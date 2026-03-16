@@ -1,0 +1,24 @@
+# secrets — never commit
+.env
+.env.*
+!.env.example
+.env.local
+.env.*.local
+
+# deps
+node_modules/
+
+# build output
+dist/
+out-tsc/
+coverage/
+*.tsbuildinfo
+
+# logs
+npm-debug.log*
+pnpm-debug.log*
+
+# editors / os
+.vscode/*
+.idea/
+.DS_Store
