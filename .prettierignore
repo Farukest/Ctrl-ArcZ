@@ -1,0 +1,8 @@
+docs-arc/
+dist/
+out/
+cache/
+coverage/
+packages/contracts/lib/
+pnpm-lock.yaml
+ctrl-arcz-claude-code-prompt.md
