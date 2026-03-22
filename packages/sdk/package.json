@@ -1,0 +1,51 @@
+{
+  "name": "@ctrl-arcz/sdk",
+  "version": "0.1.0",
+  "description": "Ctrl+ArcZ SDK — protected USDC transfers on Arc: pre-send risk firewall, code-gated claim, sender cancel, automatic refund",
+  "keywords": [
+    "arc",
+    "usdc",
+    "circle",
+    "address-poisoning",
+    "protected-transfer",
+    "viem"
+  ],
+  "license": "MIT",
+  "private": false,
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:integration": "cross-env INTEGRATION=1 vitest run test/integration",
+    "test:watch": "vitest"
+  },
+  "peerDependencies": {
+    "viem": "^2.38.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "cross-env": "^10.1.0",
+    "dotenv": "^17.4.2",
+    "tsup": "^8.3.5",
+    "typescript": "^5.7.3",
+    "viem": "^2.38.0",
+    "vitest": "^2.1.8"
+  }
+}
