@@ -1,0 +1,16 @@
+{
+  "name": "@ctrl-arcz/contracts",
+  "version": "0.1.0",
+  "description": "Ctrl+ArcZ protected-transfer contract (Foundry)",
+  "private": true,
+  "scripts": {
+    "build": "forge build",
+    "test": "forge test -vv",
+    "coverage": "forge coverage --no-match-coverage \"test|script\"",
+    "fmt": "forge fmt",
+    "gen:addresses": "node ../../scripts/gen-contract-addresses.mjs",
+    "deploy:testnet": "pnpm gen:addresses && forge script script/Deploy.s.sol:Deploy --rpc-url arc_testnet --broadcast -vvv && node ../../scripts/sync-deployment.mjs",
+    "verify:testnet": "forge verify-contract --chain-id 5042002 --verifier blockscout --verifier-url https://testnet.arcscan.app/api/",
+    "typecheck": "echo \"no typescript in contracts package\""
+  }
+}
