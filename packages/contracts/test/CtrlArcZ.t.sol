@@ -157,6 +157,34 @@ contract CtrlArcZTest is Test {
     // config
     // -----------------------------------------------------------------
 
+    function test_createConfig_isIdempotent() public {
+        vm.prank(integrator);
+        bytes32 again = arcz.createConfig(WINDOW, CtrlArcZ.ClaimMode.CODE, 0, address(0));
+        assertEq(again, configId, "same parameters, same id");
+    }
+
+    function test_createConfig_differentIntegrators_differentIds() public {
+        vm.prank(stranger);
+        bytes32 other = arcz.createConfig(WINDOW, CtrlArcZ.ClaimMode.CODE, 0, address(0));
+        assertTrue(other != configId, "config is scoped to its integrator");
+    }
+
+    function test_createConfig_unsupportedMode_reverts() public {
+        vm.expectRevert(abi.encodeWithSelector(CtrlArcZ.ClaimModeNotSupported.selector, CtrlArcZ.ClaimMode.SIGNATURE));
+        vm.prank(integrator);
+        arcz.createConfig(WINDOW, CtrlArcZ.ClaimMode.SIGNATURE, 0, address(0));
+
+        vm.expectRevert(abi.encodeWithSelector(CtrlArcZ.ClaimModeNotSupported.selector, CtrlArcZ.ClaimMode.REGISTERED));
+        vm.prank(integrator);
+        arcz.createConfig(WINDOW, CtrlArcZ.ClaimMode.REGISTERED, 0, address(0));
+    }
+
+    function test_createConfig_windowTooLong_reverts() public {
+        vm.expectRevert(CtrlArcZ.RecallWindowTooLong.selector);
+        vm.prank(integrator);
+        arcz.createConfig(7 days + 1, CtrlArcZ.ClaimMode.CODE, 0, address(0));
+    }
+
     // -----------------------------------------------------------------
     // input guards
     // -----------------------------------------------------------------
