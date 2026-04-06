@@ -185,9 +185,47 @@ contract CtrlArcZTest is Test {
         arcz.createConfig(7 days + 1, CtrlArcZ.ClaimMode.CODE, 0, address(0));
     }
 
+    function test_sendProtected_unknownConfig_reverts() public {
+        bytes32 bogus = keccak256("nope");
+        vm.expectRevert(abi.encodeWithSelector(CtrlArcZ.UnknownConfig.selector, bogus));
+        vm.prank(sender);
+        arcz.sendProtected(bogus, recipient, ONE_USDC, claimHash);
+    }
+
     // -----------------------------------------------------------------
     // input guards
     // -----------------------------------------------------------------
+
+    function test_sendProtected_zeroAmount_reverts() public {
+        vm.expectRevert(CtrlArcZ.ZeroAmount.selector);
+        vm.prank(sender);
+        arcz.sendProtected(configId, recipient, 0, claimHash);
+    }
+
+    function test_sendProtected_zeroRecipient_reverts() public {
+        vm.expectRevert(CtrlArcZ.ZeroAddress.selector);
+        vm.prank(sender);
+        arcz.sendProtected(configId, address(0), ONE_USDC, claimHash);
+    }
+
+    function test_sendProtected_toSelf_reverts() public {
+        vm.expectRevert(CtrlArcZ.SelfTransfer.selector);
+        vm.prank(sender);
+        arcz.sendProtected(configId, sender, ONE_USDC, claimHash);
+    }
+
+    function test_sendProtected_emptyClaimHash_reverts() public {
+        vm.expectRevert(CtrlArcZ.EmptyClaimHash.selector);
+        vm.prank(sender);
+        arcz.sendProtected(configId, recipient, ONE_USDC, bytes32(0));
+    }
+
+    function test_sendProtected_amountAboveUint96_reverts() public {
+        uint256 tooBig = uint256(type(uint96).max) + 1;
+        vm.expectRevert(CtrlArcZ.AmountTooLarge.selector);
+        vm.prank(sender);
+        arcz.sendProtected(configId, recipient, tooBig, claimHash);
+    }
 
     // -----------------------------------------------------------------
     // isolation between transfers
