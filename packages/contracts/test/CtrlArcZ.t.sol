@@ -220,6 +220,17 @@ contract CtrlArcZTest is Test {
         arcz.sendProtected(configId, recipient, ONE_USDC, bytes32(0));
     }
 
+    function test_getTransfer_unknownId_reverts() public {
+        vm.expectRevert(abi.encodeWithSelector(CtrlArcZ.UnknownTransfer.selector, 999));
+        arcz.getTransfer(999);
+    }
+
+    function test_claim_unknownId_reverts() public {
+        vm.expectRevert(abi.encodeWithSelector(CtrlArcZ.UnknownTransfer.selector, 999));
+        vm.prank(recipient);
+        arcz.claim(999, CODE, SALT);
+    }
+
     function test_sendProtected_amountAboveUint96_reverts() public {
         uint256 tooBig = uint256(type(uint96).max) + 1;
         vm.expectRevert(CtrlArcZ.AmountTooLarge.selector);
