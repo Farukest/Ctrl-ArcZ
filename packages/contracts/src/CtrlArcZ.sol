@@ -50,7 +50,8 @@ contract CtrlArcZ is ReentrancyGuard {
         NONE,
         PENDING,
         CLAIMED,
-        CANCELLED
+        CANCELLED,
+        RECLAIMED
     }
 
     struct Config {
@@ -139,6 +140,8 @@ contract CtrlArcZ is ReentrancyGuard {
 
     event TransferCancelled(uint256 indexed transferId, address indexed sender, uint256 amount);
 
+    event TransferReclaimed(uint256 indexed transferId, address indexed sender, address caller, uint256 amount);
+
     // ---------------------------------------------------------------------
     // Errors
     // ---------------------------------------------------------------------
@@ -158,6 +161,7 @@ contract CtrlArcZ is ReentrancyGuard {
     error NotSender(address caller, address sender);
     error TransferNotPending(uint256 transferId, TransferStatus status);
     error TransferExpired(uint256 transferId, uint40 deadline);
+    error TransferNotExpired(uint256 transferId, uint40 deadline);
 
     // ---------------------------------------------------------------------
     // Construction
@@ -332,6 +336,25 @@ contract CtrlArcZ is ReentrancyGuard {
         USDC.safeTransfer(t.sender, amount);
 
         emit TransferCancelled(transferId, t.sender, amount);
+    }
+
+    /// @notice Refund an unclaimed transfer whose window has lapsed. Callable by
+    ///         anyone; the money can only ever go back to the sender.
+    /// @dev This is the "no keeper required" path: a recipient who never claims
+    ///      cannot strand the funds, and the sender does not have to be online.
+    function reclaimExpired(uint256 transferId) external nonReentrant {
+        ProtectedTransfer storage t = _transfers[transferId];
+        if (t.status == TransferStatus.NONE) revert UnknownTransfer(transferId);
+        if (t.status != TransferStatus.PENDING) revert TransferNotPending(transferId, t.status);
+        if (block.timestamp <= t.deadline) revert TransferNotExpired(transferId, t.deadline);
+
+        address sender = t.sender;
+        uint256 amount = t.amount;
+        t.status = TransferStatus.RECLAIMED;
+
+        USDC.safeTransfer(sender, amount);
+
+        emit TransferReclaimed(transferId, sender, msg.sender, amount);
     }
 
     // ---------------------------------------------------------------------
