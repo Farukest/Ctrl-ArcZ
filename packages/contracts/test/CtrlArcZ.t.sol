@@ -145,6 +145,43 @@ contract CtrlArcZTest is Test {
     // cancel
     // -----------------------------------------------------------------
 
+    function test_cancel_bySender_refundsInFull() public {
+        uint256 amount = 5_000 * ONE_USDC;
+        uint256 before = usdc.balanceOf(sender);
+        uint256 transferId = _send(amount);
+
+        vm.expectEmit(true, true, false, true, address(arcz));
+        emit TransferCancelled(transferId, sender, amount);
+
+        vm.prank(sender);
+        arcz.cancel(transferId);
+
+        assertEq(usdc.balanceOf(sender), before, "sender made whole");
+        assertEq(usdc.balanceOf(address(arcz)), 0);
+        assertEq(uint8(arcz.getTransfer(transferId).status), uint8(CtrlArcZ.TransferStatus.CANCELLED));
+    }
+
+    function test_cancel_byNonSender_reverts() public {
+        uint256 transferId = _send(100 * ONE_USDC);
+
+        vm.expectRevert(abi.encodeWithSelector(CtrlArcZ.NotSender.selector, recipient, sender));
+        vm.prank(recipient);
+        arcz.cancel(transferId);
+    }
+
+    /// Unclaimed money belongs to the sender — the window does not take that away.
+    function test_cancel_afterWindowExpired_stillWorks() public {
+        uint256 amount = 100 * ONE_USDC;
+        uint256 before = usdc.balanceOf(sender);
+        uint256 transferId = _send(amount);
+
+        vm.warp(block.timestamp + WINDOW + 1);
+
+        vm.prank(sender);
+        arcz.cancel(transferId);
+        assertEq(usdc.balanceOf(sender), before);
+    }
+
     // -----------------------------------------------------------------
     // expiry / automatic refund
     // -----------------------------------------------------------------
@@ -223,6 +260,12 @@ contract CtrlArcZTest is Test {
     function test_getTransfer_unknownId_reverts() public {
         vm.expectRevert(abi.encodeWithSelector(CtrlArcZ.UnknownTransfer.selector, 999));
         arcz.getTransfer(999);
+    }
+
+    function test_cancel_unknownId_reverts() public {
+        vm.expectRevert(abi.encodeWithSelector(CtrlArcZ.UnknownTransfer.selector, 999));
+        vm.prank(sender);
+        arcz.cancel(999);
     }
 
     function test_claim_unknownId_reverts() public {
