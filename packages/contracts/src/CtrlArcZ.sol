@@ -49,7 +49,8 @@ contract CtrlArcZ is ReentrancyGuard {
     enum TransferStatus {
         NONE,
         PENDING,
-        CLAIMED
+        CLAIMED,
+        CANCELLED
     }
 
     struct Config {
@@ -136,6 +137,8 @@ contract CtrlArcZ is ReentrancyGuard {
         uint256 indexed transferId, address indexed to, address caller, uint256 amountToRecipient, uint256 fee
     );
 
+    event TransferCancelled(uint256 indexed transferId, address indexed sender, uint256 amount);
+
     // ---------------------------------------------------------------------
     // Errors
     // ---------------------------------------------------------------------
@@ -152,6 +155,7 @@ contract CtrlArcZ is ReentrancyGuard {
     error EmptyClaimHash();
     error WrongClaimCode();
     error SelfTransfer();
+    error NotSender(address caller, address sender);
     error TransferNotPending(uint256 transferId, TransferStatus status);
     error TransferExpired(uint256 transferId, uint40 deadline);
 
@@ -306,6 +310,28 @@ contract CtrlArcZ is ReentrancyGuard {
         USDC.safeTransfer(to, amountToRecipient);
 
         emit TransferClaimed(transferId, to, msg.sender, amountToRecipient, fee);
+    }
+
+    // ---------------------------------------------------------------------
+    // Cancel and refund
+    // ---------------------------------------------------------------------
+
+    /// @notice Take the money back. Sender only, allowed until a claim lands,
+    ///         inside or outside the window.
+    /// @dev Unclaimed money belongs to the sender. That is the whole promise, so
+    ///      there is no deadline on this.
+    function cancel(uint256 transferId) external nonReentrant {
+        ProtectedTransfer storage t = _transfers[transferId];
+        if (t.status == TransferStatus.NONE) revert UnknownTransfer(transferId);
+        if (t.status != TransferStatus.PENDING) revert TransferNotPending(transferId, t.status);
+        if (msg.sender != t.sender) revert NotSender(msg.sender, t.sender);
+
+        uint256 amount = t.amount;
+        t.status = TransferStatus.CANCELLED;
+
+        USDC.safeTransfer(t.sender, amount);
+
+        emit TransferCancelled(transferId, t.sender, amount);
     }
 
     // ---------------------------------------------------------------------
