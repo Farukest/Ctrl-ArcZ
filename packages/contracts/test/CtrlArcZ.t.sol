@@ -186,6 +186,56 @@ contract CtrlArcZTest is Test {
     // expiry / automatic refund
     // -----------------------------------------------------------------
 
+    function test_reclaimExpired_returnsFundsToSender_calledByAnyone() public {
+        uint256 amount = 400 * ONE_USDC;
+        uint256 before = usdc.balanceOf(sender);
+        uint256 transferId = _send(amount);
+
+        vm.warp(block.timestamp + WINDOW + 1);
+
+        vm.expectEmit(true, true, false, true, address(arcz));
+        emit TransferReclaimed(transferId, sender, stranger, amount);
+
+        vm.prank(stranger); // no keeper needed; anyone can trigger the refund
+        arcz.reclaimExpired(transferId);
+
+        assertEq(usdc.balanceOf(sender), before, "sender refunded");
+        assertEq(usdc.balanceOf(stranger), 0, "caller earns nothing");
+        assertEq(uint8(arcz.getTransfer(transferId).status), uint8(CtrlArcZ.TransferStatus.RECLAIMED));
+    }
+
+    function test_reclaimExpired_beforeDeadline_reverts() public {
+        uint256 transferId = _send(100 * ONE_USDC);
+        uint40 deadline = arcz.getTransfer(transferId).deadline;
+
+        vm.expectRevert(abi.encodeWithSelector(CtrlArcZ.TransferNotExpired.selector, transferId, deadline));
+        arcz.reclaimExpired(transferId);
+    }
+
+    function test_claim_afterDeadline_reverts() public {
+        uint256 transferId = _send(100 * ONE_USDC);
+        uint40 deadline = arcz.getTransfer(transferId).deadline;
+
+        vm.warp(uint256(deadline) + 1);
+
+        vm.expectRevert(abi.encodeWithSelector(CtrlArcZ.TransferExpired.selector, transferId, deadline));
+        vm.prank(recipient);
+        arcz.claim(transferId, CODE, SALT);
+    }
+
+    /// Arc's block timestamps are non-decreasing, not strictly increasing, so a
+    /// claim landing exactly on the deadline second must still succeed.
+    function test_claim_exactlyOnDeadline_succeeds() public {
+        uint256 transferId = _send(100 * ONE_USDC);
+        uint40 deadline = arcz.getTransfer(transferId).deadline;
+
+        vm.warp(deadline);
+
+        vm.prank(recipient);
+        arcz.claim(transferId, CODE, SALT);
+        assertEq(usdc.balanceOf(recipient), 100 * ONE_USDC);
+    }
+
     // -----------------------------------------------------------------
     // fees
     // -----------------------------------------------------------------
@@ -266,6 +316,11 @@ contract CtrlArcZTest is Test {
         vm.expectRevert(abi.encodeWithSelector(CtrlArcZ.UnknownTransfer.selector, 999));
         vm.prank(sender);
         arcz.cancel(999);
+    }
+
+    function test_reclaimExpired_unknownId_reverts() public {
+        vm.expectRevert(abi.encodeWithSelector(CtrlArcZ.UnknownTransfer.selector, 999));
+        arcz.reclaimExpired(999);
     }
 
     function test_claim_unknownId_reverts() public {
