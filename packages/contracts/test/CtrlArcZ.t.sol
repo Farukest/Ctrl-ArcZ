@@ -182,6 +182,47 @@ contract CtrlArcZTest is Test {
         assertEq(usdc.balanceOf(sender), before);
     }
 
+    function test_claim_afterCancel_reverts() public {
+        uint256 transferId = _send(100 * ONE_USDC);
+
+        vm.prank(sender);
+        arcz.cancel(transferId);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(CtrlArcZ.TransferNotPending.selector, transferId, CtrlArcZ.TransferStatus.CANCELLED)
+        );
+        vm.prank(recipient);
+        arcz.claim(transferId, CODE, SALT);
+    }
+
+    function test_cancel_afterClaim_reverts() public {
+        uint256 transferId = _send(100 * ONE_USDC);
+
+        vm.prank(recipient);
+        arcz.claim(transferId, CODE, SALT);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(CtrlArcZ.TransferNotPending.selector, transferId, CtrlArcZ.TransferStatus.CLAIMED)
+        );
+        vm.prank(sender);
+        arcz.cancel(transferId);
+    }
+
+    function test_doubleClaim_reverts() public {
+        uint256 transferId = _send(100 * ONE_USDC);
+
+        vm.prank(recipient);
+        arcz.claim(transferId, CODE, SALT);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(CtrlArcZ.TransferNotPending.selector, transferId, CtrlArcZ.TransferStatus.CLAIMED)
+        );
+        vm.prank(recipient);
+        arcz.claim(transferId, CODE, SALT);
+
+        assertEq(usdc.balanceOf(recipient), 100 * ONE_USDC, "paid exactly once");
+    }
+
     // -----------------------------------------------------------------
     // expiry / automatic refund
     // -----------------------------------------------------------------
@@ -234,6 +275,20 @@ contract CtrlArcZTest is Test {
         vm.prank(recipient);
         arcz.claim(transferId, CODE, SALT);
         assertEq(usdc.balanceOf(recipient), 100 * ONE_USDC);
+    }
+
+    function test_reclaimExpired_afterClaim_reverts() public {
+        uint256 transferId = _send(100 * ONE_USDC);
+
+        vm.prank(recipient);
+        arcz.claim(transferId, CODE, SALT);
+
+        vm.warp(block.timestamp + WINDOW + 1);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(CtrlArcZ.TransferNotPending.selector, transferId, CtrlArcZ.TransferStatus.CLAIMED)
+        );
+        arcz.reclaimExpired(transferId);
     }
 
     // -----------------------------------------------------------------
@@ -339,6 +394,23 @@ contract CtrlArcZTest is Test {
     // -----------------------------------------------------------------
     // isolation between transfers
     // -----------------------------------------------------------------
+
+    function test_transfersAreIndependent() public {
+        uint256 first = _send(100 * ONE_USDC);
+        uint256 second = _send(200 * ONE_USDC);
+        assertEq(second, first + 1);
+
+        vm.prank(recipient);
+        arcz.claim(second, CODE, SALT);
+
+        assertEq(usdc.balanceOf(recipient), 200 * ONE_USDC);
+        assertEq(usdc.balanceOf(address(arcz)), 100 * ONE_USDC, "the first is untouched");
+        assertTrue(arcz.isClaimable(first));
+
+        vm.prank(sender);
+        arcz.cancel(first);
+        assertEq(usdc.balanceOf(address(arcz)), 0);
+    }
 
     // -----------------------------------------------------------------
     // Permit2 send path
