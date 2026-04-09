@@ -43,6 +43,7 @@ contract CtrlArcZTest is Test {
     );
     event TransferCancelled(uint256 indexed transferId, address indexed sender, uint256 amount);
     event TransferReclaimed(uint256 indexed transferId, address indexed sender, address caller, uint256 amount);
+    event TransferLocked(uint256 indexed transferId);
 
     function setUp() public {
         usdc = new MockUSDC();
@@ -140,6 +141,52 @@ contract CtrlArcZTest is Test {
     // -----------------------------------------------------------------
     // wrong code / lockout
     // -----------------------------------------------------------------
+
+    /// A wrong code must NOT revert — a revert would roll back the attempt counter
+    /// and the lockout could never bind. It returns false and burns an attempt.
+    function test_claim_wrongCode_returnsFalseAndCountsAttempt() public {
+        uint256 transferId = _send(100 * ONE_USDC);
+
+        vm.prank(recipient);
+        bool ok = arcz.claim(transferId, "000000", SALT);
+
+        assertFalse(ok, "claim reports failure");
+        assertEq(arcz.attemptsRemaining(transferId), 4, "the attempt persisted");
+        assertEq(usdc.balanceOf(recipient), 0, "no payout");
+        assertEq(usdc.balanceOf(address(arcz)), 100 * ONE_USDC, "funds still locked");
+    }
+
+    /// The right code with the wrong salt must fail: the salt carries the entropy.
+    function test_claim_correctCodeWrongSalt_fails() public {
+        uint256 transferId = _send(100 * ONE_USDC);
+
+        vm.prank(recipient);
+        bool ok = arcz.claim(transferId, CODE, keccak256("wrong-salt"));
+
+        assertFalse(ok);
+        assertEq(usdc.balanceOf(recipient), 0);
+    }
+
+    function test_claim_fiveWrongCodes_locksTransfer() public {
+        uint256 amount = 100 * ONE_USDC;
+        uint256 transferId = _send(amount);
+
+        for (uint8 i = 1; i <= 4; i++) {
+            vm.prank(recipient);
+            arcz.claim(transferId, "000000", SALT);
+            assertEq(arcz.attemptsRemaining(transferId), 5 - i, "each guess costs an attempt");
+        }
+
+        vm.expectEmit(true, false, false, false, address(arcz));
+        emit TransferLocked(transferId);
+        vm.prank(recipient);
+        arcz.claim(transferId, "000000", SALT);
+
+        CtrlArcZ.ProtectedTransfer memory t = arcz.getTransfer(transferId);
+        assertEq(uint8(t.status), uint8(CtrlArcZ.TransferStatus.LOCKED));
+        assertEq(t.attempts, 5);
+        assertFalse(arcz.isClaimable(transferId));
+    }
 
     // -----------------------------------------------------------------
     // cancel
