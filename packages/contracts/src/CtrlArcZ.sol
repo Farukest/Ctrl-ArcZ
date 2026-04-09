@@ -51,7 +51,8 @@ contract CtrlArcZ is ReentrancyGuard {
         PENDING,
         CLAIMED,
         CANCELLED,
-        RECLAIMED
+        RECLAIMED,
+        LOCKED
     }
 
     struct Config {
@@ -71,6 +72,7 @@ contract CtrlArcZ is ReentrancyGuard {
         // slot 1
         address to;
         uint40 deadline;
+        uint8 attempts;
         TransferStatus status;
         // slot 2, 3
         bytes32 claimHash;
@@ -80,6 +82,15 @@ contract CtrlArcZ is ReentrancyGuard {
     // ---------------------------------------------------------------------
     // Constants
     // ---------------------------------------------------------------------
+
+    /// @notice Wrong-code guesses allowed before a transfer is frozen.
+    /// @dev Caps an on-chain brute force of the 6-digit code at 5 tries in 10^6.
+    ///      Attempts are counted for ANY caller, not just the recorded recipient:
+    ///      if only the recipient's guesses counted, an attacker could grind the
+    ///      code for free from throwaway addresses. The cost is that a griefer can
+    ///      freeze a transfer with 5 wrong guesses — funds stay safe, the sender
+    ///      cancels and re-sends. See "known limits" in the README.
+    uint8 public constant MAX_CLAIM_ATTEMPTS = 5;
 
     /// @notice Upper bound on the recall window: 7 days.
     uint32 public constant MAX_RECALL_WINDOW = 7 days;
@@ -142,6 +153,10 @@ contract CtrlArcZ is ReentrancyGuard {
 
     event TransferReclaimed(uint256 indexed transferId, address indexed sender, address caller, uint256 amount);
 
+    event ClaimAttemptFailed(uint256 indexed transferId, address caller, uint8 attempts);
+
+    event TransferLocked(uint256 indexed transferId);
+
     // ---------------------------------------------------------------------
     // Errors
     // ---------------------------------------------------------------------
@@ -156,7 +171,6 @@ contract CtrlArcZ is ReentrancyGuard {
     error UnknownConfig(bytes32 configId);
     error UnknownTransfer(uint256 transferId);
     error EmptyClaimHash();
-    error WrongClaimCode();
     error SelfTransfer();
     error NotSender(address caller, address sender);
     error TransferNotPending(uint256 transferId, TransferStatus status);
@@ -264,6 +278,7 @@ contract CtrlArcZ is ReentrancyGuard {
             amount: uint96(amount),
             to: to,
             deadline: deadline,
+            attempts: 0,
             status: TransferStatus.PENDING,
             claimHash: claimHash,
             configId: configId
@@ -286,12 +301,24 @@ contract CtrlArcZ is ReentrancyGuard {
     ///      time, never to `msg.sender`. That makes a claim front-run-safe and
     ///      lets a sender or relayer settle on behalf of a recipient who has no
     ///      USDC for gas yet (on Arc, gas is USDC).
-    function claim(uint256 transferId, string calldata code, bytes32 salt) external {
-        claimWithProof(transferId, abi.encode(salt, code));
+    ///
+    ///      IMPORTANT — a wrong proof does NOT revert; it returns false.
+    ///      An attempt limiter cannot be built on a reverting call: a revert would
+    ///      roll back the very counter that records the failed guess, so the limit
+    ///      would never bind and the 20-bit code could be ground down on-chain for
+    ///      the price of gas. The failed attempt must therefore commit. Callers
+    ///      MUST check the return value (or the receipt: `TransferClaimed` on
+    ///      success, `ClaimAttemptFailed` / `TransferLocked` on failure) rather
+    ///      than treating a mined transaction as a successful claim. The SDK's
+    ///      `claim()` does this and throws on a failed attempt.
+    /// @return claimed True when the proof was valid and the funds were released.
+    function claim(uint256 transferId, string calldata code, bytes32 salt) external returns (bool claimed) {
+        return claimWithProof(transferId, abi.encode(salt, code));
     }
 
     /// @notice Mode-agnostic claim: the proof is interpreted by the config's verifier.
-    function claimWithProof(uint256 transferId, bytes memory proof) public nonReentrant {
+    /// @dev See `claim` — a wrong proof returns false rather than reverting.
+    function claimWithProof(uint256 transferId, bytes memory proof) public nonReentrant returns (bool claimed) {
         ProtectedTransfer storage t = _transfers[transferId];
         if (t.status == TransferStatus.NONE) revert UnknownTransfer(transferId);
         if (t.status != TransferStatus.PENDING) revert TransferNotPending(transferId, t.status);
@@ -299,7 +326,17 @@ contract CtrlArcZ is ReentrancyGuard {
 
         Config memory config = configs[t.configId];
 
-        if (!config.verifier.verify(transferId, t.claimHash, msg.sender, proof)) revert WrongClaimCode();
+        if (!config.verifier.verify(transferId, t.claimHash, msg.sender, proof)) {
+            uint8 attempts = t.attempts + 1;
+            t.attempts = attempts;
+            emit ClaimAttemptFailed(transferId, msg.sender, attempts);
+
+            if (attempts >= MAX_CLAIM_ATTEMPTS) {
+                t.status = TransferStatus.LOCKED;
+                emit TransferLocked(transferId);
+            }
+            return false;
+        }
 
         address to = t.to;
         uint256 amount = t.amount;
@@ -314,20 +351,23 @@ contract CtrlArcZ is ReentrancyGuard {
         USDC.safeTransfer(to, amountToRecipient);
 
         emit TransferClaimed(transferId, to, msg.sender, amountToRecipient, fee);
+        return true;
     }
 
     // ---------------------------------------------------------------------
     // Cancel and refund
     // ---------------------------------------------------------------------
 
-    /// @notice Take the money back. Sender only, allowed until a claim lands,
-    ///         inside or outside the window.
+    /// @notice Take the money back. Sender only, allowed until a claim lands —
+    ///         inside or outside the window, and also on a locked transfer.
     /// @dev Unclaimed money belongs to the sender. That is the whole promise, so
     ///      there is no deadline on this.
     function cancel(uint256 transferId) external nonReentrant {
         ProtectedTransfer storage t = _transfers[transferId];
         if (t.status == TransferStatus.NONE) revert UnknownTransfer(transferId);
-        if (t.status != TransferStatus.PENDING) revert TransferNotPending(transferId, t.status);
+        if (t.status != TransferStatus.PENDING && t.status != TransferStatus.LOCKED) {
+            revert TransferNotPending(transferId, t.status);
+        }
         if (msg.sender != t.sender) revert NotSender(msg.sender, t.sender);
 
         uint256 amount = t.amount;
@@ -345,7 +385,9 @@ contract CtrlArcZ is ReentrancyGuard {
     function reclaimExpired(uint256 transferId) external nonReentrant {
         ProtectedTransfer storage t = _transfers[transferId];
         if (t.status == TransferStatus.NONE) revert UnknownTransfer(transferId);
-        if (t.status != TransferStatus.PENDING) revert TransferNotPending(transferId, t.status);
+        if (t.status != TransferStatus.PENDING && t.status != TransferStatus.LOCKED) {
+            revert TransferNotPending(transferId, t.status);
+        }
         if (block.timestamp <= t.deadline) revert TransferNotExpired(transferId, t.deadline);
 
         address sender = t.sender;
@@ -371,5 +413,12 @@ contract CtrlArcZ is ReentrancyGuard {
     function isClaimable(uint256 transferId) external view returns (bool) {
         ProtectedTransfer memory t = _transfers[transferId];
         return t.status == TransferStatus.PENDING && block.timestamp <= t.deadline;
+    }
+
+    /// @notice Guesses left before the transfer freezes.
+    function attemptsRemaining(uint256 transferId) external view returns (uint8) {
+        ProtectedTransfer memory t = _transfers[transferId];
+        if (t.status != TransferStatus.PENDING) return 0;
+        return MAX_CLAIM_ATTEMPTS - t.attempts;
     }
 }
