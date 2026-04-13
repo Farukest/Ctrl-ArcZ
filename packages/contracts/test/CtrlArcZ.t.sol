@@ -188,6 +188,51 @@ contract CtrlArcZTest is Test {
         assertFalse(arcz.isClaimable(transferId));
     }
 
+    /// The property the lockout exists for: a 6-digit code is only ~20 bits, so an
+    /// attacker sitting on a poisoned recipient address must not be able to grind
+    /// it on-chain. After 5 guesses the transfer is frozen, whoever is guessing.
+    function test_bruteForce_isCappedAtFiveGuesses_evenAcrossAddresses() public {
+        uint256 transferId = _send(5_000 * ONE_USDC);
+
+        address[5] memory attackers = [makeAddr("a1"), makeAddr("a2"), makeAddr("a3"), makeAddr("a4"), makeAddr("a5")];
+        for (uint256 i = 0; i < attackers.length; i++) {
+            vm.prank(attackers[i]);
+            arcz.claim(transferId, "111111", SALT);
+        }
+
+        // Sixth guess cannot even be made: the transfer is frozen.
+        vm.expectRevert(
+            abi.encodeWithSelector(CtrlArcZ.TransferNotPending.selector, transferId, CtrlArcZ.TransferStatus.LOCKED)
+        );
+        vm.prank(stranger);
+        arcz.claim(transferId, "222222", SALT);
+
+        assertEq(usdc.balanceOf(address(arcz)), 5_000 * ONE_USDC, "money never moved");
+    }
+
+    /// Once locked, even the correct code is dead — only the sender can recover.
+    function test_claim_afterLock_evenCorrectCodeFails() public {
+        uint256 amount = 100 * ONE_USDC;
+        uint256 transferId = _send(amount);
+
+        for (uint8 i = 1; i <= 5; i++) {
+            vm.prank(recipient);
+            arcz.claim(transferId, "000000", SALT);
+        }
+
+        vm.expectRevert(
+            abi.encodeWithSelector(CtrlArcZ.TransferNotPending.selector, transferId, CtrlArcZ.TransferStatus.LOCKED)
+        );
+        vm.prank(recipient);
+        arcz.claim(transferId, CODE, SALT);
+
+        // The sender's money is not stranded.
+        vm.prank(sender);
+        arcz.cancel(transferId);
+        assertEq(usdc.balanceOf(address(arcz)), 0, "funds returned");
+        assertEq(usdc.balanceOf(recipient), 0);
+    }
+
     // -----------------------------------------------------------------
     // cancel
     // -----------------------------------------------------------------
@@ -436,6 +481,16 @@ contract CtrlArcZTest is Test {
         vm.expectRevert(CtrlArcZ.AmountTooLarge.selector);
         vm.prank(sender);
         arcz.sendProtected(configId, recipient, tooBig, claimHash);
+    }
+
+    function test_attemptsRemaining_isZeroOnceSettled() public {
+        uint256 transferId = _send(ONE_USDC);
+        assertEq(arcz.attemptsRemaining(transferId), 5);
+
+        vm.prank(recipient);
+        arcz.claim(transferId, CODE, SALT);
+
+        assertEq(arcz.attemptsRemaining(transferId), 0, "no attempts left on a settled transfer");
     }
 
     // -----------------------------------------------------------------
