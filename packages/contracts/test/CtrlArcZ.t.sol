@@ -233,6 +233,24 @@ contract CtrlArcZTest is Test {
         assertEq(usdc.balanceOf(recipient), 0);
     }
 
+    /// A locked transfer is still refundable once its window lapses.
+    function test_reclaimExpired_worksOnLockedTransfer() public {
+        uint256 amount = 100 * ONE_USDC;
+        uint256 before = usdc.balanceOf(sender);
+        uint256 transferId = _send(amount);
+
+        for (uint8 i = 1; i <= 5; i++) {
+            vm.prank(recipient);
+            arcz.claim(transferId, "000000", SALT);
+        }
+
+        vm.warp(block.timestamp + WINDOW + 1);
+        vm.prank(stranger);
+        arcz.reclaimExpired(transferId);
+
+        assertEq(usdc.balanceOf(sender), before, "sender refunded");
+    }
+
     // -----------------------------------------------------------------
     // cancel
     // -----------------------------------------------------------------
