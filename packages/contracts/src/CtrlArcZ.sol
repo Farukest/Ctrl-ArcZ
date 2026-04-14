@@ -39,7 +39,8 @@ contract CtrlArcZ is ReentrancyGuard {
     /// @notice How a transfer is released to its recipient.
     /// @dev v1 implements CODE. SIGNATURE and REGISTERED are reserved: creating a
     ///      config with them reverts, but the `IClaimVerifier` seam means they can
-    ///      ship later without redeploying this contract.
+    ///      ship later without redeploying this contract — an integrator supplies
+    ///      its own verifier via `createConfigWithVerifier`.
     enum ClaimMode {
         CODE,
         SIGNATURE,
@@ -206,6 +207,20 @@ contract CtrlArcZ is ReentrancyGuard {
     {
         IClaimVerifier verifier = _builtInVerifier(claimMode);
         return _createConfig(recallWindow, claimMode, feeBps, feeRecipient, verifier);
+    }
+
+    /// @notice Same, but with an integrator-supplied verifier.
+    /// @dev This is the extension seam that keeps `IClaimVerifier` an honest
+    ///      promise: a new claim mode ships as a new verifier contract, with no
+    ///      change to CtrlArcZ and no admin able to switch verifiers under
+    ///      existing transfers. A config's verifier is fixed at creation, and it
+    ///      only ever governs transfers created under that config.
+    function createConfigWithVerifier(uint32 recallWindow, IClaimVerifier verifier, uint16 feeBps, address feeRecipient)
+        external
+        returns (bytes32 configId)
+    {
+        if (address(verifier) == address(0)) revert ZeroAddress();
+        return _createConfig(recallWindow, ClaimMode.CODE, feeBps, feeRecipient, verifier);
     }
 
     function _createConfig(
