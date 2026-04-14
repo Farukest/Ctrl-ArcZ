@@ -437,6 +437,21 @@ contract CtrlArcZTest is Test {
         arcz.createConfig(7 days + 1, CtrlArcZ.ClaimMode.CODE, 0, address(0));
     }
 
+    /// An integrator can plug in its own verifier without CtrlArcZ changing.
+    function test_createConfigWithVerifier_worksWithCustomVerifier() public {
+        CodeClaimVerifier custom = new CodeClaimVerifier();
+
+        vm.prank(integrator);
+        bytes32 customConfig = arcz.createConfigWithVerifier(WINDOW, IClaimVerifier(address(custom)), 0, address(0));
+
+        vm.prank(sender);
+        uint256 transferId = arcz.sendProtected(customConfig, recipient, 10 * ONE_USDC, claimHash);
+
+        vm.prank(recipient);
+        arcz.claim(transferId, CODE, SALT);
+        assertEq(usdc.balanceOf(recipient), 10 * ONE_USDC);
+    }
+
     function test_sendProtected_unknownConfig_reverts() public {
         bytes32 bogus = keccak256("nope");
         vm.expectRevert(abi.encodeWithSelector(CtrlArcZ.UnknownConfig.selector, bogus));
@@ -499,6 +514,22 @@ contract CtrlArcZTest is Test {
         vm.expectRevert(CtrlArcZ.AmountTooLarge.selector);
         vm.prank(sender);
         arcz.sendProtected(configId, recipient, tooBig, claimHash);
+    }
+
+    function test_createConfigWithVerifier_zeroVerifier_reverts() public {
+        vm.expectRevert(CtrlArcZ.ZeroAddress.selector);
+        vm.prank(integrator);
+        arcz.createConfigWithVerifier(WINDOW, IClaimVerifier(address(0)), 0, address(0));
+    }
+
+    function test_constructor_zeroUsdc_reverts() public {
+        vm.expectRevert(CtrlArcZ.ZeroAddress.selector);
+        new CtrlArcZ(IERC20(address(0)), IClaimVerifier(address(verifier)), IPermit2(address(permit2)));
+    }
+
+    function test_constructor_zeroVerifier_reverts() public {
+        vm.expectRevert(CtrlArcZ.ZeroAddress.selector);
+        new CtrlArcZ(IERC20(address(usdc)), IClaimVerifier(address(0)), IPermit2(address(permit2)));
     }
 
     function test_attemptsRemaining_isZeroOnceSettled() public {
