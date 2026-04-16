@@ -119,6 +119,9 @@ contract CtrlArcZ is ReentrancyGuard {
     mapping(bytes32 configId => Config) public configs;
     mapping(uint256 transferId => ProtectedTransfer) private _transfers;
 
+    /// @notice Layer 3: an address a sender has successfully paid at least once.
+    mapping(address sender => mapping(address recipient => bool)) public isVerifiedRecipient;
+
     /// @notice Id of the next transfer. Starts at 1, so 0 always means "none".
     uint256 public nextTransferId = 1;
 
@@ -160,6 +163,8 @@ contract CtrlArcZ is ReentrancyGuard {
     event ClaimAttemptFailed(uint256 indexed transferId, address caller, uint8 attempts);
 
     event TransferLocked(uint256 indexed transferId);
+
+    event RecipientVerified(address indexed sender, address indexed recipient, uint256 transferId);
 
     // ---------------------------------------------------------------------
     // Errors
@@ -361,6 +366,7 @@ contract CtrlArcZ is ReentrancyGuard {
         }
 
         address to = t.to;
+        address sender = t.sender;
         uint256 amount = t.amount;
 
         // Effects before interactions.
@@ -368,6 +374,12 @@ contract CtrlArcZ is ReentrancyGuard {
 
         uint256 fee = (amount * config.feeBps) / BPS_DENOMINATOR;
         uint256 amountToRecipient = amount - fee;
+
+        // Layer 3: this recipient is now a proven counterparty for this sender.
+        if (!isVerifiedRecipient[sender][to]) {
+            isVerifiedRecipient[sender][to] = true;
+            emit RecipientVerified(sender, to, transferId);
+        }
 
         if (fee > 0) USDC.safeTransfer(config.feeRecipient, fee);
         USDC.safeTransfer(to, amountToRecipient);
