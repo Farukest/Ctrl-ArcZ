@@ -25,6 +25,9 @@ import {IClaimVerifier} from "./interfaces/IClaimVerifier.sol";
 ///      Arc notes:
 ///       - USDC is used strictly through its ERC-20 interface (6 decimals). The
 ///         native 18-decimal balance is never read or mixed in.
+///       - `receive()` is payable because on Arc an ERC-20 USDC transfer moves the
+///         account's native balance; accepting native value costs nothing and
+///         guarantees the contract can be funded either way.
 ///       - Memo is NOT called from here: Arc's Memo predeploy only accepts a
 ///         direct EOA caller and reverts on a contract caller ("sender spoofing").
 ///         The SDK wraps `sendProtected` in `Memo.memo(...)` instead, and the
@@ -187,6 +190,10 @@ contract CtrlArcZ is ReentrancyGuard {
         USDC = usdc;
         CODE_VERIFIER = codeVerifier;
     }
+
+    /// @dev On Arc a USDC ERC-20 transfer moves the account's native balance, so a
+    ///      contract holding USDC holds native value. Accepting it explicitly.
+    receive() external payable {}
 
     // ---------------------------------------------------------------------
     // Config — one per integrator behaviour
