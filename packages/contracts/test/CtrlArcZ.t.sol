@@ -43,6 +43,7 @@ contract CtrlArcZTest is Test {
     );
     event TransferCancelled(uint256 indexed transferId, address indexed sender, uint256 amount);
     event TransferReclaimed(uint256 indexed transferId, address indexed sender, address caller, uint256 amount);
+    event RecipientVerified(address indexed sender, address indexed recipient, uint256 transferId);
     event TransferLocked(uint256 indexed transferId);
 
     function setUp() public {
@@ -122,6 +123,22 @@ contract CtrlArcZTest is Test {
         assertEq(usdc.balanceOf(address(arcz)), 0, "contract empty");
         assertEq(uint8(arcz.getTransfer(transferId).status), uint8(CtrlArcZ.TransferStatus.CLAIMED));
         assertFalse(arcz.isClaimable(transferId));
+    }
+
+    /// Layer 3: the first successful claim promotes the recipient to "verified".
+    function test_claim_registersVerifiedRecipient() public {
+        assertFalse(arcz.isVerifiedRecipient(sender, recipient));
+
+        uint256 transferId = _send(100 * ONE_USDC);
+
+        vm.expectEmit(true, true, false, true, address(arcz));
+        emit RecipientVerified(sender, recipient, transferId);
+
+        vm.prank(recipient);
+        arcz.claim(transferId, CODE, SALT);
+
+        assertTrue(arcz.isVerifiedRecipient(sender, recipient), "recipient now verified");
+        assertFalse(arcz.isVerifiedRecipient(recipient, sender), "verification is directional");
     }
 
     /// Anyone may submit the proof, but the money can only go to `to`.
@@ -532,6 +549,23 @@ contract CtrlArcZTest is Test {
         new CtrlArcZ(IERC20(address(usdc)), IClaimVerifier(address(0)), IPermit2(address(permit2)));
     }
 
+    /// A zero window means the transfer is refundable immediately — allowed, but it
+    /// leaves no room to claim in a later block. Integrators pick a real window.
+    function test_zeroWindow_isAllowed_andExpiresImmediately() public {
+        vm.prank(integrator);
+        bytes32 cfg = arcz.createConfig(0, CtrlArcZ.ClaimMode.CODE, 0, address(0));
+
+        vm.prank(sender);
+        uint256 transferId = arcz.sendProtected(cfg, recipient, ONE_USDC, claimHash);
+        assertEq(arcz.getTransfer(transferId).deadline, uint40(block.timestamp));
+
+        vm.warp(block.timestamp + 1);
+        assertFalse(arcz.isClaimable(transferId));
+
+        arcz.reclaimExpired(transferId);
+        assertEq(uint8(arcz.getTransfer(transferId).status), uint8(CtrlArcZ.TransferStatus.RECLAIMED));
+    }
+
     function test_attemptsRemaining_isZeroOnceSettled() public {
         uint256 transferId = _send(ONE_USDC);
         assertEq(arcz.attemptsRemaining(transferId), 5);
@@ -540,6 +574,19 @@ contract CtrlArcZTest is Test {
         arcz.claim(transferId, CODE, SALT);
 
         assertEq(arcz.attemptsRemaining(transferId), 0, "no attempts left on a settled transfer");
+    }
+
+    function test_hashCode_matchesTheCommitmentFormat() public view {
+        assertEq(verifier.hashCode(SALT, CODE), claimHash, "SDK and contract derive the same hash");
+    }
+
+    /// The contract accepts native value: on Arc a USDC ERC-20 transfer moves the
+    /// account's native balance, so a USDC-holding contract holds native value.
+    function test_receive_acceptsNativeValue() public {
+        vm.deal(stranger, 1 ether);
+        vm.prank(stranger);
+        (bool ok,) = address(arcz).call{value: 1 ether}("");
+        assertTrue(ok, "contract must be able to hold native value");
     }
 
     // -----------------------------------------------------------------
