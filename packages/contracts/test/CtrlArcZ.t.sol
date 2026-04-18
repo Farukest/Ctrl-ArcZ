@@ -422,6 +422,61 @@ contract CtrlArcZTest is Test {
     // fees
     // -----------------------------------------------------------------
 
+    function test_claim_withFee_splitsCorrectly() public {
+        bytes32 feeConfig = _configWithFee(100); // 1%, the maximum
+        uint256 amount = 5_000 * ONE_USDC;
+
+        vm.prank(sender);
+        uint256 transferId = arcz.sendProtected(feeConfig, recipient, amount, claimHash);
+
+        vm.prank(recipient);
+        arcz.claim(transferId, CODE, SALT);
+
+        uint256 expectedFee = (amount * 100) / 10_000; // 50 USDC
+        assertEq(expectedFee, 50 * ONE_USDC);
+        assertEq(usdc.balanceOf(feeRecipient), expectedFee, "integrator fee paid");
+        assertEq(usdc.balanceOf(recipient), amount - expectedFee, "recipient gets the rest");
+        assertEq(usdc.balanceOf(address(arcz)), 0, "nothing left behind");
+    }
+
+    /// A fee is only earned on settlement: a cancelled transfer refunds in full.
+    function test_cancel_withFeeConfig_refundsFullAmount_noFee() public {
+        bytes32 feeConfig = _configWithFee(100);
+        uint256 amount = 1_000 * ONE_USDC;
+        uint256 before = usdc.balanceOf(sender);
+
+        vm.prank(sender);
+        uint256 transferId = arcz.sendProtected(feeConfig, recipient, amount, claimHash);
+
+        vm.prank(sender);
+        arcz.cancel(transferId);
+
+        assertEq(usdc.balanceOf(sender), before, "no fee on a cancel");
+        assertEq(usdc.balanceOf(feeRecipient), 0);
+    }
+
+    function test_createConfig_feeAboveMax_reverts() public {
+        vm.expectRevert(CtrlArcZ.FeeTooHigh.selector);
+        vm.prank(integrator);
+        arcz.createConfig(WINDOW, CtrlArcZ.ClaimMode.CODE, 101, feeRecipient);
+    }
+
+    /// 6-decimal precision: a 1% fee on the smallest unit rounds down to zero and
+    /// the recipient still receives the full micro-amount. Nothing is lost.
+    function test_feeRounding_atOneMicroUsdc() public {
+        bytes32 feeConfig = _configWithFee(100);
+
+        vm.prank(sender);
+        uint256 transferId = arcz.sendProtected(feeConfig, recipient, 1, claimHash); // 0.000001 USDC
+
+        vm.prank(recipient);
+        arcz.claim(transferId, CODE, SALT);
+
+        assertEq(usdc.balanceOf(feeRecipient), 0, "fee rounds down");
+        assertEq(usdc.balanceOf(recipient), 1, "recipient gets the full unit");
+        assertEq(usdc.balanceOf(address(arcz)), 0, "no dust stranded");
+    }
+
     // -----------------------------------------------------------------
     // config
     // -----------------------------------------------------------------
@@ -531,6 +586,12 @@ contract CtrlArcZTest is Test {
         vm.expectRevert(CtrlArcZ.AmountTooLarge.selector);
         vm.prank(sender);
         arcz.sendProtected(configId, recipient, tooBig, claimHash);
+    }
+
+    function test_createConfig_feeWithoutRecipient_reverts() public {
+        vm.expectRevert(CtrlArcZ.FeeRecipientRequired.selector);
+        vm.prank(integrator);
+        arcz.createConfig(WINDOW, CtrlArcZ.ClaimMode.CODE, 50, address(0));
     }
 
     function test_createConfigWithVerifier_zeroVerifier_reverts() public {
