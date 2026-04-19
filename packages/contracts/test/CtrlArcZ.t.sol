@@ -678,4 +678,55 @@ contract CtrlArcZTest is Test {
     // -----------------------------------------------------------------
     // fuzz
     // -----------------------------------------------------------------
+
+    function testFuzz_sendAndClaim_conservesValue(uint96 amount, uint32 window) public {
+        amount = uint96(bound(amount, 1, 10_000 * ONE_USDC));
+        window = uint32(bound(window, 1, arcz.MAX_RECALL_WINDOW()));
+
+        vm.prank(integrator);
+        bytes32 cfg = arcz.createConfig(window, CtrlArcZ.ClaimMode.CODE, 0, address(0));
+
+        uint256 senderBefore = usdc.balanceOf(sender);
+
+        vm.prank(sender);
+        uint256 transferId = arcz.sendProtected(cfg, recipient, amount, claimHash);
+
+        vm.prank(recipient);
+        arcz.claim(transferId, CODE, SALT);
+
+        assertEq(usdc.balanceOf(recipient), amount);
+        assertEq(usdc.balanceOf(sender), senderBefore - amount);
+        assertEq(usdc.balanceOf(address(arcz)), 0, "contract never keeps a remainder");
+    }
+
+    function testFuzz_feeSplitNeverLosesValue(uint96 amount, uint16 feeBps) public {
+        amount = uint96(bound(amount, 1, 10_000 * ONE_USDC));
+        feeBps = uint16(bound(feeBps, 0, arcz.MAX_FEE_BPS()));
+
+        vm.prank(integrator);
+        bytes32 cfg = arcz.createConfig(WINDOW, CtrlArcZ.ClaimMode.CODE, feeBps, feeRecipient);
+
+        vm.prank(sender);
+        uint256 transferId = arcz.sendProtected(cfg, recipient, amount, claimHash);
+
+        vm.prank(recipient);
+        arcz.claim(transferId, CODE, SALT);
+
+        // Every unit is accounted for: recipient + fee == amount, nothing stuck.
+        assertEq(usdc.balanceOf(recipient) + usdc.balanceOf(feeRecipient), amount);
+        assertEq(usdc.balanceOf(address(arcz)), 0);
+    }
+
+    function testFuzz_cancelAlwaysRefundsExactly(uint96 amount) public {
+        amount = uint96(bound(amount, 1, 10_000 * ONE_USDC));
+        uint256 before = usdc.balanceOf(sender);
+
+        vm.prank(sender);
+        uint256 transferId = arcz.sendProtected(configId, recipient, amount, claimHash);
+
+        vm.prank(sender);
+        arcz.cancel(transferId);
+
+        assertEq(usdc.balanceOf(sender), before, "refund is exact, no fee, no dust");
+    }
 }
