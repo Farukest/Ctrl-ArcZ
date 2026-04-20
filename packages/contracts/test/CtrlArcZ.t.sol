@@ -729,4 +729,36 @@ contract CtrlArcZTest is Test {
 
         assertEq(usdc.balanceOf(sender), before, "refund is exact, no fee, no dust");
     }
+
+    /// A wrong code never releases funds, whatever the guess.
+    function testFuzz_wrongCodeNeverPays(string calldata guess) public {
+        vm.assume(keccak256(abi.encodePacked(SALT, guess)) != claimHash);
+
+        uint256 transferId = _send(100 * ONE_USDC);
+
+        vm.prank(recipient);
+        bool ok = arcz.claim(transferId, guess, SALT);
+
+        assertFalse(ok, "a wrong proof never reports success");
+        assertEq(usdc.balanceOf(recipient), 0, "no payout without the real proof");
+        assertEq(usdc.balanceOf(address(arcz)), 100 * ONE_USDC, "funds stay locked");
+    }
+
+    /// Any salt/code pair that hashes to the commitment releases the funds — and it
+    /// can only ever pay the recorded recipient. Confirms the verifier is the only
+    /// gate and that the payout target is not attacker-controllable.
+    function testFuzz_anyValidProofPaysOnlyTheRecipient(bytes32 salt, string calldata code, address caller) public {
+        vm.assume(caller != address(0) && caller != address(arcz));
+        bytes32 h = keccak256(abi.encodePacked(salt, code));
+        vm.assume(h != bytes32(0));
+
+        vm.prank(sender);
+        uint256 transferId = arcz.sendProtected(configId, recipient, 100 * ONE_USDC, h);
+
+        vm.prank(caller);
+        bool ok = arcz.claim(transferId, code, salt);
+
+        assertTrue(ok);
+        assertEq(usdc.balanceOf(recipient), 100 * ONE_USDC, "always the recorded recipient");
+    }
 }
