@@ -1,6 +1,6 @@
 {
   "name": "ctrl-arcz",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Ctrl+ArcZ — korumali USDC transferi: gonderim oncesi risk taramasi, kodla claim, iptal ve otomatik iade (Arc)",
   "private": true,
   "type": "module",
@@ -14,7 +14,10 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "typecheck": "pnpm -r typecheck"
+    "typecheck": "pnpm -r typecheck",
+    "contracts:build": "pnpm --filter @ctrl-arcz/contracts build",
+    "contracts:test": "pnpm --filter @ctrl-arcz/contracts test",
+    "deploy:testnet": "pnpm --filter @ctrl-arcz/contracts deploy:testnet"
   },
   "devDependencies": {
     "@eslint/js": "^9.18.0",
