@@ -12,3 +12,5 @@
  */
 
 export * from './chains/arcTestnet.js';
+export { ctrlArcZAbi, codeClaimVerifierAbi, memoAbi } from './abi/ctrlArcZ.js';
+export { getLogsChunked, type ChunkedEventsParams } from './events.js';
