@@ -14,3 +14,28 @@
 export * from './chains/arcTestnet.js';
 export { ctrlArcZAbi, codeClaimVerifierAbi, memoAbi } from './abi/ctrlArcZ.js';
 export { getLogsChunked, type ChunkedEventsParams } from './events.js';
+
+// Layer 1
+export { check, type CheckOptions } from './risk/check.js';
+export {
+  evaluateRisk,
+  isLookalike,
+  craftLookalike,
+  AFFIX_LENGTH,
+  FRESH_ADDRESS_MAX_AGE_MS,
+} from './risk/rules.js';
+export {
+  BlockscoutDataProvider,
+  type BlockscoutProviderOptions,
+} from './risk/blockscoutProvider.js';
+export type {
+  AddressActivity,
+  Counterparty,
+  IDataProvider,
+  RiskInput,
+  RiskLevel,
+  RiskReason,
+  RiskReport,
+  RiskRuleCode,
+  ZeroValueBait,
+} from './risk/types.js';
