@@ -71,3 +71,25 @@ export const ARC_CCTP_DOMAIN = 26 as const;
  * Source: https://docs.arc.io/arc/references/contract-addresses
  */
 export const BLOCKLISTED_TEST_ADDRESS = '0x70997970C51812dc3A010C7d01b50e0d17dc79C8' as const;
+
+/**
+ * CtrlArcZ deployment on Arc Testnet.
+ * Written by `scripts/sync-deployment.mjs` from the Deploy.s.sol output — never
+ * edited by hand. The zero address means "not deployed yet".
+ */
+export const CTRL_ARCZ_ADDRESS = '0x0000000000000000000000000000000000000000' as `0x${string}`;
+export const CODE_CLAIM_VERIFIER_ADDRESS =
+  '0x0000000000000000000000000000000000000000' as `0x${string}`;
+
+/**
+ * Block CtrlArcZ was deployed at. Event queries start here, never from 0: Arc's
+ * RPC caps `eth_getLogs` at a 10,000-block range (error -32614), so a full-history
+ * scan must be chunked from this block forward. See `getLogsChunked`.
+ */
+export const CTRL_ARCZ_DEPLOY_BLOCK = 0n;
+
+/** Arc RPC hard limit on an `eth_getLogs` block range. */
+export const MAX_LOG_RANGE = 10000n;
+
+export const explorerTxUrl = (hash: string) => `${EXPLORER_URL}/tx/${hash}`;
+export const explorerAddressUrl = (address: string) => `${EXPLORER_URL}/address/${address}`;
