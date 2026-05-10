@@ -39,3 +39,33 @@ export type {
   RiskRuleCode,
   ZeroValueBait,
 } from './risk/types.js';
+
+// Layer 2
+export {
+  approveUsdc,
+  cancel,
+  claim,
+  encodeClaimCall,
+  interpretClaimReceipt,
+  getAllowance,
+  getTransfer,
+  reclaimExpired,
+  sendProtected,
+  watchTransfer,
+  type ClientPair,
+  type ProtectedTransfer,
+  type SendProtectedParams,
+  type SendProtectedResult,
+  type TransferStatus,
+  type WatchTransferOptions,
+} from './transfer/transfer.js';
+export { generateClaimCode, hashClaim, type ClaimSecret } from './transfer/claimCode.js';
+export {
+  ClaimOutcomeUnknownError,
+  CtrlArcZError,
+  RiskBlockedError,
+  TransferLockedError,
+  TransferUnavailableError,
+  WrongClaimCodeError,
+  type TransferUnavailableReason,
+} from './transfer/errors.js';
