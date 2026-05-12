@@ -69,3 +69,12 @@ export {
   WrongClaimCodeError,
   type TransferUnavailableReason,
 } from './transfer/errors.js';
+
+// Layer 3
+export {
+  getCleanHistory,
+  type CleanHistory,
+  type FilteredEntry,
+  type GetCleanHistoryOptions,
+  type HistoryEntry,
+} from './history/history.js';
