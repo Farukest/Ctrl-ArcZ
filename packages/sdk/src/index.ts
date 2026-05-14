@@ -78,3 +78,17 @@ export {
   type GetCleanHistoryOptions,
   type HistoryEntry,
 } from './history/history.js';
+
+// Integrator setup
+export {
+  defineConfig,
+  recommendTransferMode,
+  registerConfig,
+  shouldBlockSend,
+  MAX_FEE_BPS,
+  MAX_RECALL_WINDOW_SECONDS,
+  type ClaimMode,
+  type DefineConfigInput,
+  type IntegratorConfig,
+  type RegisterConfigResult,
+} from './config/config.js';
