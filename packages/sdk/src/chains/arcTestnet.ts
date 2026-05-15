@@ -77,16 +77,16 @@ export const BLOCKLISTED_TEST_ADDRESS = '0x70997970C51812dc3A010C7d01b50e0d17dc7
  * Written by `scripts/sync-deployment.mjs` from the Deploy.s.sol output — never
  * edited by hand. The zero address means "not deployed yet".
  */
-export const CTRL_ARCZ_ADDRESS = '0x0000000000000000000000000000000000000000' as `0x${string}`;
+export const CTRL_ARCZ_ADDRESS = '0x8dAb7148cdc31DAcad6d7e12161AA3DEDb572Dca' as `0x${string}`;
 export const CODE_CLAIM_VERIFIER_ADDRESS =
-  '0x0000000000000000000000000000000000000000' as `0x${string}`;
+  '0x2C0f268DE2Aa8BB2ab27F2Ea5Ae8a0f9a0E068c4' as `0x${string}`;
 
 /**
  * Block CtrlArcZ was deployed at. Event queries start here, never from 0: Arc's
  * RPC caps `eth_getLogs` at a 10,000-block range (error -32614), so a full-history
  * scan must be chunked from this block forward. See `getLogsChunked`.
  */
-export const CTRL_ARCZ_DEPLOY_BLOCK = 0n;
+export const CTRL_ARCZ_DEPLOY_BLOCK = 51326557n;
 
 /** Arc RPC hard limit on an `eth_getLogs` block range. */
 export const MAX_LOG_RANGE = 10000n;
