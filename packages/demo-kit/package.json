@@ -1,0 +1,37 @@
+{
+  "name": "@ctrl-arcz/demo-kit",
+  "version": "0.1.0",
+  "description": "Shared wallet/session plumbing and styles for the Ctrl+ArcZ demo apps",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./ui": "./src/ui/index.ts",
+    "./cctp": "./src/cctp.ts",
+    "./gasless": "./src/gaslessServer.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "echo \"source-only package, consumed by Vite\"",
+    "test": "echo \"no tests\""
+  },
+  "peerDependencies": {
+    "react": "^18",
+    "react-dom": "^18",
+    "viem": "^2.38.0"
+  },
+  "dependencies": {
+    "@circle-fin/adapter-viem-v2": "^1.13.0",
+    "@circle-fin/bridge-kit": "^1.12.0",
+    "@circle-fin/modular-wallets-core": "^1.0.13",
+    "@ctrl-arcz/sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "typescript": "^5.7.3",
+    "viem": "^2.38.0"
+  }
+}
