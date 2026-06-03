@@ -1,0 +1,162 @@
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import type { Address } from 'viem';
+import {
+  cancel,
+  explorerTxUrl,
+  getTransfer,
+  TransferUnavailableError,
+  type ProtectedTransfer,
+} from '@ctrl-arcz/sdk';
+import { type Session } from '@ctrl-arcz/demo-kit';
+import {
+  Button,
+  Card,
+  CopyButton,
+  Pagination,
+  Skeleton,
+  StatusPill,
+  paginate,
+  useSubmitGuard,
+  useT,
+  useToast,
+  short,
+} from '@ctrl-arcz/demo-kit/ui';
+import { IconExternal } from '@ctrl-arcz/demo-kit/ui';
+import { loadTransfers, type StoredTransfer } from '../store.js';
+
+interface Row {
+  stored: StoredTransfer;
+  chain: ProtectedTransfer | null;
+}
+
+const PAGE_SIZE = 5;
+
+export function TransfersTab({ session, onChange }: { session: Session; onChange: () => void }) {
+  const toast = useToast();
+  const t = useT();
+  const guard = useSubmitGuard();
+  const [rows, setRows] = useState<Row[] | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [page, setPage] = useState(0);
+
+  const load = useCallback(async () => {
+    const stored = loadTransfers(session.address as Address);
+    const resolved = await Promise.all(
+      stored.map(async (s) => ({
+        stored: s,
+        chain: await getTransfer(session.clients, BigInt(s.transferId)).catch(() => null),
+      })),
+    );
+    setRows(resolved);
+  }, [session]);
+
+  useEffect(() => {
+    void load();
+    const timer = setInterval(() => void load(), 8000);
+    return () => clearInterval(timer);
+  }, [load]);
+
+  const pageCount = rows ? Math.ceil(rows.length / PAGE_SIZE) : 0;
+  // Keep the page in range as rows change.
+  useEffect(() => {
+    if (page > 0 && page >= pageCount) setPage(Math.max(0, pageCount - 1));
+  }, [page, pageCount]);
+  const pageRows = useMemo(() => (rows ? paginate(rows, page, PAGE_SIZE) : []), [rows, page]);
+
+  async function handleCancel(id: string) {
+    setBusy(id);
+    try {
+      await cancel(session.clients, BigInt(id));
+      toast.push(t('active.cancelledToast', { id }), 'success');
+      await load();
+      onChange();
+    } catch (e) {
+      if (e instanceof TransferUnavailableError) {
+        toast.push(t(`transfer.unavailable.${e.reason}` as never), 'error');
+      } else {
+        toast.push(e instanceof Error ? e.message : t('active.cancelFailed'), 'error');
+      }
+      await load(); // resync the row's on-chain status after a failed cancel
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  if (rows === null) {
+    return (
+      <Card>
+        <Skeleton height={64} />
+        <div style={{ height: 10 }} />
+        <Skeleton height={64} />
+      </Card>
+    );
+  }
+  if (rows.length === 0) {
+    return (
+      <Card>
+        <p className="muted">{t('active.empty')}</p>
+      </Card>
+    );
+  }
+
+  return (
+    <Card data-testid="transfers-list">
+      {pageRows.map(({ stored, chain }) => {
+        const status = chain?.status ?? 'NONE';
+        const canCancel = status === 'PENDING' || status === 'LOCKED';
+        return (
+          <div
+            className="trow"
+            key={stored.transferId}
+            data-testid={`transfer-${stored.transferId}`}
+          >
+            <div className="trow__top">
+              <div className="trow__idline">
+                <span className="trow__id">#{stored.transferId}</span>
+                <span className="trow__sep">·</span>
+                <span className="trow__amount">{stored.amount}</span>
+                <span className="trow__unit">USDC</span>
+              </div>
+              <StatusPill status={status} />
+            </div>
+            <div className="trow__to">→ {short(stored.to)}</div>
+
+            <hr className="rule trow__rule" />
+
+            <div className="trow__bottom">
+              <div className="trow__code">
+                <span className="trow__code-label">{t('active.code')}</span>
+                <span className="trow__code-value">{stored.code}</span>
+                <CopyButton value={stored.code} />
+              </div>
+              <div className="trow__actions">
+                <a
+                  className="linkbtn"
+                  href={explorerTxUrl(stored.txHash)}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  tx <IconExternal width={13} height={13} />
+                </a>
+                {canCancel && (
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    loading={busy === stored.transferId}
+                    disabled={Boolean(busy)}
+                    onClick={() => void guard(() => handleCancel(stored.transferId))}
+                    data-testid={`cancel-${stored.transferId}`}
+                  >
+                    {busy === stored.transferId ? t('active.cancelling') : t('active.cancel')}
+                  </Button>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })}
+
+      <Pagination page={page} pageCount={pageCount} onChange={setPage} />
+    </Card>
+  );
+}

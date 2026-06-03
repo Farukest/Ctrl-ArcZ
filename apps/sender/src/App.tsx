@@ -2,8 +2,9 @@ import { useState } from 'react';
 import { useSession } from '@ctrl-arcz/demo-kit';
 import { ConnectBar, SegmentedTabs, TopBar } from '@ctrl-arcz/demo-kit/ui';
 import { SendTab } from './components/SendTab.js';
+import { TransfersTab } from './components/TransfersTab.js';
 
-type Tab = 'send';
+type Tab = 'send' | 'transfers';
 
 export function App() {
   const state = useSession();
@@ -11,6 +12,7 @@ export function App() {
 
   const tabs: { id: Tab; label: string }[] = [
     { id: 'send', label: 'Send' },
+    { id: 'transfers', label: 'Active' },
   ];
 
   return (
@@ -25,6 +27,9 @@ export function App() {
           <SegmentedTabs tabs={tabs} value={tab} onChange={setTab} />
 
           {tab === 'send' && <SendTab session={state.session} onSent={state.refreshBalance} />}
+          {tab === 'transfers' && (
+            <TransfersTab session={state.session} onChange={state.refreshBalance} />
+          )}
         </div>
       )}
     </main>
