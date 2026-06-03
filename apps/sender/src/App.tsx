@@ -3,8 +3,9 @@ import { useSession } from '@ctrl-arcz/demo-kit';
 import { ConnectBar, SegmentedTabs, TopBar } from '@ctrl-arcz/demo-kit/ui';
 import { SendTab } from './components/SendTab.js';
 import { TransfersTab } from './components/TransfersTab.js';
+import { HistoryTab } from './components/HistoryTab.js';
 
-type Tab = 'send' | 'transfers';
+type Tab = 'send' | 'transfers' | 'history';
 
 export function App() {
   const state = useSession();
@@ -13,6 +14,7 @@ export function App() {
   const tabs: { id: Tab; label: string }[] = [
     { id: 'send', label: 'Send' },
     { id: 'transfers', label: 'Active' },
+    { id: 'history', label: 'History' },
   ];
 
   return (
@@ -30,6 +32,7 @@ export function App() {
           {tab === 'transfers' && (
             <TransfersTab session={state.session} onChange={state.refreshBalance} />
           )}
+          {tab === 'history' && <HistoryTab session={state.session} />}
         </div>
       )}
     </main>
