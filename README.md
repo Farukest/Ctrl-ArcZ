@@ -63,3 +63,58 @@ flowchart TD
 Katman 3, katman 1'i besler: bir kez korumalı ödeme yaptığın (doğrulanmış) adresin ikizi de firewall tarafından bloklanır.
 
 **Tek kontrat, çok kiracı.** Kontrat herkese açıktır; her entegratör `createConfig` ile kendi davranışını tanımlar: recall penceresi (0 sn – 7 gün), claim yöntemi, risk eşiği davranışı, `minProtectedAmount`, opsiyonel kendi fee'si. Bir borsa "24 saat pencere + yalnız kayıtlı alıcı" kurar; bir P2P cüzdanı "60 saniye + 6 haneli kod" kurar; ikisi aynı kontratı ve aynı SDK'yı kullanır.
+
+## Yapı
+
+| Paket                | Ne                                                                                                |
+| -------------------- | ------------------------------------------------------------------------------------------------- |
+| `packages/contracts` | `CtrlArcZ.sol` + `CodeClaimVerifier` + `IClaimVerifier` + Foundry testleri (61) + deploy script'i |
+| `packages/sdk`       | `@ctrl-arcz/sdk` — viem tabanlı TypeScript SDK (ESM + CJS + tipler), npm'e hazır                  |
+| `packages/demo-kit`  | İki demo app'in paylaştığı cüzdan/session altyapısı (duplikasyon yok)                             |
+| `apps/sender`        | Demo: gönderen tarafı entegrasyonu (port 5173)                                                    |
+| `apps/receiver`      | Demo: alıcı claim sayfası (port 5174)                                                             |
+| `examples/`          | Bağımsız çalışan Node quickstart'ı (SDK'yı sıfırdan kullanma örneği)                              |
+
+Tüm adresler, RPC ve chain bilgisi **tek bir dosyada** durur: `packages/sdk/src/chains/arcTestnet.ts`. Kontrat deploy script'i dahil herkes oradan okur; hiçbir yerde adres hardcode edilmez.
+
+## Kurulum
+
+```bash
+git clone --recurse-submodules <repo>
+cd Ctrl+ArcZ
+pnpm install
+
+cp .env.example .env      # cüzdanları doldur (cast wallet new ile üretebilirsin)
+```
+
+Arc'ta **USDC hem gas hem transfer varlığıdır**; cüzdanları [faucet.circle.com](https://faucet.circle.com) üzerinden Arc Testnet USDC ile fonla.
+
+Foundry gerekli: <https://getfoundry.sh>
+
+## Komutlar
+
+| Komut                       | Ne yapar                                        |
+| --------------------------- | ----------------------------------------------- |
+| `pnpm build`                | Tüm paketleri derler (kontrat + SDK + iki demo) |
+| `pnpm test`                 | Tüm testler (Foundry + vitest)                  |
+| `pnpm contracts:test`       | Yalnız kontrat testleri (`forge test`)          |
+| `pnpm deploy:testnet`       | `CtrlArcZ`'yi Arc Testnet'e deploy eder         |
+| `pnpm dev:sender`           | Gönderen demosu → http://localhost:5173         |
+| `pnpm dev:receiver`         | Alıcı demosu → http://localhost:5174            |
+| `pnpm lint` / `pnpm format` | ESLint / Prettier                               |
+
+### Demoları çalıştırma (test modu)
+
+Demolar MetaMask ile de çalışır; MetaMask'sız (headless / hızlı deneme) test modu için her app'in klasörüne `.env.local` koy:
+
+```ini
+# apps/sender/.env.local
+VITE_DEMO_PK=0x<SENDER_private_key>
+VITE_DEMO_RECEIVER=0x<RECEIVER_address>   # poisoning demosunun "güvenilen adresi"
+VITE_RECEIVER_URL=http://localhost:5174
+
+# apps/receiver/.env.local
+VITE_DEMO_PK=0x<RECEIVER_private_key>
+```
+
+Test modu **gerçek zincire gerçek tx atar** — yalnızca imza MetaMask yerine yerel key ile yapılır. `.env.local` gitignore'dadır.
