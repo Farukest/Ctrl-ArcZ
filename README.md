@@ -118,3 +118,42 @@ VITE_DEMO_PK=0x<RECEIVER_private_key>
 ```
 
 Test modu **gerçek zincire gerçek tx atar** — yalnızca imza MetaMask yerine yerel key ile yapılır. `.env.local` gitignore'dadır.
+
+## Ağ ve deploy
+
+|                       |                                                                                                                                |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Ağ                    | Arc Testnet (chain id `5042002`)                                                                                               |
+| RPC                   | `https://rpc.testnet.arc.network`                                                                                              |
+| Explorer              | [testnet.arcscan.app](https://testnet.arcscan.app)                                                                             |
+| USDC (ERC-20)         | `0x3600000000000000000000000000000000000000` (6 decimals)                                                                      |
+| **CtrlArcZ**          | [`0x8dAb7148cdc31DAcad6d7e12161AA3DEDb572Dca`](https://testnet.arcscan.app/address/0x8dAb7148cdc31DAcad6d7e12161AA3DEDb572Dca) |
+| **CodeClaimVerifier** | [`0x2C0f268DE2Aa8BB2ab27F2Ea5Ae8a0f9a0E068c4`](https://testnet.arcscan.app/address/0x2C0f268DE2Aa8BB2ab27F2Ea5Ae8a0f9a0E068c4) |
+
+> Mainnet'e hiçbir şey deploy edilmemiştir ve edilmeyecektir. Bu bir testnet projesidir; denetlenmemiştir.
+
+### Canlı akış kanıtları (gerçek Arc Testnet, gerçek USDC)
+
+| Akış                        | Sonuç                                   | Kanıt                                                                                                                                                                             |
+| --------------------------- | --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Gönder → kodla claim        | transfer #17 **CLAIMED**                | claim tx [`0xfa713689…`](https://testnet.arcscan.app/tx/0xfa71368920353efc7411b93e9416415b00293dda00a7b48720be0f1d23e16e39) · `apps/sender/e2e-artifacts/flow1-claim-success.png` |
+| Gönder → iptal              | transfer #18 **CANCELLED**              | `apps/sender/e2e-artifacts/flow2-cancel.png`                                                                                                                                      |
+| Benzer-adres firewall bloğu | gerçek üretilen `0x64ea…fe3f` **block** | `apps/sender/e2e-artifacts/flow3-poisoning-block.png`                                                                                                                             |
+| Süre dolumu iadesi          | **RECLAIMED**                           | reclaim tx [`0x5afaab34…`](https://testnet.arcscan.app/tx/0x5afaab345e4ba04e5a7764b06d1e152b545d89656b969dbc29469655631c5972)                                                     |
+
+## SDK API
+
+Tam quickstart ve imzalar: [`packages/sdk/README.md`](./packages/sdk/README.md).
+
+| Fonksiyon                                              | İş                                                          |
+| ------------------------------------------------------ | ----------------------------------------------------------- |
+| `check(sender, target, opts)`                          | Katman 1 firewall → `RiskReport` (`safe`/`warning`/`block`) |
+| `evaluateRisk(input, now?)`                            | Saf kural motoru (provider'sız, custom veri kaynağı için)   |
+| `defineConfig(input)` → `registerConfig(clients, cfg)` | Entegratör config'i kur → `configId`                        |
+| `generateClaimCode()`                                  | `{ code, salt, claimHash }`                                 |
+| `approveUsdc` → `sendProtected(clients, params)`       | USDC kilitle → `{ transferId, txHash, deadline }`           |
+| `approvePermit2` → `sendProtectedWithPermit(...)`      | Tek-imza gönderim (Permit2; ayrı approve tx'i yok)          |
+| `claim(clients, id, code, salt)`                       | Alıcıya bırak (yanlış kodda `WrongClaimCodeError` fırlatır) |
+| `cancel` / `reclaimExpired(clients, id)`               | Gönderen iptali / süre sonu otomatik iade                   |
+| `getTransfer` / `watchTransfer`                        | Zincir durumu / event aboneliği                             |
+| `getCleanHistory(address)`                             | Katman 3 — spam'sız geçmiş                                  |
