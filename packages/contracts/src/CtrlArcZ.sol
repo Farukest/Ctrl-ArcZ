@@ -5,6 +5,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {IClaimVerifier} from "./interfaces/IClaimVerifier.sol";
+import {IPermit2} from "./interfaces/IPermit2.sol";
 
 /// @title CtrlArcZ — protected USDC transfers on Arc
 /// @notice Locks a transfer until the recipient proves they hold the claim
@@ -116,6 +117,10 @@ contract CtrlArcZ is ReentrancyGuard {
     ///         verifier would be an admin key over every locked transfer.
     IClaimVerifier public immutable CODE_VERIFIER;
 
+    /// @notice Permit2 predeploy, for signature-based (approve-less) sends.
+    ///         Supplied at deploy time from `arcTestnet.ts`.
+    IPermit2 public immutable PERMIT2;
+
     mapping(bytes32 configId => Config) public configs;
     mapping(uint256 transferId => ProtectedTransfer) private _transfers;
 
@@ -190,10 +195,13 @@ contract CtrlArcZ is ReentrancyGuard {
     // Construction
     // ---------------------------------------------------------------------
 
-    constructor(IERC20 usdc, IClaimVerifier codeVerifier) {
-        if (address(usdc) == address(0) || address(codeVerifier) == address(0)) revert ZeroAddress();
+    constructor(IERC20 usdc, IClaimVerifier codeVerifier, IPermit2 permit2) {
+        if (address(usdc) == address(0) || address(codeVerifier) == address(0) || address(permit2) == address(0)) {
+            revert ZeroAddress();
+        }
         USDC = usdc;
         CODE_VERIFIER = codeVerifier;
+        PERMIT2 = permit2;
     }
 
     /// @dev On Arc a USDC ERC-20 transfer moves the account's native balance, so a
@@ -284,6 +292,52 @@ contract CtrlArcZ is ReentrancyGuard {
         nonReentrant
         returns (uint256 transferId)
     {
+        transferId = _recordTransfer(configId, to, amount, claimHash);
+        // Interaction last: state is already consistent. Requires a prior USDC
+        // approval to this contract.
+        USDC.safeTransferFrom(msg.sender, address(this), amount);
+    }
+
+    /// @notice Same as `sendProtected`, but pulls USDC via a Permit2 signature so
+    ///         the sender does not need a per-send `approve` transaction.
+    /// @dev One-time prerequisite: `USDC.approve(PERMIT2, ...)`. After that, each
+    ///      send is just an off-chain permit signature. The signature must name
+    ///      this contract as the Permit2 spender; Permit2 checks `msg.sender`
+    ///      equals the signed spender, so it cannot be replayed by anyone else.
+    /// @param permitNonce Permit2 unordered nonce (any unused 256-bit value).
+    /// @param permitDeadline Unix timestamp after which the signature is invalid.
+    /// @param signature EIP-712 signature over the Permit2 `PermitTransferFrom`.
+    function sendProtectedWithPermit(
+        bytes32 configId,
+        address to,
+        uint256 amount,
+        bytes32 claimHash,
+        uint256 permitNonce,
+        uint256 permitDeadline,
+        bytes calldata signature
+    ) external nonReentrant returns (uint256 transferId) {
+        transferId = _recordTransfer(configId, to, amount, claimHash);
+
+        // Pull exactly `amount` USDC from the sender via their Permit2 signature.
+        PERMIT2.permitTransferFrom(
+            IPermit2.PermitTransferFrom({
+                permitted: IPermit2.TokenPermissions({token: address(USDC), amount: amount}),
+                nonce: permitNonce,
+                deadline: permitDeadline
+            }),
+            IPermit2.SignatureTransferDetails({to: address(this), requestedAmount: amount}),
+            msg.sender,
+            signature
+        );
+    }
+
+    /// @dev Validates inputs and writes the pending transfer record. The caller
+    ///      then moves the USDC in (directly or via Permit2). Shared so the two
+    ///      send paths cannot drift apart.
+    function _recordTransfer(bytes32 configId, address to, uint256 amount, bytes32 claimHash)
+        private
+        returns (uint256 transferId)
+    {
         Config memory config = configs[configId];
         if (!config.exists) revert UnknownConfig(configId);
         if (to == address(0)) revert ZeroAddress();
@@ -312,12 +366,7 @@ contract CtrlArcZ is ReentrancyGuard {
         });
 
         emit TransferCreated(transferId, msg.sender, to, amount, configId, deadline, claimHash);
-
-        // Interaction last: state is already consistent. Requires a prior USDC
-        // approval to this contract.
-        USDC.safeTransferFrom(msg.sender, address(this), amount);
     }
-
 
     // ---------------------------------------------------------------------
     // Claim
