@@ -5,13 +5,16 @@ import {Test} from "forge-std/Test.sol";
 import {CtrlArcZ} from "../src/CtrlArcZ.sol";
 import {CodeClaimVerifier} from "../src/verifiers/CodeClaimVerifier.sol";
 import {IClaimVerifier} from "../src/interfaces/IClaimVerifier.sol";
+import {IPermit2} from "../src/interfaces/IPermit2.sol";
 import {MockUSDC} from "./mocks/MockUSDC.sol";
+import {MockPermit2} from "./mocks/MockPermit2.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 contract CtrlArcZTest is Test {
     CtrlArcZ internal arcz;
     CodeClaimVerifier internal verifier;
     MockUSDC internal usdc;
+    MockPermit2 internal permit2;
 
     address internal integrator = makeAddr("integrator");
     address internal feeRecipient = makeAddr("feeRecipient");
@@ -49,7 +52,8 @@ contract CtrlArcZTest is Test {
     function setUp() public {
         usdc = new MockUSDC();
         verifier = new CodeClaimVerifier();
-        arcz = new CtrlArcZ(IERC20(address(usdc)), IClaimVerifier(address(verifier)));
+        permit2 = new MockPermit2();
+        arcz = new CtrlArcZ(IERC20(address(usdc)), IClaimVerifier(address(verifier)), IPermit2(address(permit2)));
 
         vm.prank(integrator);
         configId = arcz.createConfig(WINDOW, CtrlArcZ.ClaimMode.CODE, 0, address(0));
@@ -610,6 +614,11 @@ contract CtrlArcZTest is Test {
         new CtrlArcZ(IERC20(address(usdc)), IClaimVerifier(address(0)), IPermit2(address(permit2)));
     }
 
+    function test_constructor_zeroPermit2_reverts() public {
+        vm.expectRevert(CtrlArcZ.ZeroAddress.selector);
+        new CtrlArcZ(IERC20(address(usdc)), IClaimVerifier(address(verifier)), IPermit2(address(0)));
+    }
+
     /// A zero window means the transfer is refundable immediately — allowed, but it
     /// leaves no room to claim in a later block. Integrators pick a real window.
     function test_zeroWindow_isAllowed_andExpiresImmediately() public {
@@ -674,6 +683,76 @@ contract CtrlArcZTest is Test {
     // -----------------------------------------------------------------
     // Permit2 send path
     // -----------------------------------------------------------------
+
+    function test_sendProtectedWithPermit_locksFunds_andForwardsArgs() public {
+        uint256 amount = 250 * ONE_USDC;
+        uint256 nonce = 42;
+        uint256 permitDeadline = block.timestamp + 1 hours;
+
+        // The sender approves Permit2 once (the mock uses transferFrom).
+        vm.prank(sender);
+        usdc.approve(address(permit2), type(uint256).max);
+
+        vm.prank(sender);
+        uint256 transferId =
+            arcz.sendProtectedWithPermit(configId, recipient, amount, claimHash, nonce, permitDeadline, hex"1234");
+
+        // Funds moved into the contract via Permit2.
+        assertEq(usdc.balanceOf(address(arcz)), amount);
+        assertEq(uint8(arcz.getTransfer(transferId).status), uint8(CtrlArcZ.TransferStatus.PENDING));
+
+        // CtrlArcZ passed the correct arguments to Permit2.
+        assertEq(permit2.lastToken(), address(usdc));
+        assertEq(permit2.lastAmount(), amount);
+        assertEq(permit2.lastTo(), address(arcz));
+        assertEq(permit2.lastOwner(), sender);
+        assertEq(permit2.lastNonce(), nonce);
+    }
+
+    /// A permit-funded transfer claims exactly like a normal one.
+    function test_sendProtectedWithPermit_thenClaim() public {
+        vm.prank(sender);
+        usdc.approve(address(permit2), type(uint256).max);
+
+        vm.prank(sender);
+        uint256 transferId = arcz.sendProtectedWithPermit(
+            configId, recipient, 100 * ONE_USDC, claimHash, 1, block.timestamp + 1 hours, hex"00"
+        );
+
+        vm.prank(recipient);
+        arcz.claim(transferId, CODE, SALT);
+        assertEq(usdc.balanceOf(recipient), 100 * ONE_USDC);
+    }
+
+    /// A rejected permit (bad/expired signature) reverts the whole send: no record
+    /// is left behind because the state write and the pull are one transaction.
+    function test_sendProtectedWithPermit_rejectedPermit_reverts() public {
+        permit2.setReject(true);
+
+        vm.expectRevert(MockPermit2.MockPermitRejected.selector);
+        vm.prank(sender);
+        arcz.sendProtectedWithPermit(
+            configId, recipient, 100 * ONE_USDC, claimHash, 1, block.timestamp + 1 hours, hex"00"
+        );
+
+        // nextTransferId advanced by _recordTransfer, but the transfer's funds
+        // never arrived and the whole tx reverted, so no id is queryable.
+        vm.expectRevert(abi.encodeWithSelector(CtrlArcZ.UnknownTransfer.selector, uint256(1)));
+        arcz.getTransfer(1);
+    }
+
+    function test_sendProtectedWithPermit_validatesInputs() public {
+        vm.prank(sender);
+        usdc.approve(address(permit2), type(uint256).max);
+
+        vm.expectRevert(CtrlArcZ.ZeroAmount.selector);
+        vm.prank(sender);
+        arcz.sendProtectedWithPermit(configId, recipient, 0, claimHash, 1, block.timestamp + 1 hours, hex"00");
+    }
+
+    function test_PERMIT2_addressExposed() public view {
+        assertEq(address(arcz.PERMIT2()), address(permit2));
+    }
 
     // -----------------------------------------------------------------
     // fuzz
