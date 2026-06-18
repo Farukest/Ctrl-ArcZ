@@ -51,6 +51,7 @@ export {
   getTransfer,
   reclaimExpired,
   sendProtected,
+  sendProtectedWithPermit,
   watchTransfer,
   type ClientPair,
   type ProtectedTransfer,
@@ -60,6 +61,12 @@ export {
   type WatchTransferOptions,
 } from './transfer/transfer.js';
 export { generateClaimCode, hashClaim, type ClaimSecret } from './transfer/claimCode.js';
+export {
+  approvePermit2,
+  getPermit2Allowance,
+  signPermit2Transfer,
+  type Permit2Signature,
+} from './transfer/permit2.js';
 export {
   ClaimOutcomeUnknownError,
   CtrlArcZError,
