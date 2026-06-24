@@ -32,3 +32,41 @@ export function saveTransfer(sender: Address, transfer: StoredTransfer): void {
   all.unshift(transfer);
   localStorage.setItem(key(sender), JSON.stringify(all.slice(0, 50)));
 }
+
+/**
+ * Remembers CCTP bridges run from this browser. The bridge is signed server-side
+ * with the shared demo key, so this history is per-browser, not per-wallet.
+ */
+export interface StoredBridgeStep {
+  name: string;
+  txHash?: string;
+  explorerUrl?: string;
+}
+export interface StoredBridge {
+  id: string;
+  from: string;
+  to: string;
+  fromLabel: string;
+  toLabel: string;
+  amount: string;
+  state: string;
+  steps: StoredBridgeStep[];
+  createdAt: number;
+}
+
+const BRIDGES_KEY = 'ctrl-arcz:bridges';
+
+export function loadBridges(): StoredBridge[] {
+  try {
+    const raw = localStorage.getItem(BRIDGES_KEY);
+    return raw ? (JSON.parse(raw) as StoredBridge[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveBridge(bridge: StoredBridge): void {
+  const all = loadBridges();
+  all.unshift(bridge);
+  localStorage.setItem(BRIDGES_KEY, JSON.stringify(all.slice(0, 50)));
+}
