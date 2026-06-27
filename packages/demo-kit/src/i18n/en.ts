@@ -103,6 +103,17 @@ export const en = {
   'history.zeroValue': 'zero value',
   'history.unknownToken': 'unknown token',
 
+  'demo.title': 'Poisoning scenario',
+  'demo.body':
+    'A real lookalike of a trusted address {addr} is generated, sharing its first and last characters, and the firewall blocks it before sending.',
+  'demo.run': 'Generate lookalike and scan',
+  'demo.running': 'Generating and scanning...',
+  'demo.realAddress': 'Real address',
+  'demo.fakeAddress': 'Generated lookalike',
+  'demo.indistinguishable': 'Both show as {addr} in a wallet, indistinguishable.',
+  'demo.notConfigured':
+    'Set VITE_DEMO_RECEIVER in apps/sender/.env.local to the address this scenario should imitate.',
+
   'receiver.subtitle': 'Recipient, claim with code',
   'claim.title': 'Claim the transfer',
   'claim.transferId': 'Transfer number',
