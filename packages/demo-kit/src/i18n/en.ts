@@ -1,0 +1,136 @@
+/**
+ * English — the base dictionary. Every other locale is checked against these
+ * keys, and any missing key falls back to the English string here. To add a
+ * language, copy this file, translate the values, and register it in `locales.ts`.
+ *
+ * Interpolation uses `{name}` placeholders, filled via `t('key', { name })`.
+ */
+export const en = {
+  'common.appName': 'Ctrl+ArcZ',
+  'common.connect': 'Connect wallet',
+  'common.connecting': 'Connecting...',
+  'common.disconnect': 'Disconnect',
+  'common.noWallet': 'No wallet detected.',
+  'common.installWallet': 'Install MetaMask',
+  'common.connected': 'connected',
+  'common.testWallet': 'test wallet',
+  'common.testMode': 'test mode',
+  'common.copy': 'Copy',
+  'common.copied': 'Copied',
+  'common.select': 'Select',
+  'common.cancel': 'Cancel',
+  'common.close': 'Close',
+  'common.viewOnArcScan': 'View on ArcScan',
+  'common.connectPrompt': 'Connect your wallet to continue.',
+  'common.wrongChain': 'Wrong network (chain {chainId}). Switch to Arc Testnet to continue.',
+  'common.switchToArc': 'Switch to Arc',
+  'common.switchRejected': 'Network switch was rejected.',
+  'common.connectRejected': 'Connection rejected.',
+  'common.noResults': 'No match',
+  'common.search': 'Search',
+  'common.pagination': 'Pagination',
+  'common.prevPage': 'Previous page',
+  'common.nextPage': 'Next page',
+  'common.notifications': 'Notifications',
+  'common.language': 'Language',
+  'common.themeLight': 'Switch to light theme',
+  'common.themeDark': 'Switch to dark theme',
+
+  'sender.subtitle': 'Sender panel, protected USDC transfer',
+  'nav.send': 'Send',
+  'nav.active': 'Active',
+  'nav.history': 'History',
+  'nav.poisoning': 'Poisoning',
+  'nav.bridge': 'Bridge',
+
+  'send.recipient': 'Recipient address',
+  'send.invalidAddress': 'Invalid address',
+  'send.invalidAmount': 'Invalid amount',
+  'send.selfSend': 'You cannot send to your own address',
+  'send.amount': 'Amount (USDC)',
+  'send.window': 'Cancel / claim window',
+  'send.window60s': '60 seconds',
+  'send.window1h': '1 hour',
+  'send.window24h': '24 hours',
+  'send.permitToggle': 'Send with Permit2 (no separate approve, one signature)',
+  'send.plainHint': 'Below the threshold, an unprotected plain transfer may be cheaper.',
+  'send.button': 'Send protected',
+  'send.sending': 'Sending...',
+  'send.blocked': 'Send blocked',
+  'send.switchFirst': 'Switch to Arc Testnet',
+  'send.stepConfig': 'Register config',
+  'send.stepApprove': 'Approve / sign',
+  'send.stepLock': 'Lock',
+  'send.successTitle': 'Sent and locked',
+  'send.successBody': '{amount} USDC locked. The code to give the recipient:',
+  'send.claimLinkLabel': 'Claim link (keep it private)',
+  'send.claimStep1': 'Share this link with the recipient.',
+  'send.claimStep2':
+    'Tell them the 6-digit code through a separate channel, never together with the link.',
+  'send.newTransfer': 'New transfer',
+  'send.sentToast': 'Sent and locked.',
+  'send.failedToast': 'Send failed.',
+
+  'risk.safe': 'Looks safe',
+  'risk.warning': 'Caution',
+  'risk.block': 'Send blocked',
+  'risk.reason.LOOKALIKE_ADDRESS':
+    'This address looks identical, by first and last characters, to {addr} which you have paid before, but it is a different address. Wallets hide the middle, so the two are indistinguishable.',
+  'risk.reason.ZERO_VALUE_BAIT':
+    'This address sent you {count} zero-value transfer(s). That is the signature of an address-poisoning attack: it plants the address in your history.',
+  'risk.reason.NEW_ADDRESS':
+    'This address has no on-chain history. Normal for a new recipient; stop if you did not expect it.',
+  'risk.reason.FRESH_ADDRESS':
+    'This address is less than 24 hours old. Poisoning addresses are minted fresh for the attack.',
+  'risk.reason.VERIFIED_RECIPIENT':
+    'A protected transfer to this address settled before, claimed with a code.',
+  'risk.reason.KNOWN_COUNTERPARTY': 'You have paid this exact address before.',
+  'risk.reason.DATA_UNAVAILABLE':
+    'The risk check was incomplete ({sources} did not respond). We will not say "safe" without a full scan.',
+
+  'active.empty': 'No protected transfer has been made from this browser yet.',
+  'active.code': 'Code',
+  'active.cancel': 'Cancel',
+  'active.cancelling': 'Cancelling...',
+  'active.cancelledToast': '#{id} cancelled, refund received.',
+  'active.cancelFailed': 'Cancel failed.',
+
+  'history.note':
+    'Zero-value and unknown-token rows are hidden, the surface address poisoning lives on is gone.',
+  'history.empty': 'No entries in the clean history.',
+  'history.showSpam': 'Show {count} spam rows',
+  'history.hideSpam': 'Hide spam',
+  'history.zeroValue': 'zero value',
+  'history.unknownToken': 'unknown token',
+
+  'receiver.subtitle': 'Recipient, claim with code',
+  'claim.title': 'Claim the transfer',
+  'claim.transferId': 'Transfer number',
+  'claim.code': '6-digit code',
+  'claim.codeInvalid': 'The code must be 6 digits',
+  'claim.needLink': 'Open the claim link the sender shared with you.',
+  'claim.claimOwnGas': 'Claim (my own gas)',
+  'claim.claimGasless': 'Gasless (relayer pays)',
+  'claim.gasless1': 'Circle Gas Station sponsors the gas, so you pay nothing.',
+  'claim.gasless2': 'You receive the USDC even with a completely empty wallet.',
+  'claim.claiming': 'Claiming...',
+  'claim.pendingTitle': 'Transfers waiting for you',
+  'claim.pendingEmpty': 'No protected transfer waiting.',
+  'claim.successTitle': 'Received',
+  'claim.successBody': 'It reached your wallet. New balance: {balance} USDC.',
+  'claim.needTid': 'Transfer number is required.',
+  'claim.needSalt': 'The claim link is missing (no salt). Use the link from the sender.',
+  'claim.wrongCode': 'Wrong code. Attempts remaining: {n}.',
+  'claim.wrongCodeLast':
+    'Wrong code. No attempts left; the transfer is locked and only the sender can cancel.',
+  'claim.locked':
+    'Transfer locked (5 wrong attempts). The funds are safe: only the sender can cancel and reclaim them.',
+
+  'transfer.unavailable.not_pending':
+    'This transfer is no longer available (already claimed, cancelled, or refunded).',
+  'transfer.unavailable.expired': 'This transfer has expired.',
+  'transfer.unavailable.unknown': 'No such transfer.',
+  'transfer.unavailable.not_sender': 'Only the sender can cancel this transfer.',
+} as const;
+
+export type TranslationKey = keyof typeof en;
