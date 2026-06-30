@@ -11,3 +11,14 @@ export { TopBar } from './TopBar.js';
 export { LogoWordmark } from './Logo.js';
 export { TextType, type TextTypeProps } from './TextType.js';
 export { ThemeProvider, useTheme, type Theme } from './theme.js';
+
+// i18n is re-exported here so apps can pull providers/hooks from one entry.
+export {
+  I18nProvider,
+  useI18n,
+  useT,
+  LOCALES,
+  type Locale,
+  type Translate,
+} from '../i18n/context.js';
+export { type TranslationKey } from '../i18n/en.js';
