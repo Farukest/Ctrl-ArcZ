@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useSession } from '@ctrl-arcz/demo-kit';
-import { ConnectBar, SegmentedTabs, TopBar } from '@ctrl-arcz/demo-kit/ui';
+import { ConnectBar, SegmentedTabs, TopBar, useT } from '@ctrl-arcz/demo-kit/ui';
 import { SendTab } from './components/SendTab.js';
 import { TransfersTab } from './components/TransfersTab.js';
 import { HistoryTab } from './components/HistoryTab.js';
@@ -10,19 +10,20 @@ type Tab = 'send' | 'transfers' | 'history' | 'demo';
 
 export function App() {
   const state = useSession();
+  const t = useT();
   const [tab, setTab] = useState<Tab>('send');
 
   const tabs: { id: Tab; label: string }[] = [
-    { id: 'send', label: 'Send' },
-    { id: 'transfers', label: 'Active' },
-    { id: 'history', label: 'History' },
-    { id: 'demo', label: 'Poisoning' },
+    { id: 'send', label: t('nav.send') },
+    { id: 'transfers', label: t('nav.active') },
+    { id: 'history', label: t('nav.history') },
+    { id: 'demo', label: t('nav.poisoning') },
   ];
 
   return (
     <main className="app-shell">
       <TopBar />
-      <p className="subtitle">Protected USDC transfers on Arc.</p>
+      <p className="subtitle">{t('sender.subtitle')}</p>
 
       <ConnectBar state={state} />
 
