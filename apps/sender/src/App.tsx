@@ -5,8 +5,9 @@ import { SendTab } from './components/SendTab.js';
 import { TransfersTab } from './components/TransfersTab.js';
 import { HistoryTab } from './components/HistoryTab.js';
 import { DemoTab } from './components/DemoTab.js';
+import { BridgeTab } from './components/BridgeTab.js';
 
-type Tab = 'send' | 'transfers' | 'history' | 'demo';
+type Tab = 'send' | 'transfers' | 'history' | 'bridge' | 'demo';
 
 export function App() {
   const state = useSession();
@@ -17,6 +18,7 @@ export function App() {
     { id: 'send', label: t('nav.send') },
     { id: 'transfers', label: t('nav.active') },
     { id: 'history', label: t('nav.history') },
+    { id: 'bridge', label: t('nav.bridge') },
     { id: 'demo', label: t('nav.poisoning') },
   ];
 
@@ -36,6 +38,7 @@ export function App() {
             <TransfersTab session={state.session} onChange={state.refreshBalance} />
           )}
           {tab === 'history' && <HistoryTab session={state.session} />}
+          {tab === 'bridge' && <BridgeTab />}
           {tab === 'demo' && <DemoTab session={state.session} />}
         </div>
       )}
