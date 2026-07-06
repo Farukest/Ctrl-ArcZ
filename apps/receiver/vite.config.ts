@@ -1,6 +1,28 @@
 import { defineConfig, loadEnv, type Plugin, type ViteDevServer } from 'vite';
 import react from '@vitejs/plugin-react';
 
+const SECRET_ENV = ['VITE_DEMO_PK', 'VITE_RELAYER_PK', 'VITE_CLIENT_KEY'];
+
+/**
+ * Vite inlines every VITE_-prefixed value into the client bundle at build time,
+ * so a signing key set at build is public. The demo runs on the dev server, not a
+ * prod build, so a production build should not ship keys. Refuse to build with any
+ * secret key present unless the operator explicitly acknowledges it with
+ * VITE_ALLOW_DEMO_KEYS=1 (throwaway testnet keys only, rotated, never real-value).
+ * Turns "never in production" from a comment into an enforced, opt-in decision.
+ */
+function assertNoLeakedSecrets(env: Record<string, string>, command: string): void {
+  if (command !== 'build' || env.VITE_ALLOW_DEMO_KEYS === '1') return;
+  const present = SECRET_ENV.filter((k) => env[k]);
+  if (present.length > 0) {
+    throw new Error(
+      `Refusing to build: ${present.join(', ')} would be inlined into the client bundle. ` +
+        `Set VITE_ALLOW_DEMO_KEYS=1 to acknowledge (throwaway testnet keys only), ` +
+        `or unset them and sign server-side.`,
+    );
+  }
+}
+
 const MAX_BODY_BYTES = 4 * 1024;
 
 /** Reject cross-site requests: the demo browser calls this same-origin only. */
@@ -92,8 +114,9 @@ function gaslessApi(env: Record<string, string>): Plugin {
   };
 }
 
-export default defineConfig(({ mode }) => {
+export default defineConfig(({ command, mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
+  assertNoLeakedSecrets(env, command);
   return {
     plugins: [react(), gaslessApi(env)],
     server: { port: 5174, strictPort: true },
