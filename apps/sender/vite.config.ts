@@ -14,6 +14,27 @@ import react from '@vitejs/plugin-react';
  * allowlisted chains, a hard amount cap, same-origin only, a body-size limit, and
  * generic error responses. Never expose this server with `--host`.
  */
+const SECRET_ENV = ['VITE_DEMO_PK', 'VITE_RELAYER_PK', 'VITE_CLIENT_KEY'];
+
+/**
+ * Vite inlines every VITE_-prefixed value into the client bundle at build time, so
+ * a signing key set at build is public. The demo runs on the dev server (that is
+ * where /api/bridge lives), not a prod build, so a production build should not ship
+ * keys. Refuse to build with any secret key present unless the operator explicitly
+ * acknowledges it with VITE_ALLOW_DEMO_KEYS=1 (throwaway testnet keys only, rotated,
+ * never real-value). Turns "never in production" from a comment into enforcement.
+ */
+function assertNoLeakedSecrets(env: Record<string, string>, command: string): void {
+  if (command !== 'build' || env.VITE_ALLOW_DEMO_KEYS === '1') return;
+  const present = SECRET_ENV.filter((k) => env[k]);
+  if (present.length > 0) {
+    throw new Error(
+      `Refusing to build: ${present.join(', ')} would be inlined into the client bundle. ` +
+        `Set VITE_ALLOW_DEMO_KEYS=1 to acknowledge (throwaway testnet keys only), ` +
+        `or unset them and sign server-side.`,
+    );
+  }
+}
 
 const BRIDGE_CHAIN_IDS = new Set([
   'Arc_Testnet',
@@ -103,8 +124,9 @@ function bridgeApi(env: Record<string, string>): Plugin {
   };
 }
 
-export default defineConfig(({ mode }) => {
+export default defineConfig(({ command, mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
+  assertNoLeakedSecrets(env, command);
   return {
     plugins: [react(), bridgeApi(env)],
     server: { port: 5173, strictPort: true },
