@@ -4,21 +4,44 @@
 !.env.example
 .env.local
 .env.*.local
+*.pem
+*.key
 
 # deps
 node_modules/
+/.pnp
+.pnp.js
 
 # build output
 dist/
 out-tsc/
 coverage/
 *.tsbuildinfo
+lcov.info
+
+# foundry (lib/ is a pinned git submodule — tracked on purpose)
+packages/contracts/out/
+packages/contracts/cache/
+packages/contracts/broadcast/
+
+# vite
+apps/*/dist/
+.vite/
 
 # logs
 npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 pnpm-debug.log*
 
-# editors / os
+# editors / os / tooling
 .vscode/*
 .idea/
 .DS_Store
+.claude/
+.playwright-mcp/
+.cursor/
+*.log
+
+# scratch
+/tmp
