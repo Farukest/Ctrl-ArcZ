@@ -1,0 +1,14 @@
+{
+  "name": "@ctrl-arcz/example-node-quickstart",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Headless integration example: firewall check + protected send + claim with @ctrl-arcz/sdk",
+  "scripts": {
+    "start": "node quickstart.mjs"
+  },
+  "dependencies": {
+    "@ctrl-arcz/sdk": "workspace:*",
+    "viem": "^2.38.0"
+  }
+}
