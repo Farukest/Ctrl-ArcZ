@@ -43,5 +43,18 @@ pnpm-debug.log*
 .cursor/
 *.log
 
+# generated demo data (real lookalike address, minted locally)
+packages/sdk/src/demo/lookalike.json
+
+# working notes, plans and vendored doc mirrors — not part of the deliverable
+docs-arc/
+PROGRESS.md
+DECISIONS.md
+PLAN_UI.md
+FUNDING_NEEDED.md
+ARC_FINDINGS.md
+ARC_ISSUE83_COMMENT_DRAFT.md
+ctrl-arcz-claude-code-prompt.md
+
 # scratch
 /tmp
