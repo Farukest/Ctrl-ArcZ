@@ -17,3 +17,12 @@ runs = 256
 
 [rpc_endpoints]
 arc_testnet = "https://rpc.testnet.arc.network"
+
+# Arc Testnet Explorer runs Blockscout; `forge verify-contract --verifier blockscout`
+# publishes source there. Source: https://docs.arc.io/arc/tutorials/deploy-on-arc
+[etherscan]
+arc_testnet = { key = "", url = "https://testnet.arcscan.app/api/", chain = 5042002 }
+
+# Transaction type: Arc supports EIP-1559 (the next block's base fee is published in
+# the parent header's extra_data), and Arc's own deploy tutorial uses the standard
+# 1559 flow with no `--legacy` flag. We do not pass --legacy.
