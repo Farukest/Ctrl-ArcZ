@@ -1,9 +1,12 @@
 import { useMemo, useState } from 'react';
 import {
-  BRIDGE_CHAINS,
   BRIDGE_STEPS,
+  GATEWAY_STEPS,
+  GATEWAY_CHAINS,
+  chainsForEngine,
   bridgeChainLabel,
   type BridgeChainName,
+  type BridgeEngine,
   type BridgeOutcome,
 } from '@ctrl-arcz/demo-kit';
 import {
@@ -11,9 +14,13 @@ import {
   Card,
   ChainLogo,
   Field,
+  InfoPopover,
   Input,
+  PagedList,
   Pagination,
   paginate,
+  SearchField,
+  SegmentedTabs,
   Select,
   Stepper,
   useSubmitGuard,
@@ -29,13 +36,12 @@ import { loadBridges, saveBridge, type StoredBridge } from '../store.js';
 const bridgeEnabled = import.meta.env.VITE_BRIDGE_ENABLED !== 'false';
 const HISTORY_PAGE_SIZE = 5;
 
-/** Map a Bridge Kit step name ("approve"/"burn"/"mint") to its stepper index. */
-function stepIndexForName(name: string): number {
+/** Map a server step name to its index in the active engine's step list. */
+function stepIndexFor(name: string, list: readonly string[]): number {
   const n = name.toLowerCase();
-  if (n.includes('approve')) return 0;
-  if (n.includes('burn')) return 1;
-  if (n.includes('attest')) return 2;
-  if (n.includes('mint')) return 3;
+  const i = list.findIndex((s) => n.includes(s.toLowerCase()));
+  if (i >= 0) return i;
+  if (n.includes('attest')) return list.findIndex((s) => s.toLowerCase().includes('attest'));
   return -1;
 }
 
@@ -77,6 +83,7 @@ export function BridgeTab() {
   const t = useT();
   const toast = useToast();
   const guard = useSubmitGuard();
+  const [engine, setEngine] = useState<BridgeEngine>('cctp');
   const [from, setFrom] = useState<BridgeChainName>('Arc_Testnet');
   const [to, setTo] = useState<BridgeChainName>('Base_Sepolia');
   const [amount, setAmount] = useState('0.1');
@@ -91,20 +98,40 @@ export function BridgeTab() {
   const sameChain = from === to;
   const canBridge = bridgeEnabled && amountValue > 0 && !sameChain && !busy;
 
-  const chainOptions = BRIDGE_CHAINS.map((c) => ({
+  const chainOptions = chainsForEngine(engine).map((c) => ({
     value: c.id,
     label: c.label,
     text: c.label,
     icon: <ChainLogo id={c.id} size={20} />,
   }));
 
+  // Gateway supports fewer chains than CCTP; when switching to it, snap any
+  // now-unsupported selection back to a valid default so the pickers never show
+  // an out-of-list value.
+  const changeEngine = (e: BridgeEngine) => {
+    setEngine(e);
+    if (e === 'gateway') {
+      const ids = GATEWAY_CHAINS.map((c) => c.id);
+      if (!ids.includes(from)) setFrom('Arc_Testnet');
+      if (!ids.includes(to)) setTo('Base_Sepolia');
+    }
+  };
+
+  const activeSteps = engine === 'gateway' ? GATEWAY_STEPS : BRIDGE_STEPS;
+  const stepLabel = (name: string) =>
+    t(
+      (engine === 'gateway'
+        ? `bridge.gwstep.${name}`
+        : `bridge.step.${name}`) as 'bridge.step.mint',
+    );
+
   const steps: Step[] = useMemo(() => {
     const done = result?.state === 'success';
-    return BRIDGE_STEPS.map((name) => ({
-      label: t(`bridge.step.${name}`),
+    return activeSteps.map((name) => ({
+      label: stepLabel(name),
       status: done ? 'done' : busy ? 'active' : 'pending',
     }));
-  }, [busy, result, t]);
+  }, [busy, result, t, engine]);
 
   const filteredHistory = useMemo(() => {
     const q = histQuery.trim().toLowerCase();
@@ -119,7 +146,7 @@ export function BridgeTab() {
     setBusy(true);
     setResult(null);
     try {
-      const res = await fetch('/api/bridge', {
+      const res = await fetch(engine === 'gateway' ? '/api/gateway' : '/api/bridge', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ from, to, amount }),
@@ -169,7 +196,28 @@ export function BridgeTab() {
 
         <hr className="rule" />
 
-        <div className="bridge-route-row">
+        <div className="bridge-engine">
+          <SegmentedTabs
+            tabs={[
+              { id: 'cctp', label: t('bridge.engine.cctp') },
+              { id: 'gateway', label: t('bridge.engine.gateway') },
+            ]}
+            value={engine}
+            onChange={changeEngine}
+          />
+          <InfoPopover label={t('bridge.info.aria')}>
+            <div className="infopop__item">
+              <span className="infopop__k">{t('bridge.info.cctpTitle')}</span>
+              <p>{t('bridge.info.cctpBody')}</p>
+            </div>
+            <div className="infopop__item">
+              <span className="infopop__k">{t('bridge.info.gatewayTitle')}</span>
+              <p>{t('bridge.info.gatewayBody')}</p>
+            </div>
+          </InfoPopover>
+        </div>
+
+        <div className="bridge-route-row" style={{ marginTop: 16 }}>
           <div className="bridge-route-col">
             <Field label={t('bridge.from')}>
               <Select
@@ -241,8 +289,8 @@ export function BridgeTab() {
                   href={safeHttpUrl(s.explorerUrl)}
                   target="_blank"
                   rel="noreferrer"
-                  title={t(`bridge.step.${BRIDGE_STEPS[stepIndexForName(s.name)] ?? 'mint'}`)}
-                  onMouseEnter={() => setHoverIdx(stepIndexForName(s.name))}
+                  title={stepLabel(activeSteps[stepIndexFor(s.name, activeSteps)] ?? 'mint')}
+                  onMouseEnter={() => setHoverIdx(stepIndexFor(s.name, activeSteps))}
                   onMouseLeave={() => setHoverIdx(null)}
                 >
                   {s.name} <IconExternal width={13} height={13} />
@@ -258,70 +306,71 @@ export function BridgeTab() {
             <p className="muted">{t('bridge.historyEmpty')}</p>
           ) : (
             <>
-              <Input
+              <SearchField
                 value={histQuery}
-                onChange={(e) => {
-                  setHistQuery(e.target.value);
+                onChange={(v) => {
+                  setHistQuery(v);
                   setHistPage(0);
                 }}
                 placeholder={t('bridge.historySearch')}
-                aria-label={t('bridge.historySearch')}
+                ariaLabel={t('bridge.historySearch')}
                 data-testid="bridge-history-search"
               />
 
               {filteredHistory.length === 0 ? (
-                <p className="muted" style={{ marginTop: 12 }}>
+                <p className="muted" style={{ marginTop: 14 }}>
                   {t('bridge.historyNoMatch')}
                 </p>
               ) : (
-                <div className="bridge-hist" style={{ marginTop: 8 }}>
-                  {pageRows.map((b) => (
-                    <div key={b.id} className="bridge-hist__row" data-testid="bridge-history-row">
-                      <div className="bridge-hist__head">
-                        <span className="bridge-hist__route">
-                          <ChainLogo id={b.from} size={18} />
-                          {b.fromLabel}
-                          <span className="bridge-hist__arrow">&rarr;</span>
-                          <ChainLogo id={b.to} size={18} />
-                          {b.toLabel}
-                        </span>
-                        <span className="bridge-hist__meta">
-                          <span className="bridge-hist__amount mono">{b.amount} USDC</span>
-                          <span
-                            className={`hstatus${
-                              b.state === 'success'
-                                ? ' hstatus--ok'
-                                : b.state === 'error'
-                                  ? ' hstatus--err'
-                                  : ''
-                            }`}
-                          >
-                            {t(`bridge.state.${b.state}` as 'bridge.state.success')}
+                <PagedList resetKey={histQuery}>
+                  <div className="bridge-hist" style={{ marginTop: 14 }}>
+                    {pageRows.map((b) => (
+                      <div key={b.id} className="bridge-hist__row" data-testid="bridge-history-row">
+                        <div className="bridge-hist__head">
+                          <span className="bridge-hist__route">
+                            <ChainLogo id={b.from} size={18} />
+                            {b.fromLabel}
+                            <span className="bridge-hist__arrow">&rarr;</span>
+                            <ChainLogo id={b.to} size={18} />
+                            {b.toLabel}
                           </span>
-                          <span className="bridge-hist__time">{relativeTime(b.createdAt)}</span>
-                        </span>
-                      </div>
-                      <div className="row wrap" style={{ gap: 8 }}>
-                        {b.steps
-                          .filter((s) => s.txHash && safeHttpUrl(s.explorerUrl))
-                          .map((s) => (
-                            <a
-                              key={s.name}
-                              className="linkbtn"
-                              href={safeHttpUrl(s.explorerUrl)}
-                              target="_blank"
-                              rel="noreferrer"
+                          <span className="bridge-hist__meta">
+                            <span className="bridge-hist__amount mono">{b.amount} USDC</span>
+                            <span
+                              className={`hstatus${
+                                b.state === 'success'
+                                  ? ' hstatus--ok'
+                                  : b.state === 'error'
+                                    ? ' hstatus--err'
+                                    : ''
+                              }`}
                             >
-                              {s.name} <IconExternal width={13} height={13} />
-                            </a>
-                          ))}
+                              {t(`bridge.state.${b.state}` as 'bridge.state.success')}
+                            </span>
+                            <span className="bridge-hist__time">{relativeTime(b.createdAt)}</span>
+                          </span>
+                        </div>
+                        <div className="row wrap" style={{ gap: 8 }}>
+                          {b.steps
+                            .filter((s) => s.txHash && safeHttpUrl(s.explorerUrl))
+                            .map((s) => (
+                              <a
+                                key={s.name}
+                                className="linkbtn"
+                                href={safeHttpUrl(s.explorerUrl)}
+                                target="_blank"
+                                rel="noreferrer"
+                              >
+                                {s.name} <IconExternal width={13} height={13} />
+                              </a>
+                            ))}
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                  <Pagination page={page} pageCount={pageCount} onChange={setHistPage} />
+                </PagedList>
               )}
-
-              <Pagination page={page} pageCount={pageCount} onChange={setHistPage} />
             </>
           )}
         </Card>

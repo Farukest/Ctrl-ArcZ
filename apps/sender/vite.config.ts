@@ -49,6 +49,13 @@ const BRIDGE_CHAIN_IDS = new Set([
   'Sonic_Testnet',
   'World_Chain_Sepolia',
 ]);
+const GATEWAY_CHAIN_IDS = new Set([
+  'Arc_Testnet',
+  'Ethereum_Sepolia',
+  'Base_Sepolia',
+  'Avalanche_Fuji',
+  'Sonic_Testnet',
+]);
 const MAX_BRIDGE_AMOUNT = 5; // USDC, testnet demo ceiling
 const MAX_BODY_BYTES = 4 * 1024;
 
@@ -68,11 +75,23 @@ function isSameOrigin(req: { headers: Record<string, string | string[] | undefin
   return true;
 }
 
-function bridgeApi(env: Record<string, string>): Plugin {
+/**
+ * Shared handler for the two cross-chain endpoints. Both validate identically
+ * (allowlisted chains, amount cap, same-origin, body cap) and only differ in the
+ * server module they run: CCTP (bridgeUsdc) or Gateway (gatewayTransfer).
+ */
+function crossChainApi(
+  env: Record<string, string>,
+  route: string,
+  moduleId: string,
+  fn: string,
+  label: string,
+  allowedChains: Set<string>,
+): Plugin {
   return {
-    name: 'ctrl-arcz-bridge-api',
+    name: `ctrl-arcz-api-${label}`,
     configureServer(server: ViteDevServer) {
-      server.middlewares.use('/api/bridge', async (req, res) => {
+      server.middlewares.use(route, async (req, res) => {
         const send = (status: number, body: unknown) => {
           res.statusCode = status;
           res.setHeader('content-type', 'application/json');
@@ -81,12 +100,13 @@ function bridgeApi(env: Record<string, string>): Plugin {
         if (req.method !== 'POST') return send(405, { error: 'method not allowed' });
         if (!isSameOrigin(req as never)) return send(403, { error: 'forbidden' });
         try {
-          const chunks: Buffer[] = [];
+          const chunks: Uint8Array[] = [];
           let size = 0;
           for await (const c of req) {
-            size += (c as Buffer).length;
+            const chunk = c as Uint8Array;
+            size += chunk.length;
             if (size > MAX_BODY_BYTES) return send(413, { error: 'payload too large' });
-            chunks.push(c as Buffer);
+            chunks.push(chunk);
           }
 
           let parsed: { from?: unknown; to?: unknown; amount?: unknown };
@@ -97,9 +117,9 @@ function bridgeApi(env: Record<string, string>): Plugin {
           }
           const { from, to, amount } = parsed;
 
-          if (typeof from !== 'string' || !BRIDGE_CHAIN_IDS.has(from))
+          if (typeof from !== 'string' || !allowedChains.has(from))
             return send(400, { error: 'invalid source chain' });
-          if (typeof to !== 'string' || !BRIDGE_CHAIN_IDS.has(to))
+          if (typeof to !== 'string' || !allowedChains.has(to))
             return send(400, { error: 'invalid destination chain' });
           if (from === to) return send(400, { error: 'source and destination must differ' });
           const amt =
@@ -109,15 +129,15 @@ function bridgeApi(env: Record<string, string>): Plugin {
 
           const privateKey = env.VITE_DEMO_PK;
           if (!privateKey) return send(400, { error: 'no demo key configured' });
-          const mod = (await server.ssrLoadModule('@ctrl-arcz/demo-kit/cctp')) as {
-            bridgeUsdc: (p: unknown) => Promise<unknown>;
-          };
-          const result = await mod.bridgeUsdc({ privateKey, from, to, amount: String(amount) });
+          const mod = (await server.ssrLoadModule(moduleId)) as Record<
+            string,
+            (p: unknown) => Promise<unknown>
+          >;
+          const result = await mod[fn]!({ privateKey, from, to, amount: String(amount) });
           return send(200, result);
         } catch (e) {
-          // Log the detail server-side; return a generic message (no RPC/stack leak).
-          server.config.logger.error(`/api/bridge failed: ${e instanceof Error ? e.message : e}`);
-          return send(502, { error: 'bridge failed' });
+          server.config.logger.error(`${route} failed: ${e instanceof Error ? e.message : e}`);
+          return send(502, { error: `${label} failed` });
         }
       });
     },
@@ -128,7 +148,25 @@ export default defineConfig(({ command, mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   assertNoLeakedSecrets(env, command);
   return {
-    plugins: [react(), bridgeApi(env)],
+    plugins: [
+      react(),
+      crossChainApi(
+        env,
+        '/api/bridge',
+        '@ctrl-arcz/demo-kit/cctp',
+        'bridgeUsdc',
+        'bridge',
+        BRIDGE_CHAIN_IDS,
+      ),
+      crossChainApi(
+        env,
+        '/api/gateway',
+        '@ctrl-arcz/demo-kit/gateway',
+        'gatewayTransfer',
+        'gateway',
+        GATEWAY_CHAIN_IDS,
+      ),
+    ],
     server: { port: 5173, strictPort: true },
   };
 });
