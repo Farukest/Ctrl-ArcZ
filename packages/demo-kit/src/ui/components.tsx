@@ -190,9 +190,19 @@ export function Field({
   );
 }
 
-type InputProps = InputHTMLAttributes<HTMLInputElement> & { mono?: boolean; invalid?: boolean };
-export function Input({ mono, invalid, className, ...rest }: InputProps) {
-  const cls = ['input', mono && 'input--mono', invalid && 'is-invalid', className]
+type InputProps = InputHTMLAttributes<HTMLInputElement> & {
+  mono?: boolean;
+  invalid?: boolean;
+  sm?: boolean;
+};
+export function Input({ mono, invalid, sm, className, ...rest }: InputProps) {
+  const cls = [
+    'input',
+    mono && 'input--mono',
+    sm && 'input--sm',
+    invalid && 'is-invalid',
+    className,
+  ]
     .filter(Boolean)
     .join(' ');
   return <input className={cls} aria-invalid={invalid || undefined} {...rest} />;
@@ -535,6 +545,38 @@ export function SegmentedTabs<T extends string>({
   );
 }
 
+/* Info popover ------------------------------------------------------------ */
+/**
+ * A small info icon that reveals an explanation on click (not hover, so it never
+ * flickers or fires by accident). Reuses AnchoredLayer, so it is a popover on
+ * desktop and a bottom sheet on mobile, with click-away and Escape to close.
+ */
+export function InfoPopover({ label, children }: { label?: string; children: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  const anchor = useRef<HTMLButtonElement>(null);
+  return (
+    <>
+      <button
+        ref={anchor}
+        type="button"
+        className="infodot"
+        onClick={() => setOpen((v) => !v)}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        aria-label={label}
+        data-testid="info-popover"
+      >
+        <span className="infodot__glyph" aria-hidden>
+          i
+        </span>
+      </button>
+      <AnchoredLayer anchorRef={anchor} open={open} onClose={() => setOpen(false)} label={label}>
+        <div className="infopop">{children}</div>
+      </AnchoredLayer>
+    </>
+  );
+}
+
 /* Pagination --------------------------------------------------------------- */
 export function Pagination({
   page,
@@ -577,6 +619,60 @@ export function Pagination({
 /** Clamp-safe page slice helper for lists. */
 export function paginate<T>(items: T[], page: number, size: number): T[] {
   return items.slice(page * size, page * size + size);
+}
+
+/* Search field (one modular control reused across every list) --------------- */
+export function SearchField({
+  value,
+  onChange,
+  placeholder,
+  ariaLabel,
+  ...rest
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  ariaLabel?: string;
+} & { [k: `data-${string}`]: string }) {
+  return (
+    <div className="searchfield">
+      <IconSearch className="searchfield__icon" width={16} height={16} aria-hidden />
+      <input
+        className="searchfield__input"
+        type="search"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        aria-label={ariaLabel ?? placeholder}
+        autoComplete="off"
+        {...rest}
+      />
+    </div>
+  );
+}
+
+/**
+ * Wraps a paginated list so the pagination control never jumps as you move
+ * between pages: the container locks to the tallest page height seen (measured on
+ * an unconstrained inner div, so there is no feedback loop), and a short last page
+ * keeps that height instead of pulling everything up. `resetKey` re-measures when
+ * the dataset changes (e.g. a new search), so filtering does not leave dead space.
+ */
+export function PagedList({ children, resetKey }: { children: ReactNode; resetKey?: unknown }) {
+  const inner = useRef<HTMLDivElement>(null);
+  const [minH, setMinH] = useState(0);
+  useLayoutEffect(() => {
+    const h = inner.current?.offsetHeight ?? 0;
+    setMinH((prev) => (h > prev ? h : prev));
+  });
+  useEffect(() => {
+    setMinH(0);
+  }, [resetKey]);
+  return (
+    <div className="paged-list" style={minH ? { minHeight: minH } : undefined}>
+      <div ref={inner}>{children}</div>
+    </div>
+  );
 }
 
 /* Modal ------------------------------------------------------------------- */

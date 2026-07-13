@@ -146,6 +146,9 @@ body {
 }
 html {
   -webkit-text-size-adjust: 100%;
+  /* Always reserve the scrollbar gutter so the centered layout never jumps
+     sideways when a tab's content grows tall enough to need a scrollbar. */
+  scrollbar-gutter: stable;
 }
 
 body {

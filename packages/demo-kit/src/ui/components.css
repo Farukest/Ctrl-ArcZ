@@ -346,6 +346,52 @@
     border-color var(--dur-2) var(--ease),
     box-shadow var(--dur-2) var(--ease);
 }
+.input--sm {
+  min-height: 40px;
+  font-size: var(--fs-sm);
+}
+
+/* Modular search field (same look/feel in every list) --------------------- */
+.searchfield {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: 40px;
+  padding: 0 var(--sp-3);
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-md);
+  transition: border-color var(--dur-2) var(--ease);
+}
+.searchfield:focus-within {
+  border-color: var(--accent-ring);
+}
+.searchfield__icon {
+  color: var(--text-lo);
+  flex-shrink: 0;
+}
+.searchfield__input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-hi);
+  font-family: inherit;
+  font-size: var(--fs-sm);
+  outline: none;
+}
+.searchfield__input::placeholder {
+  color: var(--text-lo);
+}
+.searchfield__input::-webkit-search-cancel-button {
+  cursor: pointer;
+}
+
+/* Paginated list wrapper: reserves the tallest page height so paging never
+   shifts the layout (see PagedList). */
+.paged-list {
+  display: block;
+}
 .input::placeholder {
   color: var(--text-lo);
 }
@@ -597,10 +643,11 @@
 /* Checkbox / Switch ------------------------------------------------------- */
 .check {
   display: inline-flex;
-  align-items: flex-start;
+  align-items: center;
   gap: var(--sp-3);
   cursor: pointer;
   font-size: var(--fs-sm);
+  line-height: 1.4;
   color: var(--text-hi);
   user-select: none;
 }
@@ -617,7 +664,6 @@
   justify-content: center;
   width: 20px;
   height: 20px;
-  margin-top: 1px;
   border: 1px solid var(--border-strong);
   border-radius: 6px;
   background: var(--surface-2);
@@ -743,6 +789,95 @@
   color: var(--accent);
   font-size: 18px;
   font-weight: 700;
+}
+
+/* Info popover (click to open, mobile-friendly) --------------------------- */
+.infodot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--text-mid);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition:
+    color var(--dur-1) var(--ease),
+    border-color var(--dur-1) var(--ease),
+    background-color var(--dur-1) var(--ease);
+}
+@media (hover: hover) {
+  .infodot:hover {
+    color: var(--accent);
+    border-color: var(--accent-ring);
+    background: var(--accent-soft);
+  }
+}
+.infodot[aria-expanded='true'] {
+  color: var(--accent);
+  border-color: var(--accent-ring);
+  background: var(--accent-soft);
+}
+.infodot__glyph {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-style: italic;
+  font-weight: 700;
+  font-size: 14px;
+  line-height: 1;
+}
+.infopop {
+  width: min(280px, 82vw);
+  padding: var(--sp-2) var(--sp-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+.infopop__item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.infopop__item + .infopop__item {
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--border-subtle);
+}
+.infopop__k {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-sm);
+  font-weight: 650;
+  color: var(--text-hi);
+}
+.infopop__k::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.infopop__item:last-child .infopop__k::before {
+  background: var(--safe);
+}
+.infopop p {
+  margin: 0;
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+  color: var(--text-mid);
+}
+
+/* Bridge engine toggle row (CCTP / Gateway + info) ------------------------ */
+.bridge-engine {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.bridge-engine .segtabs {
+  flex: 1;
+  min-width: 0;
 }
 
 /* Bridge history list ----------------------------------------------------- */
