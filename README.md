@@ -157,3 +157,7 @@ Tam quickstart ve imzalar: [`packages/sdk/README.md`](./packages/sdk/README.md).
 | `cancel` / `reclaimExpired(clients, id)`               | Gönderen iptali / süre sonu otomatik iade                   |
 | `getTransfer` / `watchTransfer`                        | Zincir durumu / event aboneliği                             |
 | `getCleanHistory(address)`                             | Katman 3 — spam'sız geçmiş                                  |
+
+## Durum
+
+v0.1.0 hazır; üç demo akışı canlı zincirde doğrulandı. Sürüm notları: [`CHANGELOG.md`](./CHANGELOG.md). Güvenlik denetimi ve bilinen sınırlar: [`SECURITY.md`](./SECURITY.md).
