@@ -117,6 +117,9 @@ importers:
       '@circle-fin/modular-wallets-core':
         specifier: ^1.0.13
         version: 1.0.13(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)(zod@3.25.67)
+      '@circle-fin/unified-balance-kit':
+        specifier: ^1.2.2
+        version: 1.2.2(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
       '@ctrl-arcz/sdk':
         specifier: workspace:*
         version: link:../sdk
@@ -277,6 +280,14 @@ packages:
     peerDependenciesMeta:
       '@solana/web3.js':
         optional: true
+
+  '@circle-fin/provider-gateway-v1@1.1.2':
+    resolution: {integrity: sha512-xhOgHJcbdoDtVPRg8RdsxOrHw4k0AfOmGXvBGZiRnGOvGfBw4VChFx2SIhA/ufq6Gv85xhZG32lSS+Z+aGqzVQ==}
+    engines: {node: '>=20.0.0'}
+
+  '@circle-fin/unified-balance-kit@1.2.2':
+    resolution: {integrity: sha512-imd0XGjC+6i6dMBJnk3dNVgLeQChDqrGYUdhDsxTMLdSsqCEeSI4flwAEHChPa1LNWY4Baebeo7V7JZ067CUPQ==}
+    engines: {node: '>=20.0.0'}
 
   '@coral-xyz/anchor-errors@0.31.1':
     resolution: {integrity: sha512-NhNEku4F3zzUSBtrYz84FzYWm48+9OvmT1Hhnwr6GnPQry2dsEqH/ti/7ASjjpoFTWRnPXrjAIT1qM6Isop+LQ==}
@@ -2735,6 +2746,45 @@ snapshots:
       zod: 3.25.67
     optionalDependencies:
       '@solana/web3.js': 1.98.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
+    transitivePeerDependencies:
+      - bufferutil
+      - encoding
+      - typescript
+      - utf-8-validate
+
+  '@circle-fin/provider-gateway-v1@1.1.2(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)':
+    dependencies:
+      '@coral-xyz/anchor': 0.31.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
+      '@ethersproject/abi': 5.8.0
+      '@ethersproject/address': 5.8.0
+      '@ethersproject/bytes': 5.8.0
+      '@ethersproject/units': 5.8.0
+      '@noble/curves': 1.4.2
+      '@solana/web3.js': 1.98.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
+      abitype: 1.2.4(typescript@5.9.3)(zod@3.25.67)
+      bn.js: 5.2.5
+      bs58: 6.0.0
+      zod: 3.25.67
+    transitivePeerDependencies:
+      - bufferutil
+      - encoding
+      - typescript
+      - utf-8-validate
+
+  '@circle-fin/unified-balance-kit@1.2.2(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)':
+    dependencies:
+      '@circle-fin/provider-gateway-v1': 1.1.2(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
+      '@coral-xyz/anchor': 0.31.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
+      '@ethersproject/abi': 5.8.0
+      '@ethersproject/address': 5.8.0
+      '@ethersproject/bytes': 5.8.0
+      '@ethersproject/units': 5.8.0
+      '@noble/curves': 1.4.2
+      '@solana/web3.js': 1.98.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
+      abitype: 1.2.4(typescript@5.9.3)(zod@3.25.67)
+      bn.js: 5.2.5
+      bs58: 6.0.0
+      zod: 3.25.67
     transitivePeerDependencies:
       - bufferutil
       - encoding

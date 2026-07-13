@@ -23,6 +23,13 @@ export type BridgeChainName =
 export const BRIDGE_STEPS = ['approve', 'burn', 'fetchAttestation', 'mint'] as const;
 export type BridgeStepName = (typeof BRIDGE_STEPS)[number];
 
+/** Steps of a Circle Gateway instant transfer (deposit once, then instant spend). */
+export const GATEWAY_STEPS = ['deposit', 'sign', 'attestation', 'mint'] as const;
+export type GatewayStepName = (typeof GATEWAY_STEPS)[number];
+
+/** How the cross-chain move is performed. */
+export type BridgeEngine = 'cctp' | 'gateway';
+
 export interface BridgeStep {
   name: string;
   state: string;
@@ -56,4 +63,27 @@ export const BRIDGE_CHAINS: { id: BridgeChainName; label: string }[] = [
 
 export function bridgeChainLabel(id: string): string {
   return BRIDGE_CHAINS.find((c) => c.id === id)?.label ?? id;
+}
+
+/**
+ * The subset of chains Circle Gateway supports on testnet. It is smaller than the
+ * CCTP set, so the Gateway mode restricts its From/To pickers to these.
+ */
+export type GatewayChainName =
+  'Arc_Testnet' | 'Ethereum_Sepolia' | 'Base_Sepolia' | 'Avalanche_Fuji' | 'Sonic_Testnet';
+
+export const GATEWAY_CHAIN_IDS: readonly GatewayChainName[] = [
+  'Arc_Testnet',
+  'Ethereum_Sepolia',
+  'Base_Sepolia',
+  'Avalanche_Fuji',
+  'Sonic_Testnet',
+];
+
+export const GATEWAY_CHAINS = BRIDGE_CHAINS.filter((c) =>
+  (GATEWAY_CHAIN_IDS as readonly string[]).includes(c.id),
+);
+
+export function chainsForEngine(engine: BridgeEngine): { id: BridgeChainName; label: string }[] {
+  return engine === 'gateway' ? GATEWAY_CHAINS : BRIDGE_CHAINS;
 }

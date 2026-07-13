@@ -8,6 +8,7 @@
     ".": "./src/index.ts",
     "./ui": "./src/ui/index.ts",
     "./cctp": "./src/cctp.ts",
+    "./gateway": "./src/gateway.ts",
     "./gasless": "./src/gaslessServer.ts"
   },
   "scripts": {
@@ -24,6 +25,7 @@
     "@circle-fin/adapter-viem-v2": "^1.13.0",
     "@circle-fin/bridge-kit": "^1.12.0",
     "@circle-fin/modular-wallets-core": "^1.0.13",
+    "@circle-fin/unified-balance-kit": "^1.2.2",
     "@ctrl-arcz/sdk": "workspace:*"
   },
   "devDependencies": {

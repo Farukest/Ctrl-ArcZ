@@ -16,9 +16,16 @@ export { makeTestProvider, installTestProvider } from './testProvider.js';
 export {
   BRIDGE_CHAINS,
   BRIDGE_STEPS,
+  GATEWAY_STEPS,
+  GATEWAY_CHAINS,
+  GATEWAY_CHAIN_IDS,
+  chainsForEngine,
   bridgeChainLabel,
   type BridgeChainName,
+  type GatewayChainName,
   type BridgeStepName,
+  type GatewayStepName,
+  type BridgeEngine,
   type BridgeStep,
   type BridgeOutcome,
 } from './bridgeChains.js';
