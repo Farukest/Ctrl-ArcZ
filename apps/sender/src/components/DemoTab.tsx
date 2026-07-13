@@ -28,6 +28,7 @@ export function DemoTab({ session }: { session: Session }) {
   }
 
   async function run() {
+    if (!TRUSTED) return;
     setBusy(true);
     setError(null);
     setReport(null);
