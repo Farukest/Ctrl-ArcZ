@@ -12,7 +12,9 @@ import {
   Button,
   Card,
   CopyButton,
+  PagedList,
   Pagination,
+  SearchField,
   Skeleton,
   StatusPill,
   paginate,
@@ -31,6 +33,20 @@ interface Row {
 
 const PAGE_SIZE = 5;
 
+/** One lowercased haystack for searching a transfer row. */
+function transferHaystack(r: Row): string {
+  return [
+    `#${r.stored.transferId}`,
+    r.stored.amount,
+    'usdc',
+    r.stored.to,
+    r.stored.code,
+    r.chain?.status ?? '',
+  ]
+    .join(' ')
+    .toLowerCase();
+}
+
 export function TransfersTab({ session, onChange }: { session: Session; onChange: () => void }) {
   const toast = useToast();
   const t = useT();
@@ -38,6 +54,7 @@ export function TransfersTab({ session, onChange }: { session: Session; onChange
   const [rows, setRows] = useState<Row[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [page, setPage] = useState(0);
+  const [query, setQuery] = useState('');
 
   const load = useCallback(async () => {
     const stored = loadTransfers(session.address as Address);
@@ -56,12 +73,14 @@ export function TransfersTab({ session, onChange }: { session: Session; onChange
     return () => clearInterval(timer);
   }, [load]);
 
-  const pageCount = rows ? Math.ceil(rows.length / PAGE_SIZE) : 0;
-  // Keep the page in range as rows change.
-  useEffect(() => {
-    if (page > 0 && page >= pageCount) setPage(Math.max(0, pageCount - 1));
-  }, [page, pageCount]);
-  const pageRows = useMemo(() => (rows ? paginate(rows, page, PAGE_SIZE) : []), [rows, page]);
+  const filtered = useMemo(() => {
+    if (!rows) return [];
+    const q = query.trim().toLowerCase();
+    return q ? rows.filter((r) => transferHaystack(r).includes(q)) : rows;
+  }, [rows, query]);
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const safePage = Math.min(page, pageCount - 1);
+  const pageRows = useMemo(() => paginate(filtered, safePage, PAGE_SIZE), [filtered, safePage]);
 
   async function handleCancel(id: string) {
     setBusy(id);
@@ -101,62 +120,81 @@ export function TransfersTab({ session, onChange }: { session: Session; onChange
 
   return (
     <Card data-testid="transfers-list">
-      {pageRows.map(({ stored, chain }) => {
-        const status = chain?.status ?? 'NONE';
-        const canCancel = status === 'PENDING' || status === 'LOCKED';
-        return (
-          <div
-            className="trow"
-            key={stored.transferId}
-            data-testid={`transfer-${stored.transferId}`}
-          >
-            <div className="trow__top">
-              <div className="trow__idline">
-                <span className="trow__id">#{stored.transferId}</span>
-                <span className="trow__sep">·</span>
-                <span className="trow__amount">{stored.amount}</span>
-                <span className="trow__unit">USDC</span>
-              </div>
-              <StatusPill status={status} />
-            </div>
-            <div className="trow__to">→ {short(stored.to)}</div>
-
-            <hr className="rule trow__rule" />
-
-            <div className="trow__bottom">
-              <div className="trow__code">
-                <span className="trow__code-label">{t('active.code')}</span>
-                <span className="trow__code-value">{stored.code}</span>
-                <CopyButton value={stored.code} />
-              </div>
-              <div className="trow__actions">
-                <a
-                  className="linkbtn"
-                  href={explorerTxUrl(stored.txHash)}
-                  target="_blank"
-                  rel="noreferrer"
+      <SearchField
+        value={query}
+        onChange={(v) => {
+          setQuery(v);
+          setPage(0);
+        }}
+        placeholder={t('active.search')}
+        ariaLabel={t('active.search')}
+        data-testid="transfers-search"
+      />
+      {filtered.length === 0 ? (
+        <p className="muted" style={{ marginTop: 14 }}>
+          {t('active.noMatch')}
+        </p>
+      ) : (
+        <PagedList resetKey={query}>
+          <div style={{ marginTop: 14 }}>
+            {pageRows.map(({ stored, chain }) => {
+              const status = chain?.status ?? 'NONE';
+              const canCancel = status === 'PENDING' || status === 'LOCKED';
+              return (
+                <div
+                  className="trow"
+                  key={stored.transferId}
+                  data-testid={`transfer-${stored.transferId}`}
                 >
-                  tx <IconExternal width={13} height={13} />
-                </a>
-                {canCancel && (
-                  <Button
-                    variant="danger"
-                    size="sm"
-                    loading={busy === stored.transferId}
-                    disabled={Boolean(busy)}
-                    onClick={() => void guard(() => handleCancel(stored.transferId))}
-                    data-testid={`cancel-${stored.transferId}`}
-                  >
-                    {busy === stored.transferId ? t('active.cancelling') : t('active.cancel')}
-                  </Button>
-                )}
-              </div>
-            </div>
-          </div>
-        );
-      })}
+                  <div className="trow__top">
+                    <div className="trow__idline">
+                      <span className="trow__id">#{stored.transferId}</span>
+                      <span className="trow__sep">·</span>
+                      <span className="trow__amount">{stored.amount}</span>
+                      <span className="trow__unit">USDC</span>
+                    </div>
+                    <StatusPill status={status} />
+                  </div>
+                  <div className="trow__to">→ {short(stored.to)}</div>
 
-      <Pagination page={page} pageCount={pageCount} onChange={setPage} />
+                  <hr className="rule trow__rule" />
+
+                  <div className="trow__bottom">
+                    <div className="trow__code">
+                      <span className="trow__code-label">{t('active.code')}</span>
+                      <span className="trow__code-value">{stored.code}</span>
+                      <CopyButton value={stored.code} />
+                    </div>
+                    <div className="trow__actions">
+                      <a
+                        className="linkbtn"
+                        href={explorerTxUrl(stored.txHash)}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        tx <IconExternal width={13} height={13} />
+                      </a>
+                      {canCancel && (
+                        <Button
+                          variant="danger"
+                          size="sm"
+                          loading={busy === stored.transferId}
+                          disabled={Boolean(busy)}
+                          onClick={() => void guard(() => handleCancel(stored.transferId))}
+                          data-testid={`cancel-${stored.transferId}`}
+                        >
+                          {busy === stored.transferId ? t('active.cancelling') : t('active.cancel')}
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <Pagination page={safePage} pageCount={pageCount} onChange={setPage} />
+        </PagedList>
+      )}
     </Card>
   );
 }
