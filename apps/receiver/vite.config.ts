@@ -61,12 +61,13 @@ function gaslessApi(env: Record<string, string>): Plugin {
         if (req.method !== 'POST') return send(405, { error: 'method not allowed' });
         if (!isSameOrigin(req as never)) return send(403, { error: 'forbidden' });
         try {
-          const chunks: Buffer[] = [];
+          const chunks: Uint8Array[] = [];
           let size = 0;
           for await (const c of req) {
-            size += (c as Buffer).length;
+            const chunk = c as Uint8Array;
+            size += chunk.length;
             if (size > MAX_BODY_BYTES) return send(413, { error: 'payload too large' });
-            chunks.push(c as Buffer);
+            chunks.push(chunk);
           }
 
           let parsed: { transferId?: unknown; code?: unknown; salt?: unknown };
