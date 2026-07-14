@@ -57,6 +57,8 @@ export {
   type ProtectedTransfer,
   type SendProtectedParams,
   type SendProtectedResult,
+  MAX_REPORT_AGE_MS,
+  type SendProtectedOptions,
   type TransferStatus,
   type WatchTransferOptions,
 } from './transfer/transfer.js';

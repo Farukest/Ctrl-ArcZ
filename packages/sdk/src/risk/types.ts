@@ -43,6 +43,12 @@ export interface RiskReport {
   reasons: RiskReason[];
   /** True when every data source answered. A partial check never reports `safe`. */
   complete: boolean;
+  /**
+   * When the verdict was reached. A report is a snapshot: a bait transfer landing
+   * after it was taken would not appear in it. `sendProtected` re-scans rather
+   * than trusting a report older than `MAX_REPORT_AGE_MS`.
+   */
+  checkedAt: Date;
 }
 
 /** One counterparty the sender has previously sent value to. */

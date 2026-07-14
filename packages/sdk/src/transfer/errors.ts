@@ -1,4 +1,5 @@
 import { BaseError, ContractFunctionRevertedError } from 'viem';
+import type { RiskReport } from '../risk/types.js';
 
 /** Base class so integrators can `catch (e) { if (e instanceof CtrlArcZError) ... }`. */
 export class CtrlArcZError extends Error {
@@ -80,9 +81,20 @@ export class ClaimOutcomeUnknownError extends CtrlArcZError {
   }
 }
 
-/** A send was attempted while the risk firewall said `block`. */
+/**
+ * A send was attempted while the risk firewall said `block`.
+ *
+ * Carries the whole `RiskReport`, not just its messages, so a caller that catches
+ * this can render the same explanation the pre-send UI would have shown: the rule
+ * codes, which address the target imitates (`lookalikeOf`), and whether the scan
+ * was complete. `reasons` is kept as the flattened message list for logging.
+ */
 export class RiskBlockedError extends CtrlArcZError {
-  constructor(readonly reasons: string[]) {
+  readonly reasons: string[];
+
+  constructor(readonly report: RiskReport) {
+    const reasons = report.reasons.map((r) => r.message);
     super(`The risk scan stopped the send:\n- ${reasons.join('\n- ')}`);
+    this.reasons = reasons;
   }
 }

@@ -167,6 +167,7 @@ export function evaluateRisk(input: RiskInput, now: Date = new Date()): RiskRepo
     level,
     reasons,
     complete: unavailable.length === 0,
+    checkedAt: now,
   };
 }
 

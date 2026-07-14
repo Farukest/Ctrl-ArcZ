@@ -17,11 +17,16 @@ import { ctrlArcZAbi, memoAbi } from '../abi/ctrlArcZ.js';
 import { ADDRESSES, CTRL_ARCZ_ADDRESS } from '../chains/arcTestnet.js';
 import {
   ClaimOutcomeUnknownError,
+  RiskBlockedError,
   TransferLockedError,
   TransferUnavailableError,
   WrongClaimCodeError,
   decodeRevert,
 } from './errors.js';
+import { check, type CheckOptions } from '../risk/check.js';
+import type { RiskReport } from '../risk/types.js';
+// Runtime import, but not a cycle: config.ts imports only *types* from this file.
+import { defineConfig, shouldBlockSend, type IntegratorConfig } from '../config/config.js';
 
 /** Maps a contract revert to a clean typed error; rethrows anything unrecognized. */
 function mapTransferRevert(err: unknown, allowNotSender = false): never {
@@ -35,9 +40,10 @@ function mapTransferRevert(err: unknown, allowNotSender = false): never {
 import { signPermit2Transfer } from './permit2.js';
 
 /**
- * Defensive guard for the send path. The risk `check()` is the real poisoning
- * defense and is caller-invoked, but a zero/invalid recipient or a non-positive
- * amount should never reach the contract regardless.
+ * Cheap structural guard for the send path. The poisoning defense is the risk
+ * `check()`, run by default inside `sendProtected` via `runRiskGuard`; this only
+ * rejects a zero/invalid recipient or non-positive amount before it can reach the
+ * contract, independent of the risk scan.
  */
 function assertSendParams(params: { to: Address; amount: bigint }): void {
   if (!isAddress(params.to) || params.to === zeroAddress) {
@@ -98,6 +104,46 @@ export interface SendProtectedResult {
   deadline: Date;
 }
 
+/**
+ * How long a `RiskReport` may be reused before the guard insists on a fresh scan.
+ * A report is a snapshot; a bait transfer that lands after it was taken would not
+ * be in it, so an old one is not evidence of anything.
+ */
+export const MAX_REPORT_AGE_MS = 2 * 60 * 1000;
+
+export interface SendProtectedOptions {
+  /**
+   * Run the address-poisoning `check()` before submitting. On by default:
+   * installing the SDK should make a send protected, without the integrator
+   * having to remember a separate call.
+   *
+   * Turning this off removes the poisoning defense from the send path entirely.
+   * If you already ran `check()` yourself, pass that report as `report` instead:
+   * it reuses your scan without giving up the guard.
+   */
+  skipRiskCheck?: boolean;
+  /**
+   * The behaviour whose `onWarning` policy decides what a `warning` verdict does.
+   * Pass the same config you registered, so a config that says `onWarning: 'block'`
+   * blocks here too. Defaults to `defineConfig()`, which lets warnings through and
+   * stops only hard blocks (a poisoning lookalike, a zero-value bait, or a scan
+   * that could not rule a lookalike out). Warnings are advisory by design: a
+   * brand-new recipient is the most common legitimate payment there is, and a
+   * default that hard-failed it would only teach integrators to disable the guard.
+   */
+  config?: IntegratorConfig;
+  /**
+   * A report you already have for this exact sender and target, to avoid scanning
+   * twice. It is used only when it matches both addresses and is younger than
+   * `MAX_REPORT_AGE_MS`; otherwise the guard silently re-scans.
+   */
+  report?: RiskReport;
+  /** Forwarded to `check`. `client` and `contractAddress` default from `clients`. */
+  checkOptions?: CheckOptions;
+  /** Invoked with the report when the scan does NOT block, so callers can surface warnings. */
+  onReport?: (report: RiskReport) => void;
+}
+
 const contractOf = (clients: ClientPair): Address =>
   clients.contractAddress ?? (CTRL_ARCZ_ADDRESS as Address);
 
@@ -125,6 +171,51 @@ export async function getAllowance(clients: ClientPair, owner: Address): Promise
 
 const addressOf = (account: Account | Address): Address =>
   typeof account === 'string' ? account : account.address;
+
+/** True when a supplied report is about this exact pair and is still fresh. */
+function isUsableReport(
+  report: RiskReport,
+  sender: Address,
+  target: Address,
+  now: number,
+): boolean {
+  const same = (a: Address, b: Address) => a.toLowerCase() === b.toLowerCase();
+  if (!same(report.sender, sender) || !same(report.target, target)) return false;
+  return now - report.checkedAt.getTime() <= MAX_REPORT_AGE_MS;
+}
+
+/**
+ * Fail-closed pre-send firewall. Runs the risk `check()` unless the caller opted
+ * out, and throws `RiskBlockedError` before any funds move when the verdict blocks.
+ * This is what makes the firewall the default rather than something an integrator
+ * has to remember to wire up.
+ *
+ * The warning policy comes from the integrator's own `IntegratorConfig`, through
+ * the same `shouldBlockSend` the UI uses, so there is exactly one place that
+ * decides what a warning means and it cannot disagree with itself.
+ */
+async function runRiskGuard(
+  clients: ClientPair,
+  sender: Address,
+  target: Address,
+  options?: SendProtectedOptions,
+): Promise<void> {
+  if (options?.skipRiskCheck) return;
+
+  const supplied = options?.report;
+  const report =
+    supplied && isUsableReport(supplied, sender, target, Date.now())
+      ? supplied
+      : await check(sender, target, {
+          client: clients.publicClient,
+          contractAddress: contractOf(clients),
+          ...options?.checkOptions,
+        });
+
+  const config = options?.config ?? defineConfig();
+  if (shouldBlockSend(config, report.level)) throw new RiskBlockedError(report);
+  options?.onReport?.(report);
+}
 
 /** Approve CtrlArcZ to pull `amount` USDC. Returns null when the allowance already covers it. */
 export async function approveUsdc(clients: ClientPair, amount: bigint): Promise<Hash | null> {
@@ -156,9 +247,11 @@ export async function approveUsdc(clients: ClientPair, amount: bigint): Promise<
 export async function sendProtected(
   clients: ClientPair,
   params: SendProtectedParams,
+  options?: SendProtectedOptions,
 ): Promise<SendProtectedResult> {
   const account = requireAccount(clients.walletClient);
   assertSendParams(params);
+  await runRiskGuard(clients, addressOf(account), params.to, options);
   const contract = contractOf(clients);
   const useMemo = params.memo ?? true;
 
@@ -218,9 +311,11 @@ export async function sendProtected(
 export async function sendProtectedWithPermit(
   clients: ClientPair,
   params: SendProtectedParams,
+  options?: SendProtectedOptions,
 ): Promise<SendProtectedResult> {
   const account = requireAccount(clients.walletClient);
   assertSendParams(params);
+  await runRiskGuard(clients, addressOf(account), params.to, options);
   const contract = contractOf(clients);
 
   const permit = await signPermit2Transfer(clients, params.amount, contract);
