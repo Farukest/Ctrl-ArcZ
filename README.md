@@ -25,14 +25,14 @@ Protected USDC transfers on Arc: an SDK and a single contract that screen a paym
 
 ## In one look
 
-|                  |                                                                                       |
-| ---------------- | ------------------------------------------------------------------------------------- |
-| **Network**      | Arc Testnet, chain id `5042002`                                                       |
-| **Asset**        | USDC, which on Arc is both the gas token and the thing you are sending                |
-| **Protection**   | Pre-send risk firewall, code-gated claim, sender cancel, automatic expiry refund      |
-| **Custody**      | None. Funds are with the user or in the contract. No owner, no pause, no upgrade path |
-| **Product**      | An SDK any wallet, exchange or payments app embeds. Not another wallet                |
-| **Tests**        | 61 Foundry tests (100 percent branch coverage), 53 SDK unit tests, live testnet runs  |
+|                |                                                                                       |
+| -------------- | ------------------------------------------------------------------------------------- |
+| **Network**    | Arc Testnet, chain id `5042002`                                                       |
+| **Asset**      | USDC, which on Arc is both the gas token and the thing you are sending                |
+| **Protection** | Pre-send risk firewall, code-gated claim, sender cancel, automatic expiry refund      |
+| **Custody**    | None. Funds are with the user or in the contract. No owner, no pause, no upgrade path |
+| **Product**    | An SDK any wallet, exchange or payments app embeds. Not another wallet                |
+| **Tests**      | 61 Foundry tests (100 percent branch coverage), 53 SDK unit tests, live testnet runs  |
 
 ## The problem
 
@@ -48,13 +48,13 @@ Something has to refuse the send.
 
 ## How it compares
 
-|                                | Stops the send | Funds recoverable after the fact | Needs an arbiter | Takes custody | Works for plain P2P |
-| ------------------------------ | -------------- | -------------------------------- | ---------------- | ------------- | ------------------- |
-| Wallet address-book warning    | No             | No                               | No               | No            | Yes                 |
-| Poisoning detection service    | Warns only     | No                               | No               | No            | Yes                 |
-| Commerce escrow                | No             | Yes, by dispute                  | Yes              | Yes           | No                  |
-| Circle Refund Protocol         | No             | Yes, by mediator                 | Yes              | Yes           | No                  |
-| **Ctrl+ArcZ**                  | **Yes**        | **Yes, by the sender**           | **No**           | **No**        | **Yes**             |
+|                             | Stops the send | Funds recoverable after the fact | Needs an arbiter | Takes custody | Works for plain P2P |
+| --------------------------- | -------------- | -------------------------------- | ---------------- | ------------- | ------------------- |
+| Wallet address-book warning | No             | No                               | No               | No            | Yes                 |
+| Poisoning detection service | Warns only     | No                               | No               | No            | Yes                 |
+| Commerce escrow             | No             | Yes, by dispute                  | Yes              | Yes           | No                  |
+| Circle Refund Protocol      | No             | Yes, by mediator                 | Yes              | Yes           | No                  |
+| **Ctrl+ArcZ**               | **Yes**        | **Yes, by the sender**           | **No**           | **No**        | **Yes**             |
 
 Circle's Refund Protocol solves a different problem on purpose. It is a commerce escrow built around an **arbiter** who sets the lockup window and authorizes refunds for buyer and seller disputes. Ctrl+ArcZ is P2P wrong-address safety: the sender holds the cancel right, the expiry refund is automatic, and no third party can move the money. Adding an arbiter would break the one property that makes a protected-transfer contract worth trusting.
 
@@ -101,20 +101,22 @@ One deployment, many tenants. An integrator calls `createConfig` once and gets a
 
 `check(sender, target)` returns a graded verdict. It is a pure rule engine, so the same input always produces the same verdict, with no network call inside the decision itself.
 
-| Rule                 | Verdict     | Why                                                                                                     |
-| -------------------- | ----------- | ------------------------------------------------------------------------------------------------------- |
-| `LOOKALIKE_ADDRESS`  | **block**   | The target shares the first and last four hex characters with an address this sender has actually paid  |
-| `ZERO_VALUE_BAIT`    | **block**   | The target sent this sender a zero-value transfer. Sending someone zero tokens has no other purpose     |
-| `FRESH_ADDRESS`      | warning     | First seen less than 24 hours ago. Poisoning addresses are minted for the attack                        |
-| `NEW_ADDRESS`        | warning     | No on-chain history at all                                                                              |
-| `VERIFIED_RECIPIENT` | safe        | A protected transfer to this address settled before, claimed with a code                                |
-| `KNOWN_COUNTERPARTY` | safe        | This exact address has been paid before                                                                 |
+| Rule                 | Verdict   | Why                                                                                                    |
+| -------------------- | --------- | ------------------------------------------------------------------------------------------------------ |
+| `LOOKALIKE_ADDRESS`  | **block** | The target shares the first and last four hex characters with an address this sender has actually paid |
+| `ZERO_VALUE_BAIT`    | **block** | The target sent this sender a zero-value transfer. Sending someone zero tokens has no other purpose    |
+| `FRESH_ADDRESS`      | warning   | First seen less than 24 hours ago. Poisoning addresses are minted for the attack                       |
+| `NEW_ADDRESS`        | warning   | No on-chain history at all                                                                             |
+| `VERIFIED_RECIPIENT` | safe      | A protected transfer to this address settled before, claimed with a code                               |
+| `KNOWN_COUNTERPARTY` | safe      | This exact address has been paid before                                                                |
 
 Two properties matter more than the rule list.
 
 **A positive signal never overrides a block.** An address you paid last week does not make its lookalike safe. That is the whole attack.
 
 **The firewall fails closed.** If the sender's payment history cannot be fetched, the lookalike rule could not run, so a lookalike cannot be ruled out. An unverified target is blocked rather than downgraded to a warning the user clicks through. A firewall that waves traffic through when its data source is down is worse than no firewall, and the report is never silently marked safe.
+
+**You do not have to remember to call it.** `sendProtected` runs the scan itself and throws `RiskBlockedError` before any funds move, so installing the SDK is what makes a send protected. A separate call an integrator can forget is not a defense.
 
 <table>
 <tr>
@@ -238,14 +240,14 @@ A protected transfer needs USDC on Arc. Both of Circle's cross-chain routes are 
 </tr>
 </table>
 
-|                    | CCTP                                              | Gateway                                                        |
-| ------------------ | ------------------------------------------------- | -------------------------------------------------------------- |
-| Model              | Burn on the source, mint on the destination       | Deposit once into a unified balance, then spend from it        |
-| First transfer     | About a minute                                    | Deposit, then an instant spend                                  |
-| Repeat transfers   | About a minute, every time                        | About half a second, no deposit                                 |
-| Best for           | A one-off move                                    | Sending often                                                   |
-| Chains on testnet  | 11                                                | 5                                                               |
-| Destination gas    | None needed, Circle forwards the mint             | None needed, Circle forwards the mint                           |
+|                   | CCTP                                        | Gateway                                                 |
+| ----------------- | ------------------------------------------- | ------------------------------------------------------- |
+| Model             | Burn on the source, mint on the destination | Deposit once into a unified balance, then spend from it |
+| First transfer    | About a minute                              | Deposit, then an instant spend                          |
+| Repeat transfers  | About a minute, every time                  | About half a second, no deposit                         |
+| Best for          | A one-off move                              | Sending often                                           |
+| Chains on testnet | 11                                          | 5                                                       |
+| Destination gas   | None needed, Circle forwards the mint       | None needed, Circle forwards the mint                   |
 
 ```mermaid
 flowchart LR
@@ -283,23 +285,23 @@ The lock-then-claim mechanic needs two transactions. That is exactly what has ke
 
 ## Smart contracts
 
-| Contract              | Address                                                                                                                        | Role                                                    |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------- |
+| Contract              | Address                                                                                                                        | Role                                                      |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------- |
 | **CtrlArcZ**          | [`0x8dAb7148cdc31DAcad6d7e12161AA3DEDb572Dca`](https://testnet.arcscan.app/address/0x8dAb7148cdc31DAcad6d7e12161AA3DEDb572Dca) | Config registry, protected transfers, verified recipients |
 | **CodeClaimVerifier** | [`0x2C0f268DE2Aa8BB2ab27F2Ea5Ae8a0f9a0E068c4`](https://testnet.arcscan.app/address/0x2C0f268DE2Aa8BB2ab27F2Ea5Ae8a0f9a0E068c4) | Checks `keccak256(salt, code)` for `ClaimMode.CODE`       |
-| USDC (Arc predeploy)  | `0x3600000000000000000000000000000000000000`                                                                                    | The asset, and the gas                                   |
+| USDC (Arc predeploy)  | `0x3600000000000000000000000000000000000000`                                                                                   | The asset, and the gas                                    |
 
 Deploy block `51326557`. Nothing is deployed to mainnet, and nothing will be.
 
-| Function                                        | Caller       | Purpose                                                          |
-| ----------------------------------------------- | ------------ | ---------------------------------------------------------------- |
-| `createConfig(window, mode, feeBps, feeTo)`     | Integrator   | Register a behaviour, get a deterministic `configId`             |
-| `sendProtected(configId, to, amount, hash)`     | Sender       | Lock USDC against a claim commitment                             |
-| `sendProtectedWithPermit(..., signature)`       | Sender       | The same, pulled through Permit2, so no separate approve tx      |
-| `claim(id, code, salt)`                         | Anyone       | Release to the recorded recipient. Returns false on a wrong code |
-| `cancel(id)`                                    | Sender only  | Take the money back, any time before a claim lands               |
-| `reclaimExpired(id)`                            | Anyone       | Refund an expired transfer. Only ever to the sender              |
-| `isVerifiedRecipient(sender, recipient)`        | Anyone       | Layer 3, read by the firewall                                    |
+| Function                                    | Caller      | Purpose                                                          |
+| ------------------------------------------- | ----------- | ---------------------------------------------------------------- |
+| `createConfig(window, mode, feeBps, feeTo)` | Integrator  | Register a behaviour, get a deterministic `configId`             |
+| `sendProtected(configId, to, amount, hash)` | Sender      | Lock USDC against a claim commitment                             |
+| `sendProtectedWithPermit(..., signature)`   | Sender      | The same, pulled through Permit2, so no separate approve tx      |
+| `claim(id, code, salt)`                     | Anyone      | Release to the recorded recipient. Returns false on a wrong code |
+| `cancel(id)`                                | Sender only | Take the money back, any time before a claim lands               |
+| `reclaimExpired(id)`                        | Anyone      | Refund an expired transfer. Only ever to the sender              |
+| `isVerifiedRecipient(sender, recipient)`    | Anyone      | Layer 3, read by the firewall                                    |
 
 The contract is **ownerless**: no owner, no pause, no proxy, no upgrade path, no admin function that can touch a locked transfer. A protected-transfer contract that an admin can drain protects nobody. There are 61 Foundry tests, including fuzz tests for value conservation, the fee split, cancel, and the property that a valid proof only ever pays the recorded recipient. Branch coverage is 100 percent.
 
@@ -315,26 +317,26 @@ The full audit lives in [`SECURITY.md`](./SECURITY.md). The short version:
 
 ## Tech stack
 
-| Layer          | Choice                                                       |
-| -------------- | ------------------------------------------------------------ |
-| Contract       | Solidity 0.8.24, Foundry, OpenZeppelin (SafeERC20, ReentrancyGuard) |
-| SDK            | TypeScript, viem, tsup (ESM, CJS and types), vitest          |
-| Risk data      | ArcScan (Blockscout REST), behind an `IDataProvider` seam    |
-| Cross-chain    | Circle CCTP via Bridge Kit, Circle Gateway via Unified Balance Kit |
-| Gasless        | Permissionless `claim` plus a relayer. Circle Gas Station in the demo |
-| Approvals      | Permit2, for single-signature sends                          |
-| Demos          | React, Vite, a shared design system in `@ctrl-arcz/demo-kit` |
+| Layer       | Choice                                                                |
+| ----------- | --------------------------------------------------------------------- |
+| Contract    | Solidity 0.8.24, Foundry, OpenZeppelin (SafeERC20, ReentrancyGuard)   |
+| SDK         | TypeScript, viem, tsup (ESM, CJS and types), vitest                   |
+| Risk data   | ArcScan (Blockscout REST), behind an `IDataProvider` seam             |
+| Cross-chain | Circle CCTP via Bridge Kit, Circle Gateway via Unified Balance Kit    |
+| Gasless     | Permissionless `claim` plus a relayer. Circle Gas Station in the demo |
+| Approvals   | Permit2, for single-signature sends                                   |
+| Demos       | React, Vite, a shared design system in `@ctrl-arcz/demo-kit`          |
 
 ## Repository layout
 
 | Path                 | What                                                                    |
 | -------------------- | ----------------------------------------------------------------------- |
-| `packages/contracts` | `CtrlArcZ.sol`, `CodeClaimVerifier`, `IClaimVerifier`, Foundry tests     |
-| `packages/sdk`       | `@ctrl-arcz/sdk`, the thing an integrator actually installs              |
-| `packages/demo-kit`  | Shared wallet session, design system and the server-side bridge helpers  |
-| `apps/sender`        | Sender demo, port 5173                                                   |
-| `apps/receiver`      | Recipient claim page, port 5174                                          |
-| `examples`           | A standalone Node quickstart, no framework                               |
+| `packages/contracts` | `CtrlArcZ.sol`, `CodeClaimVerifier`, `IClaimVerifier`, Foundry tests    |
+| `packages/sdk`       | `@ctrl-arcz/sdk`, the thing an integrator actually installs             |
+| `packages/demo-kit`  | Shared wallet session, design system and the server-side bridge helpers |
+| `apps/sender`        | Sender demo, port 5173                                                  |
+| `apps/receiver`      | Recipient claim page, port 5174                                         |
+| `examples`           | A standalone Node quickstart, no framework                              |
 
 Every address, RPC and chain constant lives in exactly one file, `packages/sdk/src/chains/arcTestnet.ts`. The Foundry deploy script reads a JSON file generated from it, so no address is written down twice.
 
@@ -350,36 +352,48 @@ cp .env.example .env      # fill in throwaway testnet wallets
 
 USDC is both gas and the asset on Arc, so fund the wallets with Arc Testnet USDC from [faucet.circle.com](https://faucet.circle.com). Foundry is required for the contract: <https://getfoundry.sh>
 
-| Command                     | What it does                                     |
-| --------------------------- | ------------------------------------------------ |
-| `pnpm build`                | Build every package                              |
-| `pnpm test`                 | Foundry plus vitest                              |
-| `pnpm contracts:test`       | Contract tests only                              |
-| `pnpm deploy:testnet`       | Deploy `CtrlArcZ` to Arc Testnet                 |
-| `pnpm dev:sender`           | Sender demo on http://localhost:5173             |
-| `pnpm dev:receiver`         | Recipient demo on http://localhost:5174          |
+| Command               | What it does                            |
+| --------------------- | --------------------------------------- |
+| `pnpm build`          | Build every package                     |
+| `pnpm test`           | Foundry plus vitest                     |
+| `pnpm contracts:test` | Contract tests only                     |
+| `pnpm deploy:testnet` | Deploy `CtrlArcZ` to Arc Testnet        |
+| `pnpm dev:sender`     | Sender demo on http://localhost:5173    |
+| `pnpm dev:receiver`   | Recipient demo on http://localhost:5174 |
 
-Using the SDK is four calls:
+Using the SDK is three calls, and the firewall is one of them whether you ask for it or not:
 
 ```ts
 import {
-  check, defineConfig, registerConfig,
-  generateClaimCode, approveUsdc, sendProtected,
+  defineConfig,
+  registerConfig,
+  generateClaimCode,
+  approveUsdc,
+  sendProtected,
+  RiskBlockedError,
 } from '@ctrl-arcz/sdk';
 
-const report = await check(sender, recipient);          // Layer 1
-if (report.level === 'block') return;                   // refuse, do not warn
-
-const { configId } = await registerConfig(clients, defineConfig({ recallWindow: 3600 }));
-const secret = generateClaimCode();                     // code, salt, claimHash
+const config = defineConfig({ recallWindow: 3600 });
+const { configId } = await registerConfig(clients, config);
+const secret = generateClaimCode(); // code, salt, claimHash
 
 await approveUsdc(clients, amount);
-const { transferId } = await sendProtected(clients, {
-  configId, to: recipient, amount, claimHash: secret.claimHash,
-});
+
+try {
+  // Layer 1 runs inside this call. A lookalike or a zero-value baiter throws
+  // before a single unit of USDC moves. There is no separate call to forget.
+  const { transferId } = await sendProtected(
+    clients,
+    { configId, to: recipient, amount, claimHash: secret.claimHash },
+    { config },
+  );
+} catch (e) {
+  if (e instanceof RiskBlockedError) showRiskCard(e.report);
+  else throw e;
+}
 ```
 
-The recipient claims with `claim(clients, transferId, code, salt)`. The sender can `cancel(clients, transferId)` at any time before that. Full signatures are in [`packages/sdk/README.md`](./packages/sdk/README.md).
+The recipient claims with `claim(clients, transferId, code, salt)`. The sender can `cancel(clients, transferId)` at any time before that. Full signatures, and how to reuse a report your own UI already fetched, are in [`packages/sdk/README.md`](./packages/sdk/README.md).
 
 The demos run without MetaMask if you drop a `.env.local` into each app; the wallet is then a local test signer that still broadcasts real transactions to Arc Testnet. See [`.env.example`](./.env.example).
 

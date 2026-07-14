@@ -59,8 +59,38 @@ self-transfer guards, SafeERC20 on every movement, and no admin / upgrade /
 - **Fixed — `RecipientVerified` read failure** is now recorded as incomplete data
   (never silently "safe").
 - **Hardened — send-path guards.** `sendProtected*` reject a zero/invalid recipient
-  and non-positive amount before touching the chain. (Note: the poisoning `check()`
-  remains caller-invoked and is the real defense — integrators must run it.)
+  and non-positive amount before touching the chain.
+- **Fixed — firewall is on by default.** `sendProtected` / `sendProtectedWithPermit`
+  now run the poisoning `check()` themselves before submitting, throwing
+  `RiskBlockedError` on a `block` result — no funds move. Previously the scan was
+  caller-invoked, so an integrator who called `sendProtected` directly got no
+  firewall at all ("install the SDK, then remember to also call the firewall").
+  Verified live on Arc Testnet: a crafted lookalike passed straight to
+  `sendProtected`, with no `check()` call of its own, threw `RiskBlockedError` and
+  the sender's balance did not move. Hard blocks cannot be waved through.
+- **One warning policy, not two.** The guard runs the caller's `IntegratorConfig`
+  through the same `shouldBlockSend` the UI uses, so a config that says
+  `onWarning: 'block'` cannot mean one thing on the pre-send screen and another
+  inside the SDK. An earlier revision had a second, separate `onWarning` option on
+  the send call, which silently ignored the config's own policy.
+- **`RiskBlockedError` carries the whole `RiskReport`,** not just the message
+  strings, so a caller that catches it can render the same explanation (rule codes,
+  `lookalikeOf`, `complete`) instead of a flattened line of text.
+- **A reused report must be fresh and about the right pair.** Callers that already
+  ran `check()` pass the report through `report` rather than disabling the guard.
+  It is honoured only when it matches the same sender and target and is younger
+  than `MAX_REPORT_AGE_MS` (2 minutes); otherwise the guard re-scans. A stale or
+  mismatched report is not evidence: a bait transfer could have landed since, and a
+  clean report for address A must never wave through a send to poisoned address B.
+- **Accepted — `skipRiskCheck` exists.** It removes the poisoning defense from the
+  send path entirely. It is documented as a last resort, and the demo no longer
+  uses it: the reference integration runs the real guarded code path.
+- **Known dependency.** The guard reads ArcScan. If the indexer is unreachable, a
+  send to an address the sender has never paid will throw, because a lookalike
+  cannot be ruled out and the firewall fails closed. That is the intended behaviour
+  of a firewall, but it makes `sendProtected` depend on an indexer being up.
+  Integrators can supply their own `IDataProvider`, or an `evaluateRisk` report
+  built from their own data.
 
 ## Bridge / gasless / keys
 
@@ -110,6 +140,7 @@ self-transfer guards, SafeERC20 on every movement, and no admin / upgrade /
 1. Rotate every key that has ever been in a build; never use real-value keys.
 2. Signing is already server-side (bridge and gasless). Keep it that way; the only
    key still reaching the browser is the dev-only test-wallet stand-in.
-3. Set `onWarning: 'block'` if your users must be hard-stopped on poisoning risk.
+3. Set `onWarning: 'block'` on your `IntegratorConfig` and pass it to `sendProtected`
+   if your users must be hard-stopped on any doubt, not just a hard block.
 4. Redeploy the contract if you want to remove `receive()` or change the lockout
    griefing tradeoff.

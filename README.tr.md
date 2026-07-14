@@ -25,14 +25,14 @@ Arc üzerinde korumalı USDC transferi: bir ödemeyi imzalanmadan önce tarayan,
 
 ## Tek bakışta
 
-|                |                                                                                          |
-| -------------- | ---------------------------------------------------------------------------------------- |
-| **Ağ**         | Arc Testnet, chain id `5042002`                                                          |
-| **Varlık**     | USDC. Arc'ta hem gas token'ı hem gönderdiğiniz şey                                       |
-| **Koruma**     | Gönderim öncesi risk firewall'u, kodla claim, gönderen iptali, süre dolunca otomatik iade |
-| **Custody**    | Yok. Para ya kullanıcıda ya kontratta. Owner yok, pause yok, upgrade yolu yok            |
-| **Ürün**       | Herhangi bir cüzdanın, borsanın veya ödeme uygulamasının gömdüğü bir SDK. Yeni bir cüzdan değil |
-| **Testler**    | 61 Foundry testi (dal kapsamı yüzde 100), 53 SDK birim testi, canlı testnet koşuları     |
+|             |                                                                                                 |
+| ----------- | ----------------------------------------------------------------------------------------------- |
+| **Ağ**      | Arc Testnet, chain id `5042002`                                                                 |
+| **Varlık**  | USDC. Arc'ta hem gas token'ı hem gönderdiğiniz şey                                              |
+| **Koruma**  | Gönderim öncesi risk firewall'u, kodla claim, gönderen iptali, süre dolunca otomatik iade       |
+| **Custody** | Yok. Para ya kullanıcıda ya kontratta. Owner yok, pause yok, upgrade yolu yok                   |
+| **Ürün**    | Herhangi bir cüzdanın, borsanın veya ödeme uygulamasının gömdüğü bir SDK. Yeni bir cüzdan değil |
+| **Testler** | 61 Foundry testi (dal kapsamı yüzde 100), 53 SDK birim testi, canlı testnet koşuları            |
 
 ## Problem
 
@@ -48,12 +48,12 @@ Bir yerde birinin gönderimi reddetmesi gerekiyor.
 
 ## Karşılaştırma
 
-|                              | Gönderimi durdurur | Sonradan para kurtarılabilir | Arbiter gerekir | Custody alır | Düz P2P'de çalışır |
-| ---------------------------- | ------------------ | ---------------------------- | --------------- | ------------ | ------------------ |
-| Cüzdan adres defteri uyarısı | Hayır              | Hayır                        | Hayır           | Hayır        | Evet               |
-| Poisoning tespit servisi     | Sadece uyarır      | Hayır                        | Hayır           | Hayır        | Evet               |
-| Ticari escrow                | Hayır              | Evet, anlaşmazlık yoluyla    | Evet            | Evet         | Hayır              |
-| Circle Refund Protocol       | Hayır              | Evet, aracı yoluyla          | Evet            | Evet         | Hayır              |
+|                              | Gönderimi durdurur | Sonradan para kurtarılabilir  | Arbiter gerekir | Custody alır | Düz P2P'de çalışır |
+| ---------------------------- | ------------------ | ----------------------------- | --------------- | ------------ | ------------------ |
+| Cüzdan adres defteri uyarısı | Hayır              | Hayır                         | Hayır           | Hayır        | Evet               |
+| Poisoning tespit servisi     | Sadece uyarır      | Hayır                         | Hayır           | Hayır        | Evet               |
+| Ticari escrow                | Hayır              | Evet, anlaşmazlık yoluyla     | Evet            | Evet         | Hayır              |
+| Circle Refund Protocol       | Hayır              | Evet, aracı yoluyla           | Evet            | Evet         | Hayır              |
 | **Ctrl+ArcZ**                | **Evet**           | **Evet, gönderen tarafından** | **Hayır**       | **Hayır**    | **Evet**           |
 
 Circle'ın Refund Protocol'ü bilinçli olarak farklı bir problemi çözüyor. Bir **arbiter** etrafında kurulu ticari escrow: aracı, lockup penceresini belirliyor ve alıcı satıcı anlaşmazlıklarında iadeyi yetkilendiriyor. Ctrl+ArcZ ise P2P yanlış adres güvenliği: iptal hakkı gönderende, süre dolumu iadesi otomatik ve parayı üçüncü bir taraf hareket ettiremiyor. Araya bir arbiter koymak, korumalı transfer kontratını güvenilir kılan tek özelliği bozardı.
@@ -101,20 +101,22 @@ Tek deploy, çok kiracı. Entegratör bir kez `createConfig` çağırıp kendi d
 
 `check(sender, target)` derecelendirilmiş bir karar döner. Saf bir kural motorudur: aynı girdi her zaman aynı kararı üretir, kararın içinde ağ çağrısı yoktur.
 
-| Kural                | Karar       | Neden                                                                                             |
-| -------------------- | ----------- | ------------------------------------------------------------------------------------------------- |
-| `LOOKALIKE_ADDRESS`  | **block**   | Hedef, bu gönderenin gerçekten ödeme yaptığı bir adresle ilk ve son dört hex karakteri paylaşıyor |
-| `ZERO_VALUE_BAIT`    | **block**   | Hedef, bu gönderene 0 değerli transfer atmış. Birine sıfır token göndermenin başka amacı yok      |
-| `FRESH_ADDRESS`      | uyarı       | İlk kez 24 saatten kısa süre önce görüldü. Poisoning adresleri saldırı için taze üretilir         |
-| `NEW_ADDRESS`        | uyarı       | Hiç zincir geçmişi yok                                                                            |
-| `VERIFIED_RECIPIENT` | güvenli     | Bu adrese daha önce korumalı bir transfer kodla claim edilerek ulaştı                             |
-| `KNOWN_COUNTERPARTY` | güvenli     | Bu adrese daha önce ödeme yapıldı                                                                  |
+| Kural                | Karar     | Neden                                                                                             |
+| -------------------- | --------- | ------------------------------------------------------------------------------------------------- |
+| `LOOKALIKE_ADDRESS`  | **block** | Hedef, bu gönderenin gerçekten ödeme yaptığı bir adresle ilk ve son dört hex karakteri paylaşıyor |
+| `ZERO_VALUE_BAIT`    | **block** | Hedef, bu gönderene 0 değerli transfer atmış. Birine sıfır token göndermenin başka amacı yok      |
+| `FRESH_ADDRESS`      | uyarı     | İlk kez 24 saatten kısa süre önce görüldü. Poisoning adresleri saldırı için taze üretilir         |
+| `NEW_ADDRESS`        | uyarı     | Hiç zincir geçmişi yok                                                                            |
+| `VERIFIED_RECIPIENT` | güvenli   | Bu adrese daha önce korumalı bir transfer kodla claim edilerek ulaştı                             |
+| `KNOWN_COUNTERPARTY` | güvenli   | Bu adrese daha önce ödeme yapıldı                                                                 |
 
 Kural listesinden daha önemli iki özellik var.
 
 **Olumlu bir sinyal bloğu asla ezmez.** Geçen hafta ödeme yaptığınız bir adres, onun ikizini güvenli yapmaz. Saldırının tamamı zaten bu.
 
 **Firewall kapalı düşer.** Gönderenin ödeme geçmişi çekilemezse benzer adres kuralı çalışamamış demektir, dolayısıyla bir ikiz elenemez. Doğrulanmamış bir hedef, kullanıcının tıklayıp geçeceği bir uyarıya düşürülmek yerine bloklanır. Veri kaynağı çöktüğünde trafiği geçiren bir firewall, hiç firewall olmamasından kötüdür; rapor asla sessizce güvenli işaretlenmez.
+
+**Çağırmayı hatırlamanız gerekmiyor.** `sendProtected` taramayı kendisi çalıştırır ve para kımıldamadan `RiskBlockedError` fırlatır; yani SDK'yı kurmak korumalı olmak demektir. Entegratörün unutabileceği ayrı bir çağrı, savunma değildir.
 
 <table>
 <tr>
@@ -238,14 +240,14 @@ Korumalı transfer için Arc'ta USDC gerekir. Circle'ın iki zincirler arası yo
 </tr>
 </table>
 
-|                     | CCTP                                        | Gateway                                                   |
-| ------------------- | ------------------------------------------- | --------------------------------------------------------- |
-| Model               | Kaynakta yak, hedefte bas                   | Bir kez birleşik bakiyeye yatır, sonra oradan harca       |
-| İlk transfer        | Yaklaşık bir dakika                         | Yatırma, ardından anında harcama                          |
-| Tekrarlı transferler | Her seferinde yaklaşık bir dakika          | Yaklaşık yarım saniye, yatırma yok                        |
-| En uygun            | Tek seferlik taşıma                         | Sık gönderim                                              |
-| Testnet zinciri     | 11                                          | 5                                                         |
-| Hedefte gas         | Gerekmez, mint'i Circle iletir              | Gerekmez, mint'i Circle iletir                            |
+|                      | CCTP                              | Gateway                                             |
+| -------------------- | --------------------------------- | --------------------------------------------------- |
+| Model                | Kaynakta yak, hedefte bas         | Bir kez birleşik bakiyeye yatır, sonra oradan harca |
+| İlk transfer         | Yaklaşık bir dakika               | Yatırma, ardından anında harcama                    |
+| Tekrarlı transferler | Her seferinde yaklaşık bir dakika | Yaklaşık yarım saniye, yatırma yok                  |
+| En uygun             | Tek seferlik taşıma               | Sık gönderim                                        |
+| Testnet zinciri      | 11                                | 5                                                   |
+| Hedefte gas          | Gerekmez, mint'i Circle iletir    | Gerekmez, mint'i Circle iletir                      |
 
 ```mermaid
 flowchart LR
@@ -283,23 +285,23 @@ Kilitle sonra claim et mekaniği iki işlem gerektirir. Bu mekaniği diğer zinc
 
 ## Akıllı kontratlar
 
-| Kontrat               | Adres                                                                                                                          | Rolü                                                       |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------- |
-| **CtrlArcZ**          | [`0x8dAb7148cdc31DAcad6d7e12161AA3DEDb572Dca`](https://testnet.arcscan.app/address/0x8dAb7148cdc31DAcad6d7e12161AA3DEDb572Dca) | Config kaydı, korumalı transferler, doğrulanmış alıcılar   |
-| **CodeClaimVerifier** | [`0x2C0f268DE2Aa8BB2ab27F2Ea5Ae8a0f9a0E068c4`](https://testnet.arcscan.app/address/0x2C0f268DE2Aa8BB2ab27F2Ea5Ae8a0f9a0E068c4) | `ClaimMode.CODE` için `keccak256(salt, kod)` doğrular       |
-| USDC (Arc predeploy)  | `0x3600000000000000000000000000000000000000`                                                                                    | Hem varlık hem gas                                          |
+| Kontrat               | Adres                                                                                                                          | Rolü                                                     |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------- |
+| **CtrlArcZ**          | [`0x8dAb7148cdc31DAcad6d7e12161AA3DEDb572Dca`](https://testnet.arcscan.app/address/0x8dAb7148cdc31DAcad6d7e12161AA3DEDb572Dca) | Config kaydı, korumalı transferler, doğrulanmış alıcılar |
+| **CodeClaimVerifier** | [`0x2C0f268DE2Aa8BB2ab27F2Ea5Ae8a0f9a0E068c4`](https://testnet.arcscan.app/address/0x2C0f268DE2Aa8BB2ab27F2Ea5Ae8a0f9a0E068c4) | `ClaimMode.CODE` için `keccak256(salt, kod)` doğrular    |
+| USDC (Arc predeploy)  | `0x3600000000000000000000000000000000000000`                                                                                   | Hem varlık hem gas                                       |
 
 Deploy bloğu `51326557`. Mainnet'e hiçbir şey deploy edilmedi ve edilmeyecek.
 
-| Fonksiyon                                       | Çağıran        | Ne yapar                                                              |
-| ----------------------------------------------- | -------------- | --------------------------------------------------------------------- |
-| `createConfig(pencere, mod, feeBps, feeTo)`     | Entegratör     | Bir davranış kaydeder, deterministik `configId` döner                 |
-| `sendProtected(configId, to, amount, hash)`     | Gönderen       | USDC'yi bir claim taahhüdüne karşı kilitler                           |
-| `sendProtectedWithPermit(..., signature)`       | Gönderen       | Aynısı, Permit2 ile çekilir, ayrı approve işlemi yok                  |
-| `claim(id, kod, salt)`                          | Herkes         | Kayıtlı alıcıya bırakır. Yanlış kodda `false` döner                   |
-| `cancel(id)`                                    | Yalnız gönderen | Claim gerçekleşmeden önce her an parayı geri alır                     |
-| `reclaimExpired(id)`                            | Herkes         | Süresi dolan transferi iade eder. Yalnızca gönderene                  |
-| `isVerifiedRecipient(gönderen, alıcı)`          | Herkes         | Katman 3, firewall tarafından okunur                                  |
+| Fonksiyon                                   | Çağıran         | Ne yapar                                              |
+| ------------------------------------------- | --------------- | ----------------------------------------------------- |
+| `createConfig(pencere, mod, feeBps, feeTo)` | Entegratör      | Bir davranış kaydeder, deterministik `configId` döner |
+| `sendProtected(configId, to, amount, hash)` | Gönderen        | USDC'yi bir claim taahhüdüne karşı kilitler           |
+| `sendProtectedWithPermit(..., signature)`   | Gönderen        | Aynısı, Permit2 ile çekilir, ayrı approve işlemi yok  |
+| `claim(id, kod, salt)`                      | Herkes          | Kayıtlı alıcıya bırakır. Yanlış kodda `false` döner   |
+| `cancel(id)`                                | Yalnız gönderen | Claim gerçekleşmeden önce her an parayı geri alır     |
+| `reclaimExpired(id)`                        | Herkes          | Süresi dolan transferi iade eder. Yalnızca gönderene  |
+| `isVerifiedRecipient(gönderen, alıcı)`      | Herkes          | Katman 3, firewall tarafından okunur                  |
 
 Kontrat **sahipsizdir**: owner yok, pause yok, proxy yok, upgrade yolu yok, kilitli bir transfere dokunabilecek admin fonksiyonu yok. Admin'in drenajlayabildiği bir korumalı transfer kontratı kimseyi korumaz. 61 Foundry testi var; içinde değer korunumu, fee bölüşümü, iptal ve geçerli bir kanıtın yalnızca kayıtlı alıcıya ödeme yaptığı özelliği için fuzz testleri de bulunuyor. Dal kapsamı yüzde 100.
 
@@ -315,26 +317,26 @@ Denetimin tamamı [`SECURITY.md`](./SECURITY.md) içinde. Kısa hali:
 
 ## Teknoloji
 
-| Katman           | Seçim                                                                |
-| ---------------- | -------------------------------------------------------------------- |
-| Kontrat          | Solidity 0.8.24, Foundry, OpenZeppelin (SafeERC20, ReentrancyGuard)  |
-| SDK              | TypeScript, viem, tsup (ESM, CJS ve tipler), vitest                  |
-| Risk verisi      | ArcScan (Blockscout REST), `IDataProvider` arayüzü arkasında         |
-| Zincirler arası  | Bridge Kit ile Circle CCTP, Unified Balance Kit ile Circle Gateway   |
-| Gasless          | İzin gerektirmeyen `claim` ve bir relayer. Demoda Circle Gas Station |
-| Onaylar          | Permit2, tek imzalı gönderim için                                    |
-| Demolar          | React, Vite, `@ctrl-arcz/demo-kit` içinde ortak tasarım sistemi      |
+| Katman          | Seçim                                                                |
+| --------------- | -------------------------------------------------------------------- |
+| Kontrat         | Solidity 0.8.24, Foundry, OpenZeppelin (SafeERC20, ReentrancyGuard)  |
+| SDK             | TypeScript, viem, tsup (ESM, CJS ve tipler), vitest                  |
+| Risk verisi     | ArcScan (Blockscout REST), `IDataProvider` arayüzü arkasında         |
+| Zincirler arası | Bridge Kit ile Circle CCTP, Unified Balance Kit ile Circle Gateway   |
+| Gasless         | İzin gerektirmeyen `claim` ve bir relayer. Demoda Circle Gas Station |
+| Onaylar         | Permit2, tek imzalı gönderim için                                    |
+| Demolar         | React, Vite, `@ctrl-arcz/demo-kit` içinde ortak tasarım sistemi      |
 
 ## Depo yapısı
 
-| Yol                  | Ne                                                                       |
-| -------------------- | ------------------------------------------------------------------------ |
+| Yol                  | Ne                                                                        |
+| -------------------- | ------------------------------------------------------------------------- |
 | `packages/contracts` | `CtrlArcZ.sol`, `CodeClaimVerifier`, `IClaimVerifier`, Foundry testleri   |
-| `packages/sdk`       | `@ctrl-arcz/sdk`, entegratörün gerçekten kurduğu şey                     |
+| `packages/sdk`       | `@ctrl-arcz/sdk`, entegratörün gerçekten kurduğu şey                      |
 | `packages/demo-kit`  | Ortak cüzdan oturumu, tasarım sistemi ve sunucu tarafı köprü yardımcıları |
-| `apps/sender`        | Gönderen demosu, port 5173                                               |
-| `apps/receiver`      | Alıcı claim sayfası, port 5174                                           |
-| `examples`           | Bağımsız bir Node quickstart'ı, çerçevesiz                               |
+| `apps/sender`        | Gönderen demosu, port 5173                                                |
+| `apps/receiver`      | Alıcı claim sayfası, port 5174                                            |
+| `examples`           | Bağımsız bir Node quickstart'ı, çerçevesiz                                |
 
 Her adres, RPC ve chain sabiti tek bir dosyada durur: `packages/sdk/src/chains/arcTestnet.ts`. Foundry deploy script'i ondan üretilen bir JSON dosyasını okur, böylece hiçbir adres iki kez yazılmaz.
 
@@ -350,36 +352,48 @@ cp .env.example .env      # tek kullanımlık testnet cüzdanlarını doldur
 
 Arc'ta USDC hem gas hem varlık, o yüzden cüzdanları [faucet.circle.com](https://faucet.circle.com) üzerinden Arc Testnet USDC ile fonlayın. Kontrat için Foundry gerekli: <https://getfoundry.sh>
 
-| Komut                       | Ne yapar                                     |
-| --------------------------- | -------------------------------------------- |
-| `pnpm build`                | Tüm paketleri derler                         |
-| `pnpm test`                 | Foundry ve vitest                            |
-| `pnpm contracts:test`       | Yalnız kontrat testleri                      |
-| `pnpm deploy:testnet`       | `CtrlArcZ`'yi Arc Testnet'e deploy eder      |
-| `pnpm dev:sender`           | Gönderen demosu, http://localhost:5173       |
-| `pnpm dev:receiver`         | Alıcı demosu, http://localhost:5174          |
+| Komut                 | Ne yapar                                |
+| --------------------- | --------------------------------------- |
+| `pnpm build`          | Tüm paketleri derler                    |
+| `pnpm test`           | Foundry ve vitest                       |
+| `pnpm contracts:test` | Yalnız kontrat testleri                 |
+| `pnpm deploy:testnet` | `CtrlArcZ`'yi Arc Testnet'e deploy eder |
+| `pnpm dev:sender`     | Gönderen demosu, http://localhost:5173  |
+| `pnpm dev:receiver`   | Alıcı demosu, http://localhost:5174     |
 
-SDK'yı kullanmak dört çağrı:
+SDK'yı kullanmak üç çağrı ve firewall istesen de istemesen de onlardan biri:
 
 ```ts
 import {
-  check, defineConfig, registerConfig,
-  generateClaimCode, approveUsdc, sendProtected,
+  defineConfig,
+  registerConfig,
+  generateClaimCode,
+  approveUsdc,
+  sendProtected,
+  RiskBlockedError,
 } from '@ctrl-arcz/sdk';
 
-const report = await check(sender, recipient);          // Katman 1
-if (report.level === 'block') return;                   // reddet, uyarma
-
-const { configId } = await registerConfig(clients, defineConfig({ recallWindow: 3600 }));
-const secret = generateClaimCode();                     // kod, salt, claimHash
+const config = defineConfig({ recallWindow: 3600 });
+const { configId } = await registerConfig(clients, config);
+const secret = generateClaimCode(); // kod, salt, claimHash
 
 await approveUsdc(clients, amount);
-const { transferId } = await sendProtected(clients, {
-  configId, to: recipient, amount, claimHash: secret.claimHash,
-});
+
+try {
+  // Katman 1 bu çağrının içinde çalışır. Benzer adres veya 0 değerli yem,
+  // tek bir birim USDC kımıldamadan hata fırlatır. Unutulacak ayrı bir çağrı yok.
+  const { transferId } = await sendProtected(
+    clients,
+    { configId, to: recipient, amount, claimHash: secret.claimHash },
+    { config },
+  );
+} catch (e) {
+  if (e instanceof RiskBlockedError) showRiskCard(e.report);
+  else throw e;
+}
 ```
 
-Alıcı `claim(clients, transferId, code, salt)` ile alır. Gönderen o ana kadar her an `cancel(clients, transferId)` diyebilir. Tüm imzalar: [`packages/sdk/README.md`](./packages/sdk/README.md).
+Alıcı `claim(clients, transferId, code, salt)` ile alır. Gönderen o ana kadar her an `cancel(clients, transferId)` diyebilir. Tüm imzalar ve UI'nizin zaten çektiği raporu nasıl yeniden kullanacağınız: [`packages/sdk/README.md`](./packages/sdk/README.md).
 
 Demolar MetaMask olmadan da çalışır: her app'in klasörüne bir `.env.local` bırakın, cüzdan yerel bir test imzalayıcısı olur ve yine Arc Testnet'e gerçek işlem yayınlar. Bakınız [`.env.example`](./.env.example).
 
