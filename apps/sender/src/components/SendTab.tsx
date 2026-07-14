@@ -9,6 +9,7 @@ import {
   generateClaimCode,
   recommendTransferMode,
   registerConfig,
+  RiskBlockedError,
   sendProtected,
   sendProtectedWithPermit,
   shouldBlockSend,
@@ -134,10 +135,11 @@ export function SendTab({ session, onSent }: { session: Session; onSent: () => v
     setBusy(true);
     setStep(0);
     try {
-      const { configId } = await registerConfig(
-        session.clients,
-        defineConfig({ recallWindow: Number(windowSec) }),
-      );
+      const sendConfig = defineConfig({
+        recallWindow: Number(windowSec),
+        onWarning: config.onWarning,
+      });
+      const { configId } = await registerConfig(session.clients, sendConfig);
       setStep(1);
 
       const secret = generateClaimCode();
@@ -148,15 +150,22 @@ export function SendTab({ session, onSent }: { session: Session; onSent: () => v
         claimHash: secret.claimHash,
       };
 
+      // The SDK's own pre-send firewall stays on: this is the code path an
+      // integrator gets by default, so the demo exercises it rather than opting
+      // out. The report the UI already fetched is handed over, so the guard runs
+      // on the same verdict instead of scanning the address a second time. It
+      // re-scans by itself if that report is stale or about another address.
+      const guard = { config: sendConfig, ...(activeReport ? { report: activeReport } : {}) };
+
       let result;
       if (usePermit) {
         await approvePermit2(session.clients);
         setStep(2);
-        result = await sendProtectedWithPermit(session.clients, args);
+        result = await sendProtectedWithPermit(session.clients, args, guard);
       } else {
         await approveUsdc(session.clients, amountValue);
         setStep(2);
-        result = await sendProtected(session.clients, args);
+        result = await sendProtected(session.clients, args, guard);
       }
 
       saveTransfer(session.address as Address, {
@@ -182,9 +191,16 @@ export function SendTab({ session, onSent }: { session: Session; onSent: () => v
       setReport(null);
       onSent();
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      setError(msg);
-      toast.push(t('send.failedToast'), 'error');
+      if (e instanceof RiskBlockedError) {
+        // The SDK's own firewall stopped the send. It carries the full report, so
+        // show the same card the pre-send scan would have, not a raw message.
+        setReport(e.report);
+        setError(null);
+        toast.push(t('send.blockedToast'), 'error');
+      } else {
+        setError(e instanceof Error ? e.message : String(e));
+        toast.push(t('send.failedToast'), 'error');
+      }
     } finally {
       setBusy(false);
       setStep(0);
