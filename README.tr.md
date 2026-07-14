@@ -32,7 +32,7 @@ Arc üzerinde korumalı USDC transferi: bir ödemeyi imzalanmadan önce tarayan,
 | **Koruma**  | Gönderim öncesi risk firewall'u, kodla claim, gönderen iptali, süre dolunca otomatik iade       |
 | **Custody** | Yok. Para ya kullanıcıda ya kontratta. Owner yok, pause yok, upgrade yolu yok                   |
 | **Ürün**    | Herhangi bir cüzdanın, borsanın veya ödeme uygulamasının gömdüğü bir SDK. Yeni bir cüzdan değil |
-| **Testler** | 61 Foundry testi (dal kapsamı yüzde 100), 53 SDK birim testi, canlı testnet koşuları            |
+| **Testler** | 61 Foundry testi (dal kapsamı yüzde 100), 61 SDK birim testi, canlı testnet koşuları            |
 
 ## Problem
 
@@ -82,8 +82,9 @@ flowchart LR
 
     USDC["USDC ERC-20<br/>0x3600…0000, 6 decimals"]
 
-    I -->|check| RISK
     I -->|sendProtected| TR
+    TR ==>|firewall, para kımıldamadan önce| RISK
+    I -.->|check, opsiyonel, gönderim öncesi UI için| RISK
     I -->|getCleanHistory| HIST
     I -->|defineConfig| CFG
     RISK -.->|okur| SCOUT

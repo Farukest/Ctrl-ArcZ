@@ -32,7 +32,7 @@ Protected USDC transfers on Arc: an SDK and a single contract that screen a paym
 | **Protection** | Pre-send risk firewall, code-gated claim, sender cancel, automatic expiry refund      |
 | **Custody**    | None. Funds are with the user or in the contract. No owner, no pause, no upgrade path |
 | **Product**    | An SDK any wallet, exchange or payments app embeds. Not another wallet                |
-| **Tests**      | 61 Foundry tests (100 percent branch coverage), 53 SDK unit tests, live testnet runs  |
+| **Tests**      | 61 Foundry tests (100 percent branch coverage), 61 SDK unit tests, live testnet runs  |
 
 ## The problem
 
@@ -82,8 +82,9 @@ flowchart LR
 
     USDC["USDC ERC-20<br/>0x3600…0000, 6 decimals"]
 
-    I -->|check| RISK
     I -->|sendProtected| TR
+    TR ==>|firewall, before any funds move| RISK
+    I -.->|check, optional, for a pre-send UI| RISK
     I -->|getCleanHistory| HIST
     I -->|defineConfig| CFG
     RISK -.->|reads| SCOUT
