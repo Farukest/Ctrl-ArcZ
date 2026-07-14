@@ -5,6 +5,7 @@
  * (a sender legitimately holds the code to share it with the recipient).
  */
 import type { Address, Hex } from 'viem';
+import type { BridgeEngine } from '@ctrl-arcz/demo-kit';
 
 export interface StoredTransfer {
   transferId: string;
@@ -44,6 +45,8 @@ export interface StoredBridgeStep {
 }
 export interface StoredBridge {
   id: string;
+  /** Which engine performed the move (older entries may be missing this). */
+  engine?: BridgeEngine;
   from: string;
   to: string;
   fromLabel: string;

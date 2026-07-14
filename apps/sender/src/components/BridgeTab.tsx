@@ -23,10 +23,10 @@ import {
   SegmentedTabs,
   Select,
   Stepper,
+  TxLink,
   useSubmitGuard,
   useT,
   useToast,
-  IconExternal,
   type Step,
 } from '@ctrl-arcz/demo-kit/ui';
 import { loadBridges, saveBridge, type StoredBridge } from '../store.js';
@@ -92,6 +92,7 @@ export function BridgeTab() {
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
   const [bridges, setBridges] = useState<StoredBridge[]>(() => loadBridges());
   const [histQuery, setHistQuery] = useState('');
+  const [histEngine, setHistEngine] = useState<'all' | BridgeEngine>('all');
   const [histPage, setHistPage] = useState(0);
 
   const amountValue = Number(amount);
@@ -135,8 +136,12 @@ export function BridgeTab() {
 
   const filteredHistory = useMemo(() => {
     const q = histQuery.trim().toLowerCase();
-    return q ? bridges.filter((b) => bridgeHaystack(b).includes(q)) : bridges;
-  }, [bridges, histQuery]);
+    return bridges.filter(
+      (b) =>
+        (histEngine === 'all' || (b.engine ?? 'cctp') === histEngine) &&
+        (!q || bridgeHaystack(b).includes(q)),
+    );
+  }, [bridges, histQuery, histEngine]);
 
   const pageCount = Math.max(1, Math.ceil(filteredHistory.length / HISTORY_PAGE_SIZE));
   const page = Math.min(histPage, pageCount - 1);
@@ -158,6 +163,7 @@ export function BridgeTab() {
       setResult(data);
       saveBridge({
         id: `${from}-${to}-${Date.now()}`,
+        engine,
         from,
         to,
         fromLabel: bridgeChainLabel(from),
@@ -186,12 +192,12 @@ export function BridgeTab() {
 
   return (
     <>
-      <Card title={t('bridge.title')} data-testid="bridge-tab">
-        <p className="muted">{t('bridge.body')}</p>
+      <Card title={t(`bridge.${engine}.title`)} data-testid="bridge-tab">
+        <p className="muted">{t(`bridge.${engine}.body`)}</p>
         <ul className="hintlist">
-          <li>{t('bridge.point1')}</li>
-          <li>{t('bridge.point2')}</li>
-          <li>{t('bridge.point3')}</li>
+          <li>{t(`bridge.${engine}.point1`)}</li>
+          <li>{t(`bridge.${engine}.point2`)}</li>
+          <li>{t(`bridge.${engine}.point3`)}</li>
         </ul>
 
         <hr className="rule" />
@@ -283,18 +289,15 @@ export function BridgeTab() {
             {result.steps
               .filter((s) => s.txHash && safeHttpUrl(s.explorerUrl))
               .map((s) => (
-                <a
+                <TxLink
                   key={s.name}
-                  className="linkbtn"
                   href={safeHttpUrl(s.explorerUrl)}
-                  target="_blank"
-                  rel="noreferrer"
+                  label={s.name}
+                  copyValue={s.txHash ?? ''}
                   title={stepLabel(activeSteps[stepIndexFor(s.name, activeSteps)] ?? 'mint')}
                   onMouseEnter={() => setHoverIdx(stepIndexFor(s.name, activeSteps))}
                   onMouseLeave={() => setHoverIdx(null)}
-                >
-                  {s.name} <IconExternal width={13} height={13} />
-                </a>
+                />
               ))}
           </div>
         )}
@@ -306,26 +309,41 @@ export function BridgeTab() {
             <p className="muted">{t('bridge.historyEmpty')}</p>
           ) : (
             <>
-              <SearchField
-                value={histQuery}
-                onChange={(v) => {
-                  setHistQuery(v);
-                  setHistPage(0);
-                }}
-                placeholder={t('bridge.historySearch')}
-                ariaLabel={t('bridge.historySearch')}
-                data-testid="bridge-history-search"
-              />
+              <div className="hist-controls">
+                <SearchField
+                  value={histQuery}
+                  onChange={(v) => {
+                    setHistQuery(v);
+                    setHistPage(0);
+                  }}
+                  placeholder={t('bridge.historySearch')}
+                  ariaLabel={t('bridge.historySearch')}
+                  data-testid="bridge-history-search"
+                />
+                <Select
+                  value={histEngine}
+                  options={[
+                    { value: 'all', label: t('bridge.filterAll') },
+                    { value: 'cctp', label: t('bridge.engine.cctp') },
+                    { value: 'gateway', label: t('bridge.engine.gateway') },
+                  ]}
+                  onChange={(v) => {
+                    setHistEngine(v as 'all' | BridgeEngine);
+                    setHistPage(0);
+                  }}
+                  ariaLabel={t('bridge.filterEngine')}
+                />
+              </div>
 
               {filteredHistory.length === 0 ? (
                 <p className="muted" style={{ marginTop: 14 }}>
                   {t('bridge.historyNoMatch')}
                 </p>
               ) : (
-                <PagedList resetKey={histQuery}>
+                <PagedList resetKey={histQuery} reserve={page < pageCount - 1}>
                   <div className="bridge-hist" style={{ marginTop: 14 }}>
                     {pageRows.map((b) => (
-                      <div key={b.id} className="bridge-hist__row" data-testid="bridge-history-row">
+                      <div key={b.id} className="trow" data-testid="bridge-history-row">
                         <div className="bridge-hist__head">
                           <span className="bridge-hist__route">
                             <ChainLogo id={b.from} size={18} />
@@ -350,26 +368,30 @@ export function BridgeTab() {
                             <span className="bridge-hist__time">{relativeTime(b.createdAt)}</span>
                           </span>
                         </div>
-                        <div className="row wrap" style={{ gap: 8 }}>
-                          {b.steps
-                            .filter((s) => s.txHash && safeHttpUrl(s.explorerUrl))
-                            .map((s) => (
-                              <a
-                                key={s.name}
-                                className="linkbtn"
-                                href={safeHttpUrl(s.explorerUrl)}
-                                target="_blank"
-                                rel="noreferrer"
-                              >
-                                {s.name} <IconExternal width={13} height={13} />
-                              </a>
-                            ))}
-                        </div>
+                        {b.steps.some((s) => s.txHash && safeHttpUrl(s.explorerUrl)) && (
+                          <>
+                            <hr className="rule trow__rule" />
+                            <div className="bridge-hist__links">
+                              {b.steps
+                                .filter((s) => s.txHash && safeHttpUrl(s.explorerUrl))
+                                .map((s) => (
+                                  <TxLink
+                                    key={s.name}
+                                    href={safeHttpUrl(s.explorerUrl)}
+                                    label={s.name}
+                                    copyValue={s.txHash ?? ''}
+                                  />
+                                ))}
+                            </div>
+                          </>
+                        )}
                       </div>
                     ))}
                   </div>
-                  <Pagination page={page} pageCount={pageCount} onChange={setHistPage} />
                 </PagedList>
+              )}
+              {filteredHistory.length > 0 && (
+                <Pagination page={page} pageCount={pageCount} onChange={setHistPage} />
               )}
             </>
           )}

@@ -135,7 +135,7 @@ export function TransfersTab({ session, onChange }: { session: Session; onChange
           {t('active.noMatch')}
         </p>
       ) : (
-        <PagedList resetKey={query}>
+        <PagedList resetKey={query} reserve={safePage < pageCount - 1}>
           <div style={{ marginTop: 14 }}>
             {pageRows.map(({ stored, chain }) => {
               const status = chain?.status ?? 'NONE';
@@ -192,8 +192,10 @@ export function TransfersTab({ session, onChange }: { session: Session; onChange
               );
             })}
           </div>
-          <Pagination page={safePage} pageCount={pageCount} onChange={setPage} />
         </PagedList>
+      )}
+      {filtered.length > 0 && (
+        <Pagination page={safePage} pageCount={pageCount} onChange={setPage} />
       )}
     </Card>
   );

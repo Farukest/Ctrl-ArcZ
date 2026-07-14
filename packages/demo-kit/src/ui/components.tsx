@@ -20,6 +20,8 @@ import { useTheme } from './theme.js';
 import {
   IconCheck,
   IconChevron,
+  IconChevronsLeft,
+  IconChevronsRight,
   IconClose,
   IconCopy,
   IconGlobe,
@@ -28,6 +30,7 @@ import {
   IconInfo,
   IconAlert,
   IconSearch,
+  IconExternal,
 } from './icons.js';
 
 /** Short 0x…abcd address form used everywhere. */
@@ -476,14 +479,33 @@ export function StatusPill({ status, label }: { status: string; label?: ReactNod
 }
 
 /* CopyButton / AddressChip ------------------------------------------------ */
-export function CopyButton({ value, label }: { value: string; label?: string }) {
+export function CopyButton({ value, label }: { value: string; label?: string | undefined }) {
   const t = useT();
   const [copied, setCopied] = useState(false);
   const copy = useCallback(() => {
-    void navigator.clipboard.writeText(value).then(() => {
+    const done = () => {
       setCopied(true);
       setTimeout(() => setCopied(false), 1600);
-    });
+    };
+    // The async Clipboard API can reject (not focused, denied, insecure context);
+    // catch it (no unhandled rejection) and fall back to a hidden-textarea copy.
+    Promise.resolve(navigator.clipboard?.writeText(value))
+      .then(done)
+      .catch(() => {
+        try {
+          const ta = document.createElement('textarea');
+          ta.value = value;
+          ta.style.position = 'fixed';
+          ta.style.opacity = '0';
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand('copy');
+          document.body.removeChild(ta);
+          done();
+        } catch {
+          /* clipboard unavailable; nothing more we can do */
+        }
+      });
   }, [value]);
   return (
     <button
@@ -589,12 +611,23 @@ export function Pagination({
 }) {
   const t = useT();
   if (pageCount <= 1) return null;
+  const atStart = page <= 0;
+  const atEnd = page >= pageCount - 1;
   return (
     <nav className="pagination" aria-label={t('common.pagination')}>
       <button
         className="pagination__btn"
+        onClick={() => onChange(0)}
+        disabled={atStart}
+        aria-label={t('common.firstPage')}
+        data-testid="page-first"
+      >
+        <IconChevronsLeft className="pagination__chev" />
+      </button>
+      <button
+        className="pagination__btn"
         onClick={() => onChange(page - 1)}
-        disabled={page <= 0}
+        disabled={atStart}
         aria-label={t('common.prevPage')}
         data-testid="page-prev"
       >
@@ -606,11 +639,20 @@ export function Pagination({
       <button
         className="pagination__btn"
         onClick={() => onChange(page + 1)}
-        disabled={page >= pageCount - 1}
+        disabled={atEnd}
         aria-label={t('common.nextPage')}
         data-testid="page-next"
       >
         <IconChevron className="pagination__chev pagination__chev--next" />
+      </button>
+      <button
+        className="pagination__btn"
+        onClick={() => onChange(pageCount - 1)}
+        disabled={atEnd}
+        aria-label={t('common.lastPage')}
+        data-testid="page-last"
+      >
+        <IconChevronsRight className="pagination__chev" />
       </button>
     </nav>
   );
@@ -619,6 +661,41 @@ export function Pagination({
 /** Clamp-safe page slice helper for lists. */
 export function paginate<T>(items: T[], page: number, size: number): T[] {
   return items.slice(page * size, page * size + size);
+}
+
+/* Tx link + copy (one chip: open in explorer, or copy the hash without leaving) */
+export function TxLink({
+  href,
+  label,
+  copyValue,
+  copyLabel,
+  title,
+  onMouseEnter,
+  onMouseLeave,
+}: {
+  href?: string | undefined;
+  label: ReactNode;
+  copyValue: string;
+  copyLabel?: string | undefined;
+  title?: string | undefined;
+  onMouseEnter?: (() => void) | undefined;
+  onMouseLeave?: (() => void) | undefined;
+}) {
+  return (
+    <span className="txlink" onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave}>
+      {href ? (
+        <a className="txlink__go" href={href} target="_blank" rel="noreferrer" title={title}>
+          {label}
+          <IconExternal width={13} height={13} />
+        </a>
+      ) : (
+        <span className="txlink__go" title={title}>
+          {label}
+        </span>
+      )}
+      <CopyButton value={copyValue} label={copyLabel} />
+    </span>
+  );
 }
 
 /* Search field (one modular control reused across every list) --------------- */
@@ -658,7 +735,22 @@ export function SearchField({
  * keeps that height instead of pulling everything up. `resetKey` re-measures when
  * the dataset changes (e.g. a new search), so filtering does not leave dead space.
  */
-export function PagedList({ children, resetKey }: { children: ReactNode; resetKey?: unknown }) {
+/**
+ * Keeps a paginated list's height stable so the pagination bar underneath does
+ * not shift as you move between full pages (no moving click target). It reserves
+ * the tallest page seen — but only while `reserve` is true. Callers pass
+ * `reserve={!isLastPage}` so the final, partial page collapses to its own content
+ * instead of leaving a large empty gap above the controls.
+ */
+export function PagedList({
+  children,
+  resetKey,
+  reserve = true,
+}: {
+  children: ReactNode;
+  resetKey?: unknown;
+  reserve?: boolean;
+}) {
   const inner = useRef<HTMLDivElement>(null);
   const [minH, setMinH] = useState(0);
   useLayoutEffect(() => {
@@ -669,7 +761,7 @@ export function PagedList({ children, resetKey }: { children: ReactNode; resetKe
     setMinH(0);
   }, [resetKey]);
   return (
-    <div className="paged-list" style={minH ? { minHeight: minH } : undefined}>
+    <div className="paged-list" style={reserve && minH ? { minHeight: minH } : undefined}>
       <div ref={inner}>{children}</div>
     </div>
   );

@@ -83,6 +83,20 @@ export const IconChevron = (p: SVGProps<SVGSVGElement>) => (
   </svg>
 );
 
+export const IconChevronsLeft = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}>
+    <path d="m11 17-5-5 5-5" />
+    <path d="m18 17-5-5 5-5" />
+  </svg>
+);
+
+export const IconChevronsRight = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}>
+    <path d="m13 17 5-5-5-5" />
+    <path d="m6 17 5-5-5-5" />
+  </svg>
+);
+
 export const IconGlobe = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)}>
     <circle cx="12" cy="12" r="9" />

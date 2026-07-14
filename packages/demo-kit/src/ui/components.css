@@ -386,6 +386,12 @@
 .searchfield__input::-webkit-search-cancel-button {
   cursor: pointer;
 }
+/* The field itself shows focus (border via :focus-within); suppress the global
+   focus ring on the bare input so it does not draw a second inner border. */
+.searchfield__input:focus-visible {
+  box-shadow: none;
+  border-radius: 0;
+}
 
 /* Paginated list wrapper: reserves the tallest page height so paging never
    shifts the layout (see PagedList). */
@@ -880,21 +886,31 @@
   min-width: 0;
 }
 
-/* Bridge history list ----------------------------------------------------- */
+/* Bridge history controls (search + engine filter) ------------------------ */
+.hist-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.hist-controls .searchfield {
+  flex: 1;
+  min-width: 0;
+}
+.hist-controls .select-trigger {
+  min-height: 40px;
+  min-width: 108px;
+}
+
+/* Bridge history list: reuses the Active list's .trow card + .rule divider so
+   both histories look and behave identically. Each entry is a bordered card
+   (unambiguous item boundary), split inside by the dashed .rule (meta vs links). */
 .bridge-hist {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-3);
+  display: block;
 }
-.bridge-hist__row {
+.bridge-hist__links {
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
   gap: var(--sp-2);
-  padding: var(--sp-3) 0;
-  border-top: 1px solid var(--border-subtle);
-}
-.bridge-hist__row:first-child {
-  border-top: none;
 }
 .bridge-hist__head {
   display: flex;
@@ -1233,6 +1249,53 @@
 }
 .linkbtn > svg {
   color: var(--accent);
+}
+
+/* Tx link chip: an "open in explorer" link joined to a copy-hash button. */
+.txlink {
+  display: inline-flex;
+  align-items: stretch;
+  height: 30px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  overflow: hidden;
+}
+.txlink__go {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 8px 0 10px;
+  color: var(--text-mid);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  text-decoration: none;
+  transition: color var(--dur-2) var(--ease);
+}
+.txlink__go > svg {
+  color: var(--accent);
+}
+.txlink .addr__copy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  padding: 0;
+  border-radius: 0;
+  border-left: 1px solid var(--border-subtle);
+  color: var(--text-lo);
+}
+.txlink .addr__copy:focus-visible {
+  box-shadow: none;
+}
+@media (hover: hover) {
+  .txlink__go:hover {
+    color: var(--text-hi);
+  }
+  .txlink .addr__copy:hover {
+    color: var(--accent);
+    background: var(--surface-3);
+  }
 }
 @media (hover: hover) {
   .linkbtn:hover {
