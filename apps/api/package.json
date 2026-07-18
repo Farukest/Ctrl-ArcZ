@@ -1,0 +1,24 @@
+{
+  "name": "@ctrl-arcz/api",
+  "version": "0.1.0",
+  "description": "Ctrl+ArcZ backend — the co-signer, cross-chain bridge, gasless claim, and push notifications for the web and mobile apps",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "tsx src/server.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@ctrl-arcz/demo-kit": "workspace:*",
+    "@ctrl-arcz/sdk": "workspace:*",
+    "dotenv": "^16.4.7",
+    "expo-server-sdk": "^3.13.0",
+    "viem": "^2.38.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  }
+}
