@@ -1,0 +1,39 @@
+{
+  "name": "@ctrl-arcz/mobile",
+  "version": "0.1.0",
+  "description": "Ctrl+ArcZ mobile app (Expo) — protected USDC transfers and payer-side privacy on Arc",
+  "main": "index.ts",
+  "private": true,
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@ctrl-arcz/sdk": "workspace:*",
+    "@expo/vector-icons": "^15.0.2",
+    "@react-navigation/bottom-tabs": "^7.18.11",
+    "@react-navigation/native": "^7.3.11",
+    "@react-navigation/native-stack": "^7.18.3",
+    "expo": "~57.0.7",
+    "expo-camera": "~57.0.3",
+    "expo-crypto": "~57.0.1",
+    "expo-linking": "~57.0.3",
+    "expo-local-authentication": "~57.0.1",
+    "expo-secure-store": "~57.0.1",
+    "expo-status-bar": "~57.0.1",
+    "react": "19.2.3",
+    "react-native": "0.86.0",
+    "react-native-get-random-values": "~1.11.0",
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-screens": "4.25.2",
+    "react-native-url-polyfill": "^4.0.0",
+    "viem": "^2.38.0"
+  },
+  "devDependencies": {
+    "@types/react": "~19.2.2",
+    "typescript": "^5.7.3"
+  }
+}
