@@ -5,125 +5,130 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
-import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 
 /// @title SpendPolicyAccount — a single-purpose, policy-bound payer wallet
-/// @notice The "disposable card" of Ctrl+ArcZ's payer-side shield. Funded from a
-///         vault, it can only pay a locked `target`, only up to `maxAmount`, only
-///         until `expiry`, and every outbound payment needs a co-signer (the
-///         enclave "veto") in addition to the owner. Anything left over can only
-///         ever return to the `vault`, so the account is a one-way valve, never a
-///         black hole.
+/// @notice The "disposable card" of Ctrl+ArcZ's payer-side shield. Funded per
+///         payment, it can only pay a locked `target`, only up to `maxAmount`,
+///         only until `expiry`; every spend needs the enclave co-signer, and any
+///         leftover can only ever return to the committed vault.
 ///
-/// @dev Deployed as an EIP-1167 minimal-proxy clone per intent (see
-///      `SpendPolicyFactory`), so `init` runs once instead of a constructor. The
-///      signature domain binds `address(this)` and `chainid`, which is clone-safe
-///      (no cached domain separator that a clone would inherit wrong).
+/// @dev Privacy note — the account stores NO payer identity. There is no `owner`
+///      variable and no owner signature on a spend, so a merchant who is paid from
+///      this address cannot read who funded it from the account itself. The vault
+///      is stored only as a commitment (`vaultHash`); its address is revealed only
+///      at the moment of a sweep, and only to whoever already knows it. The
+///      residual on-chain link is the funding transaction (payer -> account),
+///      which a transparent chain cannot hide without confidential transfers (Arc
+///      Privacy Sector); the account surface itself leaks nothing.
 ///
-///      Trust model:
-///       - Outbound to the third-party `target`: 2-of-2 (owner + cosigner). The
-///         cosigner is the enclave; it refuses to sign a spend that fails policy
-///         or the risk firewall, so a bad payment is physically impossible, not
-///         merely warned about.
-///       - Return to the owner's own `vault`: owner alone, any time; and by anyone
-///         once expired. This is the liveness escape hatch: if the enclave ever
-///         goes dark, funds are never stranded — they sweep home.
+///      Trust model — a spend needs only the co-signer's signature. The funds are
+///      hard-locked to `target` and capped, so the co-signer can never steal or
+///      redirect; it can only ever push the payment the payer set up when they
+///      created and funded the account. The payer signs nothing blind: their only
+///      action is a normal, readable USDC transfer to fund the account.
+///
+///      Signatures are EIP-712 typed data. The domain binds `address(this)` and
+///      `chainid` and is computed on the fly, which is clone-safe.
 contract SpendPolicyAccount is ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     enum Mode {
-        PUSH, // one-shot checkout: owner + cosigner authorize each pay
-        PULL // recurring/allowance: cosigner authorizes each pull, owner pre-authorized at creation
+        PUSH, // one-shot checkout: the co-signer authorizes each pay
+        PULL // recurring/allowance: the co-signer authorizes each pull
 
     }
 
-    // --- policy, set once at init (clone) ---
+    uint8 private constant ACTION_PAY = 0;
+    uint8 private constant ACTION_PULL = 1;
+
+    // --- policy, set once at init (clone). No payer identity is stored. ---
     IERC20 public token;
-    address public owner; // the payer / vault owner
-    address public cosigner; // the enclave co-signer
-    address public vault; // the only address funds may return to
-    address public target; // the locked payee; funds can go nowhere else
-    uint256 public maxAmount; // cumulative cap across all pays/pulls
-    uint40 public expiry; // no outbound payment after this timestamp
-    uint40 public interval; // PULL: min seconds between pulls (0 for PUSH)
+    address public cosigner; // the enclave co-signer; not the payer's identity
+    bytes32 public vaultHash; // keccak256(abi.encode(vault)); the return address, hidden until sweep
+    address public target; // the locked payee; the payee already knows itself
+    uint256 public maxAmount; // cumulative cap across all spends
+    uint256 public perPullMax; // PULL: max per single pull (the real subscription guarantee)
+    uint40 public expiry; // no spend after this
+    uint40 public interval; // PULL: min seconds between pulls
+
     Mode public mode;
 
     // --- mutable state ---
-    uint256 public spent; // cumulative sent to target
+    uint256 public spent;
     uint40 public lastPull;
-    uint256 public nonce; // replay guard for signed actions
+    uint256 public nonce;
     bool private _initialized;
 
-    event Initialized(address indexed owner, address indexed target, uint256 maxAmount, uint40 expiry, Mode mode);
+    // --- EIP-712 ---
+    bytes32 private constant _DOMAIN_TYPEHASH =
+        keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)");
+    bytes32 private constant _SPEND_TYPEHASH =
+        keccak256("Spend(address target,uint256 amount,uint256 nonce,uint8 action)");
+    bytes32 private constant _NAME_HASH = keccak256(bytes("Ctrl+ArcZ SpendPolicy"));
+    bytes32 private constant _VERSION_HASH = keccak256(bytes("1"));
+
     event Paid(address indexed target, uint256 amount, uint256 spent);
     event Pulled(address indexed target, uint256 amount, uint256 spent);
-    event SweptToVault(address indexed vault, uint256 amount);
+    event SweptToVault(uint256 amount);
 
     error AlreadyInitialized();
     error ZeroAddress();
+    error ZeroCommitment();
     error ZeroAmount();
     error WrongMode();
     error Expired();
     error OverLimit();
+    error OverPerPull();
     error TooSoon();
-    error BadOwnerSig();
     error BadCosignerSig();
     error NotExpiredYet();
+    error WrongVault();
 
-    /// @dev On Arc, a USDC ERC-20 transfer moves the recipient's native balance, so
-    ///      a contract must accept native value to be fundable. Without this, funding
-    ///      an ephemeral account (or a sweep into it) would revert on Arc. Costs
-    ///      nothing on a standard EVM. The clone forwards value-only calls here.
+    /// @dev On Arc a USDC ERC-20 transfer moves native balance, so a contract must
+    ///      accept native value to be fundable. Costs nothing on a plain EVM.
     receive() external payable {}
 
     /// @notice One-time setup for a freshly cloned account.
     function init(
         IERC20 token_,
-        address owner_,
         address cosigner_,
-        address vault_,
+        bytes32 vaultHash_,
         address target_,
         uint256 maxAmount_,
+        uint256 perPullMax_,
         uint40 expiry_,
         uint40 interval_,
         Mode mode_
     ) external {
         if (_initialized) revert AlreadyInitialized();
-        if (
-            address(token_) == address(0) || owner_ == address(0) || cosigner_ == address(0) || vault_ == address(0)
-                || target_ == address(0)
-        ) revert ZeroAddress();
+        if (address(token_) == address(0) || cosigner_ == address(0) || target_ == address(0)) revert ZeroAddress();
+        if (vaultHash_ == bytes32(0)) revert ZeroCommitment();
         if (maxAmount_ == 0) revert ZeroAmount();
 
         _initialized = true;
         token = token_;
-        owner = owner_;
         cosigner = cosigner_;
-        vault = vault_;
+        vaultHash = vaultHash_;
         target = target_;
         maxAmount = maxAmount_;
+        // 0 means "no tighter per-pull cap than the cumulative cap".
+        perPullMax = perPullMax_ == 0 ? maxAmount_ : perPullMax_;
         expiry = expiry_;
         interval = interval_;
         mode = mode_;
-
-        emit Initialized(owner_, target_, maxAmount_, expiry_, mode_);
     }
 
     // ------------------------------------------------------------------
-    // Outbound to the locked target (2-of-2 or cosigner-gated)
+    // Outbound to the locked target (co-signer authorized)
     // ------------------------------------------------------------------
 
-    /// @notice PUSH: pay the locked target. Needs BOTH the owner and the cosigner
-    ///         signature over `(this, target, amount, nonce, chainid)`. Anyone may
-    ///         submit the transaction (a relayer), since the money can only reach
-    ///         the pre-locked target regardless of who sends it.
-    function pay(uint256 amount, bytes calldata ownerSig, bytes calldata cosignerSig) external nonReentrant {
+    /// @notice PUSH: pay the locked target. Authorized by the co-signer alone; the
+    ///         funds can only reach the pre-locked target within the cap, so this
+    ///         cannot steal or redirect. Anyone may submit the transaction.
+    function pay(uint256 amount, bytes calldata cosignerSig) external nonReentrant {
         if (mode != Mode.PUSH) revert WrongMode();
         _checkWindowAndLimit(amount);
-
-        bytes32 digest = _actionDigest(amount);
-        if (ECDSA.recover(digest, ownerSig) != owner) revert BadOwnerSig();
-        if (ECDSA.recover(digest, cosignerSig) != cosigner) revert BadCosignerSig();
+        if (ECDSA.recover(_spendDigest(amount, ACTION_PAY), cosignerSig) != cosigner) revert BadCosignerSig();
 
         nonce++;
         spent += amount;
@@ -132,19 +137,15 @@ contract SpendPolicyAccount is ReentrancyGuard {
     }
 
     /// @notice PULL: the target (or a relayer) draws `amount`, gated by the
-    ///         cosigner's signature only — the owner pre-authorized this account
-    ///         when it was created and funded. Enforces the interval, the cumulative
-    ///         cap and the expiry on-chain, so a merchant cannot over-pull even if
-    ///         the cosigner misbehaves.
+    ///         co-signer. Enforces the per-pull cap, the interval, the cumulative
+    ///         cap and the expiry on-chain — the per-pull cap is the real
+    ///         subscription guarantee against a misbehaving co-signer.
     function pull(uint256 amount, bytes calldata cosignerSig) external nonReentrant {
         if (mode != Mode.PULL) revert WrongMode();
         _checkWindowAndLimit(amount);
-        // First pull (lastPull == 0) is always allowed; the interval only spaces
-        // out subsequent pulls.
+        if (amount > perPullMax) revert OverPerPull();
         if (lastPull != 0 && block.timestamp < uint256(lastPull) + interval) revert TooSoon();
-
-        bytes32 digest = _actionDigest(amount);
-        if (ECDSA.recover(digest, cosignerSig) != cosigner) revert BadCosignerSig();
+        if (ECDSA.recover(_spendDigest(amount, ACTION_PULL), cosignerSig) != cosigner) revert BadCosignerSig();
 
         nonce++;
         spent += amount;
@@ -157,31 +158,28 @@ contract SpendPolicyAccount is ReentrancyGuard {
     // Return home — the one-way valve to the vault
     // ------------------------------------------------------------------
 
-    /// @notice Sweep the whole balance back to the vault. Owner-authorized (by
-    ///         signature so a relayer can submit), allowed any time. Because the
-    ///         destination is the hard-locked `vault`, this is safe to expose: it
-    ///         can never move funds anywhere else. Doubles as revoke (kill a
-    ///         subscription) and refund-collection.
-    function sweepToVault(bytes calldata ownerSig) external nonReentrant {
-        bytes32 digest = _sweepDigest();
-        if (ECDSA.recover(digest, ownerSig) != owner) revert BadOwnerSig();
-        nonce++;
-        _sweep();
+    /// @notice Sweep the whole balance back to the vault. Authorized by knowledge
+    ///         of the vault address (its hash must match the stored commitment), so
+    ///         no signature is needed and the vault stays hidden until this call.
+    ///         Doubles as revoke and refund-collection.
+    function sweepToVault(address vault) external nonReentrant {
+        if (keccak256(abi.encode(vault)) != vaultHash) revert WrongVault();
+        _sweep(vault);
     }
 
-    /// @notice Once expired, anyone may sweep the account home. This is the
-    ///         keeper/refund path: a refund that lands after expiry, or leftover
-    ///         funds from an abandoned checkout, are returned to the vault without
-    ///         the owner or the enclave having to act.
-    function sweepExpired() external nonReentrant {
+    /// @notice Once expired, sweep home. Still gated by the vault commitment, so
+    ///         only someone who knows the vault (the payer / their relayer) can
+    ///         call it. Liveness escape hatch if the co-signer ever goes dark.
+    function sweepExpired(address vault) external nonReentrant {
         if (block.timestamp <= expiry) revert NotExpiredYet();
-        _sweep();
+        if (keccak256(abi.encode(vault)) != vaultHash) revert WrongVault();
+        _sweep(vault);
     }
 
-    function _sweep() private {
+    function _sweep(address vault) private {
         uint256 bal = token.balanceOf(address(this));
         if (bal > 0) token.safeTransfer(vault, bal);
-        emit SweptToVault(vault, bal);
+        emit SweptToVault(bal);
     }
 
     // ------------------------------------------------------------------
@@ -194,29 +192,27 @@ contract SpendPolicyAccount is ReentrancyGuard {
         if (spent + amount > maxAmount) revert OverLimit();
     }
 
-    bytes32 private constant _ACTION_TYPEHASH =
-        keccak256("SpendPolicyAction(address account,address target,uint256 amount,uint256 nonce,uint256 chainId)");
-    bytes32 private constant _SWEEP_TYPEHASH =
-        keccak256("SpendPolicySweep(address account,address vault,uint256 nonce,uint256 chainId)");
-
-    function _actionDigest(uint256 amount) private view returns (bytes32) {
-        bytes32 structHash = keccak256(abi.encode(_ACTION_TYPEHASH, address(this), target, amount, nonce, block.chainid));
-        return MessageHashUtils.toEthSignedMessageHash(structHash);
+    function _domainSeparator() private view returns (bytes32) {
+        return keccak256(abi.encode(_DOMAIN_TYPEHASH, _NAME_HASH, _VERSION_HASH, block.chainid, address(this)));
     }
 
-    function _sweepDigest() private view returns (bytes32) {
-        bytes32 structHash = keccak256(abi.encode(_SWEEP_TYPEHASH, address(this), vault, nonce, block.chainid));
-        return MessageHashUtils.toEthSignedMessageHash(structHash);
+    function _spendDigest(uint256 amount, uint8 action) private view returns (bytes32) {
+        bytes32 structHash = keccak256(abi.encode(_SPEND_TYPEHASH, target, amount, nonce, action));
+        return keccak256(abi.encodePacked("\x19\x01", _domainSeparator(), structHash));
     }
 
-    /// @notice The digest a wallet/enclave must sign to authorize paying `amount`.
-    ///         Exposed so the SDK and the co-signer service build the exact bytes.
-    function actionDigest(uint256 amount) external view returns (bytes32) {
-        return _actionDigest(amount);
+    // ------------------------------------------------------------------
+    // Views (SDK + co-signer build/verify against these)
+    // ------------------------------------------------------------------
+
+    /// @notice The EIP-712 digest the co-signer signs to authorize a spend.
+    ///         `action` is 0 for pay, 1 for pull.
+    function spendDigest(uint256 amount, uint8 action) external view returns (bytes32) {
+        return _spendDigest(amount, action);
     }
 
-    function sweepDigest() external view returns (bytes32) {
-        return _sweepDigest();
+    function domainSeparator() external view returns (bytes32) {
+        return _domainSeparator();
     }
 
     /// @notice Remaining spendable before the cumulative cap binds.
