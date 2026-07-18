@@ -44,8 +44,8 @@ export const tr: Record<TranslationKey, string> = {
 
   'ppay.title': 'Özel Ödeme',
   'ppay.body':
-    'Bir satıcıya, ana cüzdanını, bakiyeni ve geçmişini görmeyeceği taze ve tek kullanımlık bir adresten öde. Zincir üstünde tek kullanımlık sanal kart gibi.',
-  'ppay.summary': 'Taze, tek kullanımlık bir adresten öde. Ana cüzdanın gizli kalır.',
+    'Bir satıcıya, zincir üstünde kimliğinden hiçbir iz taşımayan taze ve tek kullanımlık bir adresten öde. Tek kullanımlık sanal kart gibi.',
+  'ppay.summary': 'Zincir üstünde kimliğinden iz taşımayan taze, tek kullanımlık bir adresten öde.',
   'ppay.info.aria': 'Özel Ödeme nasıl çalışır',
   'ppay.info.k1': 'Tek kullanımlık adres',
   'ppay.info.k2': 'The Machine',
@@ -73,7 +73,7 @@ export const tr: Record<TranslationKey, string> = {
   'ppay.merchantSees': 'Satıcının gördüğü',
   'ppay.txn': 'İşlem',
   'ppay.successNote':
-    'Satıcı, tam olarak bu ödemeyi taşıyan, geçmişi sıfır bir adres görür. Kasan, bakiyen ve geçmişin gizli kalır.',
+    'Satıcı, zincir üstünde sana dair hiçbir bağ tutmayan, geçmişi sıfır bir adres görür. Besleme transferinin kendisini gizlemek Arc Privacy Sector ile gelir.',
 
   'bridge.cctp.title': 'USDC Köprüle (CCTP)',
   'bridge.cctp.body': 'Circle CCTP ile USDC’yi zincirler arası taşı.',

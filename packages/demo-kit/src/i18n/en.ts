@@ -48,8 +48,8 @@ export const en = {
 
   'ppay.title': 'Private Pay',
   'ppay.body':
-    'Pay a merchant from a fresh, single-use address so they never see your main wallet, balance or history. Like a disposable virtual card, on-chain.',
-  'ppay.summary': 'Pay from a fresh, single-use address. Your main wallet stays private.',
+    'Pay a merchant from a fresh, single-use address that carries none of your identity on-chain. Like a disposable virtual card.',
+  'ppay.summary': 'Pay from a fresh, single-use address that carries none of your identity on-chain.',
   'ppay.info.aria': 'How Private Pay works',
   'ppay.info.k1': 'Disposable address',
   'ppay.info.k2': 'The Machine',
@@ -77,7 +77,7 @@ export const en = {
   'ppay.merchantSees': 'What the merchant sees',
   'ppay.txn': 'Transaction',
   'ppay.successNote':
-    'The merchant sees a zero-history address holding exactly this payment. Your vault, balance and history stay private.',
+    'The merchant sees a zero-history address that stores no link to you on-chain. Hiding the funding transfer itself comes with Arc Privacy Sector.',
 
   'bridge.cctp.title': 'Bridge USDC (CCTP)',
   'bridge.cctp.body': 'Move USDC across chains with Circle CCTP.',

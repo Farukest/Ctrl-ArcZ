@@ -3,13 +3,13 @@ import { parseUnits, isAddress, erc20Abi, type Address, type Hex } from 'viem';
 import {
   ADDRESSES,
   SPEND_POLICY_FACTORY_ADDRESS,
-  SHIELD_VAULT_ADDRESS,
   predictEphemeral,
   createEphemeral,
+  readAccount,
   submitPay,
-  payStructHash,
   RemoteCoSigner,
   MODE_PUSH,
+  ACTION_PAY,
   explorerTxUrl,
 } from '@ctrl-arcz/sdk';
 import { type Session } from '@ctrl-arcz/demo-kit';
@@ -100,49 +100,35 @@ export function PrivatePayTab({ session }: { session: Session }) {
     const to = merchant as Address;
     const amt = parseUnits(amount, 6);
 
+    const showVeto = (reason: string, riskReasons?: string[]) => {
+      setPhase('vetoed');
+      setVeto({ reason, ...(riskReasons ? { riskReasons } : {}) });
+      toast.push(t('ppay.vetoedToast'), 'error');
+    };
+
     try {
       const cosignerAddress = (await fetch('/api/cosign').then((r) => r.json())).address as Address;
+      const cosigner = new RemoteCoSigner('/api/cosign', cosignerAddress);
       const salt = randomSalt();
       const expiry = Math.floor(Date.now() / 1000) + EXPIRY_SECONDS;
-      const chainId = BigInt(await clients.publicClient.getChainId());
+      const chainId = await clients.publicClient.getChainId();
 
-      // 1. The Machine checks FIRST, on the fresh (predicted) address. A veto here
-      //    means nothing is created and no funds ever move — the payment is stopped
-      //    before it can send, not clawed back after.
+      // 1. The Machine checks FIRST — the firewall runs before anything exists. A
+      //    veto here means nothing is created and no funds ever move: the payment
+      //    is stopped before it can send, not clawed back after.
       setPhase('machine');
-      const account = await predictEphemeral(
-        clients.publicClient,
-        SPEND_POLICY_FACTORY_ADDRESS,
-        owner,
-        salt,
-      );
-      const cosigner = new RemoteCoSigner('/api/cosign', cosignerAddress);
-      const auth = await cosigner.authorize({
-        account,
-        owner,
-        target: to,
-        amount: amt,
-        nonce: 0n,
-        chainId,
-        policy: { lockedTarget: to, remaining: amt, expiry },
-      });
-      if (!auth.approved) {
-        setPhase('vetoed');
-        setVeto({
-          reason: auth.reason,
-          ...(auth.riskReasons ? { riskReasons: auth.riskReasons } : {}),
-        });
-        toast.push(t('ppay.vetoedToast'), 'error');
-        return;
-      }
+      const pre = await cosigner.precheck({ owner, target: to, amount: amt });
+      if (!pre.approved) return showVeto(pre.reason, pre.riskReasons);
 
-      // 2. Create the disposable address, locked to this merchant.
+      // 2. Create the disposable address, locked to this merchant. It stores no
+      //    payer identity — only a hash of the owner (as the salt) and of the vault.
       setPhase('creating');
+      const account = await predictEphemeral(clients.publicClient, SPEND_POLICY_FACTORY_ADDRESS, owner, salt);
       await createEphemeral(clients, SPEND_POLICY_FACTORY_ADDRESS, salt, {
         token: USDC,
         owner,
         cosigner: cosignerAddress,
-        vault: SHIELD_VAULT_ADDRESS,
+        vault: owner, // sweeps return to the payer's own wallet
         target: to,
         maxAmount: amt,
         expiry,
@@ -150,8 +136,24 @@ export function PrivatePayTab({ session }: { session: Session }) {
         mode: MODE_PUSH,
       });
 
-      // 3. Fund it. In production this leg is confidential (Arc Privacy Sector);
-      //    in the demo the owner funds it directly.
+      // 3. The Machine authorizes the spend: the server reads the account's REAL
+      //    policy from chain and signs. Nothing the browser claims is trusted.
+      const state = await readAccount(clients.publicClient, account);
+      const auth = await cosigner.authorize({
+        account,
+        owner,
+        amount: amt,
+        action: ACTION_PAY,
+        target: state.target,
+        nonce: state.nonce,
+        chainId,
+        remaining: state.remaining,
+        expiry: state.expiry,
+      });
+      if (!auth.approved) return showVeto(auth.reason, auth.riskReasons);
+
+      // 4. Fund it (owner -> ephemeral). In production this leg is confidential
+      //    (Arc Privacy Sector); in the demo the owner funds it directly.
       setPhase('funding');
       const fundHash = await clients.walletClient.writeContract({
         address: USDC,
@@ -163,14 +165,10 @@ export function PrivatePayTab({ session }: { session: Session }) {
       });
       await clients.publicClient.waitForTransactionReceipt({ hash: fundHash });
 
-      // 4. Pay: the owner signs (nonce 0) and submits with The Machine's signature.
+      // 5. Pay with The Machine's signature alone. The payer signs nothing blind —
+      //    their only signature this whole flow was a plain, readable USDC transfer.
       setPhase('paying');
-      const digest = payStructHash({ account, target: to, amount: amt, nonce: 0n, chainId });
-      const ownerSig = await clients.walletClient.signMessage({
-        account: clients.walletClient.account!,
-        message: { raw: digest },
-      });
-      const txHash = await submitPay(clients, account, amt, ownerSig, auth.signature);
+      const txHash = await submitPay(clients, account, amt, auth.signature);
 
       setSuccess({ ephemeral: account, amount, merchant: to, txHash });
       setPhase('done');
