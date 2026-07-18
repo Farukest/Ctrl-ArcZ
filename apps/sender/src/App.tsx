@@ -4,10 +4,10 @@ import { ConnectBar, SegmentedTabs, TopBar, useT } from '@ctrl-arcz/demo-kit/ui'
 import { SendTab } from './components/SendTab.js';
 import { TransfersTab } from './components/TransfersTab.js';
 import { HistoryTab } from './components/HistoryTab.js';
-import { DemoTab } from './components/DemoTab.js';
 import { BridgeTab } from './components/BridgeTab.js';
+import { PrivatePayTab } from './components/PrivatePayTab.js';
 
-type Tab = 'send' | 'transfers' | 'history' | 'bridge' | 'demo';
+type Tab = 'send' | 'transfers' | 'history' | 'bridge' | 'privatepay';
 
 export function App() {
   const state = useSession();
@@ -19,7 +19,7 @@ export function App() {
     { id: 'transfers', label: t('nav.active') },
     { id: 'history', label: t('nav.history') },
     { id: 'bridge', label: t('nav.bridge') },
-    { id: 'demo', label: t('nav.poisoning') },
+    { id: 'privatepay', label: t('nav.privatepay') },
   ];
 
   return (
@@ -39,7 +39,7 @@ export function App() {
           )}
           {tab === 'history' && <HistoryTab session={state.session} />}
           {tab === 'bridge' && <BridgeTab />}
-          {tab === 'demo' && <DemoTab session={state.session} />}
+          {tab === 'privatepay' && <PrivatePayTab session={state.session} />}
         </div>
       )}
     </main>

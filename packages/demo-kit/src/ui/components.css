@@ -322,6 +322,15 @@
   flex-direction: column;
   gap: var(--sp-2);
 }
+
+/**
+ * Consistent vertical rhythm for a stack of form sections (fields, buttons,
+ * steppers). Replaces the ad-hoc `marginTop: 16` sprinkled per section with one
+ * global rule, so every form spaces its rows the same way.
+ */
+.formstack > * + * {
+  margin-top: var(--sp-4);
+}
 .field__label {
   font-size: var(--fs-sm);
   color: var(--text-hi);
@@ -1085,6 +1094,7 @@
 /* Segmented tabs ---------------------------------------------------------- */
 .segtabs {
   display: flex;
+  flex-wrap: wrap; /* never clip a tab: wrap to a second row on narrow widths */
   gap: 2px;
   background: var(--surface-1);
   border: 1px solid var(--border-subtle);
@@ -1093,7 +1103,9 @@
   margin-bottom: var(--sp-4);
 }
 .segtab {
-  flex: 1;
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
   background: transparent;
   border: 0;
   color: var(--text-mid);
@@ -1762,4 +1774,44 @@
     letter-spacing: 0.24em;
     text-indent: 0.24em;
   }
+}
+
+/* Private Pay — The Machine veto + private success */
+.veto {
+  border: 1px solid var(--block-border);
+  border-radius: var(--r-md);
+  padding: var(--sp-3);
+  background: var(--block-soft);
+}
+.veto__title {
+  font-weight: 600;
+  color: var(--block);
+}
+.veto__reason {
+  margin-top: var(--sp-2);
+  color: var(--text-hi);
+}
+.veto__risk {
+  margin-top: var(--sp-1);
+  color: var(--text-mid);
+  font-size: 0.92em;
+}
+.pp-success__title {
+  font-weight: 600;
+  color: var(--safe);
+}
+.pp-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  margin-top: var(--sp-2);
+}
+.pp-k {
+  color: var(--text-lo);
+}
+.pp-note {
+  margin-top: var(--sp-3);
+  color: var(--text-mid);
+  font-size: 0.92em;
 }

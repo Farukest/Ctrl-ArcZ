@@ -40,6 +40,40 @@ export const tr: Record<TranslationKey, string> = {
   'nav.history': 'Geçmiş',
   'nav.poisoning': 'Poisoning',
   'nav.bridge': 'Köprü',
+  'nav.privatepay': 'Özel Ödeme',
+
+  'ppay.title': 'Özel Ödeme',
+  'ppay.body':
+    'Bir satıcıya, ana cüzdanını, bakiyeni ve geçmişini görmeyeceği taze ve tek kullanımlık bir adresten öde. Zincir üstünde tek kullanımlık sanal kart gibi.',
+  'ppay.summary': 'Taze, tek kullanımlık bir adresten öde. Ana cüzdanın gizli kalır.',
+  'ppay.info.aria': 'Özel Ödeme nasıl çalışır',
+  'ppay.info.k1': 'Tek kullanımlık adres',
+  'ppay.info.k2': 'The Machine',
+  'ppay.info.k3': 'Tek yönlü vana',
+  'ppay.newPayment': 'Yeni ödeme',
+  'ppay.point1':
+    'Her ödeme için yeni bir adres üretilir; bu satıcıya, bu tutara ve 15 dakikaya kilitli.',
+  'ppay.point2':
+    'The Machine (enclave ortak imzacısı) her ödemeyi denetler; drainer veya lookalike adresi göndermeden önce veto eder.',
+  'ppay.point3': 'Harcanmayan ne varsa yalnızca kasana döner, başka hiçbir yere gidemez.',
+  'ppay.merchant': 'Satıcı adresi',
+  'ppay.amount': 'Tutar (USDC)',
+  'ppay.button': 'Özel öde',
+  'ppay.step.create': 'Özel adres oluştur',
+  'ppay.step.fund': 'Besle',
+  'ppay.step.machine': 'The Machine denetler',
+  'ppay.step.pay': 'Öde',
+  'ppay.doneToast': 'Özel olarak ödendi.',
+  'ppay.vetoedToast': 'The Machine bu ödemeyi veto etti. Hiç para hareket etmedi.',
+  'ppay.vetoTitle': 'The Machine veto etti',
+  'ppay.vetoBody':
+    'Ortak imzacı imzasını vermedi; ödeme uyarıyla geçiştirilmedi, fiilen imkânsız oldu. Hiç para hareket etmedi.',
+  'ppay.successTitle': 'Özel olarak ödendi',
+  'ppay.successBody': '{amount} USDC, temiz ve tek kullanımlık bir adresten satıcıya ulaştı.',
+  'ppay.merchantSees': 'Satıcının gördüğü',
+  'ppay.txn': 'İşlem',
+  'ppay.successNote':
+    'Satıcı, tam olarak bu ödemeyi taşıyan, geçmişi sıfır bir adres görür. Kasan, bakiyen ve geçmişin gizli kalır.',
 
   'bridge.cctp.title': 'USDC Köprüle (CCTP)',
   'bridge.cctp.body': 'Circle CCTP ile USDC’yi zincirler arası taşı.',

@@ -44,6 +44,40 @@ export const en = {
   'nav.history': 'History',
   'nav.poisoning': 'Poisoning',
   'nav.bridge': 'Bridge',
+  'nav.privatepay': 'Private Pay',
+
+  'ppay.title': 'Private Pay',
+  'ppay.body':
+    'Pay a merchant from a fresh, single-use address so they never see your main wallet, balance or history. Like a disposable virtual card, on-chain.',
+  'ppay.summary': 'Pay from a fresh, single-use address. Your main wallet stays private.',
+  'ppay.info.aria': 'How Private Pay works',
+  'ppay.info.k1': 'Disposable address',
+  'ppay.info.k2': 'The Machine',
+  'ppay.info.k3': 'One-way valve',
+  'ppay.newPayment': 'New payment',
+  'ppay.point1':
+    'A new address is created per payment, locked to this merchant, this amount, 15 minutes.',
+  'ppay.point2':
+    'The Machine (an enclave co-signer) checks every payment and vetoes a drainer or lookalike before it can send.',
+  'ppay.point3': 'Anything unspent can only ever return to your vault, never anywhere else.',
+  'ppay.merchant': 'Merchant address',
+  'ppay.amount': 'Amount (USDC)',
+  'ppay.button': 'Pay privately',
+  'ppay.step.create': 'Create private address',
+  'ppay.step.fund': 'Fund it',
+  'ppay.step.machine': 'The Machine checks',
+  'ppay.step.pay': 'Pay',
+  'ppay.doneToast': 'Paid privately.',
+  'ppay.vetoedToast': 'The Machine vetoed this payment. No funds moved.',
+  'ppay.vetoTitle': 'Vetoed by The Machine',
+  'ppay.vetoBody':
+    'The co-signer withheld its signature, so the payment was impossible, not merely warned against. No funds moved.',
+  'ppay.successTitle': 'Paid privately',
+  'ppay.successBody': '{amount} USDC reached the merchant from a clean, single-use address.',
+  'ppay.merchantSees': 'What the merchant sees',
+  'ppay.txn': 'Transaction',
+  'ppay.successNote':
+    'The merchant sees a zero-history address holding exactly this payment. Your vault, balance and history stay private.',
 
   'bridge.cctp.title': 'Bridge USDC (CCTP)',
   'bridge.cctp.body': 'Move USDC across chains with Circle CCTP.',
