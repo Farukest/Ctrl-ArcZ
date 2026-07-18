@@ -6,6 +6,7 @@ import { claim, getTransfer } from '@ctrl-arcz/sdk';
 import { Screen, H1, Muted, Mono, Card, PrimaryButton, GhostButton } from '../ui';
 import { useWallet } from '../lib/wallet';
 import { decodeClaim, type ClaimPayload } from '../lib/claim';
+import { confirmBiometric } from '../lib/biometrics';
 import { theme } from '../lib/theme';
 
 type Phase = 'scan' | 'confirm' | 'claiming' | 'done';
@@ -49,6 +50,7 @@ export function ReceiveScreen() {
 
   const doClaim = async () => {
     if (!session || !payload) return;
+    if (!(await confirmBiometric('Confirm claiming this transfer'))) return;
     setPhase('claiming');
     setError(null);
     try {

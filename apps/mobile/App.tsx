@@ -2,7 +2,12 @@ import React, { useEffect } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import * as Notifications from 'expo-notifications';
-import { NavigationContainer, DarkTheme, type Theme as NavTheme } from '@react-navigation/native';
+import {
+  NavigationContainer,
+  DarkTheme,
+  type Theme as NavTheme,
+  type LinkingOptions,
+} from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { WalletProvider, useWallet } from './src/lib/wallet';
 import { Tabs, navigationRef } from './src/navigation';
@@ -48,11 +53,26 @@ const navTheme: NavTheme = {
   },
 };
 
+// Deep links: ctrlarcz://claim (or https://ctrlarcz.xyz/claim) opens the Receive
+// tab; the other tabs are addressable too.
+const linking: LinkingOptions<Record<string, undefined>> = {
+  prefixes: ['ctrlarcz://', 'https://ctrlarcz.xyz'],
+  config: {
+    screens: {
+      Home: '',
+      Send: 'send',
+      Scan: 'scan',
+      Receive: 'claim',
+      'Private Pay': 'pay',
+    },
+  },
+};
+
 export default function App() {
   return (
     <SafeAreaProvider>
       <WalletProvider>
-        <NavigationContainer ref={navigationRef} theme={navTheme}>
+        <NavigationContainer ref={navigationRef} theme={navTheme} linking={linking}>
           <StatusBar style="light" />
           <Root />
         </NavigationContainer>

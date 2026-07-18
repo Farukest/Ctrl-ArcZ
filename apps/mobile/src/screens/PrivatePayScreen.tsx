@@ -16,6 +16,7 @@ import {
 import { Screen, H1, Muted, Mono, Card, PrimaryButton, GhostButton } from '../ui';
 import { useWallet } from '../lib/wallet';
 import { API_BASE } from '../lib/config';
+import { confirmBiometric } from '../lib/biometrics';
 import { theme } from '../lib/theme';
 
 type Phase = 'form' | 'machine' | 'creating' | 'funding' | 'paying' | 'done' | 'vetoed';
@@ -40,6 +41,7 @@ export function PrivatePayScreen() {
 
   const run = async () => {
     if (!session || !valid) return;
+    if (!(await confirmBiometric('Confirm this private payment'))) return;
     const owner = session.address;
     const to = merchant as Address;
     const amt = parseUnits(amount, 6);
