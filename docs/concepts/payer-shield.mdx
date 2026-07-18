@@ -12,26 +12,37 @@ The payer-side shield is a disposable virtual card for crypto. Three primitives:
   </Card>
   <Card title="Disposable account" icon="id-card">
     A single-purpose address, locked to one merchant, one cap, one expiry. Cloned
-    per payment at a deterministic address bound to the owner.
+    per payment at a deterministic address. It stores no payer identity: the owner
+    is bound only through the CREATE2 salt.
   </Card>
   <Card title="The Machine" icon="robot">
     The enclave co-signer. Runs policy plus the firewall and vetoes bad spends by
-    withholding the second signature.
+    withholding its signature.
   </Card>
 </CardGroup>
 
 ## The trust model
 
-- **Outbound to a third party (the merchant): 2-of-2.** Owner **and** co-signer.
-  The co-signer refuses a spend that fails policy or the firewall, so a bad
-  payment is physically impossible, not merely warned against.
-- **Return to your own vault: 1-of-1.** Owner alone, any time; and by anyone once
-  expired. This is the liveness escape hatch: if the enclave ever goes dark, funds
-  are never stranded, they sweep home.
+- **Outbound to a third party (the merchant): the co-signer authorizes each
+  spend.** A spend needs only "The Machine" signature, not a signature from you.
+  This is safe because the funds are hard-locked to the pre-set `target` and
+  capped by `maxAmount`: the co-signer can never steal or redirect, it can only
+  push the exact payment you set up when you created and funded the account. It
+  refuses a spend that fails policy or the firewall, so a bad payment is
+  physically impossible, not merely warned against.
+- **Return to your own vault: gated by knowledge of the vault address.** The vault
+  is stored only as a commitment (`vaultHash`); a sweep passes the vault address
+  and the contract checks it against the commitment, so no signature is needed and
+  the vault stays hidden until that call. After `expiry`, anyone who knows the
+  vault can sweep. This is the liveness escape hatch: if the enclave ever goes
+  dark, funds are never stranded, they sweep home.
+
+You sign nothing blind. Your only on-chain action is a normal, readable USDC
+transfer to fund the account; your wallet shows "Send X USDC to 0x...", never an
+opaque hash.
 
 The account is a **one-way valve**: funds can only reach the locked merchant or
-the vault. There is no third exit, so even a stolen owner key cannot redirect an
-expired account's balance anywhere but your own vault.
+the vault. There is no third exit.
 
 ## What a veto stops
 
@@ -43,10 +54,21 @@ payments.
 
 ## Privacy, honestly
 
-Today the vault-to-account funding leg is a plain transfer, so on-chain **payer
-privacy is not yet delivered** here; the merchant sees a clean, zero-history
-address, but a chain analyst could still correlate amounts and timing. The
-security legs (policy, veto, sweep, one-way valve) are fully real now.
+The **account surface leaks nothing about you**. There is no `owner` variable and
+no `owner()` getter, so a merchant paid from the ephemeral address cannot read who
+funded it from the account; the deployment calldata and the `AccountCreated` event
+carry only `ownerHash` (indexed), not your address; and the vault is revealed only
+at the moment of a sweep, and only to whoever already knows it. That part is fully
+delivered now.
+
+What is **not** yet hidden is the funding transaction. Your wallet to the
+ephemeral account is a normal transfer on a transparent chain, so an observer can
+still trace you to the ephemeral address through that one transaction. This cannot
+be hidden today without confidential transfers. So the honest line is: the account
+itself reveals nothing about you, but the residual on-chain link is the funding
+transaction, which becomes confidential under Arc Privacy Sector. Full payer
+privacy (hiding the funding link and amounts) waits on APS. The security legs
+(policy, veto, sweep, one-way valve) are fully real now.
 
 <Info>
 **Roadmap: Arc Privacy Sector (APS).** APS is Arc's confidential execution
@@ -62,7 +84,10 @@ event-dependent), and clean function-level access boundaries.
 The same account with `MODE_PULL` expresses recurring, policy-bounded spending:
 
 - **Safe allowances / subscriptions** — a merchant can pull up to a cap on an
-  interval, every pull gated by the co-signer. Kill the subscription by sweeping
-  the account; the co-signer stops signing. No infinite-approval drainer.
+  interval, every pull gated by the co-signer. A `perPullMax` field caps each
+  single pull: a subscription sets it to the per-period amount, so even a
+  misbehaving co-signer cannot drain the whole cumulative cap in one pull. That
+  per-pull cap is the real subscription guarantee. Kill the subscription by
+  sweeping the account; the co-signer stops signing. No infinite-approval drainer.
 - **Agent wallets** — hand an agent a tightly-scoped disposable account; it
   transacts autonomously but cannot exceed policy, because the enclave vetoes.

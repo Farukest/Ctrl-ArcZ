@@ -23,8 +23,10 @@ Ctrl+ArcZ protects **both sides** of a payment.
    the attack is that you send to a lookalike on purpose. Fail-closed.
 2. **Protected transfer** — escrow with a code-claim and reclaim, so a wrong send
    is not final.
-3. **Payer-side shield** — disposable, policy-bound addresses funded from a vault,
-   guarded by a 2-of-2 co-signer that vetoes.
+3. **Payer-side shield** — disposable, policy-bound addresses funded from a vault.
+   Every spend is authorized by the enclave co-signer, and the funds are hard-locked
+   to the merchant and cap you chose, so the co-signer can only push the payment you
+   set up or veto it.
 
 ## Honest positioning
 

@@ -1,13 +1,15 @@
 ---
 title: The co-signer
-description: "Run The Machine server-side: the enclave half of the 2-of-2 that vetoes bad spends."
+description: "Run The Machine server-side: the enclave that authorizes every spend and vetoes bad ones."
 ---
 
-The co-signer holds the second key. It never runs in the browser, so the key is
-never exposed. On each spend request it validates the request against the
-account's on-chain policy and the poisoning firewall, then returns a signature or
-a **veto**. Fail-closed: if the firewall's data source is unreachable, it
-withholds the signature.
+The co-signer holds the key that authorizes every spend. It never runs in the
+browser, so the key is never exposed. On each spend request it validates the
+request against the account's on-chain policy and the poisoning firewall, then
+returns a signature or a **veto**. A spend needs only this signature; the funds
+are hard-locked to the account's `target` and cap, so the co-signer can only push
+the payment the payer set up, never steal or redirect. Fail-closed: if the
+firewall's data source is unreachable, it withholds the signature.
 
 ## Server endpoint
 
@@ -31,8 +33,9 @@ const result = await cosign({ privateKey: COSIGNER_PK, body: req.body });
 res.json(result); // { approved: true, signature } | { approved: false, reason, riskReasons }
 ```
 
-`cosign` reconstructs the request, runs a `LocalCoSigner` backed by the SDK
-poisoning `check()`, and signs the exact struct hash the contract will verify.
+`cosign` reads the account's real policy from chain (never trusting what the
+browser claims), runs a `LocalCoSigner` backed by the SDK poisoning `check()`, and
+signs the exact EIP-712 `Spend` struct the contract will verify.
 
 ## The policy the co-signer enforces
 
@@ -41,8 +44,10 @@ a request that violates them:
 
 <AccordionGroup>
   <Accordion title="Target lock" icon="crosshairs">
-    The spend `target` must equal the account's on-chain `lockedTarget`. A script
-    that swaps the destination cannot get a signature.
+    The co-signer reads the account's real `target` from chain and signs only for
+    that address; it never trusts a target the browser supplies. The browser hands
+    it only `{account, owner, amount, action}`. A script that swaps the destination
+    cannot get a signature, and the contract's `target` is locked anyway.
   </Accordion>
   <Accordion title="Amount and window" icon="gauge">
     The amount must be within the remaining cumulative cap, and the account must
@@ -73,6 +78,8 @@ const auth = await machine.authorize(request); // { approved, signature } | { ap
 
 <Warning>
 The co-signer is a trust point. If it is unreachable, funds are never stranded:
-after `expiry` anyone can `sweepExpired` the account home to the vault with the
-owner's key alone. Design your key management around that escape hatch.
+after `expiry`, anyone who knows the vault address can call `sweepExpired(vault)`
+to return the account home to the vault. No co-signer signature and no owner
+signature are needed, only knowledge of the vault (the preimage of the stored
+`vaultHash`). Design your key management around that escape hatch.
 </Warning>

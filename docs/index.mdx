@@ -11,8 +11,8 @@ set of smart contracts, and reference apps.
 
 <CardGroup cols={2}>
   <Card title="Private Pay" icon="user-secret" href="/guides/private-pay">
-    Pay a merchant from a fresh, single-use address so they never see your main
-    wallet, guarded by an enclave co-signer that vetoes bad spends.
+    Pay a merchant from a fresh, single-use address that stores no payer identity,
+    guarded by an enclave co-signer that vetoes bad spends.
   </Card>
   <Card title="Poisoning firewall" icon="shield-halved" href="/guides/firewall">
     A pre-send scan that refuses a lookalike or zero-value-bait recipient before
@@ -23,8 +23,9 @@ set of smart contracts, and reference apps.
     and the recipient claims with a short code.
   </Card>
   <Card title="The Machine (co-signer)" icon="robot" href="/guides/co-signer">
-    The enclave half of a 2-of-2. It does not warn, it vetoes: a spend that fails
-    policy or the firewall is physically impossible.
+    The enclave that authorizes every spend. It does not warn, it vetoes: a spend
+    that fails policy or the firewall is physically impossible, because it just
+    withholds the signature.
   </Card>
 </CardGroup>
 

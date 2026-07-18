@@ -4,18 +4,33 @@ description: "Pay a merchant from a fresh, single-use address, guarded by a co-s
 ---
 
 Private Pay pays a merchant from a **disposable address** created for that one
-payment, so the merchant never sees your main wallet, balance or history. Every
-spend is gated by a 2-of-2: your signature **and** an enclave co-signer ("The
-Machine") that vetoes a drainer, a lookalike, or an over-policy spend. A veto is
-not a warning; it withholds the second signature, so the payment is impossible.
+payment. The account stores no payer identity, so the merchant paid from it cannot
+read who funded it from the account itself. Every spend is authorized by an enclave
+co-signer ("The Machine") that vetoes a drainer, a lookalike, or an over-policy
+spend. A veto is not a warning; it withholds the signature, so the payment is
+impossible.
+
+You sign nothing blind. A spend needs only the co-signer's signature, because the
+funds are hard-locked to the pre-set `target` and cap: the co-signer can only push
+the exact payment you set up, never steal or redirect. Your sole on-chain action
+is a normal, readable USDC transfer to fund the account.
+
+<Note>
+Full payer privacy is not delivered today. The funding transfer (your wallet to
+the ephemeral account) is a normal transfer on a transparent chain, so an observer
+can still trace you to the ephemeral address through it. Hiding that link and the
+amounts requires Arc Privacy Sector confidential transfers, which are on the
+roadmap and not live yet. What is delivered now: the account surface reveals
+nothing about you.
+</Note>
 
 ## The flow
 
 <Steps>
 
 <Step title="The Machine checks first">
-Ask the co-signer to authorize the spend on the **predicted** address, before
-anything is created. A veto here means nothing is deployed and no funds ever move.
+Pre-flight the firewall on the intended merchant, before anything is created. A
+veto here means nothing is deployed and no funds ever move.
 
 ```ts
 import { predictEphemeral, RemoteCoSigner, SPEND_POLICY_FACTORY_ADDRESS } from '@ctrl-arcz/sdk';
@@ -24,7 +39,6 @@ import { parseUnits } from 'viem';
 const amount = parseUnits('0.02', 6);
 const salt = randomSalt(); // 32 random bytes
 const expiry = Math.floor(Date.now() / 1000) + 900; // 15 minutes
-const chainId = BigInt(await publicClient.getChainId());
 
 // The co-signer's public address (served by your backend, see below).
 const { address: cosignerAddress } = await fetch('/api/cosign').then((r) => r.json());
@@ -32,14 +46,11 @@ const { address: cosignerAddress } = await fetch('/api/cosign').then((r) => r.js
 const account = await predictEphemeral(publicClient, SPEND_POLICY_FACTORY_ADDRESS, owner, salt);
 
 const cosigner = new RemoteCoSigner('/api/cosign', cosignerAddress);
-const auth = await cosigner.authorize({
-  account, owner, target: merchant, amount, nonce: 0n, chainId,
-  policy: { lockedTarget: merchant, remaining: amount, expiry },
-});
+const pre = await cosigner.precheck({ owner, target: merchant, amount });
 
-if (!auth.approved) {
+if (!pre.approved) {
   // The Machine vetoed it. Nothing was created.
-  console.warn('Vetoed:', auth.reason, auth.riskReasons);
+  console.warn('Vetoed:', pre.reason, pre.riskReasons);
   return;
 }
 ```
@@ -62,8 +73,11 @@ await createEphemeral(clients, SPEND_POLICY_FACTORY_ADDRESS, salt, {
 });
 ```
 
-The account is a minimal-proxy clone at a deterministic address bound to `owner`,
-so it can be funded before it exists and no one can front-run its slot.
+The account is a minimal-proxy clone at a deterministic address bound to
+`ownerHash` (the salt), not to your address, so it can be funded before it exists
+and no one can front-run its slot. Anyone may submit `createEphemeral`, so an
+integrator can deploy it through a relayer to keep you off the deployment
+transaction entirely.
 </Step>
 
 <Step title="Fund it">
@@ -87,19 +101,33 @@ implement `receive()`. This is handled by the deployed contracts.
 </Step>
 
 <Step title="Pay">
-You sign the same struct hash the co-signer signed (nonce 0), then submit both
-signatures. The funds can only reach the locked `target`, so anyone may submit.
+Read the account's on-chain policy, ask the co-signer to authorize the spend, then
+submit its signature alone. You sign nothing here. The funds can only reach the
+locked `target`, so anyone may submit the transaction.
 
 ```ts
-import { payStructHash, submitPay } from '@ctrl-arcz/sdk';
+import { readAccount, submitPay, ACTION_PAY } from '@ctrl-arcz/sdk';
 
-const digest = payStructHash({ account, target: merchant, amount, nonce: 0n, chainId });
-const ownerSig = await walletClient.signMessage({ account: walletClient.account, message: { raw: digest } });
+const state = await readAccount(publicClient, account);
+const chainId = await publicClient.getChainId();
 
-const txHash = await submitPay(clients, account, amount, ownerSig, auth.signature);
+// The server re-reads the real policy from chain; a RemoteCoSigner forwards only
+// { account, owner, amount, action } and ignores what the browser claims.
+const auth = await cosigner.authorize({
+  account, owner, amount, action: ACTION_PAY,
+  target: state.target, nonce: state.nonce, chainId,
+  remaining: state.remaining, expiry: state.expiry,
+});
+if (!auth.approved) {
+  console.warn('Vetoed:', auth.reason, auth.riskReasons);
+  return;
+}
+
+const txHash = await submitPay(clients, account, amount, auth.signature);
 ```
 
-The merchant receives USDC from a zero-history address. Your vault stays private.
+The merchant receives USDC from a zero-history address. The account itself reveals
+nothing about you.
 </Step>
 
 </Steps>
@@ -114,7 +142,7 @@ submits:
 import { settlePrivatePayment } from '@ctrl-arcz/sdk';
 
 const outcome = await settlePrivatePayment(clients, account, amount, cosigner, {
-  owner, vault: SHIELD_VAULT_ADDRESS,
+  owner,
 });
 if (!outcome.ok) console.warn('Vetoed:', outcome.reason);
 else console.log('Paid:', outcome.result.txHash);
@@ -125,17 +153,20 @@ else console.log('Paid:', outcome.result.txHash);
 The disposable address is a one-way valve: funds can only go to the locked
 merchant or back to your vault.
 
-- **Enclave down / abandoned:** after `expiry`, anyone may call `sweepExpired` to
-  return the balance to the vault. No co-signer needed.
-- **Refund:** the merchant refunds to the disposable address; `sweepExpired`
-  sweeps it home.
-- **Cancel early:** the owner can `sweepToVault(account)` any time.
+Both sweeps are gated by knowledge of the vault address (its hash must match the
+account's stored `vaultHash`), not by a signature, so the vault stays hidden until
+the sweep and only someone who knows it can call these.
+
+- **Enclave down / abandoned:** after `expiry`, anyone who knows the vault may call
+  `sweepExpired(vault)` to return the balance. No co-signer needed.
+- **Refund:** the merchant refunds to the disposable address; a sweep takes it home.
+- **Cancel early:** call `sweepToVault(vault)` any time.
 
 ```ts
 import { sweepExpired, sweepToVault } from '@ctrl-arcz/sdk';
 
-await sweepToVault(clients, account, SHIELD_VAULT_ADDRESS); // owner, any time
-await sweepExpired(clients, account);                       // anyone, after expiry
+await sweepToVault(clients, account, SHIELD_VAULT_ADDRESS); // any time, needs the vault
+await sweepExpired(clients, account, SHIELD_VAULT_ADDRESS); // after expiry, needs the vault
 ```
 
 ## Next
