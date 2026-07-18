@@ -1,11 +1,15 @@
 import React from 'react';
+import { createNavigationContainerRef } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
+
+/** Ref so a notification tap can navigate to the right tab from outside React. */
+export const navigationRef = createNavigationContainerRef();
 import { HomeScreen } from './screens/HomeScreen';
-import { PrivatePayScreen } from './screens/placeholders';
 import { ScanScreen } from './screens/ScanScreen';
 import { SendScreen } from './screens/SendScreen';
 import { ReceiveScreen } from './screens/ReceiveScreen';
+import { PrivatePayScreen } from './screens/PrivatePayScreen';
 import { theme } from './lib/theme';
 
 const Tab = createBottomTabNavigator();
