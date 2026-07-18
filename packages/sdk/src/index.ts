@@ -101,3 +101,37 @@ export {
   type IntegratorConfig,
   type RegisterConfigResult,
 } from './config/config.js';
+
+// Layer 4 — payer-side shield (disposable policy accounts + enclave co-signer)
+export { payStructHash, sweepStructHash, type PayDigestParams, type SweepDigestParams } from './shield/digest.js';
+export {
+  LocalCoSigner,
+  RemoteCoSigner,
+  type CoSigner,
+  type RiskCheck,
+  type RiskVerdict,
+  type AuthorizeRequest,
+  type AuthorizeResult,
+  type LocalCoSignerOptions,
+} from './shield/cosigner.js';
+export {
+  predictEphemeral,
+  createEphemeral,
+  fundFromVault,
+  readAccount,
+  signOwnerPay,
+  submitPay,
+  submitPull,
+  sweepToVault,
+  sweepExpired,
+  settlePrivatePayment,
+  MODE_PUSH,
+  MODE_PULL,
+  type ShieldClients,
+  type EphemeralPolicy,
+  type AccountState,
+  type SpendMode,
+  type PrivatePayResult,
+  type PrivatePayOutcome,
+} from './shield/shield.js';
+export { spendPolicyFactoryAbi, spendPolicyAccountAbi, vaultAbi } from './shield/abi.js';
