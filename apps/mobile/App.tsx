@@ -20,7 +20,7 @@ function Root() {
 
   // Register for push once connected; tapping a notification opens the tab it names.
   useEffect(() => {
-    if (session) void registerPushToken(session.address);
+    if (session) void registerPushToken(session);
   }, [session]);
 
   useEffect(() => {

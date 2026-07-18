@@ -1,9 +1,11 @@
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, renameSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { Expo, type ExpoPushMessage } from 'expo-server-sdk';
-import { isAddress, type Address } from 'viem';
+import { isAddress, recoverMessageAddress, type Address, type Hex } from 'viem';
 import { json, readJson, HttpError } from './http.js';
+
+const MAX_TOKENS_PER_ADDRESS = 10;
 
 /**
  * Device push-token registry, keyed by wallet address. A user may have several
@@ -23,7 +25,10 @@ function load(): Registry {
 }
 function save(reg: Registry): void {
   try {
-    writeFileSync(STORE, JSON.stringify(reg));
+    // Atomic write: a crash mid-write must not truncate the registry.
+    const tmp = `${STORE}.tmp`;
+    writeFileSync(tmp, JSON.stringify(reg));
+    renameSync(tmp, STORE);
   } catch (e) {
     console.error('failed to persist token registry:', e instanceof Error ? e.message : e);
   }
@@ -41,7 +46,9 @@ export function registerToken(address: Address, token: string): void {
   const k = key(address);
   const set = new Set(registry[k] ?? []);
   set.add(token);
-  registry[k] = [...set];
+  // Cap devices per address so a caller cannot grow the store unbounded; keep the
+  // most recent.
+  registry[k] = [...set].slice(-MAX_TOKENS_PER_ADDRESS);
   save(registry);
 }
 
@@ -75,12 +82,34 @@ export async function push(
   }
 }
 
-// --- HTTP: POST /api/notifications/register { address, token } ---
+// --- HTTP: POST /api/notifications/register { address, token, signature } ---
+
+/** The exact message a client must sign with `address` to register `token`. This
+ *  proves control of the address, so an attacker cannot subscribe their device to
+ *  a victim's payment events. */
+export function registrationMessage(address: Address, token: string): string {
+  return `Ctrl+ArcZ push registration\naddress: ${address.toLowerCase()}\ntoken: ${token}`;
+}
 
 export async function registerHandler(req: IncomingMessage, res: ServerResponse): Promise<void> {
-  const { address, token } = (await readJson(req)) as { address?: unknown; token?: unknown };
+  const { address, token, signature } = (await readJson(req)) as {
+    address?: unknown;
+    token?: unknown;
+    signature?: unknown;
+  };
   if (typeof address !== 'string' || !isAddress(address)) throw new HttpError(400, 'invalid address');
-  if (typeof token !== 'string') throw new HttpError(400, 'invalid token');
+  if (typeof token !== 'string' || !Expo.isExpoPushToken(token)) throw new HttpError(400, 'invalid token');
+  if (typeof signature !== 'string' || !/^0x[0-9a-fA-F]+$/.test(signature)) {
+    throw new HttpError(400, 'invalid signature');
+  }
+  // Prove the caller controls `address` before subscribing a device to its events.
+  const recovered = await recoverMessageAddress({
+    message: registrationMessage(address, token),
+    signature: signature as Hex,
+  });
+  if (recovered.toLowerCase() !== address.toLowerCase()) {
+    throw new HttpError(401, 'signature does not match address');
+  }
   registerToken(address, token);
   json(res, 200, { ok: true });
 }

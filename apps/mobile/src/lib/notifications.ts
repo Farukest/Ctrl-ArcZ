@@ -1,8 +1,8 @@
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import Constants from 'expo-constants';
-import type { Address } from 'viem';
 import { API_BASE } from './config';
+import type { WalletSession } from './wallet';
 
 // Show a banner even when the app is foregrounded.
 Notifications.setNotificationHandler({
@@ -22,7 +22,7 @@ Notifications.setNotificationHandler({
  * id exists (the token needs one). The backend then pushes on the Arc events that
  * matter to this address.
  */
-export async function registerPushToken(address: Address): Promise<void> {
+export async function registerPushToken(session: WalletSession): Promise<void> {
   try {
     if (!Device.isDevice) return; // remote push needs a physical device
     let status = (await Notifications.getPermissionsAsync()).status;
@@ -35,10 +35,14 @@ export async function registerPushToken(address: Address): Promise<void> {
     if (!projectId) return; // set after `eas init`
 
     const token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
+    // Prove control of the address so the backend only subscribes our own device.
+    // Must match the server's registrationMessage byte-for-byte.
+    const message = `Ctrl+ArcZ push registration\naddress: ${session.address.toLowerCase()}\ntoken: ${token}`;
+    const signature = await session.account.signMessage({ message });
     await fetch(`${API_BASE}/api/notifications/register`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ address, token }),
+      body: JSON.stringify({ address: session.address, token, signature }),
     });
   } catch {
     // Push registration is best-effort; a failure never blocks the app.

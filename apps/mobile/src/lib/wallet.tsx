@@ -14,7 +14,8 @@ import { publicClient, walletClientFromAccount } from './clients';
  */
 export interface WalletSession {
   address: Address;
-  account: Account;
+  /** A local account (has signMessage/signTypedData), backed by the device key. */
+  account: ReturnType<typeof privateKeyToAccount>;
   publicClient: PublicClient;
   walletClient: WalletClient;
 }
@@ -24,7 +25,14 @@ interface WalletContextValue {
   loading: boolean;
   connect: () => Promise<void>;
   disconnect: () => Promise<void>;
+  /** Permanently delete the key from secure storage. */
+  wipe: () => Promise<void>;
 }
+
+// Device-only so the key cannot ride an encrypted device backup off the phone.
+const STORE_OPTS: SecureStore.SecureStoreOptions = {
+  keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
+};
 
 const WalletContext = createContext<WalletContextValue | null>(null);
 const KEY_ID = 'ctrlarcz.devkey.v1';
@@ -58,7 +66,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     let pk = (await SecureStore.getItemAsync(KEY_ID)) as Hex | null;
     if (!pk) {
       pk = generatePrivateKey();
-      await SecureStore.setItemAsync(KEY_ID, pk);
+      await SecureStore.setItemAsync(KEY_ID, pk, STORE_OPTS);
     }
     setSession(sessionFromKey(pk));
   };
@@ -67,8 +75,13 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     setSession(null); // lock the session; the key stays in secure storage
   };
 
+  const wipe = async () => {
+    await SecureStore.deleteItemAsync(KEY_ID);
+    setSession(null);
+  };
+
   return (
-    <WalletContext.Provider value={{ session, loading, connect, disconnect }}>
+    <WalletContext.Provider value={{ session, loading, connect, disconnect, wipe }}>
       {children}
     </WalletContext.Provider>
   );

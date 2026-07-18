@@ -7,7 +7,7 @@ import { useWallet } from '../lib/wallet';
 import { theme } from '../lib/theme';
 
 export function HomeScreen() {
-  const { session, disconnect } = useWallet();
+  const { session, disconnect, wipe } = useWallet();
   const [balance, setBalance] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -60,6 +60,7 @@ export function HomeScreen() {
           <Mono>{short}</Mono>
         </Card>
         <GhostButton label="Disconnect" onPress={disconnect} />
+        <GhostButton label="Remove wallet from this device" onPress={wipe} />
       </ScrollView>
     </Screen>
   );

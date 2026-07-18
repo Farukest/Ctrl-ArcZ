@@ -61,6 +61,30 @@ function applyCors(req: IncomingMessage, res: ServerResponse): boolean {
   return false;
 }
 
+/**
+ * Per-IP sliding-window rate limit. The co-signer's firewall scan and any spend
+ * endpoint are expensive, and the API is unauthenticated, so a hard cap per source
+ * blunts amplification/DoS abuse. The client IP comes from nginx's
+ * X-Forwarded-For (we sit behind a trusted reverse proxy on loopback).
+ */
+const RATE_WINDOW_MS = 60_000;
+const RATE_MAX = 40; // requests per IP per minute
+const hits = new Map<string, number[]>();
+
+function clientIp(req: IncomingMessage): string {
+  const xff = req.headers['x-forwarded-for'];
+  const first = (Array.isArray(xff) ? xff[0] : xff)?.split(',')[0]?.trim();
+  return first || req.socket.remoteAddress || 'unknown';
+}
+
+function rateLimited(req: IncomingMessage, now: number): boolean {
+  const ip = clientIp(req);
+  const recent = (hits.get(ip) ?? []).filter((t) => now - t < RATE_WINDOW_MS);
+  recent.push(now);
+  hits.set(ip, recent);
+  return recent.length > RATE_MAX;
+}
+
 export type Handler = (req: IncomingMessage, res: ServerResponse) => Promise<void> | void;
 export type Routes = Record<string, Handler>;
 
@@ -69,6 +93,10 @@ export function serve(routes: Routes): void {
     try {
       if (applyCors(req, res)) return;
       const url = new URL(req.url ?? '/', 'http://localhost');
+      // Health is unmetered; everything else is rate limited per source IP.
+      if (url.pathname !== '/api/health' && rateLimited(req, Date.now())) {
+        return json(res, 429, { error: 'rate limited' });
+      }
       const key = `${req.method} ${url.pathname}`;
       const handler = routes[key];
       if (!handler) return json(res, 404, { error: 'not found' });
