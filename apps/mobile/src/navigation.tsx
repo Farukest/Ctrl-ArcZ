@@ -2,8 +2,10 @@ import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { HomeScreen } from './screens/HomeScreen';
-import { SendScreen, ReceiveScreen, PrivatePayScreen } from './screens/placeholders';
+import { PrivatePayScreen } from './screens/placeholders';
 import { ScanScreen } from './screens/ScanScreen';
+import { SendScreen } from './screens/SendScreen';
+import { ReceiveScreen } from './screens/ReceiveScreen';
 import { theme } from './lib/theme';
 
 const Tab = createBottomTabNavigator();
