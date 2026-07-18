@@ -357,11 +357,16 @@ function AnchoredLayer({
     const width = Math.max(r.width, 200);
     const left = Math.min(Math.max(8, r.left), window.innerWidth - width - 8);
     const below = window.innerHeight - r.bottom;
-    const openUp = below < 300 && r.top > below;
+    const above = r.top;
+    const openUp = below < 300 && above > below;
+    // Cap the menu to the space available in the chosen direction so a long list
+    // (e.g. all 11 bridge chains) scrolls inside the menu instead of running off
+    // the bottom (or top) of the screen where it cannot be reached.
+    const maxHeight = Math.max(160, (openUp ? above : below) - 14);
     setStyle(
       openUp
-        ? { bottom: window.innerHeight - r.top + 6, left, minWidth: r.width }
-        : { top: r.bottom + 6, left, minWidth: r.width },
+        ? { bottom: window.innerHeight - r.top + 6, left, minWidth: r.width, maxHeight }
+        : { top: r.bottom + 6, left, minWidth: r.width, maxHeight },
     );
   }, [isMobile, anchorRef, onClose]);
 
