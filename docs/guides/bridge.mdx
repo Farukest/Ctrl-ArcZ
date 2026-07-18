@@ -1,0 +1,188 @@
+---
+title: Bridge USDC
+description: "Move native USDC across chains with Circle CCTP and Gateway, plus a gas-sponsored claim, all signed server-side."
+---
+
+Ctrl+ArcZ funds and settles in USDC on Arc, but the USDC often starts on another
+chain. The demo bridges it with **Circle CCTP** (burn-and-mint) and **Circle
+Gateway** (a unified balance with instant spend), and can sponsor the recipient's
+gas on claim with **Circle Gas Station**. All three run server-side, because the
+Circle kits that power them are Node-first and cannot run in the browser.
+
+## Why the bridge runs server-side
+
+Circle CCTP moves native USDC across chains by burning it on the source, waiting
+for a Circle-signed attestation, and minting the same amount on the destination.
+Circle's Bridge Kit performs that flow, but it is built for the server: it signs
+with a raw private key and calls Circle plus chain RPCs with a custom
+`x-user-agent` header that browser CORS forbids. So the bridge cannot run on the
+page.
+
+The pattern in the demo, and the one to reproduce in production:
+
+- The bridge helper (`bridgeUsdc`, `gatewayTransfer`) runs in a Node context. In
+  the demo that is a Vite dev endpoint (`/api/bridge`, `/api/gateway`); in
+  production it is a real backend or relayer.
+- The browser posts only `{ from, to, amount }` to that endpoint, same-origin.
+- The signing key lives in the server environment and never reaches the client.
+
+The gas-sponsored claim (`/api/gasless-claim`) follows the same rule for the same
+reason: Circle Gas Station sponsors the recipient's gas through a smart account
+owned by a **relayer key**, and that key must stay server-side.
+
+<Note>
+The keys are read only by the server endpoints. A `VITE_`-prefixed value is
+inlined into the client bundle only if client code reads it through
+`import.meta.env`; the demo reads `VITE_RELAYER_PK` and `VITE_CLIENT_KEY` only
+inside the Vite endpoints, so they never ship to the browser. A production build
+that would inline any signing key is refused by a build guard, see
+[Security posture](#security-posture) below.
+</Note>
+
+## Two engines
+
+<CardGroup cols={2}>
+<Card title="CCTP (Bridge Kit)">
+Burn on the source, fetch the Circle attestation, mint on the destination. Works
+across the widest set of testnets. Steps: `approve`, `burn`, `fetchAttestation`,
+`mint`.
+</Card>
+<Card title="Gateway (Unified Balance Kit)">
+Deposit USDC once into a unified balance, then spend instantly to any supported
+chain (Arc finality is about 0.5s). Repeat transfers skip the deposit. Steps:
+`deposit`, `sign`, `attestation`, `mint`.
+</Card>
+</CardGroup>
+
+Both use Circle's forwarder (`useForwarder: true`) to submit the destination mint,
+so the recipient needs no gas on the destination chain.
+
+## Supported testnet chains
+
+CCTP supports the full list; Gateway supports a smaller subset, so its From/To
+pickers are restricted to it.
+
+| Chain | CCTP | Gateway |
+| --- | :---: | :---: |
+| Arc Testnet | yes | yes |
+| Ethereum Sepolia | yes | yes |
+| Base Sepolia | yes | yes |
+| Avalanche Fuji | yes | yes |
+| Sonic Testnet | yes | yes |
+| Arbitrum Sepolia | yes | no |
+| Optimism Sepolia | yes | no |
+| Polygon Amoy | yes | no |
+| Unichain Sepolia | yes | no |
+| Linea Sepolia | yes | no |
+| World Chain Sepolia | yes | no |
+
+Any two distinct chains from the same engine's list are a valid From/To pair. The
+allowlists are enforced on the server (`BRIDGE_CHAIN_IDS` and `GATEWAY_CHAIN_IDS`
+in `apps/sender/vite.config.ts`); a request naming a chain outside the set is
+rejected with `400`.
+
+## The server endpoint
+
+Both cross-chain endpoints share one handler. It validates identically, then loads
+the Node-only Circle module and runs the helper. This is the shape to lift into a
+real backend.
+
+```ts
+// Runs in Node only. Loads Bridge Kit / Unified Balance Kit, never the browser.
+import { bridgeUsdc } from '@ctrl-arcz/demo-kit/cctp';       // or gatewayTransfer from '.../gateway'
+
+// Inside the request handler, after validating from/to/amount:
+const result = await bridgeUsdc({
+  privateKey: process.env.DEMO_PK as `0x${string}`, // server-only signing key
+  from,   // e.g. 'Base_Sepolia'
+  to,     // e.g. 'Arc_Testnet'
+  amount, // decimal string, e.g. '2'
+});
+// result: { state, amount, steps: [{ name, state, txHash?, explorerUrl? }] }
+```
+
+The helper returns only serializable primitives. Bridge Kit's raw steps carry viem
+receipts and `BigInt` gas that `JSON.stringify` cannot handle, so the helper picks
+out `name`, `state`, `txHash`, and `explorerUrl` and drops the rest before it
+crosses the HTTP boundary.
+
+## The browser call
+
+The page never touches a key or a Circle SDK. It posts the three fields and renders
+the returned steps.
+
+```ts
+const res = await fetch('/api/bridge', {  // or '/api/gateway'
+  method: 'POST',
+  headers: { 'content-type': 'application/json' },
+  body: JSON.stringify({ from: 'Base_Sepolia', to: 'Arc_Testnet', amount: '2' }),
+});
+const outcome = await res.json();
+if (outcome.state === 'success') {
+  for (const step of outcome.steps) console.log(step.name, step.state, step.txHash);
+}
+```
+
+## Gas-sponsored claim
+
+The receiver app exposes `/api/gasless-claim`, which lets a recipient claim a
+protected transfer while paying **zero gas**. Circle Gas Station sponsors the
+user-operation through a Circle Smart Account owned by the relayer key.
+
+```ts
+const res = await fetch('/api/gasless-claim', {
+  method: 'POST',
+  headers: { 'content-type': 'application/json' },
+  body: JSON.stringify({ transferId: '42', code: '123456', salt: '0x...' }),
+});
+const result = await res.json();
+// { ok: true, txHash } | { ok: false, error: { kind, attemptsRemaining?, reason?, message? } }
+```
+
+The contract releases funds to the transfer's recorded recipient, never to
+`msg.sender`, so the sponsoring account is only a relayer: it pays the gas but
+cannot redirect the funds. The endpoint returns a plain, serializable result rather
+than throwing across HTTP; the same outcomes as `claim()` are encoded in the
+`error.kind` field. For the full result and error taxonomy, see
+[Errors and result shapes](/guides/errors-and-results).
+
+## Security posture
+
+The bridge signs with a funded key, so even though it is dev-only in the demo it is
+hardened. Reproduce every one of these controls if you deploy the pattern.
+
+<AccordionGroup>
+<Accordion title="Allowlisted chains">
+Only chains in `BRIDGE_CHAIN_IDS` / `GATEWAY_CHAIN_IDS` are accepted, and the
+source and destination must differ. Anything else is a `400`.
+</Accordion>
+<Accordion title="Hard amount cap">
+A per-request ceiling (`MAX_BRIDGE_AMOUNT`, 5 USDC in the demo) bounds the most a
+single call can move. Non-finite, zero, negative, or over-cap amounts are rejected.
+</Accordion>
+<Accordion title="Same-origin only">
+Requests are checked against `sec-fetch-site` and `origin`; cross-site callers get
+`403`. In production the allowed host is `PUBLIC_HOST`.
+</Accordion>
+<Accordion title="Body-size limit">
+The request body is capped (4 KB); a larger body returns `413` before it is parsed.
+</Accordion>
+<Accordion title="No leaked secrets">
+`VITE_`-prefixed keys must never ship to the client. An `assertNoLeakedSecrets`
+build guard refuses a production build while any signing key (`VITE_DEMO_PK`,
+`VITE_RELAYER_PK`, `VITE_CLIENT_KEY`) is present, unless the operator explicitly
+sets `VITE_ALLOW_DEMO_KEYS=1` (throwaway testnet keys only).
+</Accordion>
+</AccordionGroup>
+
+<Note>
+Never expose the dev server with `--host`. It signs with a real key; it is meant
+to be reached same-origin from the local demo only. In production, run the bridge
+behind a real backend with its own auth and rate limits.
+</Note>
+
+## Next
+
+- Handle the outcomes: [Errors and result shapes](/guides/errors-and-results).
+- Run it yourself: [Local development](/guides/local-development).
+- Send a protected transfer: [Protected transfer](/guides/protected-transfer).

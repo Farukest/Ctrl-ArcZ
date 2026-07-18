@@ -1,0 +1,168 @@
+---
+title: Local development
+description: "Install the monorepo, build the SDK, run the demo apps, and run unit, integration, and contract tests."
+---
+
+Ctrl+ArcZ is a **pnpm monorepo**. Everything below runs from the repo root unless
+noted.
+
+## Layout
+
+<CardGroup cols={2}>
+<Card title="packages/sdk">
+`@ctrl-arcz/sdk`, the published TypeScript SDK: the risk firewall, protected
+transfers, and the payer-side shield.
+</Card>
+<Card title="packages/contracts">
+The Foundry project: the protected-transfer contract, the spend-policy account and
+factory, and the vault.
+</Card>
+<Card title="packages/demo-kit">
+Shared demo helpers, including the Node-only Circle bridge and gasless server
+modules the apps call server-side.
+</Card>
+<Card title="apps/sender + apps/receiver">
+Two Vite dev apps: the sender panel and the recipient claim panel.
+</Card>
+</CardGroup>
+
+## Install
+
+Requires Node 20+ and pnpm (the repo pins `pnpm@9.15.9`). The contracts submodule
+also needs [Foundry](https://book.getfoundry.sh/).
+
+```bash
+pnpm install
+```
+
+## Build the SDK
+
+Most work needs the SDK built first, since the apps consume it as a workspace
+package.
+
+```bash
+pnpm --filter @ctrl-arcz/sdk build   # tsup -> dist
+```
+
+To rebuild on change while you work on the SDK:
+
+```bash
+pnpm --filter @ctrl-arcz/sdk dev     # tsup --watch
+```
+
+You can also build every package at once with `pnpm build` (runs each package's
+`build`).
+
+## Run the demo apps
+
+The two apps run on fixed ports (the sender on 5173, the receiver on 5174). Run
+them in separate terminals.
+
+```bash
+pnpm dev:sender     # http://localhost:5173
+pnpm dev:receiver   # http://localhost:5174
+```
+
+Each app needs a `.env.local` with dev-only, throwaway Arc-testnet keys. Copy
+`.env.example` for the full annotated list. The essentials:
+
+```bash
+# apps/sender/.env.local
+VITE_DEMO_PK=0x...          # dev-only test-wallet signer (stands in for MetaMask)
+VITE_DEMO_RECEIVER=0x...    # the poisoning demo crafts a lookalike of this
+VITE_RECEIVER_URL=http://localhost:5174
+
+# apps/receiver/.env.local
+VITE_DEMO_PK=0x...          # dev-only test-wallet signer
+VITE_RELAYER_PK=0x...       # server-only: gasless relayer / Circle account owner
+VITE_CLIENT_KEY=TEST_CLIENT_KEY:...:...   # server-only: Circle Modular Wallets key
+VITE_CLIENT_URL=https://modular-sdk.circle.com/v1/rpc/w3s/buidl
+```
+
+<Note>
+The co-signer key is server-only and is **not** `VITE_`-prefixed: it is read as
+`COSIGNER_PK` by the `/api/cosign` Vite endpoint, so it never reaches the client
+bundle. The `VITE_RELAYER_PK` and `VITE_CLIENT_KEY` values are `VITE_`-prefixed but
+read only inside the server endpoints, so they do not ship either. Use only
+throwaway testnet keys. A production build that would inline any signing key is
+refused unless you set `VITE_ALLOW_DEMO_KEYS=1`.
+</Note>
+
+The bridge, gateway, gasless, and co-signer flows are served by dev endpoints
+inside these Vite servers. See [Bridge USDC](/guides/bridge) and
+[The co-signer](/guides/co-signer) for why they run server-side.
+
+## Unit tests
+
+The SDK's unit suite runs under vitest and needs no chain.
+
+```bash
+pnpm --filter @ctrl-arcz/sdk test    # vitest run
+```
+
+Run the whole monorepo's tests with `pnpm test`, or watch with
+`pnpm --filter @ctrl-arcz/sdk test:watch`.
+
+## Integration tests against a local anvil
+
+The integration suite is the end-to-end proof that the SDK's digest and signatures
+are accepted by the deployed contracts on a real EVM. It is excluded from the
+default unit run and is gated behind `INTEGRATION=1`, so it is skipped unless anvil
+is up and the flag is set.
+
+<Steps>
+
+<Step title="Build the contracts">
+The tests deploy from Foundry's `out/` artifacts, so build them first.
+
+```bash
+pnpm contracts:build     # forge build
+```
+</Step>
+
+<Step title="Start anvil">
+Run a local anvil node (Foundry). Keep it running in its own terminal.
+
+```bash
+anvil --host 0.0.0.0     # local node on http://127.0.0.1:8545
+```
+</Step>
+
+<Step title="Run the integration suite">
+In another terminal, run the gated suite. The `test:integration` script sets the
+flag for you.
+
+```bash
+pnpm --filter @ctrl-arcz/sdk test:integration
+# equivalent to: INTEGRATION=1 vitest run test/integration
+```
+
+The suite uses anvil's default accounts as owner, co-signer, merchant, and vault,
+deploys USDC and the factory, then drives `createEphemeral`, `readAccount`, and
+`settlePrivatePayment` against them.
+</Step>
+
+</Steps>
+
+## Contract tests
+
+The Solidity tests run under Foundry, independent of the TypeScript side.
+
+```bash
+pnpm contracts:test      # forge test -vv
+# or, in packages/contracts:  forge test
+```
+
+## Quality checks
+
+```bash
+pnpm typecheck           # tsc --noEmit across packages
+pnpm lint                # eslint
+pnpm format:check        # prettier --check
+```
+
+## Next
+
+- Try the flows: [Quickstart](/getting-started/quickstart).
+- Understand the design: [Overview](/concepts/overview).
+- Handle failures: [Errors and result shapes](/guides/errors-and-results).

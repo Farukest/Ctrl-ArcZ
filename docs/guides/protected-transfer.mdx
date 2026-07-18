@@ -11,9 +11,10 @@ first and wait" ritual.
 ## Send
 
 ```ts
-import { approveUsdc, sendProtected, generateClaimCode, parseUsdc } from '@ctrl-arcz/sdk';
+import { approveUsdc, sendProtected, generateClaimCode } from '@ctrl-arcz/sdk';
+import { parseUnits } from 'viem';
 
-const amount = parseUsdc('5');
+const amount = parseUnits('5', 6);
 const secret = generateClaimCode(); // { code, salt, claimHash }
 
 await approveUsdc(clients, amount);

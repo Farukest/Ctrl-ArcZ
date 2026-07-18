@@ -1,45 +1,85 @@
 ---
 title: Quickstart
-description: "Send a protected USDC transfer with the firewall on, in a few lines."
+description: "Your first end-to-end integration: clients, the firewall, a code-gated send, and the claim."
 ---
 
-This sends USDC through the protected-transfer contract with the poisoning
-firewall running by default. If the recipient looks like a poisoning lookalike or
-has baited you with a zero-value transfer, the send is refused before any funds
-move.
+This walks the full round trip: set up clients on Arc Testnet, run the poisoning
+firewall and refuse on a block, send a code-gated protected transfer, and let the
+recipient claim it. If the recipient looks like a poisoning lookalike or has baited
+you with a zero-value transfer, the send is refused before any funds move.
+
+<Note>
+`sendProtected` already runs the firewall for you by default. Step 2 below runs
+`check` explicitly so you can show the verdict in your UI and decide before you
+build the transfer. Both paths are fail-closed.
+</Note>
 
 <Steps>
 
-<Step title="Register a config once">
-A config encodes your integrator behaviour (recall window, claim mode, optional
-fee). It is content-addressed, so calling it on every boot is free.
+<Step title="Set up viem clients on arcTestnet">
+A `ClientPair` is a viem public client for reads and a wallet client for writes,
+both on `arcTestnet`. See [Installation](/getting-started/installation) for the
+peer dependency and RPC details.
 
 ```ts
-import { defineConfig, registerConfig } from '@ctrl-arcz/sdk';
+import { createPublicClient, createWalletClient, http } from 'viem';
+import { privateKeyToAccount } from 'viem/accounts';
+import { arcTestnet, RPC_URL } from '@ctrl-arcz/sdk';
+
+const account = privateKeyToAccount('0x...'); // or a browser wallet account
+const owner = account.address;
+
+const publicClient = createPublicClient({ chain: arcTestnet, transport: http(RPC_URL) });
+const walletClient = createWalletClient({ account, chain: arcTestnet, transport: http(RPC_URL) });
+
+const clients = { publicClient, walletClient };
+```
+</Step>
+
+<Step title="Run the firewall and refuse on a block">
+`check(sender, target)` returns a `RiskReport` with a `level` of `safe`,
+`warning`, or `block`. Pass the public client so it can also read your verified
+recipients from the contract. Stop on a block: a lookalike is beaten only by not
+sending.
+
+```ts
+import { check } from '@ctrl-arcz/sdk';
+
+const recipient = '0x...';
+
+const report = await check(owner, recipient, { client: publicClient });
+
+if (report.level === 'block') {
+  // A lookalike, a zero-value bait, or a scan that could not rule a lookalike out.
+  console.warn('Refused:', report.reasons.map((r) => r.code));
+  return;
+}
+if (!report.complete) {
+  // A data source did not answer. The report is never "safe" when incomplete.
+  console.warn('Incomplete scan:', report.reasons);
+}
+```
+</Step>
+
+<Step title="Send a code-gated protected transfer">
+Register an integrator config once (it is content-addressed, so calling it on every
+boot is free), mint a claim secret, then `sendProtected`. The recipient will need
+the short `code` to claim.
+
+```ts
+import {
+  defineConfig,
+  registerConfig,
+  generateClaimCode,
+  approveUsdc,
+  sendProtected,
+} from '@ctrl-arcz/sdk';
+import { parseUnits } from 'viem';
 
 const { configId } = await registerConfig(clients, defineConfig({ recallWindow: 3600 }));
-```
-</Step>
-
-<Step title="Create a claim secret">
-The recipient will claim with a short code; the salt is the entropy that keeps the
-6-digit code safe from brute force.
-
-```ts
-import { generateClaimCode } from '@ctrl-arcz/sdk';
-
 const secret = generateClaimCode(); // { code, salt, claimHash }
-```
-</Step>
 
-<Step title="Send, protected">
-`sendProtected` runs the firewall itself and throws `RiskBlockedError` on a block
-before it submits. No funds move on a block.
-
-```ts
-import { approveUsdc, sendProtected, parseUsdc } from '@ctrl-arcz/sdk';
-
-const amount = parseUsdc('5'); // 5 USDC, 6 decimals
+const amount = parseUnits('5', 6); // 5 USDC, 6 decimals
 await approveUsdc(clients, amount);
 
 const { transferId, txHash } = await sendProtected(clients, {
@@ -51,18 +91,26 @@ const { transferId, txHash } = await sendProtected(clients, {
 ```
 
 <Warning>
-Deliver the `code` to the recipient through your normal channel with them. The
-protection is that a wrong or poisoned recipient cannot claim without it, and you
-can `cancel` to reclaim.
+`sendProtected` re-runs the firewall itself and throws `RiskBlockedError` on a
+block before it submits, so no funds move on a block even if you skip step 2.
+Deliver `secret.code` to the recipient through your normal channel. A wrong or
+poisoned recipient cannot claim without it, and you can `cancel` to reclaim.
 </Warning>
 </Step>
 
-<Step title="Recipient claims">
+<Step title="Recipient claims with the code">
+The recipient, using their own `ClientPair`, redeems the transfer with the code and
+salt you delivered.
+
 ```ts
 import { claim } from '@ctrl-arcz/sdk';
 
 await claim(recipientClients, transferId, secret.code, secret.salt);
 ```
+
+A wrong code does not revert on-chain (the attempt counter must survive the 5-guess
+lockout), so `claim` inspects the receipt and throws a typed error on a wrong code
+or a lockout rather than silently "succeeding."
 </Step>
 
 </Steps>
@@ -70,16 +118,19 @@ await claim(recipientClients, transferId, secret.code, secret.salt);
 ## What just happened
 
 <CardGroup cols={3}>
-  <Card title="Layer 1 — firewall" icon="shield-halved">
-    `sendProtected` scanned the recipient and would have refused a lookalike or
-    bait address. See [the firewall guide](/guides/firewall).
+  <Card title="Layer 1 - firewall" icon="shield-halved" href="/guides/firewall">
+    The scan refused a lookalike or bait recipient before any funds moved.
   </Card>
-  <Card title="Layer 2 — escrow" icon="lock">
+  <Card title="Layer 2 - escrow" icon="lock" href="/guides/protected-transfer">
     Funds were held by the contract, claimable only with the code, refundable to
-    you. See [protected transfer](/guides/protected-transfer).
+    you.
   </Card>
-  <Card title="Payer privacy" icon="user-secret">
-    To pay from a disposable address that stores no payer identity, use
-    [Private Pay](/guides/private-pay).
+  <Card title="Payer privacy" icon="user-secret" href="/guides/private-pay">
+    To pay from a disposable address that stores no payer identity, use Private Pay.
   </Card>
 </CardGroup>
+
+## Next
+
+- Pay a merchant privately: [Private Pay](/guides/private-pay).
+- Every function and return shape: [SDK reference](/reference/sdk-api).

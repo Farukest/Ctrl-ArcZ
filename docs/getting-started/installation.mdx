@@ -1,9 +1,11 @@
 ---
 title: Installation
-description: "Install the SDK and set up viem clients for Arc."
+description: "Install the SDK, add the viem peer dependency, and set up your Arc Testnet clients."
 ---
 
 ## Install
+
+Install the SDK alongside `viem`, its one peer dependency.
 
 <CodeGroup>
 
@@ -15,27 +17,41 @@ npm install @ctrl-arcz/sdk viem
 pnpm add @ctrl-arcz/sdk viem
 ```
 
+```bash yarn
+yarn add @ctrl-arcz/sdk viem
+```
+
 </CodeGroup>
 
-The SDK is viem-based and ships ESM + CJS + types. `viem` is a peer dependency.
+The SDK is viem-based and ships ESM + CJS + types. `viem` is a peer dependency, so
+you control its version. Arc Testnet is a built-in viem chain, which requires
+`viem >= 2.38`.
 
 ## Set up clients
 
-Every SDK call takes a `ClientPair` (a viem public client for reads, a wallet
-client for writes). The chain is exported from the SDK.
+Every SDK call takes a `ClientPair`: a viem public client for reads and a wallet
+client for writes. Both run on `arcTestnet`, and the chain plus RPC are exported
+from the SDK so you never transcribe them.
 
 ```ts
 import { createPublicClient, createWalletClient, http } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { arcTestnet, RPC_URL } from '@ctrl-arcz/sdk';
 
-const account = privateKeyToAccount('0x...'); // or a browser wallet
+const account = privateKeyToAccount('0x...'); // or a browser wallet account
 
 const publicClient = createPublicClient({ chain: arcTestnet, transport: http(RPC_URL) });
 const walletClient = createWalletClient({ account, chain: arcTestnet, transport: http(RPC_URL) });
 
 const clients = { publicClient, walletClient };
 ```
+
+<Note>
+Pass the account **object** (not just its address) to the wallet client. That is
+what tells viem to sign locally and submit via `eth_sendRawTransaction`. A bare
+address string makes viem call `wallet_sendTransaction`, which Arc's RPC does not
+support.
+</Note>
 
 <Tip>
 Arc's public RPC is rate-limited. For a multi-transaction flow, wrap the transport
@@ -44,14 +60,17 @@ does not retry by default, and enable Multicall3 batching on the public client
 (`batch: { multicall: true }`) to collapse concurrent reads into one request.
 </Tip>
 
-## Addresses
+## Addresses and chain constants
 
-Contract addresses live in one place and are exported from the SDK, so you never
-hardcode them:
+Contract addresses, the chain, and endpoints live in one place and are exported
+from the SDK, so you never hardcode them:
 
 ```ts
 import {
-  ADDRESSES,                     // USDC, Permit2, Memo, CCTP, Gateway, ...
+  arcTestnet,                    // viem chain
+  ARC_TESTNET_CHAIN_ID,          // 5042002
+  RPC_URL,                       // https://rpc.testnet.arc.network
+  ADDRESSES,                     // USDC, Memo, Permit2, CCTP, Gateway, ...
   CTRL_ARCZ_ADDRESS,             // protected-transfer contract
   SPEND_POLICY_FACTORY_ADDRESS,  // payer-shield account factory
   SHIELD_VAULT_ADDRESS,          // demo vault
@@ -65,4 +84,18 @@ import {
 | Vault | `0xc8185AF46b882368b771E8E8a1C8abe1C8e4127f` |
 | USDC (native gas token) | `0x3600000000000000000000000000000000000000` |
 
-Next: the [quickstart](/getting-started/quickstart).
+## About Arc Testnet
+
+- **Chain id** `5042002`, exported as `ARC_TESTNET_CHAIN_ID`.
+- **RPC** `https://rpc.testnet.arc.network` (`RPC_URL`). The explorer is ArcScan at
+  `https://testnet.arcscan.app`, which exposes a Blockscout-compatible REST API the
+  firewall reads from.
+- **USDC is the native gas token**, exposed as an ERC-20 interface at
+  `0x3600000000000000000000000000000000000000` with **6 decimals**. Because it is
+  native, an ERC-20 `transfer` moves native balance, so contracts that receive it
+  implement `receive()`. The SDK only ever touches the ERC-20 interface.
+- **Faucet.** Fund a test wallet with USDC from `https://faucet.circle.com`.
+
+## Next
+
+Send your first protected transfer in the [quickstart](/getting-started/quickstart).

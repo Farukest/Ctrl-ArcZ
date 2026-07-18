@@ -28,19 +28,22 @@
           {
             "group": "Integrate the SDK",
             "pages": [
-              "guides/private-pay",
               "guides/firewall",
               "guides/protected-transfer",
-              "guides/co-signer"
+              "guides/private-pay",
+              "guides/co-signer",
+              "guides/bridge",
+              "guides/errors-and-results",
+              "guides/local-development"
             ]
           },
           {
             "group": "Concepts",
-            "pages": ["concepts/overview", "concepts/payer-shield"]
+            "pages": ["concepts/overview", "concepts/poisoning", "concepts/payer-shield"]
           },
           {
             "group": "Reference",
-            "pages": ["reference/contracts"]
+            "pages": ["reference/sdk-api", "reference/contracts"]
           }
         ]
       }

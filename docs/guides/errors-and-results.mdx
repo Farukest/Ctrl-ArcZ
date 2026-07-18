@@ -1,0 +1,223 @@
+---
+title: Errors and result shapes
+description: "How the SDK signals failure: typed error classes for transfers, and result objects for the firewall and shield."
+---
+
+The SDK signals failure two ways, depending on the layer. The transfer layer
+**throws typed error classes**, so you wrap calls in `try/catch`. The firewall and
+the payer-side shield **return result objects**, so you branch on a discriminated
+field. Knowing which layer you are in tells you which pattern to use.
+
+## Typed errors: the transfer layer
+
+Every SDK error extends `CtrlArcZError`, so one `catch` can recognize all of them
+and separate SDK failures from unexpected ones. These are raised instead of raw
+viem reverts, so end users never see contract internals.
+
+<CardGroup cols={2}>
+<Card title="CtrlArcZError">
+Base class. `catch (e) { if (e instanceof CtrlArcZError) ... }` matches any SDK
+error below.
+</Card>
+<Card title="RiskBlockedError">
+`sendProtected` refused to move funds because the firewall returned `block`.
+Carries the full `RiskReport` and a flattened `reasons: string[]`.
+</Card>
+<Card title="WrongClaimCodeError">
+A claim used the wrong code. The transaction mined (it must record the attempt), so
+this is thrown from the receipt. Carries `attemptsRemaining` and `txHash`.
+</Card>
+<Card title="TransferLockedError">
+Five wrong guesses: the transfer is frozen and only the sender can `cancel`.
+Carries `transferId` and `txHash`.
+</Card>
+<Card title="TransferUnavailableError">
+An action could not run given the transfer's on-chain state. Carries a stable
+`reason`: `not_pending`, `expired`, `unknown`, or `not_sender`.
+</Card>
+<Card title="ClaimOutcomeUnknownError">
+The claim mined but produced neither a success nor a failure event, so its result
+could not be read. Carries `txHash` to investigate.
+</Card>
+</CardGroup>
+
+### When each is thrown
+
+- **`RiskBlockedError`**, from `sendProtected` (and `sendProtectedWithPermit`)
+  before any funds move, when the pre-send risk scan blocks. Pass
+  `skipRiskCheck: true` to opt out of the gate (not recommended).
+- **`WrongClaimCodeError`**, from `claim` when the code is wrong. A wrong code
+  does not revert on-chain (the contract must decrement the attempt counter), so
+  the SDK reads the receipt and throws.
+- **`TransferLockedError`**, from `claim` on the attempt that exhausts the five
+  tries, and pre-flight from the gasless claim when the transfer is already
+  `LOCKED`.
+- **`TransferUnavailableError`**, from `claim`, `cancel`, and `reclaimExpired`
+  when the transfer is not in a state that allows the action (already settled,
+  expired, unknown, or the caller is not the sender).
+- **`ClaimOutcomeUnknownError`**, from `claim` when the mined receipt carries
+  neither event, a defensive last case.
+
+### Catching them
+
+Match specific classes first, then the base class, then rethrow the rest.
+
+```ts
+import {
+  claim,
+  CtrlArcZError,
+  WrongClaimCodeError,
+  TransferLockedError,
+  TransferUnavailableError,
+  ClaimOutcomeUnknownError,
+} from '@ctrl-arcz/sdk';
+
+try {
+  const txHash = await claim(clients, transferId, code, salt);
+  console.log('Claimed:', txHash);
+} catch (e) {
+  if (e instanceof WrongClaimCodeError) {
+    console.warn(`Wrong code. Attempts left: ${e.attemptsRemaining}.`);
+  } else if (e instanceof TransferLockedError) {
+    console.warn('Locked after 5 wrong attempts; only the sender can cancel.');
+  } else if (e instanceof TransferUnavailableError) {
+    console.warn(`Unavailable: ${e.reason}.`); // not_pending | expired | unknown | not_sender
+  } else if (e instanceof ClaimOutcomeUnknownError) {
+    console.warn(`Mined but unreadable: ${e.txHash}.`);
+  } else if (e instanceof CtrlArcZError) {
+    console.warn(`SDK error: ${e.message}.`);
+  } else {
+    throw e; // not ours
+  }
+}
+```
+
+For the send side, the one class you catch is `RiskBlockedError`. It carries the
+whole report, so you can render the same explanation the pre-send UI would show.
+
+```ts
+import { sendProtected, RiskBlockedError } from '@ctrl-arcz/sdk';
+
+try {
+  await sendProtected(clients, { to, amount, code });
+} catch (e) {
+  if (e instanceof RiskBlockedError) {
+    console.warn('Blocked before any funds moved.');
+    for (const r of e.report.reasons) console.warn(r.code, r.message, r.lookalikeOf);
+    return;
+  }
+  throw e;
+}
+```
+
+## Result objects: the firewall and the shield
+
+The firewall and the co-signer do not throw for an expected verdict. A blocked
+target or a vetoed spend is a normal answer, not an exception, so they return an
+object you branch on.
+
+### RiskReport (the firewall)
+
+`check()` returns a `RiskReport`. It is **fail-closed**: it can be marked
+incomplete, and an incomplete check never reports `safe`.
+
+```ts
+import { check } from '@ctrl-arcz/sdk';
+
+const report = await check(sender, target);
+// report: { level: 'safe' | 'warning' | 'block', complete, reasons: RiskReason[], ... }
+
+if (report.level === 'block') {
+  // Stop. reasons carry codes like LOOKALIKE_ADDRESS, ZERO_VALUE_BAIT.
+} else if (report.level === 'warning' || !report.complete) {
+  // Ask the user to look again. Never auto-proceed on an incomplete scan.
+} else {
+  // safe AND complete: proceed.
+}
+```
+
+<Note>
+Never treat `complete: false` as safe. A data source was unavailable, so a
+lookalike or a bait transfer could not be ruled out. Gate on `report.level ===
+'safe' && report.complete`, not on the level alone.
+</Note>
+
+Each entry in `reasons` is a `RiskReason` with a stable `code`
+(`LOOKALIKE_ADDRESS`, `ZERO_VALUE_BAIT`, `NEW_ADDRESS`, `FRESH_ADDRESS`,
+`VERIFIED_RECIPIENT`, `KNOWN_COUNTERPARTY`, `DATA_UNAVAILABLE`), a `severity`, a
+fallback English `message`, and structured fields when relevant (`lookalikeOf`,
+`count`, `sources`). See [The firewall](/guides/firewall) for the rules.
+
+### PrecheckResult and AuthorizeResult (the co-signer)
+
+The co-signer answers with an `approved` discriminant. `precheck` runs only the
+firewall before any account exists; `authorize` validates the chain-read policy and
+then co-signs.
+
+```ts
+const pre = await cosigner.precheck({ owner, target, amount });
+if (!pre.approved) {
+  console.warn('Vetoed before anything was created:', pre.reason, pre.riskReasons);
+  return;
+}
+// pre.approved === true: nothing else on precheck.
+
+const auth = await cosigner.authorize({
+  account, owner, amount, action, target, nonce, chainId, remaining, expiry,
+});
+if (!auth.approved) {
+  console.warn('Vetoed:', auth.reason, auth.riskReasons);
+  return;
+}
+const signature = auth.signature; // present only when approved
+```
+
+- `PrecheckResult` is `{ approved: true }` or `{ approved: false, reason,
+  riskReasons? }`.
+- `AuthorizeResult` is `{ approved: true, signature }` or `{ approved: false,
+  reason, riskReasons? }`.
+
+### PrivatePayOutcome (one-call checkout)
+
+`settlePrivatePayment` wraps read, authorize, and submit. It never throws for a
+veto; it returns `ok: false`.
+
+```ts
+import { settlePrivatePayment } from '@ctrl-arcz/sdk';
+
+const outcome = await settlePrivatePayment(clients, account, amount, cosigner, { owner });
+if (outcome.ok) {
+  console.log('Paid:', outcome.result.txHash, 'from', outcome.result.account);
+} else {
+  console.warn('Vetoed:', outcome.reason, outcome.riskReasons); // outcome.vetoed === true
+}
+```
+
+<Note>
+A veto is not an error. The co-signer withholds its signature, and a spend needs
+that signature, so the payment becomes **impossible** rather than failing partway.
+That is why a veto surfaces as `{ approved: false }` / `{ ok: false }`, not as a
+thrown exception. Treat it as a normal branch and explain the `reason` to the user.
+</Note>
+
+## Which layer throws, which returns
+
+| Call | Signals via |
+| --- | --- |
+| `sendProtected`, `sendProtectedWithPermit` | throws `RiskBlockedError` |
+| `claim` | throws `WrongClaimCodeError` / `TransferLockedError` / `TransferUnavailableError` / `ClaimOutcomeUnknownError` |
+| `cancel`, `reclaimExpired` | throws `TransferUnavailableError` |
+| `check` | returns `RiskReport` |
+| `cosigner.precheck` / `authorize` | returns `PrecheckResult` / `AuthorizeResult` |
+| `settlePrivatePayment` | returns `PrivatePayOutcome` |
+
+The server-side gasless claim is the exception that converts throws to a result:
+`/api/gasless-claim` catches the transfer errors and returns
+`{ ok, txHash?, error? }` so nothing throws across HTTP. See
+[Bridge USDC](/guides/bridge#gas-sponsored-claim).
+
+## Next
+
+- The firewall verdict in depth: [The firewall](/guides/firewall).
+- The co-signer and veto model: [The co-signer](/guides/co-signer).
+- Full type reference: [SDK API](/reference/sdk-api).

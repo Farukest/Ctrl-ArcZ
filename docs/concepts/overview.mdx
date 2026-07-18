@@ -1,44 +1,100 @@
 ---
 title: Overview
-description: "A shield covering both sides of a USDC payment."
+description: "The mental model: four layers, where each one kicks in, and the trust boundaries between them."
 ---
 
-Ctrl+ArcZ protects **both sides** of a payment.
+Ctrl+ArcZ protects **both sides** of a USDC payment. On the recipient side you
+could send to the wrong or poisoned address; on the payer side, paying reveals
+your wallet and exposes you to drainers. The system answers both with four layers
+that fit together.
 
 <CardGroup cols={2}>
-  <Card title="Recipient side" icon="shield-halved">
-    You could send to the wrong or poisoned address. The **firewall** refuses a
-    lookalike or bait recipient before you send, and the **protected transfer**
-    makes a mistaken send recoverable.
+  <Card title="Recipient side" icon="shield-halved" href="/concepts/poisoning">
+    The **firewall** refuses a lookalike or bait recipient before you send, and
+    the **protected transfer** makes a mistaken send recoverable.
   </Card>
-  <Card title="Payer side" icon="user-secret">
-    Paying reveals your wallet and exposes you to drainers. **Private Pay** pays
-    from a disposable address, and **The Machine** vetoes bad spends.
+  <Card title="Payer side" icon="user-secret" href="/concepts/payer-shield">
+    **Private Pay** pays from a disposable address that stores no payer identity,
+    and **The Machine** vetoes bad spends.
   </Card>
 </CardGroup>
 
-## The layers
+## The four layers
 
-1. **Firewall** — a pre-send scan for poisoning. The actual protection, because
-   the attack is that you send to a lookalike on purpose. Fail-closed.
-2. **Protected transfer** — escrow with a code-claim and reclaim, so a wrong send
-   is not final.
-3. **Payer-side shield** — disposable, policy-bound addresses funded from a vault.
-   Every spend is authorized by the enclave co-signer, and the funds are hard-locked
-   to the merchant and cap you chose, so the co-signer can only push the payment you
-   set up or veto it.
+1. **Firewall (layer 1).** A pre-send scan for poisoning. This is the protection
+   that actually matters against a lookalike, because the attack is that you send
+   to it on purpose, so escrow cannot save you. Fail-closed: an incomplete scan is
+   never reported as safe. See [Address poisoning](/concepts/poisoning) and the
+   [firewall guide](/guides/firewall).
+2. **Protected transfer (layer 2).** Escrow with a code-gated claim, sender
+   `cancel`, and automatic refund of an expired unclaimed send, so a genuinely
+   wrong send is not final. See [Protected transfer](/guides/protected-transfer).
+3. **Clean history (layer 3).** Code-claimed settlement keeps your activity
+   spam-free, and the contract's verified recipients feed back into layer 1 as
+   known-good addresses, so a lookalike of someone you reached through a protected
+   transfer is caught too.
+4. **Payer-side shield (layer 4).** Disposable, policy-bound addresses funded from
+   a vault. Every spend is authorized by the enclave co-signer, and the funds are
+   hard-locked to the merchant and cap you chose, so the co-signer can only push
+   the payment you set up or veto it. See [Payer-side shield](/concepts/payer-shield)
+   and [Private Pay](/guides/private-pay).
+
+## Where each layer kicks in
+
+- **Before you send** to a counterparty, the firewall scans the recipient. A block
+  stops the send; there is no way to lose funds to a lookalike you were about to
+  copy. `sendProtected` runs this by default.
+- **When you send** through the protected transfer, the funds are escrowed and the
+  recipient must claim with a code you deliver out of band. If they never claim,
+  the send is refundable to you.
+- **After a protected transfer settles**, the recipient becomes a verified
+  known-good address that strengthens the next firewall scan.
+- **When you pay a merchant** and want payer-side protection, Private Pay routes
+  the payment through a disposable account, and the co-signer vetoes any spend
+  that fails policy or the firewall.
+
+## Trust boundaries
+
+The layers do not all run in the same place, and that separation is deliberate:
+
+- **The firewall runs client-side.** It is a pure rule engine (`evaluateRisk`) fed
+  by public on-chain data through `check`. It needs no secret and no trusted
+  server, so anyone can reproduce its verdict. Its only dependency is a data
+  source (Blockscout / ArcScan and the contract's own events), and if that source
+  is down the report fails closed.
+- **The co-signer runs server-side, in an enclave ("The Machine").** It holds the
+  key that authorizes a spend from a disposable account. It re-reads the real
+  on-chain policy rather than trusting the browser, and it vetoes by withholding
+  its signature. A veto is not a warning; the spend becomes impossible. See
+  [The co-signer](/guides/co-signer).
+- **The contracts enforce policy on-chain.** A disposable account is hard-locked
+  to one `target` and one cap, so even the co-signer can only push the exact
+  payment you set up, never redirect or steal. The protected-transfer contract
+  enforces the code-claim, the attempt lockout, the cancel rights, and the
+  expiry refund. Nothing off-chain can override these.
+
+The important consequence: you never sign blind, and no single component can move
+your money on its own. The firewall can only refuse. The co-signer can only push
+the one payment the contract already permits. The contract enforces the envelope.
 
 ## Honest positioning
 
 This is defense-in-depth, not magic. A careful user who verifies every full
-address from a trusted source does not get poisoned and does not need it. Its
-value is catching the slip when discipline lapses, and making the slip
-non-catastrophic. It is the category of 2FA and transaction simulators, calibrated
-as "a safety net for human error and drainers," not "the unbreakable answer."
+address from a trusted source does not get poisoned and does not need it. Its value
+is catching the slip when discipline lapses, and making the slip non-catastrophic.
+It is the category of 2FA and transaction simulators, calibrated as "a safety net
+for human error and drainers," not "the unbreakable answer."
+
+On the payer side, be precise about what is delivered. The disposable account
+surface stores no payer identity, so a merchant paid from it cannot read who
+funded it from the account itself. But the funding transaction (your wallet to the
+disposable account) is a normal transfer on a transparent chain, so an observer can
+still trace you to that account through it. Full payer privacy waits on Arc Privacy
+Sector. See [Payer-side shield](/concepts/payer-shield) for the exact model.
 
 ## Why Arc
 
-The design is only practical on a chain where **gas is USDC** (ephemeral
-addresses need no separate gas), settlement is **sub-second** (the multi-step
-private checkout finishes instantly), and Circle tooling (CCTP, Gateway, and the
-Arc Privacy Sector roadmap) is built in.
+The design is only practical on a chain where **gas is USDC** (ephemeral addresses
+need no separate gas), settlement is **sub-second** (the multi-step private
+checkout finishes instantly), and Circle tooling (CCTP, Gateway, and the Arc
+Privacy Sector roadmap) is built in.

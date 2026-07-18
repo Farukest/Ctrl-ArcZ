@@ -1,0 +1,836 @@
+---
+title: SDK API reference
+description: "Every exported function, type and constant in @ctrl-arcz/sdk, grouped by layer, with real signatures read from source."
+---
+
+`@ctrl-arcz/sdk` provides protected USDC transfers on Arc. It is organized in
+layers, each usable on its own:
+
+1. **Firewall (risk)** - the pre-send poisoning check. A victim sends to a
+   lookalike on purpose, so locking funds afterwards does not help; only refusing
+   does.
+2. **Protected transfer** - code-gated claim, sender cancel, automatic refund.
+   This replaces the "send $1 first and wait" ritual.
+3. **Clean history** - a spam-free history, so a fake address is never sitting
+   there waiting to be copied.
+4. **Payer-side shield** - disposable, policy-bound payment addresses settled
+   under an enclave co-signer's veto.
+
+The SDK is [viem](https://viem.sh)-based. Read clients are viem `PublicClient`,
+write clients are viem `WalletClient`, and most write calls take a `ClientPair`:
+
+```ts
+interface ClientPair {
+  publicClient: PublicClient;
+  walletClient: WalletClient;
+  /** Overrides the deployed CtrlArcZ address (tests, alternative deployments). */
+  contractAddress?: Address;
+}
+```
+
+The shield layer uses `ShieldClients` (`{ publicClient, walletClient }`) without
+the `contractAddress` field.
+
+<Note>
+Amounts are always USDC base units (`bigint`, 6 decimals on Arc's USDC ERC-20
+interface). Use viem's `parseUnits('1.50', 6)`. The 18-decimal native interface is
+never used, and the two must not be mixed.
+</Note>
+
+## Chains and addresses
+
+Everything under `chains/arcTestnet` is re-exported at the top level.
+
+```ts
+import { arcTestnet as viemArcTestnet } from 'viem/chains';
+
+const arcTestnet = viemArcTestnet;              // viem built-in (needs viem >= 2.38)
+const ARC_TESTNET_CHAIN_ID = 5042002;
+
+const RPC_URL = 'https://rpc.testnet.arc.network';
+const WS_URL = 'wss://rpc.testnet.arc.network';
+const EXPLORER_URL = 'https://testnet.arcscan.app';
+const EXPLORER_API_URL = 'https://testnet.arcscan.app/api/v2';
+const FAUCET_URL = 'https://faucet.circle.com';
+```
+
+### Address constants
+
+`ADDRESSES` is a single map of every Arc predeploy and token. The Ctrl+ArcZ
+deployment addresses are separate top-level constants.
+
+| Constant | Value | Notes |
+| --- | --- | --- |
+| `ADDRESSES.USDC` | `0x3600000000000000000000000000000000000000` | ERC-20 interface, 6 decimals |
+| `ADDRESSES.EURC` | `0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a` | |
+| `ADDRESSES.MEMO` | `0x5294E9927c3306DcBaDb03fe70b92e01cCede505` | Memo predeploy; EOA-only caller |
+| `ADDRESSES.MULTICALL3_FROM` | `0x522fAf9A91c41c443c66765030741e4AaCe147D0` | preserves `msg.sender` |
+| `ADDRESSES.PERMIT2` | `0x000000000022D473030F116dDEE9F6B43aC78BA3` | |
+| `ADDRESSES.MULTICALL3` | `0xcA11bde05977b3631167028862bE2a173976CA11` | |
+| `ADDRESSES.CREATE2_FACTORY` | `0x4e59b44847b379578588920cA78FbF26c0B4956C` | |
+
+`ADDRESSES` also carries CCTP and StableFX addresses (`CCTP_TOKEN_MESSENGER_V2`,
+`CCTP_MESSAGE_TRANSMITTER_V2`, `GATEWAY_WALLET`, `GATEWAY_MINTER`, `FX_ESCROW`),
+unused by Ctrl+ArcZ v1.
+
+Ctrl+ArcZ and shield deployment addresses (Arc Testnet, chainId `5042002`):
+
+| Constant | Value |
+| --- | --- |
+| `CTRL_ARCZ_ADDRESS` | `0x8dAb7148cdc31DAcad6d7e12161AA3DEDb572Dca` |
+| `CODE_CLAIM_VERIFIER_ADDRESS` | `0x2C0f268DE2Aa8BB2ab27F2Ea5Ae8a0f9a0E068c4` |
+| `SPEND_POLICY_FACTORY_ADDRESS` | `0x1fe8f917adC5B37D8162eaCC44706528351f0639` |
+| `SPEND_POLICY_ACCOUNT_IMPL_ADDRESS` | `0xb90C1475939Ce136E370f30074ADc9169Be5ac2f` |
+| `SHIELD_VAULT_ADDRESS` | `0xc8185AF46b882368b771E8E8a1C8abe1C8e4127f` |
+
+Other exported constants: `USDC_DECIMALS` (`6`), `ARC_CCTP_DOMAIN` (`26`),
+`BLOCKLISTED_TEST_ADDRESS` (a seeded address whose transfers always revert),
+`CTRL_ARCZ_DEPLOY_BLOCK` (`51326557n`, the block event scans start from), and
+`MAX_LOG_RANGE` (`10000n`, Arc's `eth_getLogs` block-range cap).
+
+### Explorer helpers
+
+```ts
+function explorerTxUrl(hash: string): string;       // `${EXPLORER_URL}/tx/${hash}`
+function explorerAddressUrl(address: string): string; // `${EXPLORER_URL}/address/${address}`
+```
+
+### Event helper
+
+```ts
+function getLogsChunked<TArgs = Record<string, unknown>>(
+  client: PublicClient,
+  params: ChunkedEventsParams,
+): Promise<Array<DecodedLog<TArgs>>>;
+
+interface ChunkedEventsParams {
+  address: Address;
+  abi: Abi;
+  eventName: string;
+  args?: Record<string, unknown>;
+  fromBlock?: bigint; // defaults to CTRL_ARCZ_DEPLOY_BLOCK
+}
+```
+
+Reads event logs in `MAX_LOG_RANGE`-sized chunks from `CTRL_ARCZ_DEPLOY_BLOCK`
+forward. Arc rejects a from-block-0 `eth_getLogs` and caps the range at 10,000
+blocks, so full-history scans must be chunked. `DecodedLog<TArgs>` is
+`{ args: TArgs; blockNumber: bigint | null; transactionHash: Hex | null }`.
+
+## Layer 1: Firewall (risk)
+
+The firewall is the poisoning defense. Run [`check`](#check) before every send. It
+is also run automatically inside [`sendProtected`](#sendprotected) unless you opt
+out.
+
+### check
+
+```ts
+function check(
+  sender: Address,
+  target: Address,
+  options?: CheckOptions,
+): Promise<RiskReport>;
+
+interface CheckOptions {
+  /** Defaults to ArcScan/Blockscout. */
+  provider?: IDataProvider;
+  /** Used to read `isVerifiedRecipient` from the contract. Optional. */
+  client?: PublicClient;
+  /** Overrides the deployed CtrlArcZ address. */
+  contractAddress?: Address;
+  /** Injected in tests to make the freshness rule deterministic. */
+  now?: Date;
+}
+```
+
+Fetches send history, target activity, zero-value baits and verified-recipient
+signals, then runs the pure rule engine. Returns a `RiskReport`.
+
+<Note>
+`check` is **fail-closed**. Data sources that fail are recorded, not swallowed: an
+incomplete check can return `warning` (or `block` when a lookalike cannot be ruled
+out), but it will **never** return `safe`. Always read `report.complete` and
+`report.level`, not just the reasons.
+</Note>
+
+```ts
+import { check } from '@ctrl-arcz/sdk';
+
+const report = await check(sender, target, { client: publicClient });
+if (report.level === 'block') refuseTheSend(report.reasons);
+```
+
+### RiskReport and related types
+
+```ts
+type RiskLevel = 'safe' | 'warning' | 'block';
+
+type RiskRuleCode =
+  | 'LOOKALIKE_ADDRESS'   // mimics an address you have paid
+  | 'ZERO_VALUE_BAIT'     // target sent you a 0-value transfer
+  | 'NEW_ADDRESS'         // no on-chain history
+  | 'FRESH_ADDRESS'       // first activity < 24h ago
+  | 'VERIFIED_RECIPIENT'  // a protected transfer here already settled
+  | 'KNOWN_COUNTERPARTY'  // you have paid this exact address
+  | 'DATA_UNAVAILABLE';   // a data source did not answer
+
+interface RiskReason {
+  code: RiskRuleCode;
+  severity: RiskLevel;
+  message: string;           // human-readable English fallback
+  lookalikeOf?: Address;     // the counterparty a lookalike was matched against
+  count?: number;            // number of 0-value baits (ZERO_VALUE_BAIT)
+  sources?: string[];        // data sources that did not answer (DATA_UNAVAILABLE)
+}
+
+interface RiskReport {
+  target: Address;
+  sender: Address;
+  level: RiskLevel;          // the worst severity across all reasons
+  reasons: RiskReason[];
+  complete: boolean;         // true only when every data source answered
+  checkedAt: Date;           // a report is a snapshot in time
+}
+```
+
+### Rule engine and lookalikes
+
+These let you run the rules without the network, or generate a lookalike for a
+demo.
+
+```ts
+function evaluateRisk(input: RiskInput, now?: Date): RiskReport;
+function isLookalike(candidate: Address, known: Address): boolean;
+function craftLookalike(target: Address, randomBytes?: (length: number) => Uint8Array): Address;
+
+const AFFIX_LENGTH = 4;                    // chars compared at each end of an address
+const FRESH_ADDRESS_MAX_AGE_MS = 86400000; // 24h "fresh address" window
+```
+
+- `evaluateRisk` is a pure function: same input, same verdict, no network. It takes
+  a `RiskInput` (all data pre-fetched) and returns a `RiskReport`.
+- `isLookalike` is true when `candidate` shares the first and last `AFFIX_LENGTH`
+  hex characters with `known` but is a different address.
+- `craftLookalike` mints a genuine lookalike of `target` (same visible ends, random
+  middle). Used by the poisoning demo.
+
+`RiskInput`, `AddressActivity`, `Counterparty`, `ZeroValueBait` and `IDataProvider`
+are exported types describing the rule-engine inputs.
+
+### BlockscoutDataProvider
+
+The default risk data source, reading ArcScan's Blockscout REST API.
+
+```ts
+class BlockscoutDataProvider implements IDataProvider {
+  constructor(options?: BlockscoutProviderOptions);
+  getOutgoingCounterparties(sender: Address): Promise<Address[]>;
+  getAddressActivity(address: Address): Promise<AddressActivity>;
+  countZeroValueTransfers(from: Address, to: Address): Promise<number>;
+}
+
+interface BlockscoutProviderOptions {
+  apiUrl?: string;    // defaults to Arc Testnet's ArcScan
+  timeoutMs?: number; // abort a slow explorer; default 15000 ms
+  fetchFn?: typeof fetch;
+}
+```
+
+Implement `IDataProvider` yourself to back the firewall with a different indexer,
+an internal exchange database or a cache, and pass it as `CheckOptions.provider`.
+
+More: [The firewall](/guides/firewall).
+
+## Layer 2: Protected transfer
+
+A protected transfer locks USDC in the CtrlArcZ contract; the recipient releases
+it with a code, the sender can cancel until it lands, and it auto-refunds after
+expiry.
+
+### Claim secrets
+
+```ts
+function generateClaimCode(): ClaimSecret;
+function hashClaim(salt: Hex, code: string): Hex;
+
+interface ClaimSecret {
+  code: string;      // the 6-digit code a human reads out
+  salt: Hex;         // 32 secret bytes, delivered out-of-band, never published
+  claimHash: Hex;    // keccak256(abi.encodePacked(salt, code)) - the only on-chain part
+}
+```
+
+<Note>
+The **salt is the secret**, the code is the human factor. A 6-digit code is ~20
+bits and brute-forceable offline if the salt leaks, so the salt must reach the
+recipient out of band (claim link / QR) while the code is spoken or typed. Never
+reuse a secret: a settled claim publishes both halves in its calldata forever.
+</Note>
+
+### Allowance and approval
+
+```ts
+function getAllowance(clients: ClientPair, owner: Address): Promise<bigint>;
+function approveUsdc(clients: ClientPair, amount: bigint): Promise<Hash | null>;
+```
+
+`approveUsdc` approves CtrlArcZ to pull `amount` USDC and returns `null` when the
+existing allowance already covers it (no transaction sent).
+
+### sendProtected
+
+```ts
+function sendProtected(
+  clients: ClientPair,
+  params: SendProtectedParams,
+  options?: SendProtectedOptions,
+): Promise<SendProtectedResult>;
+
+interface SendProtectedParams {
+  configId: Hex;
+  to: Address;
+  amount: bigint;    // base units (6 decimals)
+  claimHash: Hex;
+  /** Wrap in Arc's Memo predeploy for reconcilable events. Default true. */
+  memo?: boolean;
+}
+
+interface SendProtectedResult {
+  transferId: bigint;
+  txHash: Hash;
+  deadline: Date;
+}
+```
+
+Locks the funds (requires a prior `approveUsdc`) and returns the new
+`transferId`. Wrapped in Arc's Memo predeploy by default so the transfer is
+reconcilable from `Memo` events. Runs the risk firewall first.
+
+<Note>
+The firewall is **on by default**. `sendProtected` runs [`check`](#check) and
+throws [`RiskBlockedError`](#errors) before any funds move when the verdict blocks.
+Turning it off (`skipRiskCheck: true`) removes the poisoning defense from the send
+path entirely; if you already ran `check` yourself, pass the report as `report`
+instead to reuse the scan without giving up the guard.
+</Note>
+
+```ts
+interface SendProtectedOptions {
+  skipRiskCheck?: boolean;       // removes the poisoning defense; use with care
+  config?: IntegratorConfig;     // its onWarning policy decides what a warning does
+  report?: RiskReport;           // reuse a report you already ran (see below)
+  checkOptions?: CheckOptions;   // forwarded to check(); client/contract default from clients
+  onReport?: (report: RiskReport) => void; // called when the scan does NOT block
+}
+
+const MAX_REPORT_AGE_MS = 120000; // a supplied report older than 2 min is re-scanned
+```
+
+A supplied `report` is used only when it matches both `sender` and `target` and is
+younger than `MAX_REPORT_AGE_MS`; otherwise the guard silently re-scans, because a
+report is a snapshot and a bait transfer could have landed since.
+
+### sendProtectedWithPermit
+
+```ts
+function sendProtectedWithPermit(
+  clients: ClientPair,
+  params: SendProtectedParams,
+  options?: SendProtectedOptions,
+): Promise<SendProtectedResult>;
+```
+
+Same as `sendProtected` but pulls USDC via a [Permit2](#permit2-helpers) signature,
+so there is no per-send `approve` transaction. The one-time prerequisite is
+`approvePermit2(clients)`. This path is a single on-chain transaction and is not
+wrapped in Memo (routing through Memo would break Permit2's spender check).
+
+### claim / cancel / reclaimExpired
+
+```ts
+function claim(clients: ClientPair, transferId: bigint, code: string, salt: Hex): Promise<Hash>;
+function cancel(clients: ClientPair, transferId: bigint): Promise<Hash>;
+function reclaimExpired(clients: ClientPair, transferId: bigint): Promise<Hash>;
+```
+
+- `claim` releases a transfer to its recipient. Returns the tx hash on success.
+- `cancel` takes the money back. Sender only, allowed until a claim lands.
+- `reclaimExpired` refunds an expired, unclaimed transfer. Anyone may call; the
+  money goes to the sender.
+
+<Note>
+A wrong code does **not** revert on-chain (the attempt counter must survive for the
+5-guess lockout to bind), so a mined transaction is not proof of success. `claim`
+inspects the receipt and throws a typed error: [`WrongClaimCodeError`](#errors)
+(with `attemptsRemaining`), [`TransferLockedError`](#errors) after 5 wrong guesses,
+or [`ClaimOutcomeUnknownError`](#errors) if no outcome event is found.
+</Note>
+
+For gasless / ERC-4337 flows, build and interpret the claim yourself:
+
+```ts
+function encodeClaimCall(transferId: bigint, code: string, salt: Hex): Hex;
+function interpretClaimReceipt(
+  receiptLogs: Log[],
+  contractAddress: Address,
+  transferId: bigint,
+  txHash: Hash,
+): Hash; // returns txHash on success; throws the same typed errors as claim()
+```
+
+`interpretClaimReceipt` binds to both the emitting contract and the exact
+`transferId`, so an unrelated or attacker-planted event in a batched transaction
+cannot decide the outcome.
+
+### getTransfer / watchTransfer
+
+```ts
+function getTransfer(
+  clients: Pick<ClientPair, 'publicClient' | 'contractAddress'>,
+  transferId: bigint,
+): Promise<ProtectedTransfer>;
+
+function watchTransfer(
+  publicClient: PublicClient,
+  transferId: bigint,
+  options: WatchTransferOptions,
+): () => void; // returns an unsubscribe function
+
+interface WatchTransferOptions {
+  onUpdate: (transfer: ProtectedTransfer) => void;
+  contractAddress?: Address;
+}
+
+interface ProtectedTransfer {
+  transferId: bigint;
+  sender: Address;
+  to: Address;
+  amount: bigint;
+  deadline: Date;
+  attempts: number;
+  status: TransferStatus;
+  claimHash: Hex;
+  configId: Hex;
+}
+
+type TransferStatus = 'NONE' | 'PENDING' | 'CLAIMED' | 'CANCELLED' | 'RECLAIMED' | 'LOCKED';
+```
+
+`watchTransfer` fires `onUpdate` on every state change. Arc finalises on inclusion,
+so a single confirmation is final and there is no "confirming" limbo.
+
+### Permit2 helpers
+
+```ts
+function getPermit2Allowance(clients: ClientPair, owner: Address): Promise<bigint>;
+function approvePermit2(clients: ClientPair, amount?: bigint): Promise<Hex | null>; // defaults to maxUint256
+function signPermit2Transfer(
+  clients: ClientPair,
+  amount: bigint,
+  spender: Address,
+  options?: { nonce?: bigint; deadlineSeconds?: number; now?: number },
+): Promise<Permit2Signature>;
+
+interface Permit2Signature {
+  nonce: bigint;
+  deadline: bigint;
+  signature: Hex;
+}
+```
+
+`approvePermit2` is the one-time approval (returns `null` when the allowance
+already covers `amount`); after it, every send needs only a signature.
+`signPermit2Transfer` signs a `PermitTransferFrom` authorising `spender` (CtrlArcZ)
+to pull `amount` once. The EIP-712 types are exported as `PERMIT2_TYPES`.
+
+More: [Protected transfer](/guides/protected-transfer).
+
+## Layer 3: Clean history
+
+```ts
+function getCleanHistory(
+  address: Address,
+  options?: GetCleanHistoryOptions,
+): Promise<CleanHistory>;
+
+interface GetCleanHistoryOptions {
+  apiUrl?: string;
+  fetchFn?: typeof fetch;
+  /** Tokens that may appear in the clean view. Defaults to Arc's USDC + EURC. */
+  allowedTokens?: Address[];
+}
+
+interface CleanHistory {
+  entries: HistoryEntry[];
+  /** What was hidden, and why. Shown behind a "spam" toggle rather than destroyed. */
+  filtered: FilteredEntry[];
+}
+
+interface HistoryEntry {
+  txHash: `0x${string}`;
+  direction: 'in' | 'out';
+  counterparty: Address;
+  amount: bigint;       // base units, in the token's own decimals
+  decimals: number;
+  tokenAddress: Address;
+  tokenSymbol: string;
+  timestamp: Date;
+}
+
+interface FilteredEntry extends HistoryEntry {
+  reason: 'ZERO_VALUE' | 'UNKNOWN_TOKEN';
+}
+```
+
+Two rules destroy the poisoning surface: drop 0-value transfers, and show only
+known tokens (an allowlist, since a poisoning campaign ships its own lookalike
+token). Nothing is deleted; `filtered` carries the hidden rows so a UI can still
+offer "show spam".
+
+## Integrator config
+
+An `IntegratorConfig` makes protected transfers behave differently per integrator
+(an exchange withdrawal screen versus a P2P wallet) on top of the shared contract.
+
+```ts
+function defineConfig(input?: DefineConfigInput): IntegratorConfig;
+function registerConfig(clients: ClientPair, config: IntegratorConfig): Promise<RegisterConfigResult>;
+function recommendTransferMode(config: IntegratorConfig, amount: bigint): 'protected' | 'plain';
+function shouldBlockSend(config: IntegratorConfig, level: RiskLevel): boolean;
+
+const MAX_FEE_BPS = 100;               // max integrator fee: 1%
+const MAX_RECALL_WINDOW_SECONDS = 604800; // 7 days
+
+interface IntegratorConfig {
+  recallWindow: number;        // seconds before an unclaimed transfer is refundable
+  claimMode: ClaimMode;        // only 'CODE' ships in v1
+  feeBps: number;              // 0..100 (max 1%)
+  feeRecipient: Address;
+  minProtectedAmount: bigint;  // below this, recommendTransferMode returns 'plain'
+  onWarning: 'warn' | 'block'; // what a `warning` verdict does
+}
+
+type ClaimMode = 'CODE' | 'SIGNATURE' | 'REGISTERED';
+type DefineConfigInput = Partial<IntegratorConfig>;
+
+interface RegisterConfigResult {
+  configId: Hex;
+  txHash: Hash;
+}
+```
+
+- `defineConfig` fills sensible P2P-wallet defaults: a one-hour recall window, no
+  fee, protect above 10 USDC, warnings advisory (`onWarning: 'warn'`). It validates
+  bounds and throws on an out-of-range fee or window.
+- `registerConfig` registers the behaviour on-chain and returns its `configId`. It
+  is idempotent: the contract derives the id from the parameters and caller, so an
+  app can call it on every boot and get the same id back.
+- `recommendTransferMode` returns `'plain'` under `minProtectedAmount`, where a
+  second protection transaction costs more than it saves.
+- `shouldBlockSend` is the single decision point the UI and the send guard share:
+  `block` always stops; `warning` stops only when `onWarning === 'block'`.
+
+<Note>
+`SIGNATURE` and `REGISTERED` claim modes are reserved. `defineConfig` throws for
+any `claimMode` other than `'CODE'` in v1.
+</Note>
+
+## Layer 4: Payer-side shield
+
+The payer-side shield pays a merchant from a disposable, policy-bound address whose
+every spend is authorized by an enclave co-signer that can veto. See
+[Payer-side shield](/concepts/payer-shield) and [Private Pay](/guides/private-pay).
+
+<Note>
+**Honest privacy model.** The shield account stores **no owner** - there is no
+`owner()` or `vault()` getter. A spend needs **only the co-signer's signature**
+(this is not a 2-of-2 owner+cosigner scheme; the payer signs nothing). Funds are
+hard-locked to the pre-set `target` and cap, the vault is a hashed commitment
+revealed only at sweep, and PULL has a per-pull cap. All spend signatures are
+EIP-712.
+
+**Honest ceiling.** Full payer privacy needs Arc Privacy Sector confidential
+transfers, which are not live. The funding transaction is a plain transfer on a
+transparent chain today, so an observer can still trace the payer to the ephemeral
+address through it. The account surface reveals nothing; the funding leg does.
+</Note>
+
+`ShieldClients` is `{ publicClient, walletClient }`. `SpendMode` is `MODE_PUSH`
+(`0`) or `MODE_PULL` (`1`).
+
+### Account lifecycle
+
+```ts
+function predictEphemeral(
+  publicClient: PublicClient,
+  factory: Address,
+  owner: Address,
+  salt: Hex,
+): Promise<Address>;
+
+function createEphemeral(
+  clients: ShieldClients,
+  factory: Address,
+  salt: Hex,
+  policy: EphemeralPolicy,
+): Promise<{ account: Address; txHash: Hex }>;
+
+function fundFromVault(
+  clients: ShieldClients,
+  vault: Address,
+  account: Address,
+  amount: bigint,
+): Promise<Hex>;
+
+interface EphemeralPolicy {
+  token: Address;
+  owner: Address;      // bound only as a hash (the salt); never written to the account
+  cosigner: Address;
+  vault: Address;      // bound only as a commitment; address revealed only at sweep
+  target: Address;
+  maxAmount: bigint;
+  perPullMax?: bigint; // PULL only: max per single pull. 0 = no tighter cap than maxAmount
+  expiry: number;      // unix seconds; no outbound payment after this
+  interval: number;    // PULL only: min seconds between pulls. 0 for PUSH
+  mode: SpendMode;
+}
+```
+
+- `predictEphemeral` returns the deterministic address `createEphemeral` will
+  occupy, so it can be funded before it exists. The address is bound to
+  `ownerHash(owner)` and the salt, not to `msg.sender`, so no one can front-run its
+  slot.
+- `createEphemeral` deploys and initializes the account (a minimal-proxy clone).
+  Anyone may submit it, so an integrator can deploy through a relayer to keep the
+  payer off the deployment transaction.
+- `fundFromVault` moves USDC from the vault into the account (owner only). This is
+  the leg that becomes APS-confidential in production.
+
+### Reads
+
+```ts
+function readAccount(publicClient: PublicClient, account: Address): Promise<AccountState>;
+
+interface AccountState {
+  nonce: bigint;
+  spent: bigint;
+  remaining: bigint;
+  target: Address;
+  perPullMax: bigint;
+  expiry: number;
+  mode: SpendMode;
+}
+```
+
+`readAccount` is a getter-first read (no reliance on event logs, APS-ready) and is
+the authoritative policy source the co-signer validates against. There is no owner
+or vault getter by design.
+
+### Settlement
+
+```ts
+function submitPay(clients: ShieldClients, account: Address, amount: bigint, cosignerSig: Hex): Promise<Hex>;
+function submitPull(clients: ShieldClients, account: Address, amount: bigint, cosignerSig: Hex): Promise<Hex>;
+function sweepToVault(clients: ShieldClients, account: Address, vault: Address): Promise<Hex>;
+function sweepExpired(clients: ShieldClients, account: Address, vault: Address): Promise<Hex>;
+```
+
+- `submitPay` / `submitPull` submit a PUSH / PULL spend with the co-signer's
+  signature. Anyone may submit (relayer-safe); the funds are locked to the target
+  and cap.
+- `sweepToVault` sends the account home to its vault at any time; `sweepExpired`
+  does the same after `expiry` (keeper / refund path). Both are gated by knowledge
+  of the vault address (its hash must match the account's stored `vaultHash`), not
+  by a signature, so the vault stays hidden until the sweep.
+
+### One-call checkout
+
+```ts
+function settlePrivatePayment(
+  clients: ShieldClients,
+  account: Address,
+  amount: bigint,
+  cosigner: CoSigner,
+  ctx: { owner: Address },
+): Promise<PrivatePayOutcome>;
+
+interface PrivatePayResult {
+  account: Address;
+  txHash: Hex;
+}
+
+type PrivatePayOutcome =
+  | { ok: true; result: PrivatePayResult }
+  | { ok: false; vetoed: true; reason: string; riskReasons?: string[] };
+```
+
+For an existing, funded PUSH account: reads the on-chain policy, asks the co-signer
+to authorize (it may veto), then settles with its signature alone.
+
+```ts
+const outcome = await settlePrivatePayment(clients, account, amount, cosigner, { owner });
+if (!outcome.ok) console.warn('Vetoed:', outcome.reason);
+else console.log('Paid:', outcome.result.txHash);
+```
+
+### The co-signer
+
+"The Machine" authorizes every spend. It does not merely warn: it withholds the
+signature, so a spend that fails policy or the risk firewall is impossible, not a
+click-through. Both implementations satisfy the `CoSigner` interface.
+
+```ts
+interface CoSigner {
+  precheck(req: PrecheckRequest): Promise<PrecheckResult>;
+  authorize(req: AuthorizeRequest): Promise<AuthorizeResult>;
+  readonly address: Address;
+}
+
+class LocalCoSigner implements CoSigner {
+  constructor(privateKey: Hex, opts?: LocalCoSignerOptions);
+}
+
+class RemoteCoSigner implements CoSigner {
+  constructor(endpoint: string, address: Address, fetchImpl?: typeof fetch);
+}
+
+interface LocalCoSignerOptions {
+  riskCheck?: RiskCheck;         // if omitted, every target is vetoed (fail-closed)
+  vetoOn?: 'block' | 'warning';  // veto threshold; default 'block'
+}
+
+type RiskCheck = (owner: Address, target: Address) => Promise<RiskVerdict | null>;
+
+interface RiskVerdict {
+  level: 'safe' | 'warning' | 'block';
+  complete: boolean;
+  reasons?: string[];
+}
+```
+
+- `LocalCoSigner` runs in-process (tests, and inside the server). Fail-closed: any
+  policy breach, risk block, or unavailable risk data withholds the signature. With
+  no `riskCheck` configured it vetoes every target.
+- `RemoteCoSigner` lives behind an HTTP endpoint, the real shape: The Machine runs
+  server-side (a TEE), never in the browser. It forwards only the trust-agnostic
+  fields; the server re-reads the policy from chain, so anything the browser claims
+  about `target`, `nonce`, `remaining` or `expiry` is ignored by design.
+
+Request and result types:
+
+```ts
+interface PrecheckRequest {
+  owner: Address;
+  target: Address;
+  amount: bigint;
+}
+type PrecheckResult = { approved: true } | { approved: false; reason: string; riskReasons?: string[] };
+
+interface SpendRequest {
+  account: Address;
+  owner: Address;
+  amount: bigint;
+  action: SpendAction;
+}
+
+interface AuthorizeRequest extends SpendRequest {
+  target: Address;
+  nonce: bigint;
+  chainId: number;
+  remaining: bigint;
+  expiry: number;  // unix seconds
+  now?: number;    // injectable for tests
+}
+type AuthorizeResult =
+  | { approved: true; signature: Hex }
+  | { approved: false; reason: string; riskReasons?: string[] };
+```
+
+`precheck` runs only the firewall on the intended target before any account
+exists, so a bad payment is vetoed before anything is created or funded.
+`authorize` validates the chain-sourced request (amount positive, within
+`remaining`, not expired), re-runs the firewall on the chain `target`, then signs
+the exact EIP-712 spend the contract will verify.
+
+### EIP-712 digest helpers
+
+```ts
+function spendTypedData(p: SpendDigestParams): {
+  domain: TypedDataDomain;
+  types: typeof SPEND_TYPES;
+  primaryType: 'Spend';
+  message: { target: Address; amount: bigint; nonce: bigint; action: SpendAction };
+};
+function spendDigest(p: SpendDigestParams): Hex; // the 32-byte digest; equals account.spendDigest(amount, action)
+function ownerHash(owner: Address): Hex;          // keccak256(abi.encode(owner)) - the CREATE2 salt binding
+function vaultHash(vault: Address): Hex;          // keccak256(abi.encode(vault)) - the return-address commitment
+
+interface SpendDigestParams {
+  account: Address;   // becomes the EIP-712 verifyingContract
+  chainId: number;
+  target: Address;
+  amount: bigint;
+  nonce: bigint;
+  action: SpendAction;
+}
+
+const ACTION_PAY = 0;   // SpendAction
+const ACTION_PULL = 1;  // SpendAction
+const SPEND_DOMAIN_NAME = 'Ctrl+ArcZ SpendPolicy';
+const SPEND_DOMAIN_VERSION = '1';
+// SPEND_TYPES - the EIP-712 `Spend(address target,uint256 amount,uint256 nonce,uint8 action)` type
+```
+
+The domain binds `chainId` and `verifyingContract = account`, so a signature is
+un-replayable across accounts or chains; the nonce makes it un-replayable within an
+account; and `action` keeps a pay authorization from standing in for a pull. Both
+`ownerHash` and `vaultHash` are one-way: an observer reading the account learns
+nothing, and only someone who already knows the address can recompute the hash.
+
+More: [The co-signer](/guides/co-signer).
+
+## Errors
+
+All SDK errors extend `CtrlArcZError`, so `catch (e) { if (e instanceof
+CtrlArcZError) ... }` catches every one.
+
+| Class | Raised by | Carries |
+| --- | --- | --- |
+| `CtrlArcZError` | base class | - |
+| `RiskBlockedError` | `sendProtected*` when the firewall blocks | `report: RiskReport`, `reasons: string[]` |
+| `TransferUnavailableError` | `claim` / `cancel` / `reclaimExpired` on bad state | `reason: TransferUnavailableReason` |
+| `WrongClaimCodeError` | `claim` with a wrong code | `transferId`, `attemptsRemaining`, `txHash` |
+| `TransferLockedError` | `claim` after 5 wrong guesses | `transferId`, `txHash` |
+| `ClaimOutcomeUnknownError` | `claim` mined but no outcome event | `txHash` |
+
+`TransferUnavailableReason` is `'not_pending' | 'expired' | 'unknown' |
+'not_sender'`. Full handling patterns are in
+[Errors and results](/guides/errors-and-results).
+
+## ABIs
+
+For direct contract calls, the SDK exports the ABIs it uses:
+
+- `ctrlArcZAbi`, `codeClaimVerifierAbi`, `memoAbi` - the protected-transfer stack.
+- `spendPolicyFactoryAbi`, `spendPolicyAccountAbi`, `vaultAbi` - the payer-side
+  shield.
+
+```ts
+import { spendPolicyAccountAbi, readAccount } from '@ctrl-arcz/sdk';
+// use the ABI directly with viem, or prefer the typed wrappers like readAccount above
+```
+
+## Next
+
+<CardGroup cols={2}>
+  <Card title="Private Pay" icon="user-secret" href="/guides/private-pay">
+    Pay a merchant from a disposable address under the co-signer's veto.
+  </Card>
+  <Card title="Protected transfer" icon="shield-check" href="/guides/protected-transfer">
+    Code-gated claim, sender cancel, automatic refund.
+  </Card>
+  <Card title="Contracts" icon="file-contract" href="/reference/contracts">
+    The on-chain surface behind the SDK.
+  </Card>
+</CardGroup>
