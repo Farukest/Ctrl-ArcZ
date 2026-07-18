@@ -84,9 +84,9 @@ export const CODE_CLAIM_VERIFIER_ADDRESS =
 // Payer-side shield (identity-free accounts: no owner stored, co-signer-only pay,
 // hashed vault commitment, per-pull cap, EIP-712). Deployed on Arc Testnet.
 export const SPEND_POLICY_FACTORY_ADDRESS =
-  '0x1fe8f917adC5B37D8162eaCC44706528351f0639' as `0x${string}`;
+  '0x645aeD361e8DDE054c9292Fdb708DAa59bc52128' as `0x${string}`;
 export const SPEND_POLICY_ACCOUNT_IMPL_ADDRESS =
-  '0xb90C1475939Ce136E370f30074ADc9169Be5ac2f' as `0x${string}`;
+  '0x3E3d587A2C3F2FFeB564D5E0EE0c43419987bF0F' as `0x${string}`;
 export const SHIELD_VAULT_ADDRESS = '0xc8185AF46b882368b771E8E8a1C8abe1C8e4127f' as `0x${string}`;
 
 /**

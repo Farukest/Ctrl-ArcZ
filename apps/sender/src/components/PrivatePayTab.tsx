@@ -3,7 +3,6 @@ import { parseUnits, isAddress, erc20Abi, type Address, type Hex } from 'viem';
 import {
   ADDRESSES,
   SPEND_POLICY_FACTORY_ADDRESS,
-  predictEphemeral,
   createEphemeral,
   readAccount,
   submitPay,
@@ -123,8 +122,7 @@ export function PrivatePayTab({ session }: { session: Session }) {
       // 2. Create the disposable address, locked to this merchant. It stores no
       //    payer identity — only a hash of the owner (as the salt) and of the vault.
       setPhase('creating');
-      const account = await predictEphemeral(clients.publicClient, SPEND_POLICY_FACTORY_ADDRESS, owner, salt);
-      await createEphemeral(clients, SPEND_POLICY_FACTORY_ADDRESS, salt, {
+      const { account } = await createEphemeral(clients, SPEND_POLICY_FACTORY_ADDRESS, salt, {
         token: USDC,
         owner,
         cosigner: cosignerAddress,

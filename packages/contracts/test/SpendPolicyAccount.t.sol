@@ -42,11 +42,12 @@ contract SpendPolicyAccountTest is Test {
 
     // ---- helpers ----
 
-    function _create(SpendPolicyAccount.Mode mode, uint256 perPullMax, uint40 interval)
+    function _params(SpendPolicyAccount.Mode mode, uint256 perPullMax, uint40 interval)
         internal
-        returns (SpendPolicyAccount acct)
+        view
+        returns (SpendPolicyFactory.InitParams memory)
     {
-        SpendPolicyFactory.InitParams memory p = SpendPolicyFactory.InitParams({
+        return SpendPolicyFactory.InitParams({
             token: IERC20(address(usdc)),
             cosigner: cosigner,
             vaultHash: vaultHash,
@@ -57,7 +58,13 @@ contract SpendPolicyAccountTest is Test {
             interval: interval,
             mode: mode
         });
-        address a = factory.createAccount(ownerHash, bytes32(uint256(1)), p);
+    }
+
+    function _create(SpendPolicyAccount.Mode mode, uint256 perPullMax, uint40 interval)
+        internal
+        returns (SpendPolicyAccount acct)
+    {
+        address a = factory.createAccount(ownerHash, bytes32(uint256(1)), _params(mode, perPullMax, interval));
         acct = SpendPolicyAccount(payable(a));
     }
 
@@ -86,7 +93,8 @@ contract SpendPolicyAccountTest is Test {
     // ------------------------------------------------------------------
 
     function test_factory_deploysAtPredictedAddress_andInitializes() public {
-        address predicted = factory.predictAddress(ownerHash, bytes32(uint256(1)));
+        address predicted =
+            factory.predictAddress(ownerHash, bytes32(uint256(1)), _params(SpendPolicyAccount.Mode.PUSH, 0, 0));
         SpendPolicyAccount acct = _push();
         assertEq(address(acct), predicted, "predicted != actual");
         assertEq(acct.cosigner(), cosigner);
@@ -105,9 +113,22 @@ contract SpendPolicyAccountTest is Test {
     }
 
     function test_predict_boundToOwnerHash() public view {
-        address a = factory.predictAddress(ownerHash, bytes32(uint256(1)));
-        address b = factory.predictAddress(keccak256(abi.encode(stranger)), bytes32(uint256(1)));
+        SpendPolicyFactory.InitParams memory p = _params(SpendPolicyAccount.Mode.PUSH, 0, 0);
+        address a = factory.predictAddress(ownerHash, bytes32(uint256(1)), p);
+        address b = factory.predictAddress(keccak256(abi.encode(stranger)), bytes32(uint256(1)), p);
         assertTrue(a != b, "same salt different owner must differ");
+    }
+
+    /// The salt commits to the policy: the same owner + userSalt with a different
+    /// target (or cosigner, cap, vault) yields a different address, so a front-run
+    /// with a substituted policy cannot occupy the payer's predicted slot.
+    function test_predict_boundToPolicy() public view {
+        bytes32 salt = bytes32(uint256(1));
+        address a = factory.predictAddress(ownerHash, salt, _params(SpendPolicyAccount.Mode.PUSH, 0, 0));
+        SpendPolicyFactory.InitParams memory evil = _params(SpendPolicyAccount.Mode.PUSH, 0, 0);
+        evil.target = stranger; // attacker swaps the target
+        address b = factory.predictAddress(ownerHash, salt, evil);
+        assertTrue(a != b, "different policy must map to a different address");
     }
 
     // ------------------------------------------------------------------
@@ -333,9 +354,10 @@ contract SpendPolicyAccountTest is Test {
     // sweep — one-way valve to the committed vault, gated by the preimage
     // ------------------------------------------------------------------
 
-    function test_sweepToVault_correctVault_returnsEverything() public {
+    function test_sweepToVault_byVault_returnsEverything() public {
         SpendPolicyAccount acct = _push();
         _fund(acct, 77e6);
+        vm.prank(vault); // only the vault may sweep
         acct.sweepToVault(vault);
         assertEq(usdc.balanceOf(vault), 77e6, "not returned to vault");
         assertEq(usdc.balanceOf(address(acct)), 0);
@@ -344,16 +366,19 @@ contract SpendPolicyAccountTest is Test {
     function test_sweepToVault_wrongVault_reverts() public {
         SpendPolicyAccount acct = _push();
         _fund(acct, 10e6);
+        vm.prank(stranger); // caller == vault arg, but its hash does not match the commitment
         vm.expectRevert(SpendPolicyAccount.WrongVault.selector);
-        acct.sweepToVault(stranger); // does not match the commitment
+        acct.sweepToVault(stranger);
     }
 
-    function test_sweepToVault_anyoneWithThePreimageCanSubmit() public {
+    /// An observer who learned the vault preimage (it is the public funding source)
+    /// still cannot sweep to grief a pending pay: only the vault itself may.
+    function test_sweepToVault_nonVault_reverts_stopsGriefing() public {
         SpendPolicyAccount acct = _push();
         _fund(acct, 33e6);
-        vm.prank(stranger); // a relayer that knows the vault submits; funds still go home
+        vm.prank(stranger);
+        vm.expectRevert(SpendPolicyAccount.NotVault.selector);
         acct.sweepToVault(vault);
-        assertEq(usdc.balanceOf(vault), 33e6);
     }
 
     function test_sweepExpired_beforeExpiry_reverts() public {

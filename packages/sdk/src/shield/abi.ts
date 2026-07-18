@@ -108,6 +108,58 @@ export const spendPolicyFactoryAbi = [
         "name": "userSalt",
         "type": "bytes32",
         "internalType": "bytes32"
+      },
+      {
+        "name": "p",
+        "type": "tuple",
+        "internalType": "struct SpendPolicyFactory.InitParams",
+        "components": [
+          {
+            "name": "token",
+            "type": "address",
+            "internalType": "contract IERC20"
+          },
+          {
+            "name": "cosigner",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "vaultHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "target",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "maxAmount",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "perPullMax",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "expiry",
+            "type": "uint40",
+            "internalType": "uint40"
+          },
+          {
+            "name": "interval",
+            "type": "uint40",
+            "internalType": "uint40"
+          },
+          {
+            "name": "mode",
+            "type": "uint8",
+            "internalType": "enum SpendPolicyAccount.Mode"
+          }
+        ]
       }
     ],
     "outputs": [
@@ -613,6 +665,11 @@ export const spendPolicyAccountAbi = [
   {
     "type": "error",
     "name": "NotExpiredYet",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NotVault",
     "inputs": []
   },
   {

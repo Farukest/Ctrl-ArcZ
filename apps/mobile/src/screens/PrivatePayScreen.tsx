@@ -5,7 +5,6 @@ import {
   ADDRESSES,
   arcTestnet,
   SPEND_POLICY_FACTORY_ADDRESS,
-  predictEphemeral,
   createEphemeral,
   readAccount,
   submitPay,
@@ -64,8 +63,7 @@ export function PrivatePayScreen() {
       }
 
       setPhase('creating');
-      const account = await predictEphemeral(session.publicClient, SPEND_POLICY_FACTORY_ADDRESS, owner, salt);
-      await createEphemeral(clients, SPEND_POLICY_FACTORY_ADDRESS, salt, {
+      const { account } = await createEphemeral(clients, SPEND_POLICY_FACTORY_ADDRESS, salt, {
         token: ADDRESSES.USDC as Address,
         owner,
         cosigner: cosignerAddress,

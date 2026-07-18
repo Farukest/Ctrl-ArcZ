@@ -83,6 +83,7 @@ contract SpendPolicyAccount is ReentrancyGuard {
     error BadCosignerSig();
     error NotExpiredYet();
     error WrongVault();
+    error NotVault();
 
     /// @dev On Arc a USDC ERC-20 transfer moves native balance, so a contract must
     ///      accept native value to be fundable. Costs nothing on a plain EVM.
@@ -158,11 +159,13 @@ contract SpendPolicyAccount is ReentrancyGuard {
     // Return home — the one-way valve to the vault
     // ------------------------------------------------------------------
 
-    /// @notice Sweep the whole balance back to the vault. Authorized by knowledge
-    ///         of the vault address (its hash must match the stored commitment), so
-    ///         no signature is needed and the vault stays hidden until this call.
-    ///         Doubles as revoke and refund-collection.
+    /// @notice Sweep the whole balance back to the vault. Only the vault itself may
+    ///         call this. The vault address is observable on-chain (it is the
+    ///         funding source), so its hash is NOT a secret capability; gating on
+    ///         msg.sender stops an observer from front-running a pending pay with a
+    ///         sweep to grief the payment. Doubles as revoke and refund-collection.
     function sweepToVault(address vault) external nonReentrant {
+        if (msg.sender != vault) revert NotVault();
         if (keccak256(abi.encode(vault)) != vaultHash) revert WrongVault();
         _sweep(vault);
     }

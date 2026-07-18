@@ -51,26 +51,51 @@ export interface EphemeralPolicy {
   mode: SpendMode;
 }
 
-/** The deterministic address `createEphemeral` will occupy — fund it before it exists. */
+/** The on-chain InitParams tuple for a policy. */
+function paramsTuple(policy: EphemeralPolicy) {
+  return {
+    token: policy.token,
+    cosigner: policy.cosigner,
+    vaultHash: toVaultHash(policy.vault),
+    target: policy.target,
+    maxAmount: policy.maxAmount,
+    perPullMax: policy.perPullMax ?? 0n,
+    expiry: policy.expiry,
+    interval: policy.interval,
+    mode: policy.mode,
+  } as const;
+}
+
+/**
+ * The deterministic address `createEphemeral` will occupy — fund it before it
+ * exists. The address commits to the full policy, so a different policy maps to a
+ * different address (a front-runner cannot occupy this slot with a substituted
+ * target/cosigner/cap/vault).
+ */
 export async function predictEphemeral(
   publicClient: PublicClient,
   factory: Address,
-  owner: Address,
   salt: Hex,
+  policy: EphemeralPolicy,
 ): Promise<Address> {
   return publicClient.readContract({
     address: factory,
     abi: spendPolicyFactoryAbi,
     functionName: 'predictAddress',
-    args: [toOwnerHash(owner), salt],
+    args: [toOwnerHash(policy.owner), salt, paramsTuple(policy)],
   }) as Promise<Address>;
 }
 
 /**
- * Deploy + initialize the disposable account. Returns its (predicted) address.
- * Anyone may submit this (the address is bound to `ownerHash`, not to msg.sender),
- * so an integrator can deploy it through a relayer to keep the payer off the
- * deployment transaction entirely.
+ * Deploy + initialize the disposable account. Returns its address. Anyone may
+ * submit this (the address is bound to `ownerHash` + the policy, not to
+ * msg.sender), so an integrator can deploy through a relayer.
+ *
+ * After deploying, it READS BACK the account's policy and verifies it matches
+ * before returning, so a caller never funds an account someone else occupied with
+ * a different policy. (With the policy-committed salt this cannot happen, but the
+ * check also covers a benign identical-params front-run, where the deploy tx
+ * reverts yet the correct account exists.)
  */
 export async function createEphemeral(
   clients: ShieldClients,
@@ -79,31 +104,43 @@ export async function createEphemeral(
   policy: EphemeralPolicy,
 ): Promise<{ account: Address; txHash: Hex }> {
   const sender = requireAccount(clients.walletClient);
-  const predicted = await predictEphemeral(clients.publicClient, factory, policy.owner, salt);
+  const account = await predictEphemeral(clients.publicClient, factory, salt, policy);
   const txHash = await clients.walletClient.writeContract({
     address: factory,
     abi: spendPolicyFactoryAbi,
     functionName: 'createAccount',
-    args: [
-      toOwnerHash(policy.owner),
-      salt,
-      {
-        token: policy.token,
-        cosigner: policy.cosigner,
-        vaultHash: toVaultHash(policy.vault),
-        target: policy.target,
-        maxAmount: policy.maxAmount,
-        perPullMax: policy.perPullMax ?? 0n,
-        expiry: policy.expiry,
-        interval: policy.interval,
-        mode: policy.mode,
-      },
-    ],
+    args: [toOwnerHash(policy.owner), salt, paramsTuple(policy)],
     account: sender,
     chain: clients.walletClient.chain ?? null,
   });
   await clients.publicClient.waitForTransactionReceipt({ hash: txHash });
-  return { account: predicted, txHash };
+  await assertDeployedPolicy(clients.publicClient, account, policy);
+  return { account, txHash };
+}
+
+/** Confirm the deployed account carries exactly the intended policy. Throws if the
+ *  account is missing or any identity-bearing field differs — the guard the caller
+ *  relies on before funding. */
+async function assertDeployedPolicy(
+  publicClient: PublicClient,
+  account: Address,
+  policy: EphemeralPolicy,
+): Promise<void> {
+  const at = { address: account, abi: spendPolicyAccountAbi } as const;
+  const [cosigner, target, vaultHash, maxAmount] = (await Promise.all([
+    publicClient.readContract({ ...at, functionName: 'cosigner' }),
+    publicClient.readContract({ ...at, functionName: 'target' }),
+    publicClient.readContract({ ...at, functionName: 'vaultHash' }),
+    publicClient.readContract({ ...at, functionName: 'maxAmount' }),
+  ])) as [Address, Address, Hex, bigint];
+  const ok =
+    cosigner.toLowerCase() === policy.cosigner.toLowerCase() &&
+    target.toLowerCase() === policy.target.toLowerCase() &&
+    vaultHash === toVaultHash(policy.vault) &&
+    maxAmount === policy.maxAmount;
+  if (!ok) {
+    throw new Error('ephemeral account policy mismatch: refusing to fund (possible front-run)');
+  }
 }
 
 /** Fund an ephemeral account from the vault (owner only). The APS-confidential leg. */

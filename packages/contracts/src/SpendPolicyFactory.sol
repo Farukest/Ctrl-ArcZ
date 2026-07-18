@@ -52,7 +52,7 @@ contract SpendPolicyFactory {
         external
         returns (address account)
     {
-        bytes32 salt = _salt(ownerHash, userSalt);
+        bytes32 salt = _salt(ownerHash, userSalt, p);
         account = Clones.cloneDeterministic(implementation, salt);
         SpendPolicyAccount(payable(account)).init(
             p.token, p.cosigner, p.vaultHash, p.target, p.maxAmount, p.perPullMax, p.expiry, p.interval, p.mode
@@ -60,13 +60,23 @@ contract SpendPolicyFactory {
         emit AccountCreated(account, ownerHash, p.target, p.maxAmount, userSalt);
     }
 
-    /// @notice The address `createAccount(ownerHash, userSalt, ...)` will occupy.
+    /// @notice The address `createAccount(ownerHash, userSalt, p)` will occupy.
     ///         Lets the payer fund the ephemeral address before it is deployed.
-    function predictAddress(bytes32 ownerHash, bytes32 userSalt) external view returns (address) {
-        return Clones.predictDeterministicAddress(implementation, _salt(ownerHash, userSalt), address(this));
+    /// @dev The salt commits to the FULL policy `p`, so a different policy yields a
+    ///      different address. An attacker cannot occupy the payer's predicted slot
+    ///      with a substituted policy (target, cosigner, cap, vault); the worst a
+    ///      front-runner can do is deploy the payer's exact intended account, which
+    ///      is harmless. Callers must still verify the deployed policy before
+    ///      funding (see the SDK's createEphemeral).
+    function predictAddress(bytes32 ownerHash, bytes32 userSalt, InitParams calldata p)
+        external
+        view
+        returns (address)
+    {
+        return Clones.predictDeterministicAddress(implementation, _salt(ownerHash, userSalt, p), address(this));
     }
 
-    function _salt(bytes32 ownerHash, bytes32 userSalt) private pure returns (bytes32) {
-        return keccak256(abi.encode(ownerHash, userSalt));
+    function _salt(bytes32 ownerHash, bytes32 userSalt, InitParams calldata p) private pure returns (bytes32) {
+        return keccak256(abi.encode(ownerHash, userSalt, keccak256(abi.encode(p))));
     }
 }
