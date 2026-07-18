@@ -80,8 +80,10 @@ export function serve(routes: Routes): void {
       json(res, 502, { error: 'internal error' });
     }
   });
-  server.listen(env.port, () => {
+  // Bind to loopback only: the API is reached exclusively through the nginx
+  // reverse proxy (TLS), never directly, so port 8787 is not exposed on the host.
+  server.listen(env.port, '127.0.0.1', () => {
     // eslint-disable-next-line no-console
-    console.log(`ctrl-arcz api listening on :${env.port}`);
+    console.log(`ctrl-arcz api listening on 127.0.0.1:${env.port}`);
   });
 }
