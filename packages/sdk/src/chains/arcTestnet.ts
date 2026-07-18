@@ -81,12 +81,13 @@ export const CTRL_ARCZ_ADDRESS = '0x8dAb7148cdc31DAcad6d7e12161AA3DEDb572Dca' as
 export const CODE_CLAIM_VERIFIER_ADDRESS =
   '0x2C0f268DE2Aa8BB2ab27F2Ea5Ae8a0f9a0E068c4' as `0x${string}`;
 
-// Payer-side shield (deployed via DeployShield.s.sol on Arc Testnet).
+// Payer-side shield (identity-free accounts: no owner stored, co-signer-only pay,
+// hashed vault commitment, per-pull cap, EIP-712). Deployed on Arc Testnet.
 export const SPEND_POLICY_FACTORY_ADDRESS =
-  '0x8Be610e77D3ab629EA4Cd4CBA2097B8a16dD3808' as `0x${string}`;
+  '0x1fe8f917adC5B37D8162eaCC44706528351f0639' as `0x${string}`;
 export const SPEND_POLICY_ACCOUNT_IMPL_ADDRESS =
-  '0xA75746F436bd9342F4434714A5121254B02Ad28f' as `0x${string}`;
-export const SHIELD_VAULT_ADDRESS = '0xB3Cfd5c3b72b09351071E9C2023eD8DA2A76244C' as `0x${string}`;
+  '0xb90C1475939Ce136E370f30074ADc9169Be5ac2f' as `0x${string}`;
+export const SHIELD_VAULT_ADDRESS = '0xc8185AF46b882368b771E8E8a1C8abe1C8e4127f' as `0x${string}`;
 
 /**
  * Block CtrlArcZ was deployed at. Event queries start here, never from 0: Arc's

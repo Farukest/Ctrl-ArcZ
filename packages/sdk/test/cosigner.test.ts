@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { recoverMessageAddress, type Address } from 'viem';
+import { recoverTypedDataAddress, type Address } from 'viem';
 import { LocalCoSigner, type RiskVerdict } from '../src/shield/cosigner.js';
-import { payStructHash } from '../src/shield/digest.js';
+import { spendTypedData, ACTION_PAY } from '../src/shield/digest.js';
 
 const COSIGNER_PK = '0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d';
 const OWNER = '0x0000000000000000000000000000000000000a11' as Address;
 const ACCOUNT = '0x0000000000000000000000000000000000000acc' as Address;
 const MERCHANT = '0x0000000000000000000000000000000000000b22' as Address;
 const DRAINER = '0x000000000000000000000000000000000000dead' as Address;
-const CHAIN = 5042002n;
+const CHAIN = 5042002;
 
 const safe: RiskVerdict = { level: 'safe', complete: true };
 const blocked: RiskVerdict = { level: 'block', complete: true, reasons: ['known drainer'] };
@@ -17,30 +17,35 @@ function req(overrides: Partial<Parameters<LocalCoSigner['authorize']>[0]> = {})
   return {
     account: ACCOUNT,
     owner: OWNER,
-    target: MERCHANT,
     amount: 50n,
+    action: ACTION_PAY,
+    // chain-sourced policy (the server reads these; here they are provided directly)
+    target: MERCHANT,
     nonce: 0n,
     chainId: CHAIN,
-    policy: { lockedTarget: MERCHANT, remaining: 100n, expiry: 4_000_000_000 },
+    remaining: 100n,
+    expiry: 4_000_000_000,
     now: 1_000_000_000,
     ...overrides,
   };
 }
 
 describe('LocalCoSigner (The Machine)', () => {
-  it('signs a clean, in-policy request; the signature recovers to the cosigner', async () => {
+  it('signs a clean, in-policy request; the EIP-712 signature recovers to the cosigner', async () => {
     const cs = new LocalCoSigner(COSIGNER_PK, { riskCheck: async () => safe });
     const res = await cs.authorize(req());
     expect(res.approved).toBe(true);
     if (!res.approved) return;
-    const hash = payStructHash({ account: ACCOUNT, target: MERCHANT, amount: 50n, nonce: 0n, chainId: CHAIN });
-    const recovered = await recoverMessageAddress({ message: { raw: hash }, signature: res.signature });
+    const recovered = await recoverTypedDataAddress({
+      ...spendTypedData({ account: ACCOUNT, chainId: CHAIN, target: MERCHANT, amount: 50n, nonce: 0n, action: ACTION_PAY }),
+      signature: res.signature,
+    });
     expect(recovered.toLowerCase()).toBe(cs.address.toLowerCase());
   });
 
   it('vetoes when the firewall blocks the target', async () => {
     const cs = new LocalCoSigner(COSIGNER_PK, { riskCheck: async () => blocked });
-    const res = await cs.authorize(req({ target: DRAINER, policy: { lockedTarget: DRAINER, remaining: 100n, expiry: 4_000_000_000 } }));
+    const res = await cs.authorize(req({ target: DRAINER }));
     expect(res.approved).toBe(false);
     if (res.approved) return;
     expect(res.riskReasons).toContain('known drainer');
@@ -68,20 +73,25 @@ describe('LocalCoSigner (The Machine)', () => {
     expect(res.approved).toBe(false);
   });
 
-  it('vetoes a target that does not match the locked policy (redirect attempt)', async () => {
-    const cs = new LocalCoSigner(COSIGNER_PK, { riskCheck: async () => safe });
-    const res = await cs.authorize(req({ target: DRAINER })); // policy still locks MERCHANT
-    expect(res.approved).toBe(false);
-    if (res.approved) return;
-    expect(res.reason).toMatch(/locked policy target/);
-  });
-
   it('vetoes over-limit and expired requests', async () => {
     const cs = new LocalCoSigner(COSIGNER_PK, { riskCheck: async () => safe });
     const over = await cs.authorize(req({ amount: 500n }));
     expect(over.approved).toBe(false);
     const expired = await cs.authorize(req({ now: 5_000_000_000 }));
     expect(expired.approved).toBe(false);
+  });
+
+  it('binds the action tag: a pay authorization does not recover for a pull digest', async () => {
+    const cs = new LocalCoSigner(COSIGNER_PK, { riskCheck: async () => safe });
+    const res = await cs.authorize(req({ action: ACTION_PAY }));
+    expect(res.approved).toBe(true);
+    if (!res.approved) return;
+    // recovering against action=PULL(1) must NOT yield the cosigner
+    const recovered = await recoverTypedDataAddress({
+      ...spendTypedData({ account: ACCOUNT, chainId: CHAIN, target: MERCHANT, amount: 50n, nonce: 0n, action: 1 }),
+      signature: res.signature,
+    });
+    expect(recovered.toLowerCase()).not.toBe(cs.address.toLowerCase());
   });
 
   it('vetoOn: warning is stricter than the default', async () => {

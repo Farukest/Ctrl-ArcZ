@@ -122,7 +122,6 @@ describe.runIf(RUN && OWNER_PK && COSIGNER_PK && MERCHANT)('shield on Arc Testne
     const before = await balanceOf(merchant);
     const outcome = await settlePrivatePayment(clients, account, PAY, cosigner, {
       owner: owner.address,
-      vault: SHIELD_VAULT_ADDRESS,
     });
     expect(outcome.ok, JSON.stringify(outcome)).toBe(true);
     expect((await balanceOf(merchant)) - before).toBe(PAY);

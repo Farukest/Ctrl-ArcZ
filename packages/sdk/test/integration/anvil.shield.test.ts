@@ -127,7 +127,6 @@ describe('shield on-chain cross-check (anvil)', () => {
     const before = await balanceOf(MERCHANT);
     const outcome = await settlePrivatePayment({ publicClient, walletClient }, account, 50_000_000n, cosigner, {
       owner: owner.address,
-      vault: VAULT,
     });
     expect(outcome.ok, JSON.stringify(outcome)).toBe(true);
 
@@ -163,7 +162,6 @@ describe('shield on-chain cross-check (anvil)', () => {
     const before = await balanceOf(MERCHANT);
     const outcome = await settlePrivatePayment({ publicClient, walletClient }, account, 50_000_000n, cosigner, {
       owner: owner.address,
-      vault: VAULT,
     });
     expect(outcome.ok).toBe(false);
     if (!outcome.ok) expect(outcome.vetoed).toBe(true);

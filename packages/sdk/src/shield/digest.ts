@@ -1,64 +1,90 @@
-import { keccak256, encodeAbiParameters, toBytes, type Address, type Hex } from 'viem';
+import {
+  hashTypedData,
+  keccak256,
+  encodeAbiParameters,
+  type Address,
+  type Hex,
+  type TypedDataDomain,
+} from 'viem';
 
 /**
- * Digest builders for `SpendPolicyAccount`, mirroring the contract byte-for-byte.
+ * EIP-712 typed-data builders for `SpendPolicyAccount`, mirroring the contract
+ * byte-for-byte.
  *
- * The account requires signatures over a struct hash that binds `address(this)`,
- * the locked `target`, the `amount`, the current `nonce` and `chainId`. Binding
- * the account address and chain makes a signature un-replayable across accounts
- * or chains; the nonce makes it un-replayable within one account. The account
- * then verifies `ECDSA.recover(toEthSignedMessageHash(structHash), sig)`, so a
- * wallet signs the struct hash as a personal_sign message (`{ raw: structHash }`).
+ * The co-signer authorizes a spend by signing a `Spend(address target,uint256
+ * amount,uint256 nonce,uint8 action)` struct. The domain binds `chainId` and
+ * `verifyingContract = account`, so a signature is un-replayable across accounts
+ * or chains; the nonce makes it un-replayable within one account; and `action`
+ * (0 = pay, 1 = pull) keeps a pay authorization from ever standing in for a pull.
+ *
+ * Typed data (rather than a bare 32-byte hash) means any wallet that ever needs
+ * to show one of these renders the fields — target, amount — instead of an opaque
+ * hex blob. The payer never signs one of these at all: a spend needs only the
+ * co-signer's signature, and the payer's sole action is a normal USDC transfer.
  */
 
-const ACTION_TYPEHASH = keccak256(
-  toBytes('SpendPolicyAction(address account,address target,uint256 amount,uint256 nonce,uint256 chainId)'),
-);
-const SWEEP_TYPEHASH = keccak256(
-  toBytes('SpendPolicySweep(address account,address vault,uint256 nonce,uint256 chainId)'),
-);
+export const SPEND_DOMAIN_NAME = 'Ctrl+ArcZ SpendPolicy';
+export const SPEND_DOMAIN_VERSION = '1';
 
-export interface PayDigestParams {
+export const ACTION_PAY = 0 as const;
+export const ACTION_PULL = 1 as const;
+export type SpendAction = typeof ACTION_PAY | typeof ACTION_PULL;
+
+export const SPEND_TYPES = {
+  Spend: [
+    { name: 'target', type: 'address' },
+    { name: 'amount', type: 'uint256' },
+    { name: 'nonce', type: 'uint256' },
+    { name: 'action', type: 'uint8' },
+  ],
+} as const;
+
+export interface SpendDigestParams {
+  /** The account; becomes the EIP-712 `verifyingContract`. */
   account: Address;
+  /** The domain chainId. */
+  chainId: number;
   target: Address;
   amount: bigint;
   nonce: bigint;
-  chainId: bigint;
+  action: SpendAction;
+}
+
+function domain(account: Address, chainId: number): TypedDataDomain {
+  return {
+    name: SPEND_DOMAIN_NAME,
+    version: SPEND_DOMAIN_VERSION,
+    chainId,
+    verifyingContract: account,
+  };
+}
+
+/** The full EIP-712 payload for `walletClient.signTypedData` / `account.signTypedData`. */
+export function spendTypedData(p: SpendDigestParams) {
+  return {
+    domain: domain(p.account, p.chainId),
+    types: SPEND_TYPES,
+    primaryType: 'Spend' as const,
+    message: { target: p.target, amount: p.amount, nonce: p.nonce, action: p.action },
+  };
+}
+
+/** The final 32-byte EIP-712 digest — equals the account's `spendDigest(amount, action)`. */
+export function spendDigest(p: SpendDigestParams): Hex {
+  return hashTypedData(spendTypedData(p));
 }
 
 /**
- * The 32-byte struct hash a wallet/enclave signs (via `signMessage({ message: { raw } })`)
- * to authorize paying/pulling `amount` from `account` to its locked target.
+ * Commitment helpers. The account stores no payer identity: the owner is bound
+ * only through `ownerHash` (the CREATE2 salt) and the return address only through
+ * `vaultHash`. Both are `keccak256(abi.encode(address))`, one-way — an observer
+ * reading the account learns nothing, and only someone who already knows the
+ * address can recompute the hash.
  */
-export function payStructHash(p: PayDigestParams): Hex {
-  return keccak256(
-    encodeAbiParameters(
-      [
-        { type: 'bytes32' },
-        { type: 'address' },
-        { type: 'address' },
-        { type: 'uint256' },
-        { type: 'uint256' },
-        { type: 'uint256' },
-      ],
-      [ACTION_TYPEHASH, p.account, p.target, p.amount, p.nonce, p.chainId],
-    ),
-  );
+export function ownerHash(owner: Address): Hex {
+  return keccak256(encodeAbiParameters([{ type: 'address' }], [owner]));
 }
 
-export interface SweepDigestParams {
-  account: Address;
-  vault: Address;
-  nonce: bigint;
-  chainId: bigint;
-}
-
-/** The struct hash the owner signs to sweep an account back to its vault. */
-export function sweepStructHash(p: SweepDigestParams): Hex {
-  return keccak256(
-    encodeAbiParameters(
-      [{ type: 'bytes32' }, { type: 'address' }, { type: 'address' }, { type: 'uint256' }, { type: 'uint256' }],
-      [SWEEP_TYPEHASH, p.account, p.vault, p.nonce, p.chainId],
-    ),
-  );
+export function vaultHash(vault: Address): Hex {
+  return keccak256(encodeAbiParameters([{ type: 'address' }], [vault]));
 }
