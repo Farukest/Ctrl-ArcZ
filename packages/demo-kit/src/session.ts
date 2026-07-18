@@ -6,10 +6,38 @@ import {
   type Address,
   type EIP1193Provider,
   type PublicClient,
+  type Transport,
   type WalletClient,
 } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { arcTestnet, ARC_TESTNET_CHAIN_ID, RPC_URL, type ClientPair } from '@ctrl-arcz/sdk';
+
+/**
+ * The public Arc RPC returns JSON-RPC error -32011 "request limit reached" under
+ * load, which viem does not retry (it is not a 5xx/timeout). Wrap the transport to
+ * back off and retry on exactly that, so a rate-limit blip does not break a flow.
+ */
+function rlHttp(url: string): Transport {
+  const inner = http(url, { retryCount: 6, retryDelay: 1200, timeout: 30_000 });
+  return ((params) => {
+    const t = inner(params);
+    const request = async (args: unknown, opts?: unknown) => {
+      for (let i = 0; ; i++) {
+        try {
+          return await (t.request as (a: unknown, o?: unknown) => Promise<unknown>)(args, opts);
+        } catch (e) {
+          const m = String((e as Error)?.message ?? e);
+          if (i < 20 && /request limit|rate limit|429|-32011/i.test(m)) {
+            await new Promise((r) => setTimeout(r, 1800));
+            continue;
+          }
+          throw e;
+        }
+      }
+    };
+    return { ...t, request } as typeof t;
+  }) as Transport;
+}
 
 export interface Session {
   address: Address;
@@ -21,7 +49,12 @@ export interface Session {
 
 const publicClient: PublicClient = createPublicClient({
   chain: arcTestnet,
-  transport: http(RPC_URL),
+  transport: rlHttp(RPC_URL),
+  pollingInterval: 6000, // ease receipt polling against the rate-limited public RPC
+  // Coalesce concurrent readContract calls into a single Multicall3 RPC request.
+  // readAccount fires 6 reads at once; batching turns them into ONE call, which
+  // matters a lot against a rate-limited public RPC.
+  batch: { multicall: { wait: 20 } },
 });
 
 export function getPublicClient(): PublicClient {
@@ -38,7 +71,7 @@ export function localSigner(privateKey: `0x${string}`): ClientPair {
   const walletClient: WalletClient = createWalletClient({
     account,
     chain: arcTestnet,
-    transport: http(RPC_URL),
+    transport: rlHttp(RPC_URL),
   });
   return { publicClient, walletClient };
 }

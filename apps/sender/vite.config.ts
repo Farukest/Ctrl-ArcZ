@@ -144,12 +144,65 @@ function crossChainApi(
   };
 }
 
+/**
+ * The co-signer ("The Machine") endpoint. Holds the enclave key server-side and,
+ * on each spend request, validates it against the account's on-chain policy and
+ * the poisoning firewall, then returns the second signature or a veto. GET returns
+ * the co-signer's public address so the browser can lock it into new accounts.
+ */
+function cosignApi(env: Record<string, string>): Plugin {
+  return {
+    name: 'ctrl-arcz-api-cosign',
+    configureServer(server: ViteDevServer) {
+      server.middlewares.use('/api/cosign', async (req, res) => {
+        const send = (status: number, body: unknown) => {
+          res.statusCode = status;
+          res.setHeader('content-type', 'application/json');
+          res.end(JSON.stringify(body, (_k, v) => (typeof v === 'bigint' ? v.toString() : v)));
+        };
+        if (!isSameOrigin(req as never)) return send(403, { error: 'forbidden' });
+        const privateKey = env.COSIGNER_PK;
+        if (!privateKey) return send(400, { error: 'no co-signer key configured' });
+        try {
+          const mod = (await server.ssrLoadModule('@ctrl-arcz/demo-kit/cosign')) as {
+            cosign: (p: { privateKey: string; body: unknown }) => Promise<unknown>;
+            cosignerAddress: (pk: string) => string;
+          };
+          if (req.method === 'GET') return send(200, { address: mod.cosignerAddress(privateKey) });
+          if (req.method !== 'POST') return send(405, { error: 'method not allowed' });
+
+          const chunks: Uint8Array[] = [];
+          let size = 0;
+          for await (const c of req) {
+            const chunk = c as Uint8Array;
+            size += chunk.length;
+            if (size > MAX_BODY_BYTES) return send(413, { error: 'payload too large' });
+            chunks.push(chunk);
+          }
+          let body: unknown;
+          try {
+            body = JSON.parse(Buffer.concat(chunks).toString() || '{}');
+          } catch {
+            return send(400, { error: 'invalid json' });
+          }
+          const result = await mod.cosign({ privateKey, body });
+          return send(200, result);
+        } catch (e) {
+          server.config.logger.error(`/api/cosign failed: ${e instanceof Error ? e.message : e}`);
+          return send(502, { error: 'co-signer failed' });
+        }
+      });
+    },
+  };
+}
+
 export default defineConfig(({ command, mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   assertNoLeakedSecrets(env, command);
   return {
     plugins: [
       react(),
+      cosignApi(env),
       crossChainApi(
         env,
         '/api/bridge',
