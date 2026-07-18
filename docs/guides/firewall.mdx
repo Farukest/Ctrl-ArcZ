@@ -1,0 +1,68 @@
+---
+title: Poisoning firewall
+description: "Scan a recipient before you send. Fail-closed by default."
+---
+
+The firewall is the real anti-poisoning defense: a victim sends to a lookalike
+*on purpose*, so locking funds afterwards does not help. Only refusing does. It
+runs before anything is signed.
+
+## Check a recipient
+
+```ts
+import { check } from '@ctrl-arcz/sdk';
+
+const report = await check(sender, target, { client: publicClient });
+// report: { level: 'safe' | 'warning' | 'block', reasons, complete }
+```
+
+<ResponseField name="level" type="'safe' | 'warning' | 'block'">
+  The worst severity found. `block` must stop the send.
+</ResponseField>
+<ResponseField name="reasons" type="RiskReason[]">
+  Each with a `code`, `severity` and human `message`.
+</ResponseField>
+<ResponseField name="complete" type="boolean">
+  True only when every data source answered. An incomplete check never reports
+  `safe`.
+</ResponseField>
+
+## What it catches
+
+| Code | Severity | Meaning |
+| --- | --- | --- |
+| `LOOKALIKE_ADDRESS` | block | Matches the first/last characters of an address you have paid, but is different. |
+| `ZERO_VALUE_BAIT` | block | The target planted itself in your history with a 0-value transfer. |
+| `DATA_UNAVAILABLE` | block\* | Your payment history could not be fetched, so a lookalike cannot be ruled out. |
+| `NEW_ADDRESS` / `FRESH_ADDRESS` | warning | No history, or minted in the last 24h. |
+| `KNOWN_COUNTERPARTY` / `VERIFIED_RECIPIENT` | safe | You have paid this exact address, or a protected transfer to it settled. |
+
+<Info>
+**Fail-closed.** When the sender's payment history is unavailable, the lookalike
+rule cannot run, so an unverified target is **blocked**, not waved through. A
+firewall that degrades to "looks fine" when its data source is down is worse than
+none.
+</Info>
+
+## Gate a send on it
+
+```ts
+import { check, shouldBlockSend, defineConfig } from '@ctrl-arcz/sdk';
+
+const config = defineConfig({ onWarning: 'block' }); // or 'proceed'
+const report = await check(sender, target, { client: publicClient });
+
+if (shouldBlockSend(config, report.level)) {
+  // show report.reasons, refuse the send
+}
+```
+
+## It is already on inside `sendProtected`
+
+You do not have to remember to call it. `sendProtected` runs the check itself and
+throws `RiskBlockedError` on a block. Opt out per call only if you already gated:
+
+```ts
+await sendProtected(clients, params, { skipRiskCheck: true }); // you already ran check()
+await sendProtected(clients, params, { onWarning: 'block' });  // also stop warnings
+```

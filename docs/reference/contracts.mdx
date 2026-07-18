@@ -1,0 +1,61 @@
+---
+title: Contracts
+description: "Deployed contracts, addresses, and their key functions."
+---
+
+All contracts are deployed on Arc Testnet (chain `5042002`) and verifiable on
+[ArcScan](https://testnet.arcscan.app). No admin, no pause, no upgrade path:
+funds are only ever with the user or the contract.
+
+## Addresses
+
+| Contract | Address |
+| --- | --- |
+| `CtrlArcZ` | `0x8dAb7148cdc31DAcad6d7e12161AA3DEDb572Dca` |
+| `SpendPolicyFactory` | `0x8Be610e77D3ab629EA4Cd4CBA2097B8a16dD3808` |
+| `SpendPolicyAccount` (impl) | `0xA75746F436bd9342F4434714A5121254B02Ad28f` |
+| `Vault` | `0xB3Cfd5c3b72b09351071E9C2023eD8DA2A76244C` |
+| USDC | `0x3600000000000000000000000000000000000000` |
+| Permit2 | `0x000000000022D473030F116dDEE9F6B43aC78BA3` |
+
+## CtrlArcZ — protected transfer
+
+The escrow. Registers per-integrator configs and holds transfers until claimed,
+cancelled or reclaimed.
+
+| Function | Purpose |
+| --- | --- |
+| `createConfig(recallWindow, claimMode, feeBps, feeRecipient)` | Register integrator behaviour; returns `configId`. |
+| `sendProtected(configId, to, amount, claimHash)` | Lock funds for `to`, releasable with the claim secret. |
+| `claim(transferId, code, salt)` | Release to the recorded recipient. Returns `false` on a wrong code. |
+| `cancel(transferId)` | Sender reclaims, any time before a claim. |
+| `reclaimExpired(transferId)` | Anyone refunds an expired transfer to the sender. |
+
+## SpendPolicyFactory + SpendPolicyAccount
+
+The payer-side shield. The factory clones a policy-bound account per intent; the
+account enforces the policy and the 2-of-2.
+
+| Function | Purpose |
+| --- | --- |
+| `createAccount(userSalt, params)` | Clone + init a disposable account; salt bound to the owner. |
+| `predictAddress(owner, userSalt)` | The deterministic address, so you can fund it first. |
+| `pay(amount, ownerSig, cosignerSig)` | PUSH: 2-of-2 spend to the locked target. |
+| `pull(amount, cosignerSig)` | PULL: cosigner-gated recurring spend. |
+| `sweepToVault(ownerSig)` | Owner returns the balance to the vault, any time. |
+| `sweepExpired()` | Anyone returns an expired account home. Liveness escape hatch. |
+
+Signatures are over `keccak256(SpendPolicyAction, account, target, amount, nonce,
+chainId)`, bound to the account and chain so they cannot be replayed. Use
+`payStructHash` in the SDK to build the exact bytes.
+
+## Vault
+
+Holds the owner's USDC, funds accounts, receives sweeps. Owner-only outflows; the
+`_moveOut` seam is where the APS confidential transfer will slot in.
+
+<Note>
+On Arc a USDC ERC-20 transfer moves the recipient's native balance, so the account
+and vault implement `receive() payable`. Without it, funding a contract on Arc
+would revert; a plain EVM never surfaces this.
+</Note>

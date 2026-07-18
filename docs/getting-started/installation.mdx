@@ -1,0 +1,68 @@
+---
+title: Installation
+description: "Install the SDK and set up viem clients for Arc."
+---
+
+## Install
+
+<CodeGroup>
+
+```bash npm
+npm install @ctrl-arcz/sdk viem
+```
+
+```bash pnpm
+pnpm add @ctrl-arcz/sdk viem
+```
+
+</CodeGroup>
+
+The SDK is viem-based and ships ESM + CJS + types. `viem` is a peer dependency.
+
+## Set up clients
+
+Every SDK call takes a `ClientPair` (a viem public client for reads, a wallet
+client for writes). The chain is exported from the SDK.
+
+```ts
+import { createPublicClient, createWalletClient, http } from 'viem';
+import { privateKeyToAccount } from 'viem/accounts';
+import { arcTestnet, RPC_URL } from '@ctrl-arcz/sdk';
+
+const account = privateKeyToAccount('0x...'); // or a browser wallet
+
+const publicClient = createPublicClient({ chain: arcTestnet, transport: http(RPC_URL) });
+const walletClient = createWalletClient({ account, chain: arcTestnet, transport: http(RPC_URL) });
+
+const clients = { publicClient, walletClient };
+```
+
+<Tip>
+Arc's public RPC is rate-limited. For a multi-transaction flow, wrap the transport
+to back off on the JSON-RPC error `-32011` ("request limit reached"), which viem
+does not retry by default, and enable Multicall3 batching on the public client
+(`batch: { multicall: true }`) to collapse concurrent reads into one request.
+</Tip>
+
+## Addresses
+
+Contract addresses live in one place and are exported from the SDK, so you never
+hardcode them:
+
+```ts
+import {
+  ADDRESSES,                     // USDC, Permit2, Memo, CCTP, Gateway, ...
+  CTRL_ARCZ_ADDRESS,             // protected-transfer contract
+  SPEND_POLICY_FACTORY_ADDRESS,  // payer-shield account factory
+  SHIELD_VAULT_ADDRESS,          // demo vault
+} from '@ctrl-arcz/sdk';
+```
+
+| Contract | Arc Testnet address |
+| --- | --- |
+| CtrlArcZ (protected transfer) | `0x8dAb7148cdc31DAcad6d7e12161AA3DEDb572Dca` |
+| SpendPolicyFactory | `0x8Be610e77D3ab629EA4Cd4CBA2097B8a16dD3808` |
+| Vault | `0xB3Cfd5c3b72b09351071E9C2023eD8DA2A76244C` |
+| USDC (native gas token) | `0x3600000000000000000000000000000000000000` |
+
+Next: the [quickstart](/getting-started/quickstart).

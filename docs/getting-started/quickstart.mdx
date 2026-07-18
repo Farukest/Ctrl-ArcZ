@@ -1,0 +1,84 @@
+---
+title: Quickstart
+description: "Send a protected USDC transfer with the firewall on, in a few lines."
+---
+
+This sends USDC through the protected-transfer contract with the poisoning
+firewall running by default. If the recipient looks like a poisoning lookalike or
+has baited you with a zero-value transfer, the send is refused before any funds
+move.
+
+<Steps>
+
+<Step title="Register a config once">
+A config encodes your integrator behaviour (recall window, claim mode, optional
+fee). It is content-addressed, so calling it on every boot is free.
+
+```ts
+import { defineConfig, registerConfig } from '@ctrl-arcz/sdk';
+
+const { configId } = await registerConfig(clients, defineConfig({ recallWindow: 3600 }));
+```
+</Step>
+
+<Step title="Create a claim secret">
+The recipient will claim with a short code; the salt is the entropy that keeps the
+6-digit code safe from brute force.
+
+```ts
+import { generateClaimCode } from '@ctrl-arcz/sdk';
+
+const secret = generateClaimCode(); // { code, salt, claimHash }
+```
+</Step>
+
+<Step title="Send, protected">
+`sendProtected` runs the firewall itself and throws `RiskBlockedError` on a block
+before it submits. No funds move on a block.
+
+```ts
+import { approveUsdc, sendProtected, parseUsdc } from '@ctrl-arcz/sdk';
+
+const amount = parseUsdc('5'); // 5 USDC, 6 decimals
+await approveUsdc(clients, amount);
+
+const { transferId, txHash } = await sendProtected(clients, {
+  configId,
+  to: recipient,
+  amount,
+  claimHash: secret.claimHash,
+});
+```
+
+<Warning>
+Deliver the `code` to the recipient through your normal channel with them. The
+protection is that a wrong or poisoned recipient cannot claim without it, and you
+can `cancel` to reclaim.
+</Warning>
+</Step>
+
+<Step title="Recipient claims">
+```ts
+import { claim } from '@ctrl-arcz/sdk';
+
+await claim(recipientClients, transferId, secret.code, secret.salt);
+```
+</Step>
+
+</Steps>
+
+## What just happened
+
+<CardGroup cols={3}>
+  <Card title="Layer 1 — firewall" icon="shield-halved">
+    `sendProtected` scanned the recipient and would have refused a lookalike or
+    bait address. See [the firewall guide](/guides/firewall).
+  </Card>
+  <Card title="Layer 2 — escrow" icon="lock">
+    Funds were held by the contract, claimable only with the code, refundable to
+    you. See [protected transfer](/guides/protected-transfer).
+  </Card>
+  <Card title="Payer privacy" icon="user-secret">
+    To also hide your wallet from the recipient, use [Private Pay](/guides/private-pay).
+  </Card>
+</CardGroup>

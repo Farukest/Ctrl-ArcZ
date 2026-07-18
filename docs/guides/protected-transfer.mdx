@@ -1,0 +1,74 @@
+---
+title: Protected transfer
+description: "Escrowed, code-claimed USDC transfers that make a wrong send recoverable."
+---
+
+A protected transfer locks USDC in a contract instead of sending it straight to an
+address. The recipient claims it with a short code; if the address was wrong or
+poisoned, the wrong party cannot claim and you reclaim. It replaces the "send $1
+first and wait" ritual.
+
+## Send
+
+```ts
+import { approveUsdc, sendProtected, generateClaimCode, parseUsdc } from '@ctrl-arcz/sdk';
+
+const amount = parseUsdc('5');
+const secret = generateClaimCode(); // { code, salt, claimHash }
+
+await approveUsdc(clients, amount);
+const { transferId, txHash, deadline } = await sendProtected(clients, {
+  configId, to: recipient, amount, claimHash: secret.claimHash,
+});
+```
+
+Give the recipient the `code`. Anyone can submit the claim, but the funds always
+go to the recorded recipient, so a claim is front-run-safe.
+
+## Claim
+
+```ts
+import { claim } from '@ctrl-arcz/sdk';
+
+const claimed = await claim(clients, transferId, code, salt);
+```
+
+<Warning>
+A wrong code does **not** revert; it returns `false` and counts an attempt. After
+5 wrong attempts the transfer locks (anti-brute-force). The SDK `claim` throws on
+a failed attempt, so check its result rather than treating a mined tx as success.
+</Warning>
+
+## Cancel and refund
+
+Unclaimed money belongs to the sender. There is no deadline on getting it back.
+
+<CardGroup cols={2}>
+  <Card title="cancel(transferId)" icon="rotate-left">
+    Sender only, allowed any time before a claim lands, and on a locked transfer.
+  </Card>
+  <Card title="reclaimExpired(transferId)" icon="clock-rotate-left">
+    Callable by anyone once the recall window lapses; funds only ever go back to
+    the sender. No keeper required.
+  </Card>
+</CardGroup>
+
+```ts
+import { cancel, reclaimExpired, getTransfer } from '@ctrl-arcz/sdk';
+
+await cancel(clients, transferId);
+await reclaimExpired(clients, transferId);
+const t = await getTransfer(clients, transferId); // status, deadline, attempts, ...
+```
+
+## Approve-less sends
+
+To skip a per-send `approve`, use Permit2: one-time `approvePermit2(clients)`, then
+`sendProtectedWithPermit` signs an off-chain permit per send.
+
+```ts
+import { approvePermit2, sendProtectedWithPermit } from '@ctrl-arcz/sdk';
+
+await approvePermit2(clients); // once
+await sendProtectedWithPermit(clients, { configId, to, amount, claimHash });
+```

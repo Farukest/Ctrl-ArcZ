@@ -1,0 +1,57 @@
+---
+title: Ctrl+ArcZ
+description: "Protected USDC transfers and payer-side privacy on Arc."
+mode: wide
+---
+
+Ctrl+ArcZ is a security layer for USDC payments on Arc. It covers **both sides** of
+a payment: it protects the recipient you send to (address poisoning), and it
+protects you when you pay (doxxing and drainers). It ships as a TypeScript SDK, a
+set of smart contracts, and reference apps.
+
+<CardGroup cols={2}>
+  <Card title="Private Pay" icon="user-secret" href="/guides/private-pay">
+    Pay a merchant from a fresh, single-use address so they never see your main
+    wallet, guarded by an enclave co-signer that vetoes bad spends.
+  </Card>
+  <Card title="Poisoning firewall" icon="shield-halved" href="/guides/firewall">
+    A pre-send scan that refuses a lookalike or zero-value-bait recipient before
+    any funds move. Fail-closed by default.
+  </Card>
+  <Card title="Protected transfer" icon="lock" href="/guides/protected-transfer">
+    Escrowed, code-claimed transfers: a wrong or poisoned send is recoverable,
+    and the recipient claims with a short code.
+  </Card>
+  <Card title="The Machine (co-signer)" icon="robot" href="/guides/co-signer">
+    The enclave half of a 2-of-2. It does not warn, it vetoes: a spend that fails
+    policy or the firewall is physically impossible.
+  </Card>
+</CardGroup>
+
+## Why Arc
+
+Ctrl+ArcZ is built for Arc because Arc is what makes it practical:
+
+- **USDC is the gas token.** Ephemeral payment addresses need no separate gas
+  funding, the detail that kills this design on other chains.
+- **Sub-second finality.** The create-fund-pay chain finishes in one breath, so a
+  private checkout feels instant.
+- **Circle tooling built in.** CCTP and Gateway move USDC in and out; Arc Privacy
+  Sector (APS) is the roadmap for confidential balances.
+
+## Install
+
+<CodeGroup>
+
+```bash npm
+npm install @ctrl-arcz/sdk viem
+```
+
+```bash pnpm
+pnpm add @ctrl-arcz/sdk viem
+```
+
+</CodeGroup>
+
+Then jump to the [quickstart](/getting-started/quickstart) or an integration
+guide above.

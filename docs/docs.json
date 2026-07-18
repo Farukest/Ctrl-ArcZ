@@ -1,0 +1,68 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "mint",
+  "name": "Ctrl+ArcZ",
+  "description": "Protected USDC transfers and payer-side privacy on Arc.",
+  "colors": {
+    "primary": "#f5a524",
+    "light": "#f7b955",
+    "dark": "#b4770c"
+  },
+  "appearance": {
+    "default": "dark"
+  },
+  "fonts": {
+    "heading": { "family": "Space Grotesk" },
+    "body": { "family": "DM Sans" }
+  },
+  "favicon": "/favicon.svg",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get started",
+            "pages": ["index", "getting-started/installation", "getting-started/quickstart"]
+          },
+          {
+            "group": "Integrate the SDK",
+            "pages": [
+              "guides/private-pay",
+              "guides/firewall",
+              "guides/protected-transfer",
+              "guides/co-signer"
+            ]
+          },
+          {
+            "group": "Concepts",
+            "pages": ["concepts/overview", "concepts/payer-shield"]
+          },
+          {
+            "group": "Reference",
+            "pages": ["reference/contracts"]
+          }
+        ]
+      }
+    ]
+  },
+  "navbar": {
+    "links": [
+      {
+        "label": "Arc testnet",
+        "href": "https://testnet.arcscan.app"
+      }
+    ],
+    "primary": {
+      "type": "button",
+      "label": "GitHub",
+      "href": "https://github.com/Farukest/Ctrl-ArcZ"
+    }
+  },
+  "footer": {
+    "socials": {
+      "x": "https://x.com/0xFlydev",
+      "github": "https://github.com/Farukest/Ctrl-ArcZ"
+    }
+  }
+}

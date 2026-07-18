@@ -1,3 +1,11 @@
+# local notes — never commit
+*.local.md
+/notes.local/
+
+# Mintlify local preview cache
+.mint/
+docs/.mint/
+
 # secrets — never commit
 .env
 .env.*

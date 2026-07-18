@@ -1,0 +1,144 @@
+---
+title: Private Pay
+description: "Pay a merchant from a fresh, single-use address, guarded by a co-signer that vetoes bad spends."
+---
+
+Private Pay pays a merchant from a **disposable address** created for that one
+payment, so the merchant never sees your main wallet, balance or history. Every
+spend is gated by a 2-of-2: your signature **and** an enclave co-signer ("The
+Machine") that vetoes a drainer, a lookalike, or an over-policy spend. A veto is
+not a warning; it withholds the second signature, so the payment is impossible.
+
+## The flow
+
+<Steps>
+
+<Step title="The Machine checks first">
+Ask the co-signer to authorize the spend on the **predicted** address, before
+anything is created. A veto here means nothing is deployed and no funds ever move.
+
+```ts
+import { predictEphemeral, RemoteCoSigner, SPEND_POLICY_FACTORY_ADDRESS } from '@ctrl-arcz/sdk';
+import { parseUnits } from 'viem';
+
+const amount = parseUnits('0.02', 6);
+const salt = randomSalt(); // 32 random bytes
+const expiry = Math.floor(Date.now() / 1000) + 900; // 15 minutes
+const chainId = BigInt(await publicClient.getChainId());
+
+// The co-signer's public address (served by your backend, see below).
+const { address: cosignerAddress } = await fetch('/api/cosign').then((r) => r.json());
+
+const account = await predictEphemeral(publicClient, SPEND_POLICY_FACTORY_ADDRESS, owner, salt);
+
+const cosigner = new RemoteCoSigner('/api/cosign', cosignerAddress);
+const auth = await cosigner.authorize({
+  account, owner, target: merchant, amount, nonce: 0n, chainId,
+  policy: { lockedTarget: merchant, remaining: amount, expiry },
+});
+
+if (!auth.approved) {
+  // The Machine vetoed it. Nothing was created.
+  console.warn('Vetoed:', auth.reason, auth.riskReasons);
+  return;
+}
+```
+</Step>
+
+<Step title="Create the disposable address">
+```ts
+import { createEphemeral, MODE_PUSH, ADDRESSES, SHIELD_VAULT_ADDRESS } from '@ctrl-arcz/sdk';
+
+await createEphemeral(clients, SPEND_POLICY_FACTORY_ADDRESS, salt, {
+  token: ADDRESSES.USDC,
+  owner,
+  cosigner: cosignerAddress,
+  vault: SHIELD_VAULT_ADDRESS,
+  target: merchant,   // the address is locked to this merchant on-chain
+  maxAmount: amount,  // cumulative cap, enforced on-chain
+  expiry,
+  interval: 0,
+  mode: MODE_PUSH,
+});
+```
+
+The account is a minimal-proxy clone at a deterministic address bound to `owner`,
+so it can be funded before it exists and no one can front-run its slot.
+</Step>
+
+<Step title="Fund it">
+Move USDC into the disposable address. In production this leg is confidential
+(Arc Privacy Sector); today it is a plain transfer.
+
+```ts
+import { erc20Abi } from 'viem';
+
+const fundHash = await walletClient.writeContract({
+  address: ADDRESSES.USDC, abi: erc20Abi, functionName: 'transfer',
+  args: [account, amount], account: walletClient.account, chain: arcTestnet,
+});
+await publicClient.waitForTransactionReceipt({ hash: fundHash });
+```
+
+<Note>
+On Arc a USDC ERC-20 transfer moves native balance, so the account and vault
+implement `receive()`. This is handled by the deployed contracts.
+</Note>
+</Step>
+
+<Step title="Pay">
+You sign the same struct hash the co-signer signed (nonce 0), then submit both
+signatures. The funds can only reach the locked `target`, so anyone may submit.
+
+```ts
+import { payStructHash, submitPay } from '@ctrl-arcz/sdk';
+
+const digest = payStructHash({ account, target: merchant, amount, nonce: 0n, chainId });
+const ownerSig = await walletClient.signMessage({ account: walletClient.account, message: { raw: digest } });
+
+const txHash = await submitPay(clients, account, amount, ownerSig, auth.signature);
+```
+
+The merchant receives USDC from a zero-history address. Your vault stays private.
+</Step>
+
+</Steps>
+
+## One call
+
+For a straightforward push payment you can skip the manual steps with
+`settlePrivatePayment`, which reads the account, runs the co-signer, signs and
+submits:
+
+```ts
+import { settlePrivatePayment } from '@ctrl-arcz/sdk';
+
+const outcome = await settlePrivatePayment(clients, account, amount, cosigner, {
+  owner, vault: SHIELD_VAULT_ADDRESS,
+});
+if (!outcome.ok) console.warn('Vetoed:', outcome.reason);
+else console.log('Paid:', outcome.result.txHash);
+```
+
+## Recovery and refunds
+
+The disposable address is a one-way valve: funds can only go to the locked
+merchant or back to your vault.
+
+- **Enclave down / abandoned:** after `expiry`, anyone may call `sweepExpired` to
+  return the balance to the vault. No co-signer needed.
+- **Refund:** the merchant refunds to the disposable address; `sweepExpired`
+  sweeps it home.
+- **Cancel early:** the owner can `sweepToVault(account)` any time.
+
+```ts
+import { sweepExpired, sweepToVault } from '@ctrl-arcz/sdk';
+
+await sweepToVault(clients, account, SHIELD_VAULT_ADDRESS); // owner, any time
+await sweepExpired(clients, account);                       // anyone, after expiry
+```
+
+## Next
+
+- Run the guard server-side: [The co-signer](/guides/co-signer).
+- Understand the model: [Payer-side shield](/concepts/payer-shield).

@@ -1,0 +1,68 @@
+---
+title: Payer-side shield
+description: "Disposable addresses, the co-signer veto, and the one-way valve."
+---
+
+The payer-side shield is a disposable virtual card for crypto. Three primitives:
+
+<CardGroup cols={3}>
+  <Card title="Vault" icon="vault">
+    Your main kasa. Holds USDC and funds disposable accounts. The funding leg is
+    the one that becomes confidential under Arc Privacy Sector.
+  </Card>
+  <Card title="Disposable account" icon="id-card">
+    A single-purpose address, locked to one merchant, one cap, one expiry. Cloned
+    per payment at a deterministic address bound to the owner.
+  </Card>
+  <Card title="The Machine" icon="robot">
+    The enclave co-signer. Runs policy plus the firewall and vetoes bad spends by
+    withholding the second signature.
+  </Card>
+</CardGroup>
+
+## The trust model
+
+- **Outbound to a third party (the merchant): 2-of-2.** Owner **and** co-signer.
+  The co-signer refuses a spend that fails policy or the firewall, so a bad
+  payment is physically impossible, not merely warned against.
+- **Return to your own vault: 1-of-1.** Owner alone, any time; and by anyone once
+  expired. This is the liveness escape hatch: if the enclave ever goes dark, funds
+  are never stranded, they sweep home.
+
+The account is a **one-way valve**: funds can only reach the locked merchant or
+the vault. There is no third exit, so even a stolen owner key cannot redirect an
+expired account's balance anywhere but your own vault.
+
+## What a veto stops
+
+Because the target is locked on-chain, a script cannot redirect a payment. The
+co-signer adds the dynamic layer: it will not sign for a target the firewall
+flags as a drainer or a poisoning lookalike, an amount over the cap, or an expired
+window. In whole-wallet mode the same veto can gate every outflow, not just
+payments.
+
+## Privacy, honestly
+
+Today the vault-to-account funding leg is a plain transfer, so on-chain **payer
+privacy is not yet delivered** here; the merchant sees a clean, zero-history
+address, but a chain analyst could still correlate amounts and timing. The
+security legs (policy, veto, sweep, one-way valve) are fully real now.
+
+<Info>
+**Roadmap: Arc Privacy Sector (APS).** APS is Arc's confidential execution
+environment (TEE-based, running alongside the public EVM). When it ships, the
+funding leg and account state move into APS and become confidential, and the same
+co-signer speaks the same language as Arc's own privacy backend. The contracts are
+architected for this: custody behind an adapter, getter-first reads (not
+event-dependent), and clean function-level access boundaries.
+</Info>
+
+## Beyond one-off payments
+
+The same account with `MODE_PULL` expresses recurring, policy-bounded spending:
+
+- **Safe allowances / subscriptions** — a merchant can pull up to a cap on an
+  interval, every pull gated by the co-signer. Kill the subscription by sweeping
+  the account; the co-signer stops signing. No infinite-approval drainer.
+- **Agent wallets** — hand an agent a tightly-scoped disposable account; it
+  transacts autonomously but cannot exceed policy, because the enclave vetoes.

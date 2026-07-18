@@ -1,0 +1,42 @@
+---
+title: Overview
+description: "A shield covering both sides of a USDC payment."
+---
+
+Ctrl+ArcZ protects **both sides** of a payment.
+
+<CardGroup cols={2}>
+  <Card title="Recipient side" icon="shield-halved">
+    You could send to the wrong or poisoned address. The **firewall** refuses a
+    lookalike or bait recipient before you send, and the **protected transfer**
+    makes a mistaken send recoverable.
+  </Card>
+  <Card title="Payer side" icon="user-secret">
+    Paying reveals your wallet and exposes you to drainers. **Private Pay** pays
+    from a disposable address, and **The Machine** vetoes bad spends.
+  </Card>
+</CardGroup>
+
+## The layers
+
+1. **Firewall** — a pre-send scan for poisoning. The actual protection, because
+   the attack is that you send to a lookalike on purpose. Fail-closed.
+2. **Protected transfer** — escrow with a code-claim and reclaim, so a wrong send
+   is not final.
+3. **Payer-side shield** — disposable, policy-bound addresses funded from a vault,
+   guarded by a 2-of-2 co-signer that vetoes.
+
+## Honest positioning
+
+This is defense-in-depth, not magic. A careful user who verifies every full
+address from a trusted source does not get poisoned and does not need it. Its
+value is catching the slip when discipline lapses, and making the slip
+non-catastrophic. It is the category of 2FA and transaction simulators, calibrated
+as "a safety net for human error and drainers," not "the unbreakable answer."
+
+## Why Arc
+
+The design is only practical on a chain where **gas is USDC** (ephemeral
+addresses need no separate gas), settlement is **sub-second** (the multi-step
+private checkout finishes instantly), and Circle tooling (CCTP, Gateway, and the
+Arc Privacy Sector roadmap) is built in.
