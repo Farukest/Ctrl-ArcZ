@@ -25,7 +25,8 @@ function assertNoLeakedSecrets(env: Record<string, string>, command: string): vo
 
 const MAX_BODY_BYTES = 4 * 1024;
 
-/** Reject cross-site requests: the demo browser calls this same-origin only. */
+/** Reject cross-site requests: the demo browser calls this same-origin only. In
+ *  production the site runs on PUBLIC_HOST (e.g. ctrlarcz.xyz), so allow that too. */
 function isSameOrigin(req: { headers: Record<string, string | string[] | undefined> }): boolean {
   const site = req.headers['sec-fetch-site'];
   if (typeof site === 'string' && site !== 'same-origin' && site !== 'none') return false;
@@ -33,7 +34,13 @@ function isSameOrigin(req: { headers: Record<string, string | string[] | undefin
   if (typeof origin === 'string') {
     try {
       const host = new URL(origin).hostname;
-      if (host !== 'localhost' && host !== '127.0.0.1') return false;
+      const allowed = new Set(['localhost', '127.0.0.1']);
+      const pub = process.env.PUBLIC_HOST;
+      if (pub) {
+        allowed.add(pub);
+        allowed.add(`www.${pub}`);
+      }
+      if (!allowed.has(host)) return false;
     } catch {
       return false;
     }
@@ -120,6 +127,14 @@ export default defineConfig(({ command, mode }) => {
   assertNoLeakedSecrets(env, command);
   return {
     plugins: [react(), gaslessApi(env)],
-    server: { port: 5174, strictPort: true },
+    server: {
+      port: Number(process.env.PORT) || 5174,
+      strictPort: true,
+      ...(process.env.HOST ? { host: process.env.HOST } : {}),
+      ...(process.env.PUBLIC_HOST
+        ? { allowedHosts: [process.env.PUBLIC_HOST, `www.${process.env.PUBLIC_HOST}`] }
+        : {}),
+      ...(process.env.NO_HMR ? { hmr: false as const } : {}),
+    },
   };
 });
