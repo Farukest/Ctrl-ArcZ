@@ -273,6 +273,13 @@ A follow-up pass closed the remaining findings with real tests:
   precheck dropped from ~220s (504 timeout) to ~3s for any target (two distinct
   targets, so not just the verdict cache). Together with the per-IP rate limit this
   closes the amplification surface too.
-- **Still documented (pre-ship):** full TLS certificate pinning for the mobile app
-  (a dev-client + pinning-library step; the funds-critical co-signer value is
-  already pinned above).
+- **TLS certificate pinning (mobile) — FIXED.** `apps/mobile/plugins/withCertPinning.js`
+  is an Expo config plugin that pins the SPKI hashes of `api.ctrlarcz.xyz` and
+  `rpc.testnet.arc.network` at the OS TLS layer (Android `network_security_config`
+  `<pin-set>` + iOS `NSPinnedDomains`), so it covers every backend fetch and every
+  viem RPC call, not just app-level fetches. It pins the Let's Encrypt roots (ISRG
+  Root X1/X2) plus the current issuing intermediates — surviving normal 90-day leaf
+  rotation while still rejecting a rogue-CA / mis-issued certificate, the exact MITM
+  pinning defends against. The Android pin-set carries an `expiration` safety valve
+  so a stale pin can never brick the app in the field. Enforced in the native (EAS)
+  build; Expo Go cannot pin. Validated via `expo config --type introspect`.

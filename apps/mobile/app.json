@@ -33,7 +33,8 @@
         {
           "cameraPermission": "Ctrl+ArcZ scans a recipient's QR code so the firewall can check it before you send."
         }
-      ]
+      ],
+      "./plugins/withCertPinning"
     ]
   }
 }
