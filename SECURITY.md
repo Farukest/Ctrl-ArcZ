@@ -234,3 +234,28 @@ app (`apps/mobile`). Three parallel reviews; findings below with status
    + TLS.
 6. Mobile: ship with Privy (the device key is interim), split the claim code
    out-of-band, and add screenshot protection + certificate pinning.
+
+## Resolution — production-hardening pass
+
+A follow-up pass closed the remaining findings with real tests:
+
+- **Backend relayer endpoints (was: CRITICAL, mitigated by disabling).** Now
+  **Fixed** and safe to expose: `/api/bridge`, `/api/gateway`, `/api/gasless-claim`
+  require an EIP-191 **signed request** (bound to path + timestamp + body-hash,
+  fresh within 120s) plus a **per-address daily quota**. Verified live and locally:
+  an unsigned request is 401, a tampered body is 401, and the 11th over-quota call
+  is 429. The relayer key stays out of the deployment until an operator enables it
+  behind this guard.
+- **Gasless lock-griefing (was: HIGH).** Now **Fixed**: the code is checked against
+  the transfer's on-chain `claimHash` off-chain, so a wrong code is rejected before
+  any sponsored/relayer transaction and cannot consume the 5-attempt lockout;
+  errors are generic. Logic covered by the `claimCode` tests.
+- **Co-signer PULL policy (was: LOW).** Now **Fixed**: an over-`perPullMax` or
+  too-soon PULL is vetoed before signing; unit-tested.
+- **Mobile claim QR bearer (was: HIGH) + snapshot exposure (was: MEDIUM).** Now
+  **Fixed**: the QR carries only `transferId + salt`; the 6-digit code is entered
+  separately and never co-located with the QR; the secret screen blocks
+  screenshots/snapshots (`expo-screen-capture`).
+- **Still documented (pre-ship / low):** mobile certificate pinning; co-signer
+  binding `owner` to an authenticated session (funds already locked to the
+  on-chain target, so LOW); the bridge amount-string normalization.
