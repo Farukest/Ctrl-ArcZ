@@ -238,5 +238,17 @@ export default defineConfig(({ command, mode }) => {
       // Disable HMR in production so no websocket needs proxying through nginx.
       ...(process.env.NO_HMR ? { hmr: false as const } : {}),
     },
+    // Production serves a static build via `vite preview` behind the same nginx
+    // proxy, so it needs the same host allow-list as the dev server above (preview
+    // uses its own config block, not `server`). Without this, preview answers the
+    // proxied Host with a 403 "host not allowed".
+    preview: {
+      port: Number(process.env.PORT) || 5173,
+      strictPort: true,
+      ...(process.env.HOST ? { host: process.env.HOST } : {}),
+      ...(process.env.PUBLIC_HOST
+        ? { allowedHosts: [process.env.PUBLIC_HOST, `www.${process.env.PUBLIC_HOST}`] }
+        : {}),
+    },
   };
 });
