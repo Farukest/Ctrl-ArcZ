@@ -1,94 +1,49 @@
-import React, { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
-import * as SecureStore from 'expo-secure-store';
-import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
-import type { Account, Address, Hex, PublicClient, WalletClient } from 'viem';
-import { publicClient, walletClientFromAccount } from './clients';
+import { useAccount, useDisconnect, useWalletClient } from 'wagmi';
+import { useAppKit } from '@reown/appkit-wagmi-react-native';
+import type { Address, PublicClient, WalletClient } from 'viem';
+import { publicClient } from './clients';
 
 /**
- * Wallet session the screens consume. This is the stable seam: the current
- * implementation is a local testnet key kept in the device Keychain/Keystore
- * (expo-secure-store), which makes the app fully functional (read balances, sign,
- * send) without a wallet app. It will be swapped for Privy, which yields the same
- * shape from either an embedded wallet (email/passkey) or an external wallet over
- * WalletConnect, so screens do not change.
+ * Wallet session the screens consume, backed by the user's OWN connected wallet
+ * (WalletConnect via wagmi/AppKit). There is NO local key: the private key stays in
+ * the user's wallet app (MetaMask/Rabby/...), which prompts for its own biometric or
+ * PIN on every signature. `walletClient` routes writes/signs to that wallet;
+ * `publicClient` is our own rate-limited read client.
  */
 export interface WalletSession {
   address: Address;
-  /** A local account (has signMessage/signTypedData), backed by the device key. */
-  account: ReturnType<typeof privateKeyToAccount>;
-  publicClient: PublicClient;
+  /** Signs/broadcasts through the connected external wallet. wagmi returns a viem
+   *  WalletClient at runtime; its inferred type is loose, so we assert viem's. */
   walletClient: WalletClient;
+  publicClient: PublicClient;
 }
 
-interface WalletContextValue {
+export interface WalletState {
   session: WalletSession | null;
   loading: boolean;
-  connect: () => Promise<void>;
-  disconnect: () => Promise<void>;
-  /** Permanently delete the key from secure storage. */
-  wipe: () => Promise<void>;
+  /** Open the wallet-picker modal (MetaMask, Rabby, Trust, ...). */
+  connect: () => void;
+  disconnect: () => void;
 }
 
-// Device-only so the key cannot ride an encrypted device backup off the phone.
-const STORE_OPTS: SecureStore.SecureStoreOptions = {
-  keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
-};
+export function useWallet(): WalletState {
+  const { address, isConnected } = useAccount();
+  const { data: walletClient, isLoading } = useWalletClient();
+  const { open } = useAppKit();
+  const { disconnect } = useDisconnect();
 
-const WalletContext = createContext<WalletContextValue | null>(null);
-const KEY_ID = 'ctrlarcz.devkey.v1';
+  const wc = walletClient as unknown as WalletClient | undefined;
+  const session: WalletSession | null =
+    isConnected && address && wc ? { address, walletClient: wc, publicClient } : null;
 
-export function WalletProvider({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<WalletSession | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  const sessionFromKey = (pk: Hex): WalletSession => {
-    const account = privateKeyToAccount(pk);
-    return {
-      address: account.address,
-      account,
-      publicClient,
-      walletClient: walletClientFromAccount(account),
-    };
+  return {
+    session,
+    loading: isLoading,
+    connect: () => {
+      void open();
+    },
+    disconnect: () => {
+      disconnect();
+    },
   };
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const pk = (await SecureStore.getItemAsync(KEY_ID)) as Hex | null;
-        if (pk) setSession(sessionFromKey(pk));
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, []);
-
-  const connect = async () => {
-    let pk = (await SecureStore.getItemAsync(KEY_ID)) as Hex | null;
-    if (!pk) {
-      pk = generatePrivateKey();
-      await SecureStore.setItemAsync(KEY_ID, pk, STORE_OPTS);
-    }
-    setSession(sessionFromKey(pk));
-  };
-
-  const disconnect = async () => {
-    setSession(null); // lock the session; the key stays in secure storage
-  };
-
-  const wipe = async () => {
-    await SecureStore.deleteItemAsync(KEY_ID);
-    setSession(null);
-  };
-
-  return (
-    <WalletContext.Provider value={{ session, loading, connect, disconnect, wipe }}>
-      {children}
-    </WalletContext.Provider>
-  );
-}
-
-export function useWallet(): WalletContextValue {
-  const ctx = useContext(WalletContext);
-  if (!ctx) throw new Error('useWallet must be used within a WalletProvider');
-  return ctx;
 }

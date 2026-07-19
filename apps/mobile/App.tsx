@@ -9,22 +9,22 @@ import {
   type LinkingOptions,
 } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { WalletProvider, useWallet } from './src/lib/wallet';
+import { WagmiProvider } from 'wagmi';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { AppKit } from '@reown/appkit-wagmi-react-native';
+import { wagmiConfig } from './src/lib/wagmi';
+import { useWallet } from './src/lib/wallet';
 import { Tabs, navigationRef } from './src/navigation';
 import { ConnectScreen } from './src/screens/ConnectScreen';
-import { registerPushToken } from './src/lib/notifications';
 import { theme } from './src/lib/theme';
 
 // The only route names a push notification is allowed to open.
 const KNOWN_SCREENS = new Set(['Home', 'Send', 'Scan', 'Receive', 'Private Pay']);
 
+const queryClient = new QueryClient();
+
 function Root() {
   const { session, loading } = useWallet();
-
-  // Register for push once connected; tapping a notification opens the tab it names.
-  useEffect(() => {
-    if (session) void registerPushToken(session);
-  }, [session]);
 
   useEffect(() => {
     const sub = Notifications.addNotificationResponseReceivedListener((resp) => {
@@ -77,13 +77,17 @@ const linking: LinkingOptions<Record<string, undefined>> = {
 
 export default function App() {
   return (
-    <SafeAreaProvider>
-      <WalletProvider>
-        <NavigationContainer ref={navigationRef} theme={navTheme} linking={linking}>
-          <StatusBar style="light" />
-          <Root />
-        </NavigationContainer>
-      </WalletProvider>
-    </SafeAreaProvider>
+    <WagmiProvider config={wagmiConfig}>
+      <QueryClientProvider client={queryClient}>
+        <SafeAreaProvider>
+          <NavigationContainer ref={navigationRef} theme={navTheme} linking={linking}>
+            <StatusBar style="light" />
+            <Root />
+          </NavigationContainer>
+          {/* AppKit's wallet-picker modal, mounted once at the root. */}
+          <AppKit />
+        </SafeAreaProvider>
+      </QueryClientProvider>
+    </WagmiProvider>
   );
 }

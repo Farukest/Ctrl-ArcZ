@@ -7,7 +7,6 @@ import { check, approveUsdc, sendProtected, generateClaimCode, CTRL_ARCZ_ADDRESS
 import { Screen, H1, Muted, Mono, Card, PrimaryButton, GhostButton } from '../ui';
 import { useWallet } from '../lib/wallet';
 import { getConfigId, encodeClaim } from '../lib/claim';
-import { confirmBiometric } from '../lib/biometrics';
 import { theme } from '../lib/theme';
 
 type Phase = 'form' | 'busy' | 'warn' | 'blocked' | 'done';
@@ -47,7 +46,6 @@ export function SendScreen() {
 
   const send = async () => {
     if (!session || !valid) return;
-    if (!(await confirmBiometric('Confirm this transfer'))) return;
     const recipient = to as Address;
     const value = parseUnits(amount, 6);
     setPhase('busy');

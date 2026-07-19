@@ -1,14 +1,4 @@
-import {
-  createPublicClient,
-  createWalletClient,
-  custom,
-  http,
-  type Account,
-  type EIP1193Provider,
-  type PublicClient,
-  type Transport,
-  type WalletClient,
-} from 'viem';
+import { createPublicClient, http, type PublicClient, type Transport } from 'viem';
 import { arcTestnet, RPC_URL } from '@ctrl-arcz/sdk';
 
 /**
@@ -48,14 +38,5 @@ export const publicClient: PublicClient = createPublicClient({
   batch: { multicall: { wait: 20 } },
 });
 
-/** A wallet client backed by a local account (the dev/embedded key path): it signs
- *  locally and broadcasts through the RPC. */
-export function walletClientFromAccount(account: Account): WalletClient {
-  return createWalletClient({ account, chain: arcTestnet, transport: rlHttp(RPC_URL) });
-}
-
-/** A wallet client backed by an injected EIP-1193 provider (the WalletConnect /
- *  external-wallet path): signing happens in the connected wallet. */
-export function walletClientFromProvider(provider: EIP1193Provider): WalletClient {
-  return createWalletClient({ chain: arcTestnet, transport: custom(provider) });
-}
+// The write/sign client comes from the connected external wallet (WalletConnect via
+// wagmi's useWalletClient), not from a local key — see src/lib/wallet.tsx.

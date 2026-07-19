@@ -37,10 +37,12 @@ export async function registerPushToken(session: WalletSession): Promise<void> {
     const token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
     // Prove control of the address so the backend only subscribes our own device.
     // Timestamped so a captured registration cannot be replayed later. Must match
-    // the server's registrationMessage byte-for-byte.
+    // the server's registrationMessage byte-for-byte. The connected wallet prompts
+    // the user to sign (so this runs on an explicit "Enable notifications" action,
+    // not automatically on connect).
     const ts = Date.now();
     const message = `Ctrl+ArcZ push registration\naddress: ${session.address.toLowerCase()}\ntoken: ${token}\nts: ${ts}`;
-    const signature = await session.account.signMessage({ message });
+    const signature = await session.walletClient.signMessage({ account: session.address, message });
     await fetch(`${API_BASE}/api/notifications/register`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },

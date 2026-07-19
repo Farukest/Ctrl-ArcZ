@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TextInput } from 'react-native';
 import { erc20Abi, isAddress, parseUnits, type Address, type Hex } from 'viem';
 import {
   ADDRESSES,
@@ -15,7 +15,6 @@ import {
 import { Screen, H1, Muted, Mono, Card, PrimaryButton, GhostButton } from '../ui';
 import { useWallet } from '../lib/wallet';
 import { API_BASE, EXPECTED_COSIGNER } from '../lib/config';
-import { confirmBiometric } from '../lib/biometrics';
 import { theme } from '../lib/theme';
 
 type Phase = 'form' | 'machine' | 'creating' | 'funding' | 'paying' | 'done' | 'vetoed';
@@ -40,7 +39,6 @@ export function PrivatePayScreen() {
 
   const run = async () => {
     if (!session || !valid) return;
-    if (!(await confirmBiometric('Confirm this private payment'))) return;
     const owner = session.address;
     const to = merchant as Address;
     const amt = parseUnits(amount, 6);
@@ -57,7 +55,7 @@ export function PrivatePayScreen() {
       }
       const cosigner = new RemoteCoSigner(`${API_BASE}/api/cosign`, cosignerAddress, undefined, {
         address: owner,
-        sign: (message) => session.account.signMessage({ message }),
+        sign: (message) => session.walletClient.signMessage({ account: owner, message }),
       });
       const salt = randomSalt();
       const expiry = Math.floor(Date.now() / 1000) + 900;
@@ -108,7 +106,7 @@ export function PrivatePayScreen() {
         abi: erc20Abi,
         functionName: 'transfer',
         args: [account, amt],
-        account: session.account,
+        account: owner,
         chain: arcTestnet,
       });
       await session.publicClient.waitForTransactionReceipt({ hash: fundHash });

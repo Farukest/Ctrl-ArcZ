@@ -1,20 +1,10 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { View } from 'react-native';
 import { Screen, H1, Muted, Card, PrimaryButton } from '../ui';
 import { useWallet } from '../lib/wallet';
 
 export function ConnectScreen() {
   const { connect } = useWallet();
-  const [busy, setBusy] = useState(false);
-
-  const onConnect = async () => {
-    setBusy(true);
-    try {
-      await connect();
-    } finally {
-      setBusy(false);
-    }
-  };
 
   return (
     <Screen>
@@ -26,10 +16,10 @@ export function ConnectScreen() {
         </Muted>
         <Card>
           <Muted>
-            This build uses a testnet key stored in your device Keychain so you can try every
-            flow. Embedded and WalletConnect sign-in are next.
+            Connect your own wallet (MetaMask, Rabby, Trust, and more). Your keys stay in your
+            wallet app, which approves every transaction.
           </Muted>
-          <PrimaryButton label="Start on Arc testnet" onPress={onConnect} loading={busy} />
+          <PrimaryButton label="Connect wallet" onPress={connect} />
         </Card>
       </View>
     </Screen>
