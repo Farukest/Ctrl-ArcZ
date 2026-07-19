@@ -266,6 +266,13 @@ A follow-up pass closed the remaining findings with real tests:
 - **Mobile co-signer pinning (part of M5).** Now **Fixed**: the app pins the
   expected co-signer address and refuses to bake any other into an account, so a
   MITM cannot substitute an attacker-controlled co-signer.
+- **Co-signer scan performance (relates to the HIGH cosign DoS).** A dedicated
+  `VerifiedRecipientIndex` backfills the `RecipientVerified` events once then polls
+  incrementally, and `check()` takes the sender's verified recipients from it
+  instead of scanning from the deploy block on every call. Measured live: the
+  precheck dropped from ~220s (504 timeout) to ~3s for any target (two distinct
+  targets, so not just the verdict cache). Together with the per-IP rate limit this
+  closes the amplification surface too.
 - **Still documented (pre-ship):** full TLS certificate pinning for the mobile app
   (a dev-client + pinning-library step; the funds-critical co-signer value is
   already pinned above).
