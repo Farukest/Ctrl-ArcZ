@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Ctrl+ArcZ",
-    "slug": "ctrl-arcz",
+    "slug": "ctrlarcz",
     "scheme": "ctrlarcz",
     "version": "0.1.0",
     "orientation": "portrait",
@@ -20,7 +20,11 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -34,6 +38,12 @@
         }
       ],
       "./plugins/withCertPinning"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "35e1e6fc-c69f-4731-b328-0ea4ab12eefd"
+      }
+    },
+    "owner": "flydevs-team"
   }
 }
