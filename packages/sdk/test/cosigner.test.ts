@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { recoverTypedDataAddress, type Address } from 'viem';
-import { LocalCoSigner, type RiskVerdict } from '../src/shield/cosigner.js';
+import { recoverTypedDataAddress, recoverMessageAddress, type Address } from 'viem';
+import { privateKeyToAccount } from 'viem/accounts';
+import { LocalCoSigner, cosignAuthMessage, type RiskVerdict } from '../src/shield/cosigner.js';
 import { spendTypedData, ACTION_PAY, ACTION_PULL } from '../src/shield/digest.js';
 
 const COSIGNER_PK = '0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d';
@@ -118,6 +119,25 @@ describe('LocalCoSigner (The Machine)', () => {
       req({ action: ACTION_PULL, amount: 10n, perPullMax: 20n, interval: 3_600, lastPull: 1_000_000_000 - 7_200 }),
     );
     expect(res.approved).toBe(true);
+  });
+
+  it('F3 owner auth: only the owner key produces a signature that recovers to owner', async () => {
+    const owner = privateKeyToAccount(COSIGNER_PK);
+    const attacker = privateKeyToAccount('0x0000000000000000000000000000000000000000000000000000000000000abc');
+    const ts = 1_700_000_000_000;
+    const message = cosignAuthMessage(owner.address, ts);
+
+    const good = await owner.signMessage({ message });
+    expect((await recoverMessageAddress({ message, signature: good })).toLowerCase()).toBe(
+      owner.address.toLowerCase(),
+    );
+
+    // An attacker signing the same message cannot recover to the owner (so the
+    // server's owner-auth check rejects a forged owner).
+    const bad = await attacker.signMessage({ message });
+    expect((await recoverMessageAddress({ message, signature: bad })).toLowerCase()).not.toBe(
+      owner.address.toLowerCase(),
+    );
   });
 
   it('vetoOn: warning is stricter than the default', async () => {

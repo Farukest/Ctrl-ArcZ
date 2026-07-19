@@ -1,9 +1,18 @@
-import { createPublicClient, http, isAddress, type Address, type Hex, type Transport } from 'viem';
+import {
+  createPublicClient,
+  http,
+  isAddress,
+  recoverMessageAddress,
+  type Address,
+  type Hex,
+  type Transport,
+} from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import {
   LocalCoSigner,
   readAccount,
   check,
+  cosignAuthMessage,
   arcTestnet,
   RPC_URL,
   CTRL_ARCZ_ADDRESS,
@@ -40,6 +49,31 @@ export interface CosignBody {
   target?: string;
   amount?: string;
   action?: number;
+  /** F3: the payer signs cosignAuthMessage(owner, ts) to prove control of owner. */
+  ownerSig?: string;
+  ownerSigTs?: number;
+}
+
+/** Verify the payer controls `owner` before the firewall is scoped to their
+ *  history. Returns a veto on failure, or null when authenticated. */
+async function verifyOwnerAuth(
+  body: CosignBody,
+): Promise<{ approved: false; reason: string } | null> {
+  const { owner, ownerSig, ownerSigTs } = body;
+  if (!owner || !isAddress(owner) || typeof ownerSig !== 'string' || typeof ownerSigTs !== 'number') {
+    return { approved: false, reason: 'owner authentication required' };
+  }
+  if (Math.abs(Date.now() - ownerSigTs) > 120_000) {
+    return { approved: false, reason: 'stale owner authentication' };
+  }
+  const recovered = await recoverMessageAddress({
+    message: cosignAuthMessage(owner as Address, ownerSigTs),
+    signature: ownerSig as Hex,
+  });
+  if (recovered.toLowerCase() !== owner.toLowerCase()) {
+    return { approved: false, reason: 'owner authentication failed' };
+  }
+  return null;
 }
 
 /**
@@ -145,6 +179,10 @@ export async function cosign(
   params: { privateKey: Hex; body: CosignBody },
 ): Promise<AuthorizeResult | PrecheckResult> {
   const machine = new LocalCoSigner(params.privateKey, { riskCheck });
+
+  // F3: authenticate the payer before doing anything with their `owner` scope.
+  const authFail = await verifyOwnerAuth(params.body);
+  if (authFail) return authFail;
 
   // Pre-flight: firewall only, before any account exists. No chain read, no sig.
   if (params.body.phase === 'precheck') {

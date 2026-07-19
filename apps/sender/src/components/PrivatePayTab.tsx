@@ -107,7 +107,11 @@ export function PrivatePayTab({ session }: { session: Session }) {
 
     try {
       const cosignerAddress = (await fetch('/api/cosign').then((r) => r.json())).address as Address;
-      const cosigner = new RemoteCoSigner('/api/cosign', cosignerAddress);
+      const cosigner = new RemoteCoSigner('/api/cosign', cosignerAddress, undefined, {
+        address: owner,
+        sign: (message) =>
+          clients.walletClient.signMessage({ account: clients.walletClient.account!, message }),
+      });
       const salt = randomSalt();
       const expiry = Math.floor(Date.now() / 1000) + EXPIRY_SECONDS;
       const chainId = await clients.publicClient.getChainId();

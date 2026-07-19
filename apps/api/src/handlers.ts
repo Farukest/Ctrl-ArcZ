@@ -59,9 +59,16 @@ function parseCrossChain(body: unknown, allowed: Set<string>) {
   if (typeof from !== 'string' || !allowed.has(from)) throw new HttpError(400, 'invalid source chain');
   if (typeof to !== 'string' || !allowed.has(to)) throw new HttpError(400, 'invalid destination chain');
   if (from === to) throw new HttpError(400, 'source and destination must differ');
-  const amt = typeof amount === 'string' || typeof amount === 'number' ? Number(amount) : NaN;
-  if (!Number.isFinite(amt) || amt <= 0 || amt > MAX_BRIDGE_AMOUNT) throw new HttpError(400, 'invalid amount');
-  return { from, to, amount: String(amount) };
+  // Canonical USDC decimal only: no scientific notation, no whitespace, at most 6
+  // decimals. We forward exactly the validated string, so the bound that was
+  // checked and the value that is sent are the same quantity.
+  const amtStr = typeof amount === 'number' ? String(amount) : amount;
+  if (typeof amtStr !== 'string' || !/^\d+(\.\d{1,6})?$/.test(amtStr)) {
+    throw new HttpError(400, 'invalid amount format');
+  }
+  const amt = Number(amtStr);
+  if (!(amt > 0 && amt <= MAX_BRIDGE_AMOUNT)) throw new HttpError(400, 'invalid amount');
+  return { from, to, amount: amtStr };
 }
 
 export async function bridgePost(req: IncomingMessage, res: ServerResponse): Promise<void> {

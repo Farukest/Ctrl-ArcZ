@@ -256,6 +256,16 @@ A follow-up pass closed the remaining findings with real tests:
   **Fixed**: the QR carries only `transferId + salt`; the 6-digit code is entered
   separately and never co-located with the QR; the secret screen blocks
   screenshots/snapshots (`expo-screen-capture`).
-- **Still documented (pre-ship / low):** mobile certificate pinning; co-signer
-  binding `owner` to an authenticated session (funds already locked to the
-  on-chain target, so LOW); the bridge amount-string normalization.
+- **Co-signer owner binding (was: LOW/F3).** Now **Fixed**: every `/api/cosign`
+  request carries an owner-signed message; the server recovers it and rejects a
+  request whose signature does not match the claimed `owner` (or is stale).
+  Verified: no-signature, forged-owner and stale requests are all vetoed.
+- **Bridge amount normalization (was: LOW/#8).** Now **Fixed**: only a canonical
+  USDC decimal is accepted and the validated value is what is forwarded. Verified:
+  `5e-7`, `5.0000001` and ` 5 ` are rejected.
+- **Mobile co-signer pinning (part of M5).** Now **Fixed**: the app pins the
+  expected co-signer address and refuses to bake any other into an account, so a
+  MITM cannot substitute an attacker-controlled co-signer.
+- **Still documented (pre-ship):** full TLS certificate pinning for the mobile app
+  (a dev-client + pinning-library step; the funds-critical co-signer value is
+  already pinned above).

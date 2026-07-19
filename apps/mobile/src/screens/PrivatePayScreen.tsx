@@ -14,7 +14,7 @@ import {
 } from '@ctrl-arcz/sdk';
 import { Screen, H1, Muted, Mono, Card, PrimaryButton, GhostButton } from '../ui';
 import { useWallet } from '../lib/wallet';
-import { API_BASE } from '../lib/config';
+import { API_BASE, EXPECTED_COSIGNER } from '../lib/config';
 import { confirmBiometric } from '../lib/biometrics';
 import { theme } from '../lib/theme';
 
@@ -49,7 +49,16 @@ export function PrivatePayScreen() {
     setVeto(null);
     try {
       const cosignerAddress = (await fetch(`${API_BASE}/api/cosign`).then((r) => r.json())).address as Address;
-      const cosigner = new RemoteCoSigner(`${API_BASE}/api/cosign`, cosignerAddress);
+      // Pin: refuse to bake any co-signer other than the expected one into an
+      // account (defends against a MITM-substituted co-signer).
+      if (cosignerAddress.toLowerCase() !== EXPECTED_COSIGNER.toLowerCase()) {
+        setError('Unexpected co-signer address; aborting for safety.');
+        return;
+      }
+      const cosigner = new RemoteCoSigner(`${API_BASE}/api/cosign`, cosignerAddress, undefined, {
+        address: owner,
+        sign: (message) => session.account.signMessage({ message }),
+      });
       const salt = randomSalt();
       const expiry = Math.floor(Date.now() / 1000) + 900;
       const chainId = await session.publicClient.getChainId();

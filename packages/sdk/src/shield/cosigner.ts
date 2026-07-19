@@ -187,6 +187,19 @@ export class LocalCoSigner implements CoSigner {
  * real policy from chain and returns a signature or a veto. Nothing the browser
  * says about the policy is trusted.
  */
+/** Proves control of the payer address on each co-signer request, so a client
+ *  cannot scope the firewall to someone else's history by lying about `owner`. */
+export interface RemoteCoSignerAuth {
+  address: Address;
+  sign: (message: string) => Promise<Hex>;
+}
+
+/** The message the payer signs to authenticate a co-signer request. The server
+ *  recovers it and checks it equals the request's `owner` (and that it is fresh). */
+export function cosignAuthMessage(owner: Address, ts: number): string {
+  return `Ctrl+ArcZ cosign\nowner: ${owner.toLowerCase()}\nts: ${ts}`;
+}
+
 export class RemoteCoSigner implements CoSigner {
   private readonly fetchImpl: typeof fetch;
 
@@ -194,12 +207,22 @@ export class RemoteCoSigner implements CoSigner {
     private readonly endpoint: string,
     readonly address: Address,
     fetchImpl?: typeof fetch,
+    private readonly auth?: RemoteCoSignerAuth,
   ) {
     // The global `fetch` must be invoked with `this === window`; storing it as a
     // property and calling `this.fetchImpl(...)` would rebind `this` to this
     // instance and throw "Illegal invocation". Wrap it so the global is always
     // called correctly, in both the browser and Node.
     this.fetchImpl = fetchImpl ?? ((input, init) => fetch(input, init));
+  }
+
+  /** Owner-authentication fields to attach to the request body, when a signer is
+   *  configured (the payer's wallet). */
+  private async authBody(owner: Address): Promise<{ ownerSig?: Hex; ownerSigTs?: number }> {
+    if (!this.auth) return {};
+    const ts = Date.now();
+    const ownerSig = await this.auth.sign(cosignAuthMessage(owner, ts));
+    return { ownerSig, ownerSigTs: ts };
   }
 
   /** Pre-flight the firewall on the intended target before any account exists. */
@@ -212,6 +235,7 @@ export class RemoteCoSigner implements CoSigner {
         owner: req.owner,
         target: req.target,
         amount: req.amount.toString(),
+        ...(await this.authBody(req.owner)),
       }),
     });
     const data = (await res.json()) as PrecheckResult;
@@ -233,6 +257,7 @@ export class RemoteCoSigner implements CoSigner {
         owner: req.owner,
         amount: req.amount.toString(),
         action: req.action ?? ACTION_PAY,
+        ...(await this.authBody(req.owner)),
       }),
     });
     const data = (await res.json()) as
