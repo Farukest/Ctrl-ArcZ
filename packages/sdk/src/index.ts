@@ -17,6 +17,7 @@ export { getLogsChunked, type ChunkedEventsParams } from './events.js';
 
 // Layer 1
 export { check, type CheckOptions } from './risk/check.js';
+export { VerifiedRecipientIndex } from './risk/recipientIndex.js';
 export {
   evaluateRisk,
   isLookalike,

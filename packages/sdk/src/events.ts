@@ -8,6 +8,9 @@ export interface ChunkedEventsParams {
   args?: Record<string, unknown>;
   /** Defaults to the CtrlArcZ deploy block. */
   fromBlock?: bigint;
+  /** Defaults to the latest block. Lets an incremental indexer poll a bounded
+   *  window instead of always scanning to head. */
+  toBlock?: bigint;
 }
 
 export interface DecodedLog<TArgs> {
@@ -28,12 +31,12 @@ export async function getLogsChunked<TArgs = Record<string, unknown>>(
   client: PublicClient,
   params: ChunkedEventsParams,
 ): Promise<Array<DecodedLog<TArgs>>> {
-  const latest = await client.getBlockNumber();
+  const end = params.toBlock ?? (await client.getBlockNumber());
   const start = params.fromBlock ?? CTRL_ARCZ_DEPLOY_BLOCK;
 
   const all: Array<DecodedLog<TArgs>> = [];
-  for (let from = start; from <= latest; from += MAX_LOG_RANGE) {
-    const to = from + MAX_LOG_RANGE - 1n < latest ? from + MAX_LOG_RANGE - 1n : latest;
+  for (let from = start; from <= end; from += MAX_LOG_RANGE) {
+    const to = from + MAX_LOG_RANGE - 1n < end ? from + MAX_LOG_RANGE - 1n : end;
     const logs = await client.getContractEvents({
       address: params.address,
       abi: params.abi,

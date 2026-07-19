@@ -15,6 +15,18 @@ export interface CheckOptions {
   contractAddress?: Address;
   /** Injected in tests to make the freshness rule deterministic. */
   now?: Date;
+  /**
+   * The sender's verified recipients, pre-supplied by a dedicated indexer. When
+   * present, the on-demand RecipientVerified log scan is skipped entirely — this
+   * is what keeps the co-signer's precheck fast instead of scanning from the
+   * deploy block on every call.
+   */
+  verifiedRecipients?: Address[];
+  /**
+   * Bound the fallback RecipientVerified scan to the last N blocks (when no
+   * indexer list is supplied). Undefined scans from the deploy block.
+   */
+  verifiedRecipientsLookbackBlocks?: number;
 }
 
 /**
@@ -80,17 +92,28 @@ async function readVerifiedRecipients(
   options: CheckOptions,
   unavailable: string[],
 ): Promise<Address[]> {
+  // Indexer path: a pre-supplied list means no on-chain scan at all.
+  if (options.verifiedRecipients) return options.verifiedRecipients;
+
   const address = options.contractAddress ?? CTRL_ARCZ_ADDRESS;
   if (!options.client || /^0x0+$/.test(address)) return [];
 
   try {
-    // Chunked, and from the deploy block — Arc caps eth_getLogs at 10k blocks and
-    // rejects a from-0 query outright.
+    // Chunked, and from the deploy block by default — Arc caps eth_getLogs at 10k
+    // blocks and rejects a from-0 query. A lookback bound trims the scan when there
+    // is no indexer.
+    let fromBlock: bigint | undefined;
+    if (options.verifiedRecipientsLookbackBlocks != null) {
+      const latest = await options.client.getBlockNumber();
+      const back = BigInt(options.verifiedRecipientsLookbackBlocks);
+      fromBlock = latest > back ? latest - back : 0n;
+    }
     const logs = await getLogsChunked<{ recipient?: Address }>(options.client, {
       address,
       abi: ctrlArcZAbi,
       eventName: 'RecipientVerified',
       args: { sender },
+      ...(fromBlock != null ? { fromBlock } : {}),
     });
     return logs.map((log) => log.args.recipient).filter((r): r is Address => Boolean(r));
   } catch {

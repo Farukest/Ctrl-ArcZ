@@ -12,6 +12,7 @@ import {
   LocalCoSigner,
   readAccount,
   check,
+  VerifiedRecipientIndex,
   cosignAuthMessage,
   arcTestnet,
   RPC_URL,
@@ -112,6 +113,12 @@ const publicClient = createPublicClient({
   batch: { multicall: { wait: 20 } },
 });
 
+// Dedicated indexer: backfills the sender->verified-recipients map once, then polls
+// incrementally, so the firewall never does a from-deploy-block getLogs scan on a
+// cosign request (that scan was the ~220s cold-start / 504 bottleneck).
+const recipientIndex = new VerifiedRecipientIndex(publicClient, CTRL_ARCZ_ADDRESS);
+void recipientIndex.start();
+
 /**
  * Firewall-backed risk source: the SDK poisoning check, mapped to a verdict.
  *
@@ -136,7 +143,17 @@ async function riskCheck(owner: Address, target: Address): Promise<RiskVerdict |
   const hit = verdictCache.get(key);
   if (hit && hit.exp > Date.now()) return hit.verdict;
   try {
-    const report = await check(owner, target, { client: publicClient, contractAddress: CTRL_ARCZ_ADDRESS });
+    // Once the indexer has backfilled, feed its list so check() does zero on-chain
+    // scanning. While it is still backfilling (server just started), fall back to a
+    // bounded recent-blocks scan instead of a full from-deploy-block one.
+    const scanOpts = recipientIndex.isReady()
+      ? { verifiedRecipients: recipientIndex.recipientsOf(owner) }
+      : { verifiedRecipientsLookbackBlocks: 200_000 };
+    const report = await check(owner, target, {
+      client: publicClient,
+      contractAddress: CTRL_ARCZ_ADDRESS,
+      ...scanOpts,
+    });
     const verdict: RiskVerdict = {
       level: report.level,
       complete: report.complete,
