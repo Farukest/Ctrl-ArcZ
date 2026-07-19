@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import * as ScreenCapture from 'expo-screen-capture';
 import QRCode from 'react-native-qrcode-svg';
 import { isAddress, parseUnits, type Address } from 'viem';
 import { check, approveUsdc, sendProtected, generateClaimCode, CTRL_ARCZ_ADDRESS } from '@ctrl-arcz/sdk';
@@ -29,6 +30,15 @@ export function SendScreen() {
   const [error, setError] = useState<string | null>(null);
 
   const valid = isAddress(to) && Number(amount) > 0;
+
+  // Block screenshots / app-switcher snapshots while the claim QR + code are shown.
+  useEffect(() => {
+    if (phase !== 'done') return;
+    void ScreenCapture.preventScreenCaptureAsync();
+    return () => {
+      void ScreenCapture.allowScreenCaptureAsync();
+    };
+  }, [phase]);
 
   const send = async () => {
     if (!session || !valid) return;
@@ -67,7 +77,7 @@ export function SendScreen() {
 
       setDone({
         code: secret.code,
-        qr: encodeClaim({ transferId: res.transferId, code: secret.code, salt: secret.salt }),
+        qr: encodeClaim({ transferId: res.transferId, salt: secret.salt }),
         to: recipient,
         amount,
       });
@@ -146,11 +156,11 @@ export function SendScreen() {
           <>
             <Card style={{ borderColor: theme.safe }}>
               <Text style={[styles.big, { color: theme.safe }]}>Sent, escrowed</Text>
-              <Muted>Share this code with the recipient. They scan it to claim.</Muted>
+              <Muted>The recipient scans this QR, then enters the code below.</Muted>
               <View style={styles.qrWrap}>
                 <QRCode value={done.qr} size={200} backgroundColor="#ffffff" />
               </View>
-              <Muted>Claim code</Muted>
+              <Muted>Claim code (share this separately, not with the QR)</Muted>
               <Text style={styles.code}>{done.code}</Text>
             </Card>
             <Card>

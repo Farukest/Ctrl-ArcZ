@@ -96,6 +96,9 @@ importers:
       expo-notifications:
         specifier: ~57.0.6
         version: 57.0.6(expo@57.0.7)(react-native@0.86.0(@babel/core@7.29.7)(@types/react@19.2.17)(bufferutil@4.1.0)(react@19.2.3))(react@19.2.3)(typescript@5.9.3)
+      expo-screen-capture:
+        specifier: ~57.0.1
+        version: 57.0.1(expo@57.0.7)(react@19.2.3)
       expo-secure-store:
         specifier: ~57.0.1
         version: 57.0.1(expo@57.0.7)
@@ -2914,6 +2917,12 @@ packages:
       expo: '*'
       react: '*'
       react-native: '*'
+
+  expo-screen-capture@57.0.1:
+    resolution: {integrity: sha512-toam1doTc0auN0SzQA2ziamXaDhevvCBxhrGyYdVMpfbmj0+0brm+u/pAUkJJMe/f+l3LvWRwltV0dLaMdiY9A==}
+    peerDependencies:
+      expo: '*'
+      react: '*'
 
   expo-secure-store@57.0.1:
     resolution: {integrity: sha512-tLa1VmSadOq19mA/dwkl99RbHyjLE0T1qqBYMY3/OsguZTI+rlrDy/DDJjupqlVtmr95hD7o1pYqx5aL+B4YMA==}
@@ -7838,6 +7847,11 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
       - typescript
+
+  expo-screen-capture@57.0.1(expo@57.0.7)(react@19.2.3):
+    dependencies:
+      expo: 57.0.7(@babel/core@7.29.7)(@expo/dom-webview@57.0.1)(bufferutil@4.1.0)(react-dom@18.3.1(react@19.2.3))(react-native@0.86.0(@babel/core@7.29.7)(@types/react@19.2.17)(bufferutil@4.1.0)(react@19.2.3))(react@19.2.3)(typescript@5.9.3)
+      react: 19.2.3
 
   expo-secure-store@57.0.1(expo@57.0.7):
     dependencies:

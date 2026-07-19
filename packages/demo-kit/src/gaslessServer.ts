@@ -1,6 +1,10 @@
-import type { Hex } from 'viem';
+import { createPublicClient, http, type Hex } from 'viem';
 import {
   claim,
+  getTransfer,
+  hashClaim,
+  arcTestnet,
+  RPC_URL,
   TransferLockedError,
   TransferUnavailableError,
   WrongClaimCodeError,
@@ -12,6 +16,15 @@ import {
   type CircleGaslessInput,
 } from './circleGasless.js';
 import { localSigner } from './session.js';
+
+const publicClient = createPublicClient({ chain: arcTestnet, transport: http(RPC_URL) });
+
+/** Whether (salt, code) satisfies the transfer's on-chain claimHash. Pure; used to
+ *  reject a wrong code BEFORE spending a sponsored/relayer transaction, so an
+ *  unauthenticated caller cannot burn the transfer's 5-attempt lockout budget. */
+export function codeMatchesClaimHash(claimHash: Hex, salt: Hex, code: string): boolean {
+  return hashClaim(salt, code).toLowerCase() === claimHash.toLowerCase();
+}
 
 /**
  * Server-only. Runs a gasless claim (Circle Gas Station if configured, else a
@@ -58,6 +71,18 @@ export async function gaslessClaimToResult(
 ): Promise<GaslessClaimResult> {
   ensureWindowShim();
   try {
+    // Pre-flight: reject a wrong code off-chain so it never consumes an on-chain
+    // claim attempt (closes the free lock-griefing). A failed read falls through to
+    // the on-chain path, which is itself attempt-limited.
+    try {
+      const transfer = await getTransfer({ publicClient }, transferId);
+      if (!codeMatchesClaimHash(transfer.claimHash, salt, code)) {
+        return { ok: false, error: { kind: 'wrong_code' } };
+      }
+    } catch {
+      // could not read the transfer; let the on-chain claim be the arbiter
+    }
+
     let txHash: string;
     if (circleGaslessEnabled(cfg)) {
       txHash = await circleGaslessClaim(cfg, transferId, code, salt);
@@ -78,9 +103,8 @@ export async function gaslessClaimToResult(
     if (e instanceof TransferUnavailableError) {
       return { ok: false, error: { kind: 'unavailable', reason: e.reason } };
     }
-    return {
-      ok: false,
-      error: { kind: 'unknown', message: e instanceof Error ? e.message : String(e) },
-    };
+    // Do not leak internal SDK/RPC/bundler detail to the client; log it server-side.
+    console.error('gasless claim failed:', e instanceof Error ? e.message : e);
+    return { ok: false, error: { kind: 'unknown', message: 'gasless claim failed' } };
   }
 }

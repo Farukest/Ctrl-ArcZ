@@ -10,8 +10,10 @@ export function json(res: ServerResponse, status: number, body: unknown): void {
   res.end(JSON.stringify(body, (_k, v) => (typeof v === 'bigint' ? v.toString() : v)));
 }
 
-/** Read and JSON-parse the request body under a hard size cap. */
-export async function readJson(req: IncomingMessage): Promise<unknown> {
+/** Read the raw request body under a hard size cap. A request stream can be read
+ *  only once, so a handler that needs both the raw bytes (for a signature) and the
+ *  parsed value must read raw once and JSON.parse it itself. */
+export async function readRaw(req: IncomingMessage): Promise<string> {
   const chunks: Uint8Array[] = [];
   let size = 0;
   for await (const c of req) {
@@ -20,10 +22,15 @@ export async function readJson(req: IncomingMessage): Promise<unknown> {
     if (size > MAX_BODY_BYTES) throw new HttpError(413, 'payload too large');
     chunks.push(chunk);
   }
-  const raw = Buffer.concat(chunks).toString() || '{}';
+  return Buffer.concat(chunks).toString() || '{}';
+}
+
+/** Read and JSON-parse the request body under a hard size cap. */
+export async function readJson(req: IncomingMessage): Promise<unknown> {
   try {
-    return JSON.parse(raw);
-  } catch {
+    return JSON.parse(await readRaw(req));
+  } catch (e) {
+    if (e instanceof HttpError) throw e;
     throw new HttpError(400, 'invalid json');
   }
 }
@@ -48,7 +55,11 @@ function applyCors(req: IncomingMessage, res: ServerResponse): boolean {
     !origin || env.corsOrigins.length === 0 || env.corsOrigins.includes(origin);
   if (origin && allowed) res.setHeader('access-control-allow-origin', origin);
   res.setHeader('access-control-allow-methods', 'GET,POST,OPTIONS');
-  res.setHeader('access-control-allow-headers', 'content-type');
+  res.setHeader(
+    'access-control-allow-headers',
+    'content-type,x-ctrl-address,x-ctrl-timestamp,x-ctrl-signature',
+  );
+  res.setHeader('vary', 'Origin');
   if (req.method === 'OPTIONS') {
     res.statusCode = allowed ? 204 : 403;
     res.end();

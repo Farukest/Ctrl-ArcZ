@@ -4,7 +4,17 @@ import { bridgeUsdc } from '@ctrl-arcz/demo-kit/cctp';
 import { gatewayTransfer } from '@ctrl-arcz/demo-kit/gateway';
 import { gaslessClaimToResult } from '@ctrl-arcz/demo-kit/gasless';
 import { env } from './env.js';
-import { json, readJson, HttpError } from './http.js';
+import { json, readJson, readRaw, HttpError } from './http.js';
+import { requireSignedRequest, checkQuota } from './auth.js';
+
+/** JSON-parse a raw body already read for signature verification. */
+function parseBody(raw: string): unknown {
+  try {
+    return JSON.parse(raw);
+  } catch {
+    throw new HttpError(400, 'invalid json');
+  }
+}
 
 const BRIDGE_CHAIN_IDS = new Set([
   'Arc_Testnet',
@@ -55,15 +65,21 @@ function parseCrossChain(body: unknown, allowed: Set<string>) {
 }
 
 export async function bridgePost(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  const raw = await readRaw(req);
+  const caller = await requireSignedRequest(req, raw, '/api/bridge');
+  const { from, to, amount } = parseCrossChain(parseBody(raw), BRIDGE_CHAIN_IDS);
+  checkQuota(caller, Number(amount));
   if (!env.relayerPk) throw new HttpError(400, 'no relayer key configured');
-  const { from, to, amount } = parseCrossChain(await readJson(req), BRIDGE_CHAIN_IDS);
   const result = await bridgeUsdc({ privateKey: env.relayerPk, from, to, amount } as never);
   json(res, 200, result);
 }
 
 export async function gatewayPost(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  const raw = await readRaw(req);
+  const caller = await requireSignedRequest(req, raw, '/api/gateway');
+  const { from, to, amount } = parseCrossChain(parseBody(raw), GATEWAY_CHAIN_IDS);
+  checkQuota(caller, Number(amount));
   if (!env.relayerPk) throw new HttpError(400, 'no relayer key configured');
-  const { from, to, amount } = parseCrossChain(await readJson(req), GATEWAY_CHAIN_IDS);
   const result = await gatewayTransfer({ privateKey: env.relayerPk, from, to, amount } as never);
   json(res, 200, result);
 }
@@ -71,8 +87,11 @@ export async function gatewayPost(req: IncomingMessage, res: ServerResponse): Pr
 // --- gasless claim (Circle Gas Station) ---
 
 export async function gaslessPost(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  const raw = await readRaw(req);
+  const caller = await requireSignedRequest(req, raw, '/api/gasless-claim');
+  checkQuota(caller, 1);
   if (!env.relayerPk) throw new HttpError(400, 'gasless not configured');
-  const { transferId, code, salt } = (await readJson(req)) as {
+  const { transferId, code, salt } = parseBody(raw) as {
     transferId?: unknown;
     code?: unknown;
     salt?: unknown;

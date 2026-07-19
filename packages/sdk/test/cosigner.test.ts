@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { recoverTypedDataAddress, type Address } from 'viem';
 import { LocalCoSigner, type RiskVerdict } from '../src/shield/cosigner.js';
-import { spendTypedData, ACTION_PAY } from '../src/shield/digest.js';
+import { spendTypedData, ACTION_PAY, ACTION_PULL } from '../src/shield/digest.js';
 
 const COSIGNER_PK = '0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d';
 const OWNER = '0x0000000000000000000000000000000000000a11' as Address;
@@ -92,6 +92,32 @@ describe('LocalCoSigner (The Machine)', () => {
       signature: res.signature,
     });
     expect(recovered.toLowerCase()).not.toBe(cs.address.toLowerCase());
+  });
+
+  it('PULL: vetoes an amount over the per-pull cap', async () => {
+    const cs = new LocalCoSigner(COSIGNER_PK, { riskCheck: async () => safe });
+    const res = await cs.authorize(req({ action: ACTION_PULL, amount: 30n, perPullMax: 20n }));
+    expect(res.approved).toBe(false);
+    if (res.approved) return;
+    expect(res.reason).toMatch(/per-pull cap/);
+  });
+
+  it('PULL: vetoes a pull that is too soon after the last one', async () => {
+    const cs = new LocalCoSigner(COSIGNER_PK, { riskCheck: async () => safe });
+    const res = await cs.authorize(
+      req({ action: ACTION_PULL, amount: 10n, perPullMax: 20n, interval: 86_400, lastPull: 1_000_000_000 - 100 }),
+    );
+    expect(res.approved).toBe(false);
+    if (res.approved) return;
+    expect(res.reason).toMatch(/too soon/);
+  });
+
+  it('PULL: allows an in-policy pull once the interval has passed', async () => {
+    const cs = new LocalCoSigner(COSIGNER_PK, { riskCheck: async () => safe });
+    const res = await cs.authorize(
+      req({ action: ACTION_PULL, amount: 10n, perPullMax: 20n, interval: 3_600, lastPull: 1_000_000_000 - 7_200 }),
+    );
+    expect(res.approved).toBe(true);
   });
 
   it('vetoOn: warning is stricter than the default', async () => {

@@ -18,6 +18,7 @@ export function ReceiveScreen() {
   const [payload, setPayload] = useState<ClaimPayload | null>(null);
   const [amount, setAmount] = useState<string | null>(null);
   const [manual, setManual] = useState('');
+  const [code, setCode] = useState(''); // the 6-digit code, entered separately from the QR
   const [txHash, setTxHash] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -50,6 +51,10 @@ export function ReceiveScreen() {
 
   const doClaim = async () => {
     if (!session || !payload) return;
+    if (!/^\d{6}$/.test(code)) {
+      setError('Enter the 6-digit code the sender shared');
+      return;
+    }
     if (!(await confirmBiometric('Confirm claiming this transfer'))) return;
     setPhase('claiming');
     setError(null);
@@ -57,7 +62,7 @@ export function ReceiveScreen() {
       const hash = await claim(
         { publicClient: session.publicClient, walletClient: session.walletClient },
         payload.transferId,
-        payload.code,
+        code,
         payload.salt,
       );
       setTxHash(hash);
@@ -73,6 +78,7 @@ export function ReceiveScreen() {
     setPayload(null);
     setAmount(null);
     setManual('');
+    setCode('');
     setTxHash(null);
     setError(null);
   };
@@ -123,8 +129,17 @@ export function ReceiveScreen() {
         <Card>
           <Muted>Claiming transfer</Muted>
           <Text style={styles.amount}>{amount ? `${amount} USDC` : `#${payload.transferId.toString()}`}</Text>
-          <Muted>Code {payload.code}</Muted>
-          <PrimaryButton label="Claim to my wallet" onPress={doClaim} />
+          <Muted>Enter the 6-digit code the sender shared separately</Muted>
+          <TextInput
+            value={code}
+            onChangeText={(t) => setCode(t.replace(/\D/g, '').slice(0, 6))}
+            keyboardType="number-pad"
+            maxLength={6}
+            placeholder="000000"
+            placeholderTextColor={theme.muted}
+            style={styles.input}
+          />
+          <PrimaryButton label="Claim to my wallet" onPress={doClaim} disabled={code.length !== 6} />
           <GhostButton label="Cancel" onPress={reset} />
           {error && <Text style={styles.err}>{error}</Text>}
         </Card>

@@ -1,6 +1,6 @@
 import { privateKeyToAccount } from 'viem/accounts';
 import type { Address, Hex } from 'viem';
-import { spendTypedData, type SpendAction, ACTION_PAY } from './digest.js';
+import { spendTypedData, type SpendAction, ACTION_PAY, ACTION_PULL } from './digest.js';
 
 /**
  * The co-signer ("The Machine") — the enclave that authorizes every spend. It does
@@ -43,6 +43,10 @@ export interface AuthorizeRequest extends SpendRequest {
   chainId: number;
   remaining: bigint;
   expiry: number; // unix seconds
+  /** PULL only: the per-pull cap and interval, read from chain. */
+  perPullMax?: bigint;
+  interval?: number; // seconds
+  lastPull?: number; // unix seconds; 0 if never pulled
   /** Current time (unix seconds); injectable for tests. */
   now?: number;
 }
@@ -138,6 +142,23 @@ export class LocalCoSigner implements CoSigner {
     const now = req.now ?? Math.floor(Date.now() / 1000);
     if (now > req.expiry) {
       return { approved: false, reason: 'policy window has expired' };
+    }
+
+    // 1b. PULL-specific policy: the per-pull cap and interval (the real
+    //     subscription guarantee). The contract enforces both, but the co-signer
+    //     refuses to sign a request that would revert.
+    if (req.action === ACTION_PULL) {
+      if (req.perPullMax != null && req.perPullMax > 0n && req.amount > req.perPullMax) {
+        return { approved: false, reason: 'amount exceeds the per-pull cap' };
+      }
+      if (
+        req.interval != null &&
+        req.lastPull != null &&
+        req.lastPull !== 0 &&
+        now < req.lastPull + req.interval
+      ) {
+        return { approved: false, reason: 'too soon since the last pull' };
+      }
     }
 
     // 2. Risk firewall on the CHAIN target. Fail-closed.

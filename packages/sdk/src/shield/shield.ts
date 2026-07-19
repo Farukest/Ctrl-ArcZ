@@ -173,6 +173,8 @@ export interface AccountState {
   remaining: bigint;
   target: Address;
   perPullMax: bigint;
+  interval: number;
+  lastPull: number;
   expiry: number;
   mode: SpendMode;
 }
@@ -181,12 +183,14 @@ export interface AccountState {
  *  is the authoritative policy source; the co-signer validates against it. */
 export async function readAccount(publicClient: PublicClient, account: Address): Promise<AccountState> {
   const at = { address: account, abi: spendPolicyAccountAbi } as const;
-  const [nonce, spent, remaining, target, perPullMax, expiry, mode] = await Promise.all([
+  const [nonce, spent, remaining, target, perPullMax, interval, lastPull, expiry, mode] = await Promise.all([
     publicClient.readContract({ ...at, functionName: 'nonce' }),
     publicClient.readContract({ ...at, functionName: 'spent' }),
     publicClient.readContract({ ...at, functionName: 'remaining' }),
     publicClient.readContract({ ...at, functionName: 'target' }),
     publicClient.readContract({ ...at, functionName: 'perPullMax' }),
+    publicClient.readContract({ ...at, functionName: 'interval' }),
+    publicClient.readContract({ ...at, functionName: 'lastPull' }),
     publicClient.readContract({ ...at, functionName: 'expiry' }),
     publicClient.readContract({ ...at, functionName: 'mode' }),
   ]);
@@ -196,6 +200,8 @@ export async function readAccount(publicClient: PublicClient, account: Address):
     remaining,
     target,
     perPullMax,
+    interval: Number(interval),
+    lastPull: Number(lastPull),
     expiry: Number(expiry),
     mode: mode as SpendMode,
   };

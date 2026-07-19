@@ -135,6 +135,9 @@ async function reconstruct(body: CosignBody): Promise<AuthorizeRequest> {
     chainId: arcTestnet.id,
     remaining: state.remaining,
     expiry: state.expiry,
+    perPullMax: state.perPullMax,
+    interval: state.interval,
+    lastPull: state.lastPull,
   };
 }
 
