@@ -6,6 +6,8 @@ import { isAddress, recoverMessageAddress, type Address, type Hex } from 'viem';
 import { json, readJson, HttpError } from './http.js';
 
 const MAX_TOKENS_PER_ADDRESS = 10;
+const MAX_ADDRESSES = 50_000; // hard ceiling so the registry cannot grow unbounded
+const REGISTRATION_SKEW_MS = 120_000;
 
 /**
  * Device push-token registry, keyed by wallet address. A user may have several
@@ -44,6 +46,11 @@ function key(address: Address): string {
 export function registerToken(address: Address, token: string): void {
   if (!Expo.isExpoPushToken(token)) throw new HttpError(400, 'invalid expo push token');
   const k = key(address);
+  // Refuse a brand-new address once the registry is full (existing addresses may
+  // still add/replace tokens). Keeps the store bounded under abuse.
+  if (registry[k] === undefined && Object.keys(registry).length >= MAX_ADDRESSES) {
+    throw new HttpError(429, 'registry full');
+  }
   const set = new Set(registry[k] ?? []);
   set.add(token);
   // Cap devices per address so a caller cannot grow the store unbounded; keep the
@@ -85,26 +92,31 @@ export async function push(
 // --- HTTP: POST /api/notifications/register { address, token, signature } ---
 
 /** The exact message a client must sign with `address` to register `token`. This
- *  proves control of the address, so an attacker cannot subscribe their device to
- *  a victim's payment events. */
-export function registrationMessage(address: Address, token: string): string {
-  return `Ctrl+ArcZ push registration\naddress: ${address.toLowerCase()}\ntoken: ${token}`;
+ *  proves control of the address (so an attacker cannot subscribe their device to a
+ *  victim's payment events) and is timestamped so a captured registration cannot be
+ *  replayed indefinitely. */
+export function registrationMessage(address: Address, token: string, ts: number): string {
+  return `Ctrl+ArcZ push registration\naddress: ${address.toLowerCase()}\ntoken: ${token}\nts: ${ts}`;
 }
 
 export async function registerHandler(req: IncomingMessage, res: ServerResponse): Promise<void> {
-  const { address, token, signature } = (await readJson(req)) as {
+  const { address, token, signature, ts } = (await readJson(req)) as {
     address?: unknown;
     token?: unknown;
     signature?: unknown;
+    ts?: unknown;
   };
   if (typeof address !== 'string' || !isAddress(address)) throw new HttpError(400, 'invalid address');
   if (typeof token !== 'string' || !Expo.isExpoPushToken(token)) throw new HttpError(400, 'invalid token');
   if (typeof signature !== 'string' || !/^0x[0-9a-fA-F]+$/.test(signature)) {
     throw new HttpError(400, 'invalid signature');
   }
+  if (typeof ts !== 'number' || Math.abs(Date.now() - ts) > REGISTRATION_SKEW_MS) {
+    throw new HttpError(401, 'stale or missing timestamp');
+  }
   // Prove the caller controls `address` before subscribing a device to its events.
   const recovered = await recoverMessageAddress({
-    message: registrationMessage(address, token),
+    message: registrationMessage(address, token, ts),
     signature: signature as Hex,
   });
   if (recovered.toLowerCase() !== address.toLowerCase()) {

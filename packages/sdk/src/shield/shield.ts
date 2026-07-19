@@ -105,15 +105,27 @@ export async function createEphemeral(
 ): Promise<{ account: Address; txHash: Hex }> {
   const sender = requireAccount(clients.walletClient);
   const account = await predictEphemeral(clients.publicClient, factory, salt, policy);
-  const txHash = await clients.walletClient.writeContract({
-    address: factory,
-    abi: spendPolicyFactoryAbi,
-    functionName: 'createAccount',
-    args: [toOwnerHash(policy.owner), salt, paramsTuple(policy)],
-    account: sender,
-    chain: clients.walletClient.chain ?? null,
-  });
-  await clients.publicClient.waitForTransactionReceipt({ hash: txHash });
+  let txHash: Hex;
+  try {
+    txHash = await clients.walletClient.writeContract({
+      address: factory,
+      abi: spendPolicyFactoryAbi,
+      functionName: 'createAccount',
+      args: [toOwnerHash(policy.owner), salt, paramsTuple(policy)],
+      account: sender,
+      chain: clients.walletClient.chain ?? null,
+    });
+    await clients.publicClient.waitForTransactionReceipt({ hash: txHash });
+  } catch (e) {
+    // Benign deploy collision: anyone who knows (ownerHash, salt, policy) can call
+    // createAccount first. Because the salt commits to the full policy, the account
+    // that already exists carries EXACTLY our intended config — so our reverted
+    // deploy is not an error. Verify the on-chain code + policy and proceed to fund.
+    const code = await clients.publicClient.getCode({ address: account });
+    if (!code || code === '0x') throw e; // nothing there: a real failure
+    await assertDeployedPolicy(clients.publicClient, account, policy); // wrong policy -> throw
+    return { account, txHash: '0x' as Hex };
+  }
   await assertDeployedPolicy(clients.publicClient, account, policy);
   return { account, txHash };
 }
@@ -127,17 +139,38 @@ async function assertDeployedPolicy(
   policy: EphemeralPolicy,
 ): Promise<void> {
   const at = { address: account, abi: spendPolicyAccountAbi } as const;
-  const [cosigner, target, vaultHash, maxAmount] = (await Promise.all([
-    publicClient.readContract({ ...at, functionName: 'cosigner' }),
-    publicClient.readContract({ ...at, functionName: 'target' }),
-    publicClient.readContract({ ...at, functionName: 'vaultHash' }),
-    publicClient.readContract({ ...at, functionName: 'maxAmount' }),
-  ])) as [Address, Address, Hex, bigint];
+  const [token, cosigner, target, vaultHash, maxAmount, perPullMax, expiry, interval, mode] =
+    (await Promise.all([
+      publicClient.readContract({ ...at, functionName: 'token' }),
+      publicClient.readContract({ ...at, functionName: 'cosigner' }),
+      publicClient.readContract({ ...at, functionName: 'target' }),
+      publicClient.readContract({ ...at, functionName: 'vaultHash' }),
+      publicClient.readContract({ ...at, functionName: 'maxAmount' }),
+      publicClient.readContract({ ...at, functionName: 'perPullMax' }),
+      publicClient.readContract({ ...at, functionName: 'expiry' }),
+      publicClient.readContract({ ...at, functionName: 'interval' }),
+      publicClient.readContract({ ...at, functionName: 'mode' }),
+    ])) as [Address, Address, Address, Hex, bigint, bigint, bigint | number, bigint | number, number];
+  // Verify EVERY field the caller specified, not just the identity-bearing four.
+  // Defense-in-depth: even though the salt commits to the full policy (so a
+  // mismatched field yields a different address), if the derivation ever loosened
+  // or a param were trusted from calldata, a front-runner could occupy the slot
+  // with a manipulated mode/cap/expiry/interval/token. Fund only an exact match.
+  // The contract normalizes perPullMax==0 to maxAmount at init ("no tighter cap
+  // than the cumulative cap"), so compare against the same normalized value the
+  // caller's params would produce, not the raw 0.
+  const expectedPerPull =
+    policy.perPullMax == null || policy.perPullMax === 0n ? policy.maxAmount : policy.perPullMax;
   const ok =
+    token.toLowerCase() === policy.token.toLowerCase() &&
     cosigner.toLowerCase() === policy.cosigner.toLowerCase() &&
     target.toLowerCase() === policy.target.toLowerCase() &&
     vaultHash === toVaultHash(policy.vault) &&
-    maxAmount === policy.maxAmount;
+    maxAmount === policy.maxAmount &&
+    perPullMax === expectedPerPull &&
+    Number(expiry) === policy.expiry &&
+    Number(interval) === policy.interval &&
+    Number(mode) === policy.mode;
   if (!ok) {
     throw new Error('ephemeral account policy mismatch: refusing to fund (possible front-run)');
   }

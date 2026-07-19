@@ -5,20 +5,28 @@
  *   - api.ctrlarcz.xyz         (the co-signer / bridge / gasless backend)
  *   - rpc.testnet.arc.network  (the Arc JSON-RPC the wallet reads from)
  *
- * We pin the SPKI hashes of the *Let's Encrypt roots* (ISRG Root X1 + X2) plus the
- * current issuing intermediates. Pinning the roots (not the 90-day leaf) means the
- * pin survives normal certificate rotation while still rejecting a certificate from
- * any other CA — the exact threat pinning exists for (a mis-issued / rogue-CA cert
- * used to MITM the co-signer). The extra intermediate pins tighten it to the two
- * intermediates actually in use today.
+ * We pin the SPKI hashes of the current *Let's Encrypt issuing intermediates* (YE1
+ * for the API, R12 for the RPC), NOT the shared ISRG roots and NOT the 90-day leaf:
+ *   - Pinning the leaf would break on every ~90-day renewal (impractical for an app
+ *     that ships through store review).
+ *   - Pinning the ISRG *root* would accept ANY Let's Encrypt certificate for these
+ *     hosts — that is CA-level pinning, which barely narrows the trust set.
+ *   - Pinning the issuing *intermediate* is the durable middle ground: it survives
+ *     leaf rotation but rejects a certificate issued by a DIFFERENT CA — the common
+ *     rogue-CA / mis-issuance MITM. Both intermediates are pinned on both hosts so a
+ *     cross-issuer renewal does not brick the app.
  *
- * This is enforced by the OS TLS stack, so it covers every connection the app makes
- * to these hosts (fetch to the backend and every viem RPC call), not just app-level
- * fetches. It takes effect in a native build (EAS / prebuild); Expo Go cannot pin.
+ * Residual, stated honestly: this does NOT defend against Let's Encrypt itself
+ * mis-issuing under a pinned intermediate. That residual is covered at a different
+ * layer — the funds-critical co-signer ADDRESS is pinned in-app (EXPECTED_COSIGNER)
+ * and enforced on-chain, so even a successful TLS MITM cannot forge a spend.
  *
- * The Android pin-set carries an `expiration` so a forgotten pin can never brick the
- * app in the field: past that date the OS ignores the pin-set and falls back to the
- * normal trust store. Rotate the pins (and this date) well before it.
+ * Enforced by the OS TLS stack, so it covers every backend fetch and every viem RPC
+ * call, not just app-level fetches. Takes effect in a native (EAS) build; Expo Go
+ * cannot pin. The Android pin-set carries an `expiration` backstop so a missed pin
+ * rotation degrades to the system trust store rather than bricking the app in the
+ * field (iOS has no equivalent knob, so on iOS the pins are hard until an app
+ * update). Rotate the pins and this date before Let's Encrypt retires YE1/R12.
  */
 const {
   withAndroidManifest,
@@ -29,15 +37,15 @@ const {
 const fs = require('fs');
 const path = require('path');
 
-// SPKI SHA-256 pins (base64). Roots are long-lived; intermediates rotate slowly.
-const ISRG_ROOT_X1 = 'C5+lpZ7tcVwmwQIMcRtPbsQtWLABXhQzejna0wHFr8M=';
-const ISRG_ROOT_X2 = 'diGVwiVYbubAI3RW4hB9xU8e/CH2GnkuvVFZE8zmgzI=';
+// SPKI SHA-256 pins (base64) of the current Let's Encrypt issuing intermediates.
 const LE_YE1 = 'brzvtCELCIZUo4sD/qPX0ccRtPsd3DY6RfmxpOU9oB4='; // api.ctrlarcz.xyz issuer
 const LE_R12 = 'kZwN96eHtZftBWrOZUsd6cA4es80n3NzSk/XtYz2EqQ='; // rpc.testnet.arc.network issuer
 
-const PINS = [ISRG_ROOT_X1, ISRG_ROOT_X2, LE_YE1, LE_R12];
+// Both intermediates on both hosts: rejects any non-Let's-Encrypt CA while tolerating
+// a cross-issuer renewal (YE1<->R12) without bricking.
+const PINS = [LE_YE1, LE_R12];
 const DOMAINS = ['api.ctrlarcz.xyz', 'rpc.testnet.arc.network'];
-const PIN_EXPIRATION = '2027-06-01'; // safety valve; rotate pins before this
+const PIN_EXPIRATION = '2027-06-01'; // Android backstop; rotate pins before this
 
 const ANDROID_NSC = 'network_security_config';
 

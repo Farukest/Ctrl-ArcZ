@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest';
 import type { Address } from 'viem';
 import { check } from '../src/risk/check.js';
 import { craftLookalike, evaluateRisk, isLookalike } from '../src/risk/rules.js';
-import type { AddressActivity, IDataProvider, RiskInput } from '../src/risk/types.js';
+import type {
+  AddressActivity,
+  CounterpartyScan,
+  IDataProvider,
+  RiskInput,
+} from '../src/risk/types.js';
 
 const SENDER = '0x1111111111111111111111111111111111111111' as Address;
 
@@ -215,12 +220,17 @@ class FakeProvider implements IDataProvider {
       activity?: AddressActivity;
       zeroValue?: number;
       fail?: 'counterparties' | 'activity' | 'zeroValue';
+      /** Simulate a history longer than the scan cap (partial, not failed). */
+      counterpartiesPartial?: boolean;
     },
   ) {}
 
-  async getOutgoingCounterparties(): Promise<Address[]> {
+  async getOutgoingCounterparties(): Promise<CounterpartyScan> {
     if (this.data.fail === 'counterparties') throw new Error('explorer down');
-    return this.data.counterparties ?? [];
+    return {
+      counterparties: this.data.counterparties ?? [],
+      complete: this.data.counterpartiesPartial !== true,
+    };
   }
 
   async getAddressActivity(): Promise<AddressActivity> {
@@ -271,6 +281,20 @@ describe('check', () => {
     expect(
       report.reasons.some((r) => r.code === 'DATA_UNAVAILABLE' && r.severity === 'block'),
     ).toBe(true);
+  });
+
+  it('never reports "safe" on a truncated (partial) counterparty scan', async () => {
+    // The history was longer than the scan cap, so a lookalike could match a
+    // counterparty we did not page far enough to see. The report must be incomplete
+    // (at least a warning), never a clean "safe".
+    const report = await check(SENDER, CLEAN, {
+      provider: new FakeProvider({ counterparties: [REAL], counterpartiesPartial: true }),
+      now: NOW,
+    });
+
+    expect(report.complete).toBe(false);
+    expect(report.level).not.toBe('safe');
+    expect(report.reasons.some((r) => r.code === 'DATA_UNAVAILABLE')).toBe(true);
   });
 
   it('only warns (not blocks) when a NON-history source is down', async () => {

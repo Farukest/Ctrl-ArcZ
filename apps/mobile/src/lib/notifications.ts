@@ -36,13 +36,15 @@ export async function registerPushToken(session: WalletSession): Promise<void> {
 
     const token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
     // Prove control of the address so the backend only subscribes our own device.
-    // Must match the server's registrationMessage byte-for-byte.
-    const message = `Ctrl+ArcZ push registration\naddress: ${session.address.toLowerCase()}\ntoken: ${token}`;
+    // Timestamped so a captured registration cannot be replayed later. Must match
+    // the server's registrationMessage byte-for-byte.
+    const ts = Date.now();
+    const message = `Ctrl+ArcZ push registration\naddress: ${session.address.toLowerCase()}\ntoken: ${token}\nts: ${ts}`;
     const signature = await session.account.signMessage({ message });
     await fetch(`${API_BASE}/api/notifications/register`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ address: session.address, token, signature }),
+      body: JSON.stringify({ address: session.address, token, signature, ts }),
     });
   } catch {
     // Push registration is best-effort; a failure never blocks the app.

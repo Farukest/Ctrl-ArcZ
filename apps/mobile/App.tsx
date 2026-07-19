@@ -15,6 +15,9 @@ import { ConnectScreen } from './src/screens/ConnectScreen';
 import { registerPushToken } from './src/lib/notifications';
 import { theme } from './src/lib/theme';
 
+// The only route names a push notification is allowed to open.
+const KNOWN_SCREENS = new Set(['Home', 'Send', 'Scan', 'Receive', 'Private Pay']);
+
 function Root() {
   const { session, loading } = useWallet();
 
@@ -26,7 +29,11 @@ function Root() {
   useEffect(() => {
     const sub = Notifications.addNotificationResponseReceivedListener((resp) => {
       const screen = resp.notification.request.content.data?.screen as string | undefined;
-      if (screen && navigationRef.isReady()) navigationRef.navigate(screen as never);
+      // Expo's push service does not authenticate the sender, so treat the payload
+      // as untrusted: only navigate to a known route name, never an arbitrary string.
+      if (screen && KNOWN_SCREENS.has(screen) && navigationRef.isReady()) {
+        navigationRef.navigate(screen as never);
+      }
     });
     return () => sub.remove();
   }, []);

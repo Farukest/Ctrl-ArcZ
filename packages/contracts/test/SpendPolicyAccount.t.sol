@@ -279,6 +279,17 @@ contract SpendPolicyAccountTest is Test {
     // PULL — co-signer-gated recurring, with a real per-pull cap
     // ------------------------------------------------------------------
 
+    /// A PULL account with interval == 0 would disable the rate limit (every pull in
+    /// one block), so init must reject it. PUSH with interval 0 stays valid.
+    function test_init_pullZeroInterval_reverts() public {
+        vm.expectRevert(SpendPolicyAccount.ZeroInterval.selector);
+        factory.createAccount(
+            ownerHash,
+            bytes32(uint256(0xBEEF)),
+            _params(SpendPolicyAccount.Mode.PULL, PER_PULL, 0)
+        );
+    }
+
     function test_pull_happyPath_cosignerOnly() public {
         SpendPolicyAccount acct = _create(SpendPolicyAccount.Mode.PULL, PER_PULL, 1 days);
         _fund(acct, 100e6);

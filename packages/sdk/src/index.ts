@@ -121,6 +121,7 @@ export {
   LocalCoSigner,
   RemoteCoSigner,
   cosignAuthMessage,
+  type CosignAuthScope,
   type RemoteCoSignerAuth,
   type CoSigner,
   type RiskCheck,

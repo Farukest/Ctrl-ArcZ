@@ -75,6 +75,7 @@ contract SpendPolicyAccount is ReentrancyGuard {
     error ZeroAddress();
     error ZeroCommitment();
     error ZeroAmount();
+    error ZeroInterval();
     error WrongMode();
     error Expired();
     error OverLimit();
@@ -105,6 +106,11 @@ contract SpendPolicyAccount is ReentrancyGuard {
         if (address(token_) == address(0) || cosigner_ == address(0) || target_ == address(0)) revert ZeroAddress();
         if (vaultHash_ == bytes32(0)) revert ZeroCommitment();
         if (maxAmount_ == 0) revert ZeroAmount();
+        // A PULL account MUST have a positive interval: interval == 0 would make the
+        // `block.timestamp < lastPull + interval` gate always false, letting multiple
+        // pulls land in one block and defeating the per-interval subscription rate
+        // limit. PUSH ignores interval, so only constrain PULL.
+        if (mode_ == Mode.PULL && interval_ == 0) revert ZeroInterval();
 
         _initialized = true;
         token = token_;

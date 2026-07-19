@@ -93,12 +93,26 @@ export interface RiskInput {
 }
 
 /**
+ * The result of scanning a sender's outgoing counterparties. `complete` is false
+ * when the scan hit its page cap before exhausting history, so a counterparty (and
+ * thus a lookalike of it) may be missing — the report must not then claim `safe`.
+ */
+export interface CounterpartyScan {
+  counterparties: Address[];
+  complete: boolean;
+}
+
+/**
  * Where risk data comes from. The rule engine never talks to the network; swap
  * this to use a different indexer, an internal exchange database, or a cache.
+ *
+ * `getOutgoingCounterparties` MUST reject (throw) if the sender's history cannot be
+ * fetched — the firewall relies on that to fail closed. Returning an empty list on
+ * an error would silently disable lookalike detection.
  */
 export interface IDataProvider {
-  /** Addresses this sender has previously sent value to. */
-  getOutgoingCounterparties(sender: Address): Promise<Address[]>;
+  /** Addresses this sender has previously sent value to. Rejects on fetch failure. */
+  getOutgoingCounterparties(sender: Address): Promise<CounterpartyScan>;
   /** Activity summary for an address. */
   getAddressActivity(address: Address): Promise<AddressActivity>;
   /** 0-value transfers sent from `from` to `to` — the poisoning bait. */

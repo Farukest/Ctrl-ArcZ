@@ -125,7 +125,7 @@ describe('LocalCoSigner (The Machine)', () => {
     const owner = privateKeyToAccount(COSIGNER_PK);
     const attacker = privateKeyToAccount('0x0000000000000000000000000000000000000000000000000000000000000abc');
     const ts = 1_700_000_000_000;
-    const message = cosignAuthMessage(owner.address, ts);
+    const message = cosignAuthMessage(owner.address, ts, { target: owner.address, amount: 100n });
 
     const good = await owner.signMessage({ message });
     expect((await recoverMessageAddress({ message, signature: good })).toLowerCase()).toBe(
@@ -141,10 +141,32 @@ describe('LocalCoSigner (The Machine)', () => {
   });
 
   it('vetoOn: warning is stricter than the default', async () => {
-    const warn: RiskVerdict = { level: 'warning', complete: false, reasons: ['new address'] };
+    const warn: RiskVerdict = { level: 'warning', complete: true, reasons: ['new address'] };
     const lenient = new LocalCoSigner(COSIGNER_PK, { riskCheck: async () => warn });
     const strict = new LocalCoSigner(COSIGNER_PK, { riskCheck: async () => warn, vetoOn: 'warning' });
     expect((await lenient.authorize(req())).approved).toBe(true);
     expect((await strict.authorize(req())).approved).toBe(false);
+  });
+
+  it('vetoes an incomplete scan regardless of level (fail-closed on partial data)', async () => {
+    // A "safe" verdict from an incomplete scan is not trustworthy: a source that
+    // did not answer could be hiding a lookalike/bait. The default co-signer must
+    // withhold its signature even though the level is only "safe".
+    const incompleteSafe: RiskVerdict = { level: 'safe', complete: false };
+    const cs = new LocalCoSigner(COSIGNER_PK, { riskCheck: async () => incompleteSafe });
+    const res = await cs.authorize(req());
+    expect(res.approved).toBe(false);
+    if (!res.approved) expect(res.reason).toMatch(/incomplete/);
+  });
+
+  it('cosignAuthMessage binds the request scope (a different amount yields a different message)', () => {
+    const owner = privateKeyToAccount(COSIGNER_PK).address;
+    const ts = 1_700_000_000_000;
+    const a = cosignAuthMessage(owner, ts, { target: owner, amount: 100n });
+    const b = cosignAuthMessage(owner, ts, { target: owner, amount: 101n });
+    const c = cosignAuthMessage(owner, ts, { account: owner, amount: 100n, action: ACTION_PULL });
+    expect(a).not.toBe(b); // amount is bound
+    expect(a).not.toBe(c); // account/action scope differs from target scope
+    expect(a).toContain('amount: 100');
   });
 });

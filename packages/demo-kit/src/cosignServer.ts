@@ -19,6 +19,7 @@ import {
   CTRL_ARCZ_ADDRESS,
   ACTION_PAY,
   ACTION_PULL,
+  type CosignAuthScope,
   type AuthorizeRequest,
   type AuthorizeResult,
   type PrecheckResult,
@@ -55,8 +56,23 @@ export interface CosignBody {
   ownerSigTs?: number;
 }
 
-/** Verify the payer controls `owner` before the firewall is scoped to their
- *  history. Returns a veto on failure, or null when authenticated. */
+/** Reconstruct the exact auth scope the client signed, from the request body. Must
+ *  mirror RemoteCoSigner.authBody: precheck binds {target, amount}; sign binds
+ *  {account, amount, action}. */
+function authScopeOf(body: CosignBody): CosignAuthScope | null {
+  if (body.amount == null || !/^\d+$/.test(String(body.amount))) return null;
+  const amount = BigInt(body.amount);
+  if (body.phase === 'precheck') {
+    if (!body.target || !isAddress(body.target)) return null;
+    return { target: body.target as Address, amount };
+  }
+  if (!body.account || !isAddress(body.account)) return null;
+  const action = body.action === ACTION_PULL ? ACTION_PULL : ACTION_PAY;
+  return { account: body.account as Address, amount, action };
+}
+
+/** Verify the payer controls `owner` AND that the signature is bound to THIS
+ *  request (not a replay of another spend). Returns a veto on failure, or null. */
 async function verifyOwnerAuth(
   body: CosignBody,
 ): Promise<{ approved: false; reason: string } | null> {
@@ -67,15 +83,32 @@ async function verifyOwnerAuth(
   if (Math.abs(Date.now() - ownerSigTs) > 120_000) {
     return { approved: false, reason: 'stale owner authentication' };
   }
+  const scope = authScopeOf(body);
+  if (!scope) {
+    return { approved: false, reason: 'owner authentication required' };
+  }
+  // Single-use: a captured owner signature cannot be replayed within the window.
+  const seenAt = usedOwnerSigs.get(ownerSig);
+  if (seenAt !== undefined && Date.now() - seenAt < 120_000) {
+    return { approved: false, reason: 'owner authentication already used' };
+  }
   const recovered = await recoverMessageAddress({
-    message: cosignAuthMessage(owner as Address, ownerSigTs),
+    message: cosignAuthMessage(owner as Address, ownerSigTs, scope),
     signature: ownerSig as Hex,
   });
   if (recovered.toLowerCase() !== owner.toLowerCase()) {
     return { approved: false, reason: 'owner authentication failed' };
   }
+  usedOwnerSigs.set(ownerSig, Date.now());
   return null;
 }
+
+// Anti-replay store for owner-auth signatures, swept to the freshness window.
+const usedOwnerSigs = new Map<string, number>();
+(setInterval(() => {
+  const now = Date.now();
+  for (const [k, t] of usedOwnerSigs) if (now - t >= 120_000) usedOwnerSigs.delete(k);
+}, 120_000) as unknown as { unref?: () => void }).unref?.();
 
 /**
  * The public Arc RPC returns JSON-RPC error -32011 "request limit reached" under
@@ -131,12 +164,19 @@ void recipientIndex.start();
  * On an RPC failure we return null (fail-closed veto) rather than throwing, so a
  * rate-limit blip is a clean "try again", never a 502.
  */
-// The poisoning-log scan is heavy against the rate-limited public RPC, so cache a
-// verdict long enough that a target is scanned once per session, not per payment.
-// (A shorter TTL is safer for production, where a fresh scan per payment is cheap
-// on a dedicated RPC; this value suits the public-RPC demo.)
-const VERDICT_TTL_MS = 30 * 60_000;
+// Cache a verdict just long enough to cover the precheck->sign pair of a single
+// payment, NOT a whole session. A long TTL was a real TOCTOU window: an attacker
+// could warm `owner:target` to "safe", then plant a 0-value bait from `target`, and
+// the co-signer would keep serving the cached safe past the point a fresh scan
+// would block it. 60s bounds that window to the immediate payment flow. (With the
+// indexer serving verified recipients, the remaining per-scan cost is small, so a
+// short TTL is cheap.)
+const VERDICT_TTL_MS = 60_000;
 const verdictCache = new Map<string, { verdict: RiskVerdict; exp: number }>();
+(setInterval(() => {
+  const now = Date.now();
+  for (const [k, v] of verdictCache) if (v.exp <= now) verdictCache.delete(k);
+}, VERDICT_TTL_MS) as unknown as { unref?: () => void }).unref?.();
 
 async function riskCheck(owner: Address, target: Address): Promise<RiskVerdict | null> {
   const key = `${owner.toLowerCase()}:${target.toLowerCase()}`;
@@ -159,7 +199,13 @@ async function riskCheck(owner: Address, target: Address): Promise<RiskVerdict |
       complete: report.complete,
       reasons: report.reasons.map((r) => r.message),
     };
-    verdictCache.set(key, { verdict, exp: Date.now() + VERDICT_TTL_MS });
+    // Only cache once the indexer has backfilled. A verdict computed during the
+    // cold-start bounded fallback could miss an older verified recipient (so a
+    // lookalike of it might pass as "safe"); caching that would extend the gap.
+    // Recompute fresh until the index is complete.
+    if (recipientIndex.isReady()) {
+      verdictCache.set(key, { verdict, exp: Date.now() + VERDICT_TTL_MS });
+    }
     return verdict;
   } catch {
     return null; // fail-closed; the co-signer withholds its signature

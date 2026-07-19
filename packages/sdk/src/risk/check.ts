@@ -46,12 +46,14 @@ export async function check(
   const unavailable: string[] = [];
   let sendHistoryOk = true;
 
-  const [rawCounterparties, targetActivity, zeroValueCount, verified, verifiedRecipients] =
+  const [counterpartyScan, targetActivity, zeroValueCount, verified, verifiedRecipients] =
     await Promise.all([
       provider.getOutgoingCounterparties(sender).catch(() => {
+        // A fetch failure means the lookalike rule cannot run at all: fail closed
+        // (lookalikeCheckable=false → an unverified target is blocked, not warned).
         unavailable.push('send history');
         sendHistoryOk = false;
-        return [] as Address[];
+        return { counterparties: [] as Address[], complete: true };
       }),
       provider.getAddressActivity(target).catch(() => {
         unavailable.push('recipient address history');
@@ -64,6 +66,14 @@ export async function check(
       readVerifiedRecipient(sender, target, options),
       readVerifiedRecipients(sender, options, unavailable),
     ]);
+
+  // A truncated history (more counterparties than the scan cap) is not a clean
+  // "safe": a lookalike could match a counterparty we did not page far enough to
+  // see. Mark the report incomplete so it degrades to at least a warning. (This is
+  // softer than a fetch failure — we did scan the most-recent counterparties — so
+  // it warns rather than hard-blocks.)
+  if (!counterpartyScan.complete) unavailable.push('send history (partial scan)');
+  const rawCounterparties = counterpartyScan.counterparties;
 
   // A verified recipient (from a settled protected transfer) is a known-good
   // address, so its lookalike must be caught too — layer 3 feeding back into

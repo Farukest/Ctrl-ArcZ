@@ -19,19 +19,34 @@ export interface StoredTransfer {
 
 const key = (sender: Address) => `ctrl-arcz:sender:${sender.toLowerCase()}`;
 
+/**
+ * The claim `code` is the out-of-band secret that gates a claim, so it is NEVER
+ * written to localStorage: on disk it would be a bearer credential that any future
+ * script-injection on this origin could exfiltrate to drain every outstanding
+ * transfer (the salt alone cannot claim; the code is the missing factor). Instead we
+ * keep codes in memory for the current session only — enough for the active-transfers
+ * tab to show a code you just minted, gone on refresh. Share the code when you send.
+ */
+const sessionCodes = new Map<string, string>();
+
 export function loadTransfers(sender: Address): StoredTransfer[] {
   try {
     const raw = localStorage.getItem(key(sender));
-    return raw ? (JSON.parse(raw) as StoredTransfer[]) : [];
+    const stored = raw ? (JSON.parse(raw) as StoredTransfer[]) : [];
+    // Re-attach any code we still hold in memory for this session.
+    return stored.map((t) => ({ ...t, code: sessionCodes.get(t.transferId) ?? t.code ?? '' }));
   } catch {
     return [];
   }
 }
 
 export function saveTransfer(sender: Address, transfer: StoredTransfer): void {
+  if (transfer.code) sessionCodes.set(transfer.transferId, transfer.code);
   const all = loadTransfers(sender);
   all.unshift(transfer);
-  localStorage.setItem(key(sender), JSON.stringify(all.slice(0, 50)));
+  // Persist everything EXCEPT the code.
+  const persistable = all.slice(0, 50).map(({ code: _code, ...rest }) => rest);
+  localStorage.setItem(key(sender), JSON.stringify(persistable));
 }
 
 /**

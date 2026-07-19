@@ -10,7 +10,7 @@ import { getConfigId, encodeClaim } from '../lib/claim';
 import { confirmBiometric } from '../lib/biometrics';
 import { theme } from '../lib/theme';
 
-type Phase = 'form' | 'busy' | 'blocked' | 'done';
+type Phase = 'form' | 'busy' | 'warn' | 'blocked' | 'done';
 
 interface Done {
   code: string;
@@ -26,14 +26,19 @@ export function SendScreen() {
   const [phase, setPhase] = useState<Phase>('form');
   const [step, setStep] = useState('');
   const [blockReasons, setBlockReasons] = useState<string[]>([]);
+  const [warnReasons, setWarnReasons] = useState<string[]>([]);
   const [done, setDone] = useState<Done | null>(null);
+  const [revealCode, setRevealCode] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const valid = isAddress(to) && Number(amount) > 0;
 
-  // Block screenshots / app-switcher snapshots while the claim QR + code are shown.
+  // Block screenshots / app-switcher snapshots around the secret screen. Engage
+  // during 'busy' too, so capture is already blocked BEFORE the 'done' frame (with
+  // the QR) ever paints — the guard is async, so turning it on only at 'done' would
+  // leave the first frame capturable.
   useEffect(() => {
-    if (phase !== 'done') return;
+    if (phase !== 'done' && phase !== 'busy') return;
     void ScreenCapture.preventScreenCaptureAsync();
     return () => {
       void ScreenCapture.allowScreenCaptureAsync();
@@ -45,7 +50,6 @@ export function SendScreen() {
     if (!(await confirmBiometric('Confirm this transfer'))) return;
     const recipient = to as Address;
     const value = parseUnits(amount, 6);
-    const clients = { publicClient: session.publicClient, walletClient: session.walletClient };
     setPhase('busy');
     setError(null);
     try {
@@ -59,7 +63,35 @@ export function SendScreen() {
         setPhase('blocked');
         return;
       }
+      // Do NOT silently proceed on a soft-risk ('warning') or an incomplete scan.
+      // Surface the reasons and require an explicit confirmation before moving money.
+      if (report.level === 'warning' || !report.complete) {
+        const reasons = report.reasons
+          .filter((r) => r.severity !== 'safe')
+          .map((r) => r.message);
+        if (!report.complete) {
+          reasons.push('The risk check could not fully complete, so the recipient is not confirmed safe.');
+        }
+        setWarnReasons(reasons);
+        setPhase('warn');
+        return;
+      }
+      await execute(recipient, value);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      setPhase('form');
+    }
+  };
 
+  // The fund-moving leg, run only after the firewall passed (or the user explicitly
+  // confirmed a warning). Kept separate so 'Send anyway' cannot skip the firewall —
+  // it can only reach here after `send` already classified the recipient.
+  const execute = async (recipient: Address, value: bigint) => {
+    if (!session) return;
+    const clients = { publicClient: session.publicClient, walletClient: session.walletClient };
+    setPhase('busy');
+    setError(null);
+    try {
       setStep('Registering the transfer config');
       const configId = await getConfigId(session);
 
@@ -81,6 +113,7 @@ export function SendScreen() {
         to: recipient,
         amount,
       });
+      setRevealCode(false);
       setPhase('done');
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -92,6 +125,8 @@ export function SendScreen() {
     setPhase('form');
     setDone(null);
     setBlockReasons([]);
+    setWarnReasons([]);
+    setRevealCode(false);
     setError(null);
     setTo('');
     setAmount('1');
@@ -152,16 +187,38 @@ export function SendScreen() {
           </Card>
         )}
 
+        {phase === 'warn' && (
+          <Card style={{ borderColor: theme.warning }}>
+            <Text style={[styles.big, { color: theme.warning }]}>Check this recipient</Text>
+            <Muted>
+              The firewall did not clear this address. Confirm you trust it before sending. This
+              cannot be undone.
+            </Muted>
+            {warnReasons.map((r, i) => (
+              <Muted key={i}>• {r}</Muted>
+            ))}
+            <PrimaryButton
+              label="Send anyway"
+              onPress={() => void execute(to as Address, parseUnits(amount, 6))}
+            />
+            <GhostButton label="Cancel" onPress={reset} />
+          </Card>
+        )}
+
         {phase === 'done' && done && (
           <>
             <Card style={{ borderColor: theme.safe }}>
               <Text style={[styles.big, { color: theme.safe }]}>Sent, escrowed</Text>
-              <Muted>The recipient scans this QR, then enters the code below.</Muted>
+              <Muted>The recipient scans this QR, then enters the code you share separately.</Muted>
               <View style={styles.qrWrap}>
                 <QRCode value={done.qr} size={200} backgroundColor="#ffffff" />
               </View>
-              <Muted>Claim code (share this separately, not with the QR)</Muted>
-              <Text style={styles.code}>{done.code}</Text>
+              <Muted>Claim code (share this separately, never with the QR)</Muted>
+              {revealCode ? (
+                <Text style={styles.code}>{done.code}</Text>
+              ) : (
+                <GhostButton label="Reveal claim code" onPress={() => setRevealCode(true)} />
+              )}
             </Card>
             <Card>
               <Muted>Amount</Muted>

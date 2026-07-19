@@ -55,13 +55,19 @@ export class VerifiedRecipientIndex {
     if (this.started) return;
     this.started = true;
     try {
+      // Snapshot the head BEFORE scanning and scan exactly up to it, then resume the
+      // poll from head+1. If we read the head only after the scan, any event mined
+      // during the scan would fall in the gap and be missed forever while isReady()
+      // still reported complete.
+      const head = await this.client.getBlockNumber();
       const logs = await getLogsChunked<RvArgs>(this.client, {
         address: this.contractAddress,
         abi: ctrlArcZAbi,
         eventName: 'RecipientVerified',
+        toBlock: head,
       });
       this.ingest(logs);
-      this.lastBlock = await this.client.getBlockNumber();
+      this.lastBlock = head;
       this.backfilled = true;
     } catch {
       // Backfill failed (RPC blip); the incremental poll will start from the next tick.

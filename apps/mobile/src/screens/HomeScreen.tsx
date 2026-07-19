@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { erc20Abi, formatUnits, type Address } from 'viem';
 import { ADDRESSES } from '@ctrl-arcz/sdk';
 import { Screen, H1, Muted, Mono, Card, GhostButton } from '../ui';
@@ -10,6 +10,20 @@ export function HomeScreen() {
   const { session, disconnect, wipe } = useWallet();
   const [balance, setBalance] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+
+  // Wiping deletes the only copy of the on-device key: there is no backup and no
+  // export, so an accidental tap would destroy access to the funds. Require an
+  // explicit, clearly-worded confirmation first.
+  const confirmWipe = useCallback(() => {
+    Alert.alert(
+      'Remove wallet?',
+      'This permanently deletes the key from this device. It cannot be recovered, and any funds in this wallet will be lost. Continue?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Remove wallet', style: 'destructive', onPress: () => void wipe() },
+      ],
+    );
+  }, [wipe]);
 
   const load = useCallback(async () => {
     if (!session) return;
@@ -60,7 +74,7 @@ export function HomeScreen() {
           <Mono>{short}</Mono>
         </Card>
         <GhostButton label="Disconnect" onPress={disconnect} />
-        <GhostButton label="Remove wallet from this device" onPress={wipe} />
+        <GhostButton label="Remove wallet from this device" onPress={confirmWipe} />
       </ScrollView>
     </Screen>
   );

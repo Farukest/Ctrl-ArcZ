@@ -283,3 +283,79 @@ A follow-up pass closed the remaining findings with real tests:
   pinning defends against. The Android pin-set carries an `expiration` safety valve
   so a stale pin can never brick the app in the field. Enforced in the native (EAS)
   build; Expo Go cannot pin. Validated via `expo config --type introspect`.
+
+## Deep audit — five-agent adversarial pass (all findings fixed)
+
+A second, deeper review ran five independent adversarial auditors over the whole
+system (contracts, SDK, backend + demo-kit, mobile, web). Each finding below was
+reproduced, fixed, and covered by a test or a live check. No CRITICAL/HIGH remained
+after this pass; the residuals were data-layer fail-open paths and abuse-prevention
+gaps rather than key/fund-theft vectors.
+
+### SDK — firewall data layer (the core promise)
+- **HIGH — provider swallowed its own errors, making the fail-closed branch dead
+  code.** `BlockscoutDataProvider.getOutgoingCounterparties` caught every fetch
+  error and returned `[]`, so under explorer degradation a poisoning lookalike
+  downgraded to `warning`/`safe` and both the transfer and the co-signer proceeded.
+  FIXED: the provider now REJECTS on a failed history fetch (`IDataProvider` documents
+  this), so `check()` marks the report incomplete and fails closed. Regression test
+  added; the old test only passed because its fake provider threw where the real one
+  never did.
+- **HIGH — no pagination: only the most-recent ~50 counterparties were scanned, with
+  `complete:true`.** A lookalike of an older counterparty slipped through silently.
+  FIXED: `getAllPages` follows `next_page_params` up to a cap and returns a `complete`
+  flag; a truncated scan marks the report incomplete (never authoritative). Test added.
+- **MEDIUM — co-signer ignored `verdict.complete`.** FIXED: `LocalCoSigner` now vetoes
+  any incomplete scan regardless of level (a successful bounded scan stays complete,
+  so the cold-start path is unaffected). Test added.
+- **MEDIUM — owner-auth signature was a reusable bearer proof.** `cosignAuthMessage`
+  bound only owner+ts. FIXED: it now binds the request scope (target/account/amount/
+  action); the server reconstructs and verifies it and rejects a replayed signature.
+  Test added.
+- **MEDIUM — `assertDeployedPolicy` checked only 4 of 9 fields.** FIXED: it now verifies
+  token/cosigner/target/vaultHash/maxAmount/perPullMax/expiry/interval/mode (accounting
+  for the contract's perPullMax==0→maxAmount normalization — a bug the live E2E caught).
+- **LOW — indexer backfill gap** (events mined during the backfill were dropped while
+  `isReady()` reported ready). FIXED: the head is snapshotted before the scan and the
+  poll resumes from it.
+
+### Backend
+- **HIGH — rate limiter was bypassable via a spoofed `X-Forwarded-For`.** It keyed on
+  the leftmost (client-controlled) hop. FIXED: it takes the rightmost hop nginx
+  appended; a per-key ceiling and periodic sweep bound the map.
+- **MEDIUM — signed requests were replayable within the 120s window.** FIXED: a
+  single-use nonce store (keyed by signature hash) rejects repeats. Tested.
+- **MEDIUM — no global relayer spend cap** (per-address only). FIXED: a process-wide
+  daily unit ceiling. Tested.
+- **MEDIUM — 30-minute verdict cache TOCTOU.** FIXED: TTL cut to 60s, verdicts computed
+  before the indexer is ready are not cached, and the cache is swept.
+- **MEDIUM — unbounded in-memory maps.** FIXED: sweeps + ceilings on the rate-limit,
+  quota, verdict, owner-sig, and notification stores.
+- **LOW — CORS reflected any Origin when unset.** FIXED: fail closed (a browser Origin
+  is allowed only if explicitly listed; same-origin web + no-Origin mobile are
+  unaffected). **LOW — notification registration** replayable/unbounded: FIXED with a
+  timestamped, freshness-checked message and a registry ceiling.
+
+### Mobile
+- **HIGH — biometric gate failed OPEN on a device with no biometric hardware.** FIXED:
+  it now falls back to the device passcode and fails closed when the device has no
+  security at all.
+- **MEDIUM — the Send screen ignored `warning`/incomplete verdicts.** FIXED: a warning
+  or an incomplete scan now routes to an explicit confirm step; only `block` hard-stops.
+- **MEDIUM — cert "pinning" pinned the shared CA root.** FIXED: pins the issuing
+  intermediates (rejects a different CA) and drops the roots; residual LE-mis-issuance
+  is covered by the on-chain co-signer pin.
+- **MEDIUM — one-tap irreversible wallet wipe.** FIXED: a destructive-action confirm.
+  **LOW** — screenshot guard engaged earlier + claim code is tap-to-reveal; push nav is
+  allow-listed to known routes; registration is timestamped.
+
+### Web + contracts
+- **LOW — claim code persisted to localStorage.** FIXED: the code is kept in memory for
+  the session only, never written to disk (the salt alone cannot claim). **LOW** — the
+  receiver no longer reads the secret code from a URL query param.
+- **LOW — contract: `interval==0` disabled the PULL rate limit.** FIXED: `init` requires
+  `interval > 0` for PULL. New `SpendPolicyFactory`
+  (`0x8AB90Dfe39D9c9bFE8bdDa84545FA734c02442B9`) + implementation
+  (`0xa06419b913abA4BFdfEeb9D1A8800DbC2E3A2C11`) redeployed and re-verified with the
+  live create→pay→sweep E2E. **LOW** — the SDK now treats a benign deploy collision
+  (someone force-deploys the identical account) as success rather than a hard error.

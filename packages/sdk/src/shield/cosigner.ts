@@ -111,6 +111,19 @@ export class LocalCoSigner implements CoSigner {
     if (!verdict) {
       return { approved: false, reason: 'risk data unavailable (fail-closed)' };
     }
+    // An incomplete scan can never be "safe": a data source that did not answer
+    // may be hiding a lookalike or a bait. The report carries `complete`, so honor
+    // it here rather than trusting the level alone — a `warning`/`safe` verdict on
+    // a partial scan is still a veto. (A successful bounded scan is `complete:true`;
+    // only a genuine data failure sets it false, so this does not veto the normal
+    // cold-start fallback.)
+    if (verdict.complete === false) {
+      return {
+        approved: false,
+        reason: 'risk scan incomplete (fail-closed)',
+        ...(verdict.reasons ? { riskReasons: verdict.reasons } : {}),
+      };
+    }
     if (SEVERITY[verdict.level] >= this.vetoThreshold) {
       return {
         approved: false,
@@ -194,10 +207,34 @@ export interface RemoteCoSignerAuth {
   sign: (message: string) => Promise<Hex>;
 }
 
-/** The message the payer signs to authenticate a co-signer request. The server
- *  recovers it and checks it equals the request's `owner` (and that it is fresh). */
-export function cosignAuthMessage(owner: Address, ts: number): string {
-  return `Ctrl+ArcZ cosign\nowner: ${owner.toLowerCase()}\nts: ${ts}`;
+/** The exact request the owner-auth signature is bound to. Binding these (not just
+ *  owner+ts) means a captured signature cannot be replayed to authorize a
+ *  *different* spend for the same owner (a bigger amount, a PULL, another account). */
+export interface CosignAuthScope {
+  /** Precheck binds the intended target (no account exists yet). */
+  target?: Address;
+  /** Authorize binds the account being spent from. */
+  account?: Address;
+  amount: bigint;
+  /** Authorize binds the action (PAY vs PULL); precheck omits it. */
+  action?: SpendAction;
+}
+
+/**
+ * The message the payer signs to authenticate a co-signer request. The server
+ * recovers it and checks it equals the request's `owner`, that it is fresh, and
+ * that it is bound to THIS request's scope (target/account/amount/action). `ts` is
+ * milliseconds (matches the server's `Date.now()` freshness window). Field order is
+ * fixed so the server can reconstruct the exact string from the request body.
+ */
+export function cosignAuthMessage(owner: Address, ts: number, scope: CosignAuthScope): string {
+  const lines = ['Ctrl+ArcZ cosign', `owner: ${owner.toLowerCase()}`];
+  if (scope.account) lines.push(`account: ${scope.account.toLowerCase()}`);
+  if (scope.target) lines.push(`target: ${scope.target.toLowerCase()}`);
+  lines.push(`amount: ${scope.amount.toString()}`);
+  if (scope.action != null) lines.push(`action: ${scope.action}`);
+  lines.push(`ts: ${ts}`);
+  return lines.join('\n');
 }
 
 export class RemoteCoSigner implements CoSigner {
@@ -217,11 +254,15 @@ export class RemoteCoSigner implements CoSigner {
   }
 
   /** Owner-authentication fields to attach to the request body, when a signer is
-   *  configured (the payer's wallet). */
-  private async authBody(owner: Address): Promise<{ ownerSig?: Hex; ownerSigTs?: number }> {
+   *  configured (the payer's wallet). The signature is bound to this request's
+   *  scope so it cannot be replayed against a different spend. */
+  private async authBody(
+    owner: Address,
+    scope: CosignAuthScope,
+  ): Promise<{ ownerSig?: Hex; ownerSigTs?: number }> {
     if (!this.auth) return {};
     const ts = Date.now();
-    const ownerSig = await this.auth.sign(cosignAuthMessage(owner, ts));
+    const ownerSig = await this.auth.sign(cosignAuthMessage(owner, ts, scope));
     return { ownerSig, ownerSigTs: ts };
   }
 
@@ -235,7 +276,7 @@ export class RemoteCoSigner implements CoSigner {
         owner: req.owner,
         target: req.target,
         amount: req.amount.toString(),
-        ...(await this.authBody(req.owner)),
+        ...(await this.authBody(req.owner, { target: req.target, amount: req.amount })),
       }),
     });
     const data = (await res.json()) as PrecheckResult;
@@ -257,7 +298,11 @@ export class RemoteCoSigner implements CoSigner {
         owner: req.owner,
         amount: req.amount.toString(),
         action: req.action ?? ACTION_PAY,
-        ...(await this.authBody(req.owner)),
+        ...(await this.authBody(req.owner, {
+          account: req.account,
+          amount: req.amount,
+          action: req.action ?? ACTION_PAY,
+        })),
       }),
     });
     const data = (await res.json()) as

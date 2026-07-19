@@ -9,7 +9,12 @@ import {
 import { RiskBlockedError } from '../src/transfer/errors.js';
 import { defineConfig } from '../src/config/config.js';
 import { evaluateRisk } from '../src/risk/rules.js';
-import type { AddressActivity, IDataProvider, RiskReport } from '../src/risk/types.js';
+import type {
+  AddressActivity,
+  CounterpartyScan,
+  IDataProvider,
+  RiskReport,
+} from '../src/risk/types.js';
 
 const SENDER = '0x1111111111111111111111111111111111111111' as Address;
 const TARGET = '0x9999888877776666555544443333222211110000' as Address;
@@ -26,9 +31,9 @@ class FakeProvider implements IDataProvider {
       zeroValue?: number;
     } = {},
   ) {}
-  async getOutgoingCounterparties(): Promise<Address[]> {
+  async getOutgoingCounterparties(): Promise<CounterpartyScan> {
     this.calls++;
-    return this.data.counterparties ?? [];
+    return { counterparties: this.data.counterparties ?? [], complete: true };
   }
   async getAddressActivity(): Promise<AddressActivity> {
     return this.data.activity ?? { transactionCount: 42, firstSeenAt: new Date('2025-01-01') };

@@ -1,6 +1,6 @@
 import type { Address } from 'viem';
 import { EXPLORER_API_URL } from '../chains/arcTestnet.js';
-import type { AddressActivity, IDataProvider } from './types.js';
+import type { AddressActivity, CounterpartyScan, IDataProvider } from './types.js';
 
 /**
  * Risk data from ArcScan, which runs Blockscout.
@@ -32,7 +32,13 @@ interface BlockscoutTokenTransfer {
 
 interface Paged<T> {
   items?: T[] | null;
+  /** Blockscout v2 cursor: query params to append for the next page, or null at the end. */
+  next_page_params?: Record<string, string | number> | null;
 }
+
+/** Cap the counterparty scan so a hot wallet cannot make it run forever. If the
+ *  history is longer than this, the scan is marked incomplete (never authoritative). */
+const MAX_COUNTERPARTY_PAGES = 10;
 
 export interface BlockscoutProviderOptions {
   /** Defaults to Arc Testnet's ArcScan. */
@@ -70,29 +76,62 @@ export class BlockscoutDataProvider implements IDataProvider {
     }
   }
 
-  /** Every address this sender has moved value to, from both native and ERC-20 paths. */
-  async getOutgoingCounterparties(sender: Address): Promise<Address[]> {
+  /**
+   * Walk a Blockscout list endpoint across pages, following `next_page_params` up
+   * to `maxPages`. Returns whether the whole history was consumed (`complete`) — if
+   * a cursor remains at the cap, the caller must treat the result as partial. A
+   * fetch failure on ANY page rejects, so callers fail closed rather than seeing a
+   * silently truncated list.
+   */
+  private async getAllPages<T>(basePath: string, maxPages: number): Promise<{ items: T[]; complete: boolean }> {
+    const items: T[] = [];
+    let cursor: Record<string, string | number> | null = null;
+    for (let page = 0; page < maxPages; page++) {
+      const sep = basePath.includes('?') ? '&' : '?';
+      const query = cursor
+        ? sep + new URLSearchParams(Object.entries(cursor).map(([k, v]) => [k, String(v)])).toString()
+        : '';
+      const res: Paged<T> = await this.get<Paged<T>>(`${basePath}${query}`);
+      for (const it of res.items ?? []) items.push(it);
+      cursor = res.next_page_params ?? null;
+      if (!cursor) return { items, complete: true };
+    }
+    // Cursor still set after maxPages: history longer than we scanned.
+    return { items, complete: false };
+  }
+
+  /** Every address this sender has moved value to, from both native and ERC-20 paths.
+   *  Rejects if either list cannot be fetched (fail closed); marks the scan partial
+   *  if the history is longer than the page cap. */
+  async getOutgoingCounterparties(sender: Address): Promise<CounterpartyScan> {
+    // NOT swallowed: a failure here must propagate so `check` marks the report
+    // incomplete and the firewall fails closed instead of "no counterparties".
     const [transfers, transactions] = await Promise.all([
-      this.get<Paged<BlockscoutTokenTransfer>>(
+      this.getAllPages<BlockscoutTokenTransfer>(
         `/addresses/${sender}/token-transfers?filter=from`,
-      ).catch(() => ({ items: [] })),
-      this.get<Paged<BlockscoutTransaction>>(`/addresses/${sender}/transactions?filter=from`).catch(
-        () => ({ items: [] }),
+        MAX_COUNTERPARTY_PAGES,
+      ),
+      this.getAllPages<BlockscoutTransaction>(
+        `/addresses/${sender}/transactions?filter=from`,
+        MAX_COUNTERPARTY_PAGES,
       ),
     ]);
 
     const counterparties = new Set<string>();
 
-    for (const t of transfers.items ?? []) {
+    for (const t of transfers.items) {
       // A 0-value transfer the sender made is not a counterparty relationship.
       if (t.to?.hash && !isZero(t.total?.value)) counterparties.add(t.to.hash.toLowerCase());
     }
-    for (const t of transactions.items ?? []) {
+    for (const t of transactions.items) {
       if (t.to?.hash && !isZero(t.value)) counterparties.add(t.to.hash.toLowerCase());
     }
 
     counterparties.delete(sender.toLowerCase());
-    return [...counterparties] as Address[];
+    return {
+      counterparties: [...counterparties] as Address[],
+      complete: transfers.complete && transactions.complete,
+    };
   }
 
   /**

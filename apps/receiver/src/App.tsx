@@ -77,7 +77,11 @@ export function App() {
   const guard = useSubmitGuard();
   const params = useMemo(() => new URLSearchParams(window.location.search), []);
   const [tid, setTid] = useState(params.get('tid') ?? '');
-  const [code, setCode] = useState(params.get('code') ?? '');
+  // The claim code is NEVER read from the URL: a link carrying it would leak the
+  // secret into browser history, Referer headers, and chat link previews, defeating
+  // the out-of-band-code design. The recipient always types it in by hand. Only the
+  // non-secret transfer id and salt (which the sender shares via QR) come from the URL.
+  const [code, setCode] = useState('');
   const salt = params.get('salt') as Hex | null;
 
   const [pending, setPending] = useState<Pending[] | null>(null);
