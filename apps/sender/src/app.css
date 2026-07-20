@@ -1,0 +1,119 @@
+/* Send / Receive hero mode switch + the "different world" transition. */
+
+.modeswitch {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: stretch;
+  padding: 5px;
+  border-radius: 999px;
+  background: var(--card, #12141a);
+  border: 1px solid var(--card-border, rgba(255, 255, 255, 0.08));
+  overflow: hidden;
+}
+
+/* Sliding active pill. */
+.modeswitch__thumb {
+  position: absolute;
+  top: 5px;
+  bottom: 5px;
+  left: 5px;
+  width: calc(50% - 5px);
+  border-radius: 999px;
+  background: var(--mode-accent, #4b9fff);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+  transition:
+    transform 280ms cubic-bezier(0.22, 1, 0.36, 1),
+    background 280ms ease;
+}
+.modeswitch[data-mode='send'] {
+  --mode-accent: #4b9fff;
+}
+.modeswitch[data-mode='receive'] {
+  --mode-accent: #2ea043;
+}
+.modeswitch[data-mode='receive'] .modeswitch__thumb {
+  transform: translateX(100%);
+}
+
+.modeswitch__btn {
+  position: relative;
+  z-index: 1;
+  appearance: none;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  padding: 11px 8px;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  color: var(--muted, #9aa4b2);
+  transition: color 200ms ease;
+}
+.modeswitch__btn[aria-selected='true'] {
+  color: #0b0d12;
+}
+
+/* Waiting-claim badge on the inactive Receive half. */
+.modeswitch__dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  margin-left: 7px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #f85149;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  vertical-align: middle;
+  box-shadow: 0 0 0 0 rgba(248, 81, 73, 0.6);
+  animation: mode-pulse 1.6s ease-out infinite;
+}
+@keyframes mode-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(248, 81, 73, 0.55);
+  }
+  70% {
+    box-shadow: 0 0 0 7px rgba(248, 81, 73, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(248, 81, 73, 0);
+  }
+}
+
+/* The content area: replays an enter transition on every mode switch so it reads as
+   moving to a different space, without a route change. Accent tint reinforces it. */
+.mode-view {
+  margin-top: var(--sp-4, 16px);
+  animation: mode-enter 300ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.mode-view[data-mode='send'] {
+  --mode-accent: #4b9fff;
+}
+.mode-view[data-mode='receive'] {
+  --mode-accent: #2ea043;
+}
+@keyframes mode-enter {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.995);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .modeswitch__thumb,
+  .mode-view {
+    transition: none;
+    animation: none;
+  }
+  .modeswitch__dot {
+    animation: none;
+  }
+}

@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { installTestProvider } from '@ctrl-arcz/demo-kit';
 import { I18nProvider, ThemeProvider, ToastProvider } from '@ctrl-arcz/demo-kit/ui';
 import { App } from './App.js';
+import './app.css';
 
 // Test mode only: install a local-key EIP-1193 provider so the real "Connect
 // Wallet" flow can be driven headlessly. Never runs in production (no VITE_DEMO_PK).
