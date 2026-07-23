@@ -74,24 +74,44 @@
         gap: 12px;
         margin-bottom: 8px;
       }
+      /* The wordmark IS the logo: it types the undo shortcut "Ctrl+Z", erases it,
+         and retypes the brand "Ctrl+ArcZ". +=info-blue, Arc=amber, Ctrl/Z neutral. */
       .logo {
         display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width: 40px;
-        height: 40px;
-        border-radius: 11px;
-        background: var(--accent);
-        color: var(--bg);
+        align-items: baseline;
         font-family: var(--mono);
         font-weight: 600;
-        font-size: 15px;
-        letter-spacing: -0.5px;
+        font-size: 26px;
+        letter-spacing: -0.01em;
+        color: var(--hi);
+        user-select: none;
+        min-height: 1.3em;
       }
-      .brand {
-        font-weight: 700;
-        font-size: 18px;
-        letter-spacing: -0.2px;
+      .logo__ctrl,
+      .logo__z {
+        color: var(--hi);
+      }
+      .logo__plus {
+        color: var(--info);
+      }
+      .logo__arc {
+        color: var(--accent);
+      }
+      .logo__caret {
+        color: var(--accent);
+        font-weight: 400;
+        margin-left: 1px;
+        transform: translateX(-1px);
+        animation: caret-blink 1s steps(1) infinite;
+      }
+      .logo__caret--off {
+        opacity: 0;
+        animation: none;
+      }
+      @keyframes caret-blink {
+        50% {
+          opacity: 0;
+        }
       }
       h1 {
         font-size: clamp(30px, 6vw, 40px);
@@ -242,8 +262,9 @@
   <body>
     <div class="wrap">
       <header class="top">
-        <span class="logo">C+Z</span>
-        <span class="brand">Ctrl+ArcZ</span>
+        <a href="https://ctrlarcz.xyz" class="logo" id="logo" aria-label="Ctrl+ArcZ" style="text-decoration: none; border: 0"
+          ><span class="logo__word" id="logoWord"></span
+          ><span class="logo__caret" id="logoCaret">|</span></a>
       </header>
 
       <h1>Privacy Policy</h1>
@@ -255,7 +276,7 @@
         and keep the data we do touch to the minimum the service needs.
       </p>
 
-      <span class="pill"><b>&#10003;</b>&nbsp; Non-custodial · no accounts · no personal identity collected</span>
+      <span class="pill">Non-custodial · no accounts · no personal identity collected</span>
 
       <h2><span class="n">01</span>Who we are &amp; what this covers</h2>
       <p>
@@ -268,8 +289,8 @@
 
       <h2><span class="n">02</span>Information we do <em>not</em> collect</h2>
       <ul>
-        <li><strong>No personal identity</strong> — no name, email, phone number, date of birth, or government ID.</li>
-        <li><strong>No private keys or seed phrases</strong> — your keys never leave your wallet; we cannot see or access them.</li>
+        <li><strong>No personal identity</strong>: no name, email, phone number, date of birth, or government ID.</li>
+        <li><strong>No private keys or seed phrases</strong>: your keys never leave your wallet; we cannot see or access them.</li>
         <li><strong>No precise location</strong>, contacts, photos library, or advertising identifiers.</li>
         <li><strong>No trackers or third-party analytics/advertising SDKs</strong>, and we never sell data.</li>
       </ul>
@@ -318,16 +339,16 @@
       <h2><span class="n">04</span>How we use it</h2>
       <p>
         We use the data above <strong>solely to operate and secure the Service</strong>: checking
-        recipients with the firewall, relaying and settling transfers you request, and — if you opt
-        in — delivering notifications. We do not use your data for advertising, profiling, or resale,
+        recipients with the firewall, relaying and settling transfers you request, and: if you opt
+        in: delivering notifications. We do not use your data for advertising, profiling, or resale,
         and we do not build a personal profile of you.
       </p>
 
       <h2><span class="n">05</span>Blockchain is public and permanent</h2>
       <div class="card accent">
         <p style="margin-top: 0">
-          Transactions you make are written to a <strong>public blockchain</strong>. That data —
-          your wallet address, amounts, and transfer history — is visible to anyone, permanent, and
+          Transactions you make are written to a <strong>public blockchain</strong>. That data,
+          your wallet address, amounts, and transfer history, is visible to anyone, permanent, and
           <strong>outside our control</strong>. We cannot edit or delete on-chain records. This is
           inherent to how blockchains work, not a choice we make.
         </p>
@@ -340,10 +361,10 @@
         to make it work. Each has its own privacy policy:
       </p>
       <ul>
-        <li><strong>WalletConnect / Reown</strong> — relays the connection between the app and your wallet. (<a href="https://reown.com/privacy-policy" target="_blank" rel="noreferrer noopener">policy</a>)</li>
-        <li><strong>Arc RPC &amp; ArcScan explorer</strong> — read and broadcast public on-chain data.</li>
-        <li><strong>Circle</strong> — powers cross-chain (CCTP) transfers and gasless claims. (<a href="https://www.circle.com/legal/privacy-policy" target="_blank" rel="noreferrer noopener">policy</a>)</li>
-        <li><strong>Expo</strong> — delivers push notifications, if you enable them. (<a href="https://expo.dev/privacy" target="_blank" rel="noreferrer noopener">policy</a>)</li>
+        <li><strong>WalletConnect / Reown</strong>: relays the connection between the app and your wallet. (<a href="https://reown.com/privacy-policy" target="_blank" rel="noreferrer noopener">policy</a>)</li>
+        <li><strong>Arc RPC &amp; ArcScan explorer</strong>: read and broadcast public on-chain data.</li>
+        <li><strong>Circle</strong>: powers cross-chain (CCTP) transfers and gasless claims. (<a href="https://www.circle.com/legal/privacy-policy" target="_blank" rel="noreferrer noopener">policy</a>)</li>
+        <li><strong>Expo</strong>: delivers push notifications, if you enable them. (<a href="https://expo.dev/privacy" target="_blank" rel="noreferrer noopener">policy</a>)</li>
       </ul>
 
       <h2><span class="n">07</span>Security</h2>
@@ -355,8 +376,8 @@
 
       <h2><span class="n">08</span>Data retention &amp; your choices</h2>
       <ul>
-        <li><strong>Disconnect any time</strong> — disconnecting your wallet removes it from the current session.</li>
-        <li><strong>Notifications</strong> — turn them off in the app, or uninstall, to stop and remove your push token from our backend. You may also request deletion via the contact below.</li>
+        <li><strong>Disconnect any time</strong>: disconnecting your wallet removes it from the current session.</li>
+        <li><strong>Notifications</strong>: turn them off in the app, or uninstall, to stop and remove your push token from our backend. You may also request deletion via the contact below.</li>
         <li><strong>On-chain data</strong> cannot be deleted by us or anyone; it is permanent by design.</li>
       </ul>
 
@@ -384,5 +405,63 @@
         <a href="https://ctrlarcz.xyz">ctrlarcz.xyz</a>
       </footer>
     </div>
+    <script>
+      (function () {
+        var word = document.getElementById('logoWord');
+        var caret = document.getElementById('logoCaret');
+        if (!word || !caret) return;
+        var FINAL = 'Ctrl+ArcZ';
+        // Color the typed substring by segment: Ctrl / + / Arc / Z.
+        function colorize(shown) {
+          var plus = shown.indexOf('+');
+          var before = plus === -1 ? shown : shown.slice(0, plus);
+          var tail = plus === -1 ? '' : shown.slice(plus + 1);
+          var arc = tail === 'Z' ? '' : tail.slice(0, 3);
+          var z = tail === 'Z' ? 'Z' : tail.slice(3);
+          var html = '';
+          if (before) html += '<span class="logo__ctrl">' + before + '</span>';
+          if (plus !== -1) html += '<span class="logo__plus">+</span>';
+          if (arc) html += '<span class="logo__arc">' + arc + '</span>';
+          if (z) html += '<span class="logo__z">' + z + '</span>';
+          return html;
+        }
+        var reduce = false;
+        try {
+          reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        } catch (e) {}
+        if (reduce) {
+          word.innerHTML = colorize(FINAL);
+          caret.className = 'logo__caret logo__caret--off';
+          return;
+        }
+        var TYPE = 110,
+          DEL = 70,
+          PAUSE = 700,
+          INIT = 250;
+        // Build the sequence: type "Ctrl+Z", pause, delete "Z", type "ArcZ".
+        var steps = [];
+        var s1 = 'Ctrl+Z';
+        for (var i = 1; i <= s1.length; i++) steps.push({ t: colorize(s1.slice(0, i)), d: TYPE });
+        steps.push({ t: colorize(s1), d: PAUSE });
+        steps.push({ t: colorize('Ctrl+'), d: DEL });
+        var arc = 'ArcZ';
+        for (var j = 1; j <= arc.length; j++) steps.push({ t: colorize('Ctrl+' + arc.slice(0, j)), d: TYPE });
+        var k = 0;
+        function run() {
+          if (k >= steps.length) {
+            setTimeout(function () {
+              caret.className = 'logo__caret logo__caret--off';
+            }, 900);
+            return;
+          }
+          word.innerHTML = steps[k].t;
+          var d = steps[k].d;
+          k++;
+          setTimeout(run, d);
+        }
+        word.innerHTML = '';
+        setTimeout(run, INIT);
+      })();
+    </script>
   </body>
 </html>
