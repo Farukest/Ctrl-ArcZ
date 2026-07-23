@@ -441,11 +441,16 @@
         // Build the sequence: type "Ctrl+Z", pause, delete "Z", type "ArcZ".
         var steps = [];
         var s1 = 'Ctrl+Z';
-        for (var i = 1; i <= s1.length; i++) steps.push({ t: colorize(s1.slice(0, i)), d: TYPE });
-        steps.push({ t: colorize(s1), d: PAUSE });
-        steps.push({ t: colorize('Ctrl+'), d: DEL });
-        var arc = 'ArcZ';
-        for (var j = 1; j <= arc.length; j++) steps.push({ t: colorize('Ctrl+' + arc.slice(0, j)), d: TYPE });
+        var s2 = 'Ctrl+ArcZ';
+        // Type "Ctrl+Z", then pause on the full word.
+        for (var i = 1; i <= s1.length; i++)
+          steps.push({ t: colorize(s1.slice(0, i)), d: i === s1.length ? PAUSE : TYPE });
+        // Undo it: delete the WHOLE thing back to empty, one char at a time (this is
+        // exactly what the ReactBits TextType engine does between strings).
+        for (var di = s1.length - 1; di >= 0; di--)
+          steps.push({ t: colorize(s1.slice(0, di)), d: di === 0 ? INIT : DEL });
+        // Retype the brand "Ctrl+ArcZ" from scratch.
+        for (var j = 1; j <= s2.length; j++) steps.push({ t: colorize(s2.slice(0, j)), d: TYPE });
         var k = 0;
         function run() {
           if (k >= steps.length) {
