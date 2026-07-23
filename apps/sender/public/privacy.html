@@ -1,0 +1,388 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Privacy Policy · Ctrl+ArcZ</title>
+    <meta
+      name="description"
+      content="How Ctrl+ArcZ handles your data. We are non-custodial and collect no personal identity."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg: #0a0c10;
+        --sunken: #070809;
+        --card: #0e1117;
+        --border: #262d38;
+        --border-strong: #363f4c;
+        --hi: #e9edf2;
+        --mid: #9ba6b4;
+        --lo: #5d6675;
+        --accent: #f5a524;
+        --accent-soft: #2a2113;
+        --safe: #2fbf71;
+        --info: #5b8def;
+        --sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+        --radius: 14px;
+      }
+      @media (prefers-color-scheme: light) {
+        :root {
+          --bg: #f7f8fa;
+          --sunken: #eef1f5;
+          --card: #ffffff;
+          --border: #e0e5ec;
+          --border-strong: #c9d1db;
+          --hi: #0c0e12;
+          --mid: #4a5261;
+          --lo: #8a93a3;
+          --accent: #b4770c;
+          --accent-soft: #fbf1dc;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html {
+        scroll-behavior: smooth;
+      }
+      body {
+        margin: 0;
+        background:
+          radial-gradient(1200px 600px at 50% -200px, var(--accent-soft), transparent 70%),
+          var(--bg);
+        color: var(--hi);
+        font-family: var(--sans);
+        font-size: 16px;
+        line-height: 1.65;
+        -webkit-font-smoothing: antialiased;
+      }
+      .wrap {
+        max-width: 760px;
+        margin: 0 auto;
+        padding: 56px 22px 96px;
+      }
+      header.top {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 8px;
+      }
+      .logo {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 40px;
+        height: 40px;
+        border-radius: 11px;
+        background: var(--accent);
+        color: var(--bg);
+        font-family: var(--mono);
+        font-weight: 600;
+        font-size: 15px;
+        letter-spacing: -0.5px;
+      }
+      .brand {
+        font-weight: 700;
+        font-size: 18px;
+        letter-spacing: -0.2px;
+      }
+      h1 {
+        font-size: clamp(30px, 6vw, 40px);
+        line-height: 1.1;
+        letter-spacing: -1px;
+        margin: 26px 0 10px;
+      }
+      .meta {
+        color: var(--lo);
+        font-family: var(--mono);
+        font-size: 13px;
+        margin: 0 0 30px;
+      }
+      .lede {
+        color: var(--mid);
+        font-size: 18px;
+        line-height: 1.6;
+      }
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        margin: 22px 0 4px;
+        padding: 7px 13px;
+        border: 1px solid var(--border-strong);
+        border-radius: 999px;
+        background: var(--card);
+        color: var(--mid);
+        font-size: 13.5px;
+      }
+      .pill b {
+        color: var(--safe);
+      }
+      h2 {
+        font-size: 20px;
+        letter-spacing: -0.3px;
+        margin: 44px 0 12px;
+        padding-top: 14px;
+        border-top: 1px solid var(--border);
+      }
+      h2 .n {
+        color: var(--accent);
+        font-family: var(--mono);
+        font-size: 15px;
+        margin-right: 10px;
+      }
+      p {
+        color: var(--mid);
+        margin: 12px 0;
+      }
+      strong {
+        color: var(--hi);
+        font-weight: 600;
+      }
+      ul {
+        margin: 12px 0;
+        padding-left: 0;
+        list-style: none;
+      }
+      ul li {
+        color: var(--mid);
+        position: relative;
+        padding: 7px 0 7px 26px;
+      }
+      ul li::before {
+        content: '';
+        position: absolute;
+        left: 4px;
+        top: 15px;
+        width: 6px;
+        height: 6px;
+        border-radius: 2px;
+        background: var(--accent);
+      }
+      ul li strong {
+        color: var(--hi);
+      }
+      code {
+        font-family: var(--mono);
+        font-size: 0.88em;
+        color: var(--hi);
+        background: var(--sunken);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 1px 6px;
+      }
+      a {
+        color: var(--accent);
+        text-decoration: none;
+        border-bottom: 1px solid transparent;
+      }
+      a:hover {
+        border-bottom-color: var(--accent);
+      }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 18px 20px;
+        margin: 18px 0;
+      }
+      .card.accent {
+        border-color: var(--border-strong);
+        background:
+          linear-gradient(180deg, var(--accent-soft), transparent 60%), var(--card);
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 14px 0;
+        font-size: 14.5px;
+      }
+      th,
+      td {
+        text-align: left;
+        padding: 11px 12px;
+        border-bottom: 1px solid var(--border);
+        vertical-align: top;
+      }
+      th {
+        color: var(--lo);
+        font-weight: 600;
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.6px;
+      }
+      td {
+        color: var(--mid);
+      }
+      td strong {
+        color: var(--hi);
+      }
+      .table-scroll {
+        overflow-x: auto;
+      }
+      footer {
+        margin-top: 56px;
+        padding-top: 22px;
+        border-top: 1px solid var(--border);
+        color: var(--lo);
+        font-size: 13.5px;
+      }
+      footer a {
+        color: var(--mid);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header class="top">
+        <span class="logo">C+Z</span>
+        <span class="brand">Ctrl+ArcZ</span>
+      </header>
+
+      <h1>Privacy Policy</h1>
+      <p class="meta">Last updated: July 20, 2026 · Effective: July 20, 2026</p>
+
+      <p class="lede">
+        Ctrl+ArcZ is a non-custodial app for protected USDC transfers on the Arc network. We built
+        it to move money safely, not to profile you. We collect no personal identity, hold no keys,
+        and keep the data we do touch to the minimum the service needs.
+      </p>
+
+      <span class="pill"><b>&#10003;</b>&nbsp; Non-custodial · no accounts · no personal identity collected</span>
+
+      <h2><span class="n">01</span>Who we are &amp; what this covers</h2>
+      <p>
+        This policy explains how the Ctrl+ArcZ mobile app and website (together, the
+        &ldquo;Service&rdquo;) handle information. Ctrl+ArcZ is a self-custodial tool: you connect
+        your own wallet (such as MetaMask or Rabby) and it, not us, holds your keys and authorizes
+        every transaction. The Service currently operates on the <strong>Arc test network</strong>,
+        using test assets that hold no monetary value.
+      </p>
+
+      <h2><span class="n">02</span>Information we do <em>not</em> collect</h2>
+      <ul>
+        <li><strong>No personal identity</strong> — no name, email, phone number, date of birth, or government ID.</li>
+        <li><strong>No private keys or seed phrases</strong> — your keys never leave your wallet; we cannot see or access them.</li>
+        <li><strong>No precise location</strong>, contacts, photos library, or advertising identifiers.</li>
+        <li><strong>No trackers or third-party analytics/advertising SDKs</strong>, and we never sell data.</li>
+      </ul>
+
+      <h2><span class="n">03</span>Information we process</h2>
+      <p>To provide the Service, we process a small amount of technical data:</p>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Data</th>
+              <th>Why</th>
+              <th>Where it lives</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Public wallet address</strong></td>
+              <td>To run the address-poisoning firewall against public on-chain history, prepare transfers, and show your activity.</td>
+              <td>In your browser/device and, transiently, on our backend during a request.</td>
+            </tr>
+            <tr>
+              <td><strong>Transaction details</strong> (amounts, recipient addresses)</td>
+              <td>To create, escrow, claim, and settle protected transfers you initiate.</td>
+              <td>Recorded on the public blockchain (permanent and public by design).</td>
+            </tr>
+            <tr>
+              <td><strong>Push notification token</strong> <em>(only if you enable notifications)</em></td>
+              <td>To alert you when a payment involves your address.</td>
+              <td>Stored on our backend, linked to your address, until you turn it off or uninstall.</td>
+            </tr>
+            <tr>
+              <td><strong>Camera</strong> <em>(only when you scan a QR code)</em></td>
+              <td>To read a recipient address so the firewall can check it before you send.</td>
+              <td>Processed on-device in real time; images are not stored or transmitted.</td>
+            </tr>
+            <tr>
+              <td><strong>Basic technical logs</strong> (e.g. IP address for rate limiting)</td>
+              <td>Security and abuse prevention on our backend.</td>
+              <td>Kept briefly on our server, then discarded.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2><span class="n">04</span>How we use it</h2>
+      <p>
+        We use the data above <strong>solely to operate and secure the Service</strong>: checking
+        recipients with the firewall, relaying and settling transfers you request, and — if you opt
+        in — delivering notifications. We do not use your data for advertising, profiling, or resale,
+        and we do not build a personal profile of you.
+      </p>
+
+      <h2><span class="n">05</span>Blockchain is public and permanent</h2>
+      <div class="card accent">
+        <p style="margin-top: 0">
+          Transactions you make are written to a <strong>public blockchain</strong>. That data —
+          your wallet address, amounts, and transfer history — is visible to anyone, permanent, and
+          <strong>outside our control</strong>. We cannot edit or delete on-chain records. This is
+          inherent to how blockchains work, not a choice we make.
+        </p>
+      </div>
+
+      <h2><span class="n">06</span>Third-party services</h2>
+      <p>
+        The Service relies on a few infrastructure providers. When you use the relevant feature,
+        limited technical data (such as your wallet address or a signed request) is shared with them
+        to make it work. Each has its own privacy policy:
+      </p>
+      <ul>
+        <li><strong>WalletConnect / Reown</strong> — relays the connection between the app and your wallet. (<a href="https://reown.com/privacy-policy" target="_blank" rel="noreferrer noopener">policy</a>)</li>
+        <li><strong>Arc RPC &amp; ArcScan explorer</strong> — read and broadcast public on-chain data.</li>
+        <li><strong>Circle</strong> — powers cross-chain (CCTP) transfers and gasless claims. (<a href="https://www.circle.com/legal/privacy-policy" target="_blank" rel="noreferrer noopener">policy</a>)</li>
+        <li><strong>Expo</strong> — delivers push notifications, if you enable them. (<a href="https://expo.dev/privacy" target="_blank" rel="noreferrer noopener">policy</a>)</li>
+      </ul>
+
+      <h2><span class="n">07</span>Security</h2>
+      <ul>
+        <li>Your keys stay in your own wallet; <strong>we can never move your funds</strong>.</li>
+        <li>All traffic to our backend and the network uses <strong>encrypted TLS</strong>; the mobile app additionally pins the connection to defend against interception.</li>
+        <li>You are responsible for safeguarding your wallet, its recovery phrase, and your device. No app can recover a lost key.</li>
+      </ul>
+
+      <h2><span class="n">08</span>Data retention &amp; your choices</h2>
+      <ul>
+        <li><strong>Disconnect any time</strong> — disconnecting your wallet removes it from the current session.</li>
+        <li><strong>Notifications</strong> — turn them off in the app, or uninstall, to stop and remove your push token from our backend. You may also request deletion via the contact below.</li>
+        <li><strong>On-chain data</strong> cannot be deleted by us or anyone; it is permanent by design.</li>
+      </ul>
+
+      <h2><span class="n">09</span>Children</h2>
+      <p>
+        The Service is not directed to children and is not intended for anyone under 18. We do not
+        knowingly process data from minors.
+      </p>
+
+      <h2><span class="n">10</span>Changes to this policy</h2>
+      <p>
+        We may update this policy as the Service evolves. Material changes will be reflected by the
+        &ldquo;Last updated&rdquo; date at the top of this page. Continued use after an update means
+        you accept the revised policy.
+      </p>
+
+      <h2><span class="n">11</span>Contact</h2>
+      <p>
+        Questions or requests about this policy or your data? Reach us at
+        <a href="mailto:privacy@ctrlarcz.xyz">privacy@ctrlarcz.xyz</a>.
+      </p>
+
+      <footer>
+        Ctrl+ArcZ · Protected USDC transfers on Arc ·
+        <a href="https://ctrlarcz.xyz">ctrlarcz.xyz</a>
+      </footer>
+    </div>
+  </body>
+</html>
