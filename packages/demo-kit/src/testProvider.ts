@@ -1,6 +1,10 @@
-import { createWalletClient, http, type EIP1193Provider, type Hex } from 'viem';
+import { createWalletClient, fallback, http, type EIP1193Provider, type Hex } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { arcTestnet, RPC_URL } from '@ctrl-arcz/sdk';
+import { arcTestnet, RPC_URLS } from '@ctrl-arcz/sdk';
+
+// Spread across all public Arc RPCs so a single endpoint rate-limiting one heavy
+// flow does not stall the test wallet's reads/writes.
+const arcTransport = () => fallback(RPC_URLS.map((u) => http(u, { retryCount: 2, timeout: 20_000 })));
 
 export interface TestProviderOptions {
   /** Chain id the provider reports initially. Defaults to Arc Testnet. Set to a
@@ -26,8 +30,8 @@ export function makeTestProvider(
   options: TestProviderOptions = {},
 ): EIP1193Provider {
   const account = privateKeyToAccount(privateKey);
-  const wallet = createWalletClient({ account, chain: arcTestnet, transport: http(RPC_URL) });
-  const rpc = http(RPC_URL)({ chain: arcTestnet });
+  const wallet = createWalletClient({ account, chain: arcTestnet, transport: arcTransport() });
+  const rpc = arcTransport()({ chain: arcTestnet });
 
   const arcHex = `0x${arcTestnet.id.toString(16)}`;
   let chainIdHex = options.chainId ? `0x${options.chainId.toString(16)}` : arcHex;

@@ -2,6 +2,7 @@ import {
   createPublicClient,
   createWalletClient,
   custom,
+  fallback,
   http,
   type Address,
   type EIP1193Provider,
@@ -10,15 +11,15 @@ import {
   type WalletClient,
 } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { arcTestnet, ARC_TESTNET_CHAIN_ID, RPC_URL, type ClientPair } from '@ctrl-arcz/sdk';
+import { arcTestnet, ARC_TESTNET_CHAIN_ID, RPC_URL, RPC_URLS, type ClientPair } from '@ctrl-arcz/sdk';
 
 /**
  * The public Arc RPC returns JSON-RPC error -32011 "request limit reached" under
- * load, which viem does not retry (it is not a 5xx/timeout). Wrap the transport to
- * back off and retry on exactly that, so a rate-limit blip does not break a flow.
+ * load, which viem does not retry (it is not a 5xx/timeout). Wrap each endpoint to
+ * back off a few times on exactly that.
  */
 function rlHttp(url: string): Transport {
-  const inner = http(url, { retryCount: 6, retryDelay: 1200, timeout: 30_000 });
+  const inner = http(url, { retryCount: 2, retryDelay: 600, timeout: 20_000 });
   return ((params) => {
     const t = inner(params);
     const request = async (args: unknown, opts?: unknown) => {
@@ -27,16 +28,25 @@ function rlHttp(url: string): Transport {
           return await (t.request as (a: unknown, o?: unknown) => Promise<unknown>)(args, opts);
         } catch (e) {
           const m = String((e as Error)?.message ?? e);
-          if (i < 20 && /request limit|rate limit|429|-32011/i.test(m)) {
-            await new Promise((r) => setTimeout(r, 1800));
+          if (i < 3 && /request limit|rate limit|429|-32011/i.test(m)) {
+            await new Promise((r) => setTimeout(r, 900));
             continue;
           }
-          throw e;
+          throw e; // let the fallback transport move to the next RPC
         }
       }
     };
     return { ...t, request } as typeof t;
   }) as Transport;
+}
+
+/** Spread requests across all public Arc RPCs; if one rate-limits, fall back to the
+ *  next. This is what keeps heavy flows (deploy + fund + poll at once) alive. */
+function arcTransport(): Transport {
+  return fallback(
+    RPC_URLS.map((u) => rlHttp(u)),
+    { retryCount: 1 },
+  );
 }
 
 export interface Session {
@@ -49,7 +59,7 @@ export interface Session {
 
 const publicClient: PublicClient = createPublicClient({
   chain: arcTestnet,
-  transport: rlHttp(RPC_URL),
+  transport: arcTransport(),
   pollingInterval: 6000, // ease receipt polling against the rate-limited public RPC
   // Coalesce concurrent readContract calls into a single Multicall3 RPC request.
   // readAccount fires 6 reads at once; batching turns them into ONE call, which
@@ -71,7 +81,7 @@ export function localSigner(privateKey: `0x${string}`): ClientPair {
   const walletClient: WalletClient = createWalletClient({
     account,
     chain: arcTestnet,
-    transport: rlHttp(RPC_URL),
+    transport: arcTransport(),
   });
   return { publicClient, walletClient };
 }

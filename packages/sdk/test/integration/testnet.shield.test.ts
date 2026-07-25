@@ -24,7 +24,6 @@ import {
   RPC_URL,
   ADDRESSES,
   SPEND_POLICY_FACTORY_ADDRESS,
-  SHIELD_VAULT_ADDRESS,
 } from '../../src/chains/arcTestnet.js';
 import { createEphemeral, readAccount, settlePrivatePayment, sweepToVault, MODE_PUSH } from '../../src/shield/shield.js';
 import { LocalCoSigner, type RiskVerdict } from '../../src/shield/cosigner.js';

@@ -398,6 +398,28 @@ The recipient claims with `claim(clients, transferId, code, salt)`. The sender c
 
 The demos run without MetaMask if you drop a `.env.local` into each app; the wallet is then a local test signer that still broadcasts real transactions to Arc Testnet. See [`.env.example`](./.env.example).
 
+## Subscriptions and agent wallets
+
+Sending once is easy. The hard part is letting something spend *repeatedly* without handing it your wallet. A subscription, an allowance, an AI agent that pays its own bills: each needs a budget that renews, not a blank cheque.
+
+Ctrl+ArcZ solves this with a **disposable spend box**. You do not pay the merchant directly. You create a tiny on-chain account, fund it with a budget, and lock a policy into it: *this merchant only, this much per pull, this often, until this date.* An off-chain co-signer ("The Machine") firewall-checks every pull and refuses to sign anything outside the policy. The box's own code enforces the same limits, so even a leaked co-signer key or a misbehaving merchant can never take more than the budget, or send it anywhere else.
+
+You stay invisible (the merchant sees the box, never your wallet), you stay bounded (the worst case is the budget you funded), and you can cancel any time (sweep the box, funds come home, the pulls stop).
+
+**Create a subscription.** Name it, point it at a merchant, set the per-pull cap, the interval, and the total budget:
+
+![Create a subscription](./docs/screenshots/subscriptions-create.png)
+
+**Manage them all in one place.** Every box you created, read straight from chain, with live status (active, completed, cancelled, expired), search, status filters, sorting, and pagination:
+
+![Your subscriptions](./docs/screenshots/subscriptions-list.png)
+
+**Full detail per box.** How much has been pulled, what is left, when the next pull is allowed, and the box address on ArcScan, all live:
+
+![Subscription detail](./docs/screenshots/subscriptions-detail.png)
+
+Every screenshot above is a real subscription on Arc Testnet. The boxes were deployed and funded on-chain; the list is read from the factory's `AccountCreated` events keyed by the owner's hash, so no identity is stored on-chain; and cancelling really sweeps the box home. The same box in `MODE_PULL` powers the **agent wallet** case: hand an autonomous agent one tightly-scoped box and it can transact on its own, but never past the policy.
+
 ## Known limits
 
 - The contract has not been audited. Testnet only.

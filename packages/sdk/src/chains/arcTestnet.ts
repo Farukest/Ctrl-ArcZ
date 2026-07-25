@@ -15,6 +15,18 @@ export const arcTestnet = viemArcTestnet;
 export const ARC_TESTNET_CHAIN_ID = 5042002 as const;
 
 export const RPC_URL = 'https://rpc.testnet.arc.network' as const;
+/**
+ * Public Arc Testnet RPC endpoints. The default one is aggressively rate-limited
+ * (`-32011 request limit reached`) under load, so clients should spread requests
+ * across this list with a fallback transport and move off any endpoint that limits
+ * them. All are the same chain (5042002).
+ */
+export const RPC_URLS = [
+  'https://rpc.quicknode.testnet.arc.network',
+  'https://rpc.drpc.testnet.arc.network',
+  'https://rpc.blockdaemon.testnet.arc.network',
+  RPC_URL,
+] as const;
 export const WS_URL = 'wss://rpc.testnet.arc.network' as const;
 export const EXPLORER_URL = 'https://testnet.arcscan.app' as const;
 

@@ -60,20 +60,29 @@ export class BlockscoutDataProvider implements IDataProvider {
   }
 
   private async get<T>(path: string): Promise<T> {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), this.timeoutMs);
-    try {
-      const response = await this.fetchFn(`${this.apiUrl}${path}`, {
-        headers: { accept: 'application/json' },
-        signal: controller.signal,
-      });
-      if (!response.ok) {
-        throw new Error(`Explorer ${response.status} for ${path}`);
+    // ArcScan rate-limits (HTTP 429) under load. Because the firewall fails CLOSED
+    // on incomplete data, a transient 429 would otherwise veto a legitimate send, so
+    // retry a few times with backoff on 429/5xx before giving up.
+    let lastStatus = 0;
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+      try {
+        const response = await this.fetchFn(`${this.apiUrl}${path}`, {
+          headers: { accept: 'application/json' },
+          signal: controller.signal,
+        });
+        if (response.ok) return (await response.json()) as T;
+        lastStatus = response.status;
+        if (response.status !== 429 && response.status < 500) {
+          throw new Error(`Explorer ${response.status} for ${path}`);
+        }
+      } finally {
+        clearTimeout(timer);
       }
-      return (await response.json()) as T;
-    } finally {
-      clearTimeout(timer);
+      await new Promise((r) => setTimeout(r, 700 * (attempt + 1)));
     }
+    throw new Error(`Explorer ${lastStatus || 'unreachable'} for ${path}`);
   }
 
   /**

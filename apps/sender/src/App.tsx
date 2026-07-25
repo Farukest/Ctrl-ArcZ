@@ -7,11 +7,12 @@ import { TransfersTab } from './components/TransfersTab.js';
 import { HistoryTab } from './components/HistoryTab.js';
 import { BridgeTab } from './components/BridgeTab.js';
 import { PrivatePayTab } from './components/PrivatePayTab.js';
+import { SubscriptionsTab } from './components/SubscriptionsTab.js';
 import { ReceiveTab } from './components/ReceiveTab.js';
 import { ModeSwitch, type Mode } from './components/ModeSwitch.js';
 import { usePendingClaims } from './lib/usePendingClaims.js';
 
-type Tab = 'send' | 'transfers' | 'history' | 'bridge' | 'privatepay';
+type Tab = 'send' | 'transfers' | 'history' | 'bridge' | 'privatepay' | 'subscriptions';
 
 export function App() {
   const state = useSession();
@@ -43,8 +44,9 @@ export function App() {
     { id: 'send', label: t('nav.send') },
     { id: 'transfers', label: t('nav.active') },
     { id: 'history', label: t('nav.history') },
-    { id: 'bridge', label: t('nav.bridge') },
     { id: 'privatepay', label: t('nav.privatepay') },
+    { id: 'subscriptions', label: t('nav.subscriptions') },
+    { id: 'bridge', label: t('nav.bridge') },
   ];
 
   return (
@@ -72,6 +74,7 @@ export function App() {
                 {tab === 'history' && <HistoryTab session={state.session} />}
                 {tab === 'bridge' && <BridgeTab />}
                 {tab === 'privatepay' && <PrivatePayTab session={state.session} />}
+                {tab === 'subscriptions' && <SubscriptionsTab session={state.session} />}
               </>
             ) : (
               <ReceiveTab
