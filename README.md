@@ -406,6 +406,8 @@ Ctrl+ArcZ solves this with a **disposable spend box**. You do not pay the mercha
 
 You stay invisible (the merchant sees the box, never your wallet), you stay bounded (the worst case is the budget you funded), and you can cancel any time (sweep the box, funds come home, the pulls stop).
 
+The co-signer is a gatekeeper, not a custodian. Bringing the money home (`sweepToVault`, or `sweepExpired` once the date passes) needs only your own key, never the co-signer's, so if The Machine goes offline or turns hostile it can stall a pull but can never hold your funds. Its role is liveness, not custody: worst case you sweep and the subscription simply ends. There is no timezone or clock trick to exploit either, since the on-chain caps (per-pull and total) bound the loss independently of time, and the contract reads a plain UTC block timestamp with intervals measured in days.
+
 **Create a subscription.** Name it, point it at a merchant, set the per-pull cap, the interval, and the total budget:
 
 ![Create a subscription](./docs/screenshots/subscriptions-create.png)
