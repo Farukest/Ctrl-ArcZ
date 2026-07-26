@@ -36,6 +36,10 @@
     "test:integration": "cross-env INTEGRATION=1 vitest run test/integration",
     "test:watch": "vitest"
   },
+  "dependencies": {
+    "@noble/curves": "^1.8.1",
+    "@noble/hashes": "^1.7.1"
+  },
   "peerDependencies": {
     "viem": "^2.38.0"
   },

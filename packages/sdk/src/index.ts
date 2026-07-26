@@ -153,3 +153,14 @@ export {
   type PrivatePayOutcome,
 } from './shield/shield.js';
 export { spendPolicyFactoryAbi, spendPolicyAccountAbi, vaultAbi } from './shield/abi.js';
+export {
+  STEALTH_SCHEME_ID,
+  STEALTH_KEY_MESSAGE,
+  deriveStealthKeys,
+  generateStealthAddress,
+  checkStealthAddress,
+  computeStealthPrivateKey,
+  type StealthMetaAddress,
+  type StealthKeys,
+  type StealthAnnouncement,
+} from './shield/stealth.js';
