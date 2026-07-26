@@ -1,8 +1,22 @@
 import { useMemo, useState } from 'react';
-import { parseUnits, formatUnits, isAddress, erc20Abi, type Address, type Hex } from 'viem';
+import {
+  parseUnits,
+  formatUnits,
+  isAddress,
+  erc20Abi,
+  createWalletClient,
+  http,
+  fallback,
+  type Address,
+  type Hex,
+} from 'viem';
+import { privateKeyToAccount } from 'viem/accounts';
 import {
   ADDRESSES,
   SPEND_POLICY_FACTORY_ADDRESS,
+  STEALTH_ANNOUNCER_ADDRESS,
+  RPC_URLS,
+  arcTestnet,
   createEphemeral,
   readAccount,
   submitPull,
@@ -11,8 +25,13 @@ import {
   MODE_PULL,
   ACTION_PULL,
   explorerAddressUrl,
+  newStealthOwner,
+  announceArgsFor,
+  announceStealthBox,
+  computeStealthPrivateKey,
 } from '@ctrl-arcz/sdk';
-import { type Session } from '@ctrl-arcz/demo-kit';
+import { getPublicClient, type Session } from '@ctrl-arcz/demo-kit';
+import { getStealthKeys } from '../lib/stealthKeys.js';
 import {
   Button,
   Card,
@@ -134,13 +153,20 @@ export function SubscriptionsTab({ session }: { session: Session }) {
         return;
       }
 
-      // 2. Deploy the PULL box with the policy: per-pull cap, interval, total cap, expiry.
+      // 2. A fresh stealth owner: the box is owned AND vaulted by a one-time address
+      //    with no keccak(yourWallet) tag, so an observer who knows your address
+      //    cannot confirm which boxes are yours. You rediscover them by scanning the
+      //    announcer with your viewing key.
+      const keys = await getStealthKeys(session);
+      const stealth = newStealthOwner(keys);
+
+      // 3. Deploy the PULL box with the policy: per-pull cap, interval, total cap, expiry.
       setPhase('creating');
       const { account } = await createEphemeral(clients, SPEND_POLICY_FACTORY_ADDRESS, salt, {
         token: USDC,
-        owner,
+        owner: stealth.stealthAddress,
         cosigner: cosignerAddress,
-        vault: owner,
+        vault: stealth.stealthAddress,
         target: to,
         maxAmount: capAmt,
         perPullMax: perPullAmt,
@@ -149,7 +175,7 @@ export function SubscriptionsTab({ session }: { session: Session }) {
         mode: MODE_PULL,
       });
 
-      // 3. Fund the box with the total budget.
+      // 4. Fund the box with the total budget.
       setPhase('funding');
       const fundHash = await clients.walletClient.writeContract({
         address: USDC,
@@ -160,6 +186,9 @@ export function SubscriptionsTab({ session }: { session: Session }) {
         chain: clients.walletClient.chain ?? null,
       });
       await clients.publicClient.waitForTransactionReceipt({ hash: fundHash });
+
+      // 5. Announce it so only your viewing key can rediscover this box.
+      await announceStealthBox(clients, STEALTH_ANNOUNCER_ADDRESS, announceArgsFor(stealth, account));
 
       if (label.trim()) setLabel(account, label);
       setPhase('done');
@@ -221,7 +250,39 @@ export function SubscriptionsTab({ session }: { session: Session }) {
     if (!window.confirm(t('sub.cancelConfirm'))) return;
     setBusyAccount(sub.account);
     try {
-      await sweepToVault(session.clients, sub.account, session.address as Address);
+      if (sub.ephemeralPubKey) {
+        // Stealth box: the vault is a fresh stealth address only we can derive. On
+        // Arc gas is USDC, so first send the vault a little gas, then it signs the
+        // sweep itself and the funds come home to your private vault address.
+        const keys = await getStealthKeys(session);
+        const stealthPriv = computeStealthPrivateKey({
+          spendingKey: keys.spendingKey,
+          viewingKey: keys.viewingKey,
+          ephemeralPubKey: sub.ephemeralPubKey,
+        });
+        const stealthAccount = privateKeyToAccount(stealthPriv);
+        const publicClient = getPublicClient();
+
+        const gasHash = await session.clients.walletClient.writeContract({
+          address: USDC,
+          abi: erc20Abi,
+          functionName: 'transfer',
+          args: [stealthAccount.address, parseUnits('0.05', 6)],
+          account: session.clients.walletClient.account!,
+          chain: session.clients.walletClient.chain ?? null,
+        });
+        await publicClient.waitForTransactionReceipt({ hash: gasHash });
+
+        const stealthWallet = createWalletClient({
+          account: stealthAccount,
+          chain: arcTestnet,
+          transport: fallback(RPC_URLS.map((u) => http(u))),
+        });
+        await sweepToVault({ publicClient, walletClient: stealthWallet }, sub.account, stealthAccount.address);
+      } else {
+        // Legacy box: the vault is your own wallet, which sweeps directly.
+        await sweepToVault(session.clients, sub.account, session.address as Address);
+      }
       toast.push(t('sub.cancelledToast'), 'success');
       await reload();
     } catch (e) {

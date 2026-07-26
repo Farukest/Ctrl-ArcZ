@@ -101,6 +101,12 @@ export const SPEND_POLICY_ACCOUNT_IMPL_ADDRESS =
   '0xa06419b913abA4BFdfEeb9D1A8800DbC2E3A2C11' as `0x${string}`;
 export const SHIELD_VAULT_ADDRESS = '0xc8185AF46b882368b771E8E8a1C8abe1C8e4127f' as `0x${string}`;
 
+// ERC-5564 stealth-address announcement registry (schemeId 1). Standalone; does not
+// touch the factory/account. Lets a payer publish a box's ephemeral pubkey so only
+// their viewing key can rediscover it. Deployed on Arc Testnet.
+export const STEALTH_ANNOUNCER_ADDRESS =
+  '0x9b9F9F8b98Dd7a74889725e79591B3E69BdC991D' as `0x${string}`;
+
 /**
  * Block CtrlArcZ was deployed at. Event queries start here, never from 0: Arc's
  * RPC caps `eth_getLogs` at a 10,000-block range (error -32614), so a full-history
