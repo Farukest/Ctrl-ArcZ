@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { getAddress, type Hex } from 'viem';
 import { deriveStealthKeys, generateStealthAddress } from '../src/shield/stealth.js';
 import {
-  prepareStealthBox,
+  newStealthOwner,
+  announceArgsFor,
   recognizeAnnouncements,
   encodeStealthMetadata,
   decodeStealthMetadata,
@@ -20,18 +21,19 @@ describe('stealth box announcements', () => {
     expect(decodeStealthMetadata(encodeStealthMetadata(BOX))).toBe(BOX);
   });
 
-  it('prepareStealthBox produces announce args the owner can recognise', () => {
+  it('newStealthOwner + announceArgsFor produce args the owner can recognise', () => {
     const keys = deriveStealthKeys(SIG_A);
-    const { stealthAddress, announceArgs } = prepareStealthBox(keys, BOX, ('0x' + 'ab'.repeat(32)) as Hex);
+    const stealth = newStealthOwner(keys, ('0x' + 'ab'.repeat(32)) as Hex);
+    const announceArgs = announceArgsFor(stealth, BOX);
     const [schemeId, annStealth, ephemeralPubKey, metadata] = announceArgs;
 
     expect(schemeId).toBe(1n);
-    expect(annStealth).toBe(stealthAddress);
+    expect(annStealth).toBe(stealth.stealthAddress);
 
     const mine = recognizeAnnouncements(keys, [{ stealthAddress: annStealth, ephemeralPubKey, metadata }]);
     expect(mine).toHaveLength(1);
     expect(mine[0]!.box).toBe(BOX);
-    expect(mine[0]!.stealthAddress).toBe(stealthAddress);
+    expect(mine[0]!.stealthAddress).toBe(stealth.stealthAddress);
   });
 
   it('recognises only the owner’s announcements in a mixed batch', () => {

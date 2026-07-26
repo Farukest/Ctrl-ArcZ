@@ -43,26 +43,30 @@ export function decodeStealthMetadata(metadata: Hex): Address {
 }
 
 /**
- * Prepare a stealth box for a payer's meta-address. Returns the fresh stealth
- * address to use as the box's owner AND vault (so its `ownerHash`/`vaultHash` carry
- * no link to the payer), plus the arguments to announce once the box exists.
- * `ephemeralKey` is injectable for deterministic tests; omit in production.
+ * A fresh stealth owner for a new box. Use the returned `stealthAddress` as BOTH the
+ * box's owner and vault (so its `ownerHash`/`vaultHash` carry no link to the payer).
+ * The box address is not known until it is created, so announcing is a second step
+ * (see {@link announceArgsFor}). `ephemeralKey` is injectable for deterministic tests.
  */
-export function prepareStealthBox(
+export function newStealthOwner(
   meta: StealthMetaAddress,
-  box: Address,
   ephemeralKey?: Hex,
-): { stealthAddress: Address; announceArgs: readonly [bigint, Address, Hex, Hex] } {
-  const ann = generateStealthAddress(meta, ephemeralKey);
-  return {
-    stealthAddress: ann.stealthAddress,
-    announceArgs: [
-      BigInt(STEALTH_SCHEME_ID),
-      ann.stealthAddress,
-      ann.ephemeralPubKey,
-      encodeStealthMetadata(box),
-    ] as const,
-  };
+): { stealthAddress: Address; ephemeralPubKey: Hex; viewTag: number } {
+  return generateStealthAddress(meta, ephemeralKey);
+}
+
+/** The `announce(...)` arguments for a created box, tying its ephemeral key to the
+ *  box address so the payer's scan lands straight on the box. */
+export function announceArgsFor(
+  stealth: { stealthAddress: Address; ephemeralPubKey: Hex },
+  box: Address,
+): readonly [bigint, Address, Hex, Hex] {
+  return [
+    BigInt(STEALTH_SCHEME_ID),
+    stealth.stealthAddress,
+    stealth.ephemeralPubKey,
+    encodeStealthMetadata(box),
+  ] as const;
 }
 
 /** Raw announcement fields, as read from the registry log. */

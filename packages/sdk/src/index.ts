@@ -166,7 +166,8 @@ export {
 } from './shield/stealth.js';
 export { stealthAnnouncerAbi } from './shield/abi.js';
 export {
-  prepareStealthBox,
+  newStealthOwner,
+  announceArgsFor,
   recognizeAnnouncements,
   announceStealthBox,
   discoverStealthBoxes,
