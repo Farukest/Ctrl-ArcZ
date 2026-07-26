@@ -106,6 +106,9 @@ export const SHIELD_VAULT_ADDRESS = '0xc8185AF46b882368b771E8E8a1C8abe1C8e4127f'
 // their viewing key can rediscover it. Deployed on Arc Testnet.
 export const STEALTH_ANNOUNCER_ADDRESS =
   '0x9b9F9F8b98Dd7a74889725e79591B3E69BdC991D' as `0x${string}`;
+/** Block the announcer was deployed at. Scanning its events from here (instead of a
+ *  fixed lookback from head) keeps discovery to one or two `eth_getLogs` calls. */
+export const STEALTH_ANNOUNCER_DEPLOY_BLOCK = 53756547n;
 
 /**
  * Block CtrlArcZ was deployed at. Event queries start here, never from 0: Arc's

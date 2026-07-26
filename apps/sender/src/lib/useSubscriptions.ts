@@ -5,6 +5,7 @@ import {
   ADDRESSES,
   SPEND_POLICY_FACTORY_ADDRESS,
   STEALTH_ANNOUNCER_ADDRESS,
+  STEALTH_ANNOUNCER_DEPLOY_BLOCK,
   spendPolicyFactoryAbi,
   ownerHash as toOwnerHash,
   readAccount,
@@ -113,16 +114,36 @@ export function useSubscriptions(session: Session | null): {
     setSubs(built.filter((s): s is Subscription => s !== null));
   }, [session]);
 
-  const discover = useCallback(async () => {
+  // Stealth boxes: owned/vaulted by a fresh stealth address with no link to the
+  // wallet. Found by scanning the announcer (from its deploy block, so one or two
+  // getLogs calls) with the viewing key. If the user declines to sign, this no-ops
+  // and only legacy boxes show. This is the fast path — the demo's boxes are stealth.
+  const discoverStealth = useCallback(async () => {
     if (!session) return;
     const client = getPublicClient();
-    const latest = await client.getBlockNumber().catch(() => 0n);
-    const fromBlock = latest > DISCOVER_LOOKBACK ? latest - DISCOVER_LOOKBACK : 0n;
-
-    // Legacy boxes: created with owner = the wallet address, so they carry
-    // ownerHash = keccak(address) and are found by filtering on it. Kept so boxes
-    // made before stealth still appear.
     try {
+      const keys = await getStealthKeys(session);
+      const found = await discoverStealthBoxes(client, STEALTH_ANNOUNCER_ADDRESS, keys, {
+        fromBlock: STEALTH_ANNOUNCER_DEPLOY_BLOCK,
+      });
+      for (const b of found) {
+        const a = b.box.toLowerCase();
+        if (!accounts.current.has(a)) accounts.current.set(a, { salt: '0x' as Hex, ephemeralPubKey: b.ephemeralPubKey });
+      }
+    } catch {
+      /* no signature / scan failure: legacy-only view */
+    }
+  }, [session]);
+
+  // Legacy boxes: created with owner = the wallet address (ownerHash = keccak(addr)).
+  // Kept so pre-stealth boxes still appear; runs after the stealth scan so it never
+  // delays showing the user's (stealth) subscriptions.
+  const discoverLegacy = useCallback(async () => {
+    if (!session) return;
+    const client = getPublicClient();
+    try {
+      const latest = await client.getBlockNumber().catch(() => 0n);
+      const fromBlock = latest > DISCOVER_LOOKBACK ? latest - DISCOVER_LOOKBACK : 0n;
       const logs = await getLogsChunked<{ account?: Address; salt?: Hex }>(client, {
         address: SPEND_POLICY_FACTORY_ADDRESS,
         abi: spendPolicyFactoryAbi,
@@ -137,31 +158,21 @@ export function useSubscriptions(session: Session | null): {
     } catch {
       /* keep whatever we have */
     }
-
-    // Stealth boxes: owned/vaulted by a fresh stealth address with no link to the
-    // wallet. Found by scanning the announcer with the viewing key (one signature).
-    // If the user declines to sign, we simply show only the legacy boxes.
-    try {
-      const keys = await getStealthKeys(session);
-      const found = await discoverStealthBoxes(client, STEALTH_ANNOUNCER_ADDRESS, keys, { fromBlock });
-      for (const b of found) {
-        const a = b.box.toLowerCase();
-        if (!accounts.current.has(a)) accounts.current.set(a, { salt: '0x' as Hex, ephemeralPubKey: b.ephemeralPubKey });
-      }
-    } catch {
-      /* no signature / scan failure: legacy-only view */
-    }
   }, [session]);
 
   const reload = useCallback(async () => {
     setLoading(true);
     try {
-      await discover();
+      // Fast path first: scan the announcer, render the user's stealth boxes, then
+      // drop the spinner. The slower legacy scan fills in any older boxes after.
+      await discoverStealth();
       await refresh();
     } finally {
       setLoading(false);
     }
-  }, [discover, refresh]);
+    await discoverLegacy();
+    await refresh();
+  }, [discoverStealth, discoverLegacy, refresh]);
 
   useEffect(() => {
     accounts.current = new Map();
