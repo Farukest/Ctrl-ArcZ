@@ -81,8 +81,50 @@ export function GhostButton({
   );
 }
 
+/** A compact two-or-more-way toggle. Used to fold payment variants (Standard vs
+ *  Private) into one "Pay" tab instead of two peer tabs, matching the web IA. */
+export function Segmented<T extends string>({
+  options,
+  value,
+  onChange,
+}: {
+  options: { id: T; label: string }[];
+  value: T;
+  onChange: (id: T) => void;
+}) {
+  return (
+    <View style={styles.seg}>
+      {options.map((o) => {
+        const active = o.id === value;
+        return (
+          <Pressable
+            key={o.id}
+            onPress={() => onChange(o.id)}
+            style={[styles.segItem, active && styles.segItemActive]}
+          >
+            <Text style={[styles.segText, active && styles.segTextActive]}>{o.label}</Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: theme.bg },
+  seg: {
+    flexDirection: 'row',
+    backgroundColor: theme.card,
+    borderColor: theme.cardBorder,
+    borderWidth: 1,
+    borderRadius: theme.radius,
+    padding: 4,
+    gap: 4,
+  },
+  segItem: { flex: 1, paddingVertical: theme.sp(2.5), alignItems: 'center', borderRadius: theme.radius },
+  segItemActive: { backgroundColor: theme.primary },
+  segText: { color: theme.muted, fontSize: 15, fontWeight: '700' },
+  segTextActive: { color: theme.primaryText },
   screenInner: { flex: 1, padding: theme.sp(5), gap: theme.sp(4) },
   h1: { color: theme.text, fontSize: 26, fontWeight: '700' },
   muted: { color: theme.muted, fontSize: 15, lineHeight: 21 },

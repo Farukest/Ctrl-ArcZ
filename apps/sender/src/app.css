@@ -192,3 +192,46 @@
 .sub-dl > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .sub-dl dt { color: var(--text-lo, #5d6675); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
 .sub-dl dd { margin: 0; color: var(--text-hi, #e9edf2); font-size: 14px; word-break: break-all; }
+
+/* Primary nav: 3 destinations (Pay / Activity / Subscriptions) + a secondary
+   "More" affordance holding Bridge, so the core loop stays a short, uncrowded row. */
+.tabrow { display: flex; align-items: stretch; gap: var(--sp-2); margin-bottom: var(--sp-4); }
+.tabrow .segtabs { flex: 1 1 auto; margin-bottom: 0; }
+.tab-more {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  padding: 0 var(--sp-4);
+  background: var(--surface-1);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-md);
+  color: var(--text-mid);
+  font-family: inherit;
+  font-size: var(--fs-sm);
+  font-weight: 620;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color var(--dur-2) var(--ease), color var(--dur-2) var(--ease),
+    border-color var(--dur-2) var(--ease);
+}
+@media (hover: hover) { .tab-more:hover { color: var(--text-hi); border-color: var(--border-strong); } }
+.tab-more.is-active { background: var(--surface-3); color: var(--text-hi); border-color: var(--accent); }
+
+/* Secondary sub-toggle inside a primary destination (Pay: Standard|Private,
+   Activity: Active|History). Rendered smaller and sunken so it reads as a sub-choice,
+   never mistaken for a second primary nav bar. */
+.paytab__seg, .activitytab__seg { margin-bottom: var(--sp-4); }
+.paytab__seg .segtabs, .activitytab__seg .segtabs {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  margin-bottom: 0;
+  background: var(--bg-sunken);
+}
+.paytab__seg .segtab, .activitytab__seg .segtab {
+  flex: 0 0 auto;
+  min-height: 32px;
+  padding: 0 var(--sp-4);
+}

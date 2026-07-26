@@ -19,7 +19,7 @@ import { ConnectScreen } from './src/screens/ConnectScreen';
 import { theme } from './src/lib/theme';
 
 // The only route names a push notification is allowed to open.
-const KNOWN_SCREENS = new Set(['Home', 'Send', 'Scan', 'Receive', 'Private Pay']);
+const KNOWN_SCREENS = new Set(['Home', 'Pay', 'Scan', 'Receive']);
 
 const queryClient = new QueryClient();
 
@@ -67,10 +67,9 @@ const linking: LinkingOptions<Record<string, undefined>> = {
   config: {
     screens: {
       Home: '',
-      Send: 'send',
+      Pay: 'pay',
       Scan: 'scan',
       Receive: 'claim',
-      'Private Pay': 'pay',
     },
   },
 };

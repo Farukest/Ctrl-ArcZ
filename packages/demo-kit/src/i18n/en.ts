@@ -114,6 +114,11 @@ export const en = {
   'nav.poisoning': 'Poisoning',
   'nav.bridge': 'Bridge',
   'nav.privatepay': 'Private Pay',
+  'nav.pay': 'Pay',
+  'nav.activity': 'Activity',
+  'nav.more': 'More',
+  'pay.seg.standard': 'Standard',
+  'pay.seg.private': 'Private',
 
   'ppay.title': 'Private Pay',
   'ppay.body':

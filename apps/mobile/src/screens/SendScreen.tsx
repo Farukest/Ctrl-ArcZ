@@ -18,7 +18,7 @@ interface Done {
   amount: string;
 }
 
-export function SendScreen() {
+export function SendScreen({ embedded = false }: { embedded?: boolean } = {}) {
   const { session } = useWallet();
   const [to, setTo] = useState('');
   const [amount, setAmount] = useState('1');
@@ -132,12 +132,15 @@ export function SendScreen() {
 
   if (!session) return null;
 
-  return (
-    <Screen>
-      <ScrollView contentContainerStyle={{ gap: theme.sp(4) }} keyboardShouldPersistTaps="handled">
-        <H1>Send</H1>
+  const body = (
+    <ScrollView
+      style={{ flex: 1 }}
+      contentContainerStyle={{ gap: theme.sp(4) }}
+      keyboardShouldPersistTaps="handled"
+    >
+      {!embedded && <H1>Send</H1>}
 
-        {phase === 'form' && (
+      {phase === 'form' && (
           <>
             <Muted>
               A protected transfer: the firewall checks the recipient first, then the funds are
@@ -227,9 +230,10 @@ export function SendScreen() {
             <GhostButton label="New transfer" onPress={reset} />
           </>
         )}
-      </ScrollView>
-    </Screen>
+    </ScrollView>
   );
+
+  return embedded ? body : <Screen>{body}</Screen>;
 }
 
 const styles = StyleSheet.create({

@@ -7,9 +7,8 @@ import { Ionicons } from '@expo/vector-icons';
 export const navigationRef = createNavigationContainerRef();
 import { HomeScreen } from './screens/HomeScreen';
 import { ScanScreen } from './screens/ScanScreen';
-import { SendScreen } from './screens/SendScreen';
+import { PayScreen } from './screens/PayScreen';
 import { ReceiveScreen } from './screens/ReceiveScreen';
-import { PrivatePayScreen } from './screens/PrivatePayScreen';
 import { theme } from './lib/theme';
 
 const Tab = createBottomTabNavigator();
@@ -18,10 +17,9 @@ type IoniconName = keyof typeof Ionicons.glyphMap;
 
 const ICONS: Record<string, IoniconName> = {
   Home: 'wallet-outline',
-  Send: 'arrow-up-circle-outline',
+  Pay: 'arrow-up-circle-outline',
   Scan: 'scan-outline',
   Receive: 'arrow-down-circle-outline',
-  'Private Pay': 'shield-checkmark-outline',
 };
 
 export function Tabs() {
@@ -38,10 +36,9 @@ export function Tabs() {
       })}
     >
       <Tab.Screen name="Home" component={HomeScreen} />
-      <Tab.Screen name="Send" component={SendScreen} />
+      <Tab.Screen name="Pay" component={PayScreen} />
       <Tab.Screen name="Scan" component={ScanScreen} />
       <Tab.Screen name="Receive" component={ReceiveScreen} />
-      <Tab.Screen name="Private Pay" component={PrivatePayScreen} />
     </Tab.Navigator>
   );
 }

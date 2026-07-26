@@ -2,17 +2,17 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Hex } from 'viem';
 import { useSession } from '@ctrl-arcz/demo-kit';
 import { ConnectBar, SegmentedTabs, TopBar, useT, useToast } from '@ctrl-arcz/demo-kit/ui';
-import { SendTab } from './components/SendTab.js';
-import { TransfersTab } from './components/TransfersTab.js';
-import { HistoryTab } from './components/HistoryTab.js';
+import { PayTab } from './components/PayTab.js';
+import { ActivityTab } from './components/ActivityTab.js';
 import { BridgeTab } from './components/BridgeTab.js';
-import { PrivatePayTab } from './components/PrivatePayTab.js';
 import { SubscriptionsTab } from './components/SubscriptionsTab.js';
 import { ReceiveTab } from './components/ReceiveTab.js';
 import { ModeSwitch, type Mode } from './components/ModeSwitch.js';
 import { usePendingClaims } from './lib/usePendingClaims.js';
 
-type Tab = 'send' | 'transfers' | 'history' | 'bridge' | 'privatepay' | 'subscriptions';
+// Primary destinations, kept to a handful of real places. Bridge is a secondary
+// utility reached from "More", not a peer of the core pay/track/subscribe loop.
+type Tab = 'pay' | 'activity' | 'subscriptions' | 'bridge';
 
 export function App() {
   const state = useSession();
@@ -25,7 +25,7 @@ export function App() {
   const linkSalt = (params.get('salt') as Hex | null) ?? null;
 
   const [mode, setMode] = useState<Mode>(linkTid || linkSalt ? 'receive' : 'send');
-  const [tab, setTab] = useState<Tab>('send');
+  const [tab, setTab] = useState<Tab>('pay');
 
   const { pending, reload } = usePendingClaims(state.session);
   const pendingCount = pending?.length ?? 0;
@@ -40,13 +40,12 @@ export function App() {
     prevCount.current = pendingCount;
   }, [pendingCount, mode, toast, t]);
 
-  const tabs: { id: Tab; label: string }[] = [
-    { id: 'send', label: t('nav.send') },
-    { id: 'transfers', label: t('nav.active') },
-    { id: 'history', label: t('nav.history') },
-    { id: 'privatepay', label: t('nav.privatepay') },
+  // Three primary destinations; SegmentedTabs shows none highlighted while the
+  // secondary Bridge view is open, which is the intended "you left the main tabs" cue.
+  const primaryTabs: { id: Exclude<Tab, 'bridge'>; label: string }[] = [
+    { id: 'pay', label: t('nav.pay') },
+    { id: 'activity', label: t('nav.activity') },
     { id: 'subscriptions', label: t('nav.subscriptions') },
-    { id: 'bridge', label: t('nav.bridge') },
   ];
 
   return (
@@ -66,15 +65,28 @@ export function App() {
           <div className="mode-view" data-mode={mode} key={mode}>
             {mode === 'send' ? (
               <>
-                <SegmentedTabs tabs={tabs} value={tab} onChange={setTab} />
-                {tab === 'send' && <SendTab session={state.session} onSent={state.refreshBalance} />}
-                {tab === 'transfers' && (
-                  <TransfersTab session={state.session} onChange={state.refreshBalance} />
+                <div className="tabrow">
+                  <SegmentedTabs
+                    tabs={primaryTabs}
+                    value={tab === 'bridge' ? ('' as Exclude<Tab, 'bridge'>) : tab}
+                    onChange={setTab}
+                  />
+                  <button
+                    type="button"
+                    className={['tab-more', tab === 'bridge' && 'is-active'].filter(Boolean).join(' ')}
+                    aria-pressed={tab === 'bridge'}
+                    onClick={() => setTab('bridge')}
+                    data-testid="tab-bridge"
+                  >
+                    {t('nav.bridge')}
+                  </button>
+                </div>
+                {tab === 'pay' && <PayTab session={state.session} onSent={state.refreshBalance} />}
+                {tab === 'activity' && (
+                  <ActivityTab session={state.session} onChange={state.refreshBalance} />
                 )}
-                {tab === 'history' && <HistoryTab session={state.session} />}
-                {tab === 'bridge' && <BridgeTab />}
-                {tab === 'privatepay' && <PrivatePayTab session={state.session} />}
                 {tab === 'subscriptions' && <SubscriptionsTab session={state.session} />}
+                {tab === 'bridge' && <BridgeTab />}
               </>
             ) : (
               <ReceiveTab

@@ -25,7 +25,7 @@ function randomSalt(): Hex {
   return ('0x' + Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('')) as Hex;
 }
 
-export function PrivatePayScreen() {
+export function PrivatePayScreen({ embedded = false }: { embedded?: boolean } = {}) {
   const { session } = useWallet();
   const [merchant, setMerchant] = useState('');
   const [amount, setAmount] = useState('0.02');
@@ -137,12 +137,15 @@ export function PrivatePayScreen() {
     paying: 'Paying',
   };
 
-  return (
-    <Screen>
-      <ScrollView contentContainerStyle={{ gap: theme.sp(4) }} keyboardShouldPersistTaps="handled">
-        <H1>Private Pay</H1>
+  const body = (
+    <ScrollView
+      style={{ flex: 1 }}
+      contentContainerStyle={{ gap: theme.sp(4) }}
+      keyboardShouldPersistTaps="handled"
+    >
+      {!embedded && <H1>Private Pay</H1>}
 
-        {phase === 'form' && (
+      {phase === 'form' && (
           <>
             <Muted>
               Pay a merchant from a fresh, single-use address that carries none of your identity
@@ -200,9 +203,10 @@ export function PrivatePayScreen() {
             <GhostButton label="New payment" onPress={reset} />
           </>
         )}
-      </ScrollView>
-    </Screen>
+    </ScrollView>
   );
+
+  return embedded ? body : <Screen>{body}</Screen>;
 }
 
 const styles = StyleSheet.create({

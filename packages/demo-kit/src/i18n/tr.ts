@@ -110,6 +110,11 @@ export const tr: Record<TranslationKey, string> = {
   'nav.poisoning': 'Poisoning',
   'nav.bridge': 'Köprü',
   'nav.privatepay': 'Özel Ödeme',
+  'nav.pay': 'Öde',
+  'nav.activity': 'Hareketler',
+  'nav.more': 'Diğer',
+  'pay.seg.standard': 'Standart',
+  'pay.seg.private': 'Gizli',
 
   'ppay.title': 'Özel Ödeme',
   'ppay.body':
