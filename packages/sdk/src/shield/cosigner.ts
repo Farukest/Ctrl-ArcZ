@@ -55,6 +55,38 @@ export type AuthorizeResult =
   | { approved: true; signature: Hex }
   | { approved: false; reason: string; riskReasons?: string[] };
 
+/** The policy fields the co-signer needs to (re)derive a box's counterfactual
+ *  address and validate the request without the box existing yet. */
+export interface CounterfactualPolicy {
+  token: Address;
+  cosigner: Address;
+  vaultHash: Hex;
+  target: Address;
+  maxAmount: bigint;
+  perPullMax: bigint;
+  expiry: number;
+  interval: number;
+  mode: number;
+}
+
+/** Ask the co-signer to sign a one-off PUSH pay for a box that does NOT exist yet
+ *  (batched create+fund+pay). Safe because the CREATE2 salt commits the full policy
+ *  to the address: the box that gets deployed at `box` can only be this exact one,
+ *  and nonce 0 is valid for its first (only) spend. The trust boundary (the server)
+ *  MUST recompute `box` from (factory, ownerHash, salt, policy) and reject a mismatch,
+ *  so a client cannot get a signature bound to a box its policy does not map to. */
+export interface CounterfactualRequest {
+  factory: Address;
+  ownerHash: Hex;
+  salt: Hex;
+  policy: CounterfactualPolicy;
+  /** Client-predicted box address; the server recomputes and must match this. */
+  box: Address;
+  owner: Address;
+  amount: bigint;
+  chainId: number;
+}
+
 /** A pre-flight ask: run only the risk firewall on the intended target, before any
  *  account exists. Lets the flow veto a bad payment before anything is created. */
 export interface PrecheckRequest {
@@ -71,6 +103,9 @@ export type PrecheckResult = { approved: true } | Veto;
 export interface CoSigner {
   precheck(req: PrecheckRequest): Promise<PrecheckResult>;
   authorize(req: AuthorizeRequest): Promise<AuthorizeResult>;
+  /** Sign a one-off PUSH pay for a not-yet-deployed box (batched flow). Optional so
+   *  existing co-signers stay compatible. */
+  authorizeCounterfactual?(req: CounterfactualRequest): Promise<AuthorizeResult>;
   readonly address: Address;
 }
 
@@ -191,6 +226,28 @@ export class LocalCoSigner implements CoSigner {
     );
     return { approved: true, signature };
   }
+
+  /** Sign a PUSH pay for a counterfactual box. Reuses `authorize` with nonce 0 and
+   *  the policy's own caps; refuses if the box's cosigner is not this signer. */
+  async authorizeCounterfactual(req: CounterfactualRequest): Promise<AuthorizeResult> {
+    if (req.policy.cosigner.toLowerCase() !== this.address.toLowerCase()) {
+      return { approved: false, reason: 'account is not gated by this co-signer' };
+    }
+    if (req.policy.mode !== 0) {
+      return { approved: false, reason: 'counterfactual pay is PUSH-only' };
+    }
+    return this.authorize({
+      account: req.box,
+      owner: req.owner,
+      amount: req.amount,
+      action: ACTION_PAY,
+      target: req.policy.target,
+      nonce: 0n,
+      chainId: req.chainId,
+      remaining: req.policy.maxAmount,
+      expiry: req.policy.expiry,
+    });
+  }
 }
 
 /**
@@ -303,6 +360,44 @@ export class RemoteCoSigner implements CoSigner {
           amount: req.amount,
           action: req.action ?? ACTION_PAY,
         })),
+      }),
+    });
+    const data = (await res.json()) as
+      | { approved: true; signature: Hex }
+      | { approved: false; reason: string; riskReasons?: string[] };
+    if (!res.ok && !('approved' in data)) {
+      return { approved: false, reason: `co-signer error (${res.status})` };
+    }
+    return data;
+  }
+
+  /** Batched flow: the server recomputes the box address from (factory, ownerHash,
+   *  salt, policy), rejects a mismatch with the client's `box`, then signs nonce 0. */
+  async authorizeCounterfactual(req: CounterfactualRequest): Promise<AuthorizeResult> {
+    const res = await this.fetchImpl(this.endpoint, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        phase: 'sign-cf',
+        factory: req.factory,
+        ownerHash: req.ownerHash,
+        salt: req.salt,
+        box: req.box,
+        owner: req.owner,
+        amount: req.amount.toString(),
+        action: ACTION_PAY,
+        policy: {
+          token: req.policy.token,
+          cosigner: req.policy.cosigner,
+          vaultHash: req.policy.vaultHash,
+          target: req.policy.target,
+          maxAmount: req.policy.maxAmount.toString(),
+          perPullMax: req.policy.perPullMax.toString(),
+          expiry: req.policy.expiry,
+          interval: req.policy.interval,
+          mode: req.policy.mode,
+        },
+        ...(await this.authBody(req.owner, { account: req.box, amount: req.amount, action: ACTION_PAY })),
       }),
     });
     const data = (await res.json()) as

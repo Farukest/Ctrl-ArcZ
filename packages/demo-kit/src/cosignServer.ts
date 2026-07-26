@@ -17,11 +17,14 @@ import {
   arcTestnet,
   RPC_URL,
   CTRL_ARCZ_ADDRESS,
+  SPEND_POLICY_FACTORY_ADDRESS,
+  spendPolicyFactoryAbi,
   ACTION_PAY,
   ACTION_PULL,
   type CosignAuthScope,
   type AuthorizeRequest,
   type AuthorizeResult,
+  type CounterfactualRequest,
   type PrecheckResult,
   type RiskVerdict,
   type SpendAction,
@@ -45,7 +48,7 @@ import {
  *  alone (before the account exists); otherwise the server reads the account's
  *  policy from chain and signs. */
 export interface CosignBody {
-  phase?: 'precheck' | 'sign';
+  phase?: 'precheck' | 'sign' | 'sign-cf';
   account?: string;
   owner?: string;
   target?: string;
@@ -54,6 +57,23 @@ export interface CosignBody {
   /** F3: the payer signs cosignAuthMessage(owner, ts) to prove control of owner. */
   ownerSig?: string;
   ownerSigTs?: number;
+  /** 'sign-cf' (batched one-off): the server recomputes the box from these and signs
+   *  nonce 0 for a box that does not exist yet. `box` is the client's prediction,
+   *  which must equal the server's recomputation. */
+  box?: string;
+  ownerHash?: string;
+  salt?: string;
+  policy?: {
+    token?: string;
+    cosigner?: string;
+    vaultHash?: string;
+    target?: string;
+    maxAmount?: string;
+    perPullMax?: string;
+    expiry?: number;
+    interval?: number;
+    mode?: number;
+  };
 }
 
 /** Reconstruct the exact auth scope the client signed, from the request body. Must
@@ -66,9 +86,12 @@ function authScopeOf(body: CosignBody): CosignAuthScope | null {
     if (!body.target || !isAddress(body.target)) return null;
     return { target: body.target as Address, amount };
   }
-  if (!body.account || !isAddress(body.account)) return null;
+  // 'sign-cf' binds the owner-auth to the predicted box (in `box`); it is only
+  // trusted after the server confirms `box` equals its own recomputation.
+  const acct = body.phase === 'sign-cf' ? body.box : body.account;
+  if (!acct || !isAddress(acct)) return null;
   const action = body.action === ACTION_PULL ? ACTION_PULL : ACTION_PAY;
-  return { account: body.account as Address, amount, action };
+  return { account: acct as Address, amount, action };
 }
 
 /** Verify the payer controls `owner` AND that the signature is bound to THIS
@@ -238,6 +261,81 @@ async function reconstruct(body: CosignBody): Promise<AuthorizeRequest> {
   };
 }
 
+/** Handle a 'sign-cf' request: recompute the box address from the policy, reject any
+ *  mismatch with the client's prediction, then co-sign nonce 0 for it. */
+async function signCounterfactual(
+  machine: LocalCoSigner,
+  body: CosignBody,
+): Promise<AuthorizeResult> {
+  const p = body.policy;
+  if (
+    !body.owner || !isAddress(body.owner) ||
+    !body.box || !isAddress(body.box) ||
+    !body.ownerHash || !/^0x[0-9a-fA-F]{64}$/.test(body.ownerHash) ||
+    !body.salt || !/^0x[0-9a-fA-F]{64}$/.test(body.salt) ||
+    body.amount == null || !/^\d+$/.test(String(body.amount)) ||
+    !p || !p.token || !isAddress(p.token) || !p.cosigner || !isAddress(p.cosigner) ||
+    !p.vaultHash || !/^0x[0-9a-fA-F]{64}$/.test(p.vaultHash) ||
+    !p.target || !isAddress(p.target) ||
+    p.maxAmount == null || !/^\d+$/.test(String(p.maxAmount)) ||
+    p.perPullMax == null || !/^\d+$/.test(String(p.perPullMax)) ||
+    typeof p.expiry !== 'number' || typeof p.interval !== 'number' || typeof p.mode !== 'number'
+  ) {
+    return { approved: false, reason: 'invalid counterfactual request' };
+  }
+
+  const initParams = {
+    token: p.token as Address,
+    cosigner: p.cosigner as Address,
+    vaultHash: p.vaultHash as Hex,
+    target: p.target as Address,
+    maxAmount: BigInt(p.maxAmount),
+    perPullMax: BigInt(p.perPullMax),
+    expiry: p.expiry,
+    interval: p.interval,
+    mode: p.mode,
+  } as const;
+
+  // Recompute the box address independently. If it does not equal the client's `box`,
+  // the client's owner-auth is bound to an address its policy does not produce: reject.
+  let predicted: Address;
+  try {
+    predicted = (await publicClient.readContract({
+      address: SPEND_POLICY_FACTORY_ADDRESS,
+      abi: spendPolicyFactoryAbi,
+      functionName: 'predictAddress',
+      args: [body.ownerHash as Hex, body.salt as Hex, initParams],
+    })) as Address;
+  } catch {
+    return { approved: false, reason: 'address prediction unavailable (fail-closed); try again' };
+  }
+  if (predicted.toLowerCase() !== body.box.toLowerCase()) {
+    return { approved: false, reason: 'box does not match the provided policy' };
+  }
+
+  const req: CounterfactualRequest = {
+    factory: SPEND_POLICY_FACTORY_ADDRESS,
+    ownerHash: body.ownerHash as Hex,
+    salt: body.salt as Hex,
+    box: predicted,
+    owner: body.owner as Address,
+    amount: BigInt(body.amount),
+    chainId: arcTestnet.id,
+    policy: {
+      token: initParams.token,
+      cosigner: initParams.cosigner,
+      vaultHash: initParams.vaultHash,
+      target: initParams.target,
+      maxAmount: initParams.maxAmount,
+      perPullMax: initParams.perPullMax,
+      expiry: initParams.expiry,
+      interval: initParams.interval,
+      mode: initParams.mode,
+    },
+  };
+  return machine.authorizeCounterfactual(req);
+}
+
 export async function cosign(
   params: { privateKey: Hex; body: CosignBody },
 ): Promise<AuthorizeResult | PrecheckResult> {
@@ -254,6 +352,14 @@ export async function cosign(
     if (!target || !isAddress(target)) throw new Error('invalid target');
     if (amount == null || !/^\d+$/.test(String(amount))) throw new Error('invalid amount');
     return machine.precheck({ owner, target, amount: BigInt(amount) });
+  }
+
+  // Batched one-off (create+fund+pay in one tx): the box does not exist yet, so the
+  // server recomputes its address from the policy and signs nonce 0. The recompute
+  // is what makes it safe — a client cannot bind the signature to a box its policy
+  // does not map to.
+  if (params.body.phase === 'sign-cf') {
+    return signCounterfactual(machine, params.body);
   }
 
   // Sign: authoritative — read the account's real policy from chain, then sign.

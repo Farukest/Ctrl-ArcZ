@@ -1,14 +1,11 @@
 import { useMemo, useState } from 'react';
-import { parseUnits, isAddress, erc20Abi, type Address, type Hex } from 'viem';
+import { parseUnits, isAddress, type Address, type Hex } from 'viem';
 import {
   ADDRESSES,
   SPEND_POLICY_FACTORY_ADDRESS,
-  createEphemeral,
-  readAccount,
-  submitPay,
+  settlePrivatePaymentBatched,
   RemoteCoSigner,
   MODE_PUSH,
-  ACTION_PAY,
   explorerTxUrl,
 } from '@ctrl-arcz/sdk';
 import { type Session } from '@ctrl-arcz/demo-kit';
@@ -114,7 +111,6 @@ export function PrivatePayTab({ session }: { session: Session }) {
       });
       const salt = randomSalt();
       const expiry = Math.floor(Date.now() / 1000) + EXPIRY_SECONDS;
-      const chainId = await clients.publicClient.getChainId();
 
       // 1. The Machine checks FIRST — the firewall runs before anything exists. A
       //    veto here means nothing is created and no funds ever move: the payment
@@ -123,56 +119,32 @@ export function PrivatePayTab({ session }: { session: Session }) {
       const pre = await cosigner.precheck({ owner, target: to, amount: amt });
       if (!pre.approved) return showVeto(pre.reason, pre.riskReasons);
 
-      // 2. Create the disposable address, locked to this merchant. It stores no
-      //    payer identity — only a hash of the owner (as the salt) and of the vault.
-      setPhase('creating');
-      const { account } = await createEphemeral(clients, SPEND_POLICY_FACTORY_ADDRESS, salt, {
-        token: USDC,
-        owner,
-        cosigner: cosignerAddress,
-        vault: owner, // sweeps return to the payer's own wallet
-        target: to,
-        maxAmount: amt,
-        expiry,
-        interval: 0,
-        mode: MODE_PUSH,
-      });
-
-      // 3. The Machine authorizes the spend: the server reads the account's REAL
-      //    policy from chain and signs. Nothing the browser claims is trusted.
-      const state = await readAccount(clients.publicClient, account);
-      const auth = await cosigner.authorize({
-        account,
-        owner,
-        amount: amt,
-        action: ACTION_PAY,
-        target: state.target,
-        nonce: state.nonce,
-        chainId,
-        remaining: state.remaining,
-        expiry: state.expiry,
-      });
-      if (!auth.approved) return showVeto(auth.reason, auth.riskReasons);
-
-      // 4. Fund it (owner -> ephemeral). In production this leg is confidential
-      //    (Arc Privacy Sector); in the demo the owner funds it directly.
-      setPhase('funding');
-      const fundHash = await clients.walletClient.writeContract({
-        address: USDC,
-        abi: erc20Abi,
-        functionName: 'transfer',
-        args: [account, amt],
-        account: clients.walletClient.account!,
-        chain: clients.walletClient.chain ?? null,
-      });
-      await clients.publicClient.waitForTransactionReceipt({ hash: fundHash });
-
-      // 5. Pay with The Machine's signature alone. The payer signs nothing blind —
-      //    their only signature this whole flow was a plain, readable USDC transfer.
+      // 2. Create + fund + pay in ONE transaction. The Machine signs for the box's
+      //    counterfactual address (it does not exist yet); the CREATE2 salt commits
+      //    the policy to that address, so signing nonce 0 for it is safe. The payer
+      //    approves once and pays one base fee instead of three.
       setPhase('paying');
-      const txHash = await submitPay(clients, account, amt, auth.signature);
+      const outcome = await settlePrivatePaymentBatched(
+        clients,
+        SPEND_POLICY_FACTORY_ADDRESS,
+        salt,
+        {
+          token: USDC,
+          owner,
+          cosigner: cosignerAddress,
+          vault: owner, // sweeps return to the payer's own wallet
+          target: to,
+          maxAmount: amt,
+          expiry,
+          interval: 0,
+          mode: MODE_PUSH,
+        },
+        cosigner,
+        { owner },
+      );
+      if (!outcome.ok) return showVeto(outcome.reason, outcome.riskReasons);
 
-      setSuccess({ ephemeral: account, amount, merchant: to, txHash });
+      setSuccess({ ephemeral: outcome.result.account, amount, merchant: to, txHash: outcome.result.txHash });
       setPhase('done');
       toast.push(t('ppay.doneToast'), 'success');
     } catch (e) {

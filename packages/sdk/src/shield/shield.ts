@@ -1,7 +1,43 @@
-import { type Address, type Hex, type PublicClient, type WalletClient, type Account } from 'viem';
+import { encodeFunctionData, type Address, type Hex, type PublicClient, type WalletClient, type Account } from 'viem';
 import { spendPolicyFactoryAbi, spendPolicyAccountAbi, vaultAbi } from './abi.js';
 import { ownerHash as toOwnerHash, vaultHash as toVaultHash, ACTION_PAY } from './digest.js';
+import { ADDRESSES } from '../chains/arcTestnet.js';
 import type { CoSigner } from './cosigner.js';
+
+/** Multicall3's value-routing aggregate. On Arc, native == USDC (18-dec native vs the
+ *  6-dec ERC-20 view), so funding a box is a native-value send to its receive(). */
+const multicall3Abi = [
+  {
+    type: 'function',
+    name: 'aggregate3Value',
+    stateMutability: 'payable',
+    inputs: [
+      {
+        name: 'calls',
+        type: 'tuple[]',
+        components: [
+          { name: 'target', type: 'address' },
+          { name: 'allowFailure', type: 'bool' },
+          { name: 'value', type: 'uint256' },
+          { name: 'callData', type: 'bytes' },
+        ],
+      },
+    ],
+    outputs: [
+      {
+        name: 'returnData',
+        type: 'tuple[]',
+        components: [
+          { name: 'success', type: 'bool' },
+          { name: 'returnData', type: 'bytes' },
+        ],
+      },
+    ],
+  },
+] as const;
+
+/** 6-dec ERC-20 USDC amount -> 18-dec native value, for a funding send on Arc. */
+const toNativeValue = (amount6: bigint): bigint => amount6 * 10n ** 12n;
 
 /**
  * The payer-side shield integration surface. A few generic calls let a wallet,
@@ -367,4 +403,95 @@ export async function settlePrivatePayment(
 
   const txHash = await submitPay(clients, account, amount, auth.signature);
   return { ok: true, result: { account, txHash } };
+}
+
+/**
+ * One-off Private Pay collapsed into a SINGLE transaction: create the box, fund it,
+ * and pay the merchant in one Multicall3 call, so the payer approves once and pays
+ * one base fee instead of three.
+ *
+ * The co-signer signs for the box's COUNTERFACTUAL address (nonce 0) via
+ * `authorizeCounterfactual` — safe because the CREATE2 salt commits the full policy
+ * to the address. Funding is a native-value send to the box's receive() (on Arc
+ * native == USDC). For a one-off, cap == payment == funding == `policy.maxAmount`.
+ */
+export async function settlePrivatePaymentBatched(
+  clients: ShieldClients,
+  factory: Address,
+  salt: Hex,
+  policy: EphemeralPolicy,
+  cosigner: CoSigner,
+  ctx: { owner: Address },
+): Promise<PrivatePayOutcome> {
+  if (policy.mode !== MODE_PUSH) {
+    return { ok: false, vetoed: true, reason: 'batched pay is PUSH-only' };
+  }
+  if (!cosigner.authorizeCounterfactual) {
+    return { ok: false, vetoed: true, reason: 'co-signer does not support batched pay' };
+  }
+  const sender = requireAccount(clients.walletClient);
+  const amount = policy.maxAmount;
+  const box = await predictEphemeral(clients.publicClient, factory, salt, policy);
+  const chainId = await clients.publicClient.getChainId();
+  const ownerHash = toOwnerHash(policy.owner);
+  const vaultHash = toVaultHash(policy.vault);
+
+  const auth = await cosigner.authorizeCounterfactual({
+    factory,
+    ownerHash,
+    salt,
+    box,
+    owner: ctx.owner,
+    amount,
+    chainId,
+    policy: {
+      token: policy.token,
+      cosigner: policy.cosigner,
+      vaultHash,
+      target: policy.target,
+      maxAmount: policy.maxAmount,
+      perPullMax: policy.perPullMax ?? 0n,
+      expiry: policy.expiry,
+      interval: policy.interval,
+      mode: policy.mode,
+    },
+  });
+  if (!auth.approved) {
+    return {
+      ok: false,
+      vetoed: true,
+      reason: auth.reason,
+      ...(auth.riskReasons ? { riskReasons: auth.riskReasons } : {}),
+    };
+  }
+
+  const createData = encodeFunctionData({
+    abi: spendPolicyFactoryAbi,
+    functionName: 'createAccount',
+    args: [ownerHash, salt, paramsTuple(policy)],
+  });
+  const payData = encodeFunctionData({
+    abi: spendPolicyAccountAbi,
+    functionName: 'pay',
+    args: [amount, auth.signature],
+  });
+  const value = toNativeValue(amount);
+
+  const txHash = await clients.walletClient.writeContract({
+    address: ADDRESSES.MULTICALL3 as Address,
+    abi: multicall3Abi,
+    functionName: 'aggregate3Value',
+    args: [
+      [
+        { target: factory, allowFailure: false, value: 0n, callData: createData },
+        { target: box, allowFailure: false, value, callData: '0x' as Hex },
+        { target: box, allowFailure: false, value: 0n, callData: payData },
+      ],
+    ],
+    value,
+    account: sender,
+    chain: clients.walletClient.chain ?? null,
+  });
+  await clients.publicClient.waitForTransactionReceipt({ hash: txHash });
+  return { ok: true, result: { account: box, txHash } };
 }
