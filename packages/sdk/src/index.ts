@@ -164,3 +164,14 @@ export {
   type StealthKeys,
   type StealthAnnouncement,
 } from './shield/stealth.js';
+export { stealthAnnouncerAbi } from './shield/abi.js';
+export {
+  prepareStealthBox,
+  recognizeAnnouncements,
+  announceStealthBox,
+  discoverStealthBoxes,
+  encodeStealthMetadata,
+  decodeStealthMetadata,
+  type StealthBox,
+  type RawAnnouncement,
+} from './shield/stealthBox.js';
