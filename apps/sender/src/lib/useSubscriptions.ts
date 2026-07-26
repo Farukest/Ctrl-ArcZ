@@ -4,12 +4,15 @@ import { getPublicClient, type Session } from '@ctrl-arcz/demo-kit';
 import {
   ADDRESSES,
   SPEND_POLICY_FACTORY_ADDRESS,
+  STEALTH_ANNOUNCER_ADDRESS,
   spendPolicyFactoryAbi,
   ownerHash as toOwnerHash,
   readAccount,
   getLogsChunked,
+  discoverStealthBoxes,
   MODE_PULL,
 } from '@ctrl-arcz/sdk';
+import { getStealthKeys } from './stealthKeys.js';
 
 const USDC = ADDRESSES.USDC as Address;
 // Bound the one-time discovery scan (the factory is recent; this keeps the initial
@@ -22,6 +25,9 @@ export interface Subscription {
   account: Address;
   target: Address;
   salt: Hex;
+  /** Present for stealth boxes: the ephemeral pubkey needed to derive the key that
+   *  controls the box's stealth vault (for cancel). Absent for legacy boxes. */
+  ephemeralPubKey?: Hex;
   cap: bigint;
   perPull: bigint;
   interval: number;
@@ -54,8 +60,9 @@ export function useSubscriptions(session: Session | null): {
 } {
   const [subs, setSubs] = useState<Subscription[] | null>(null);
   const [loading, setLoading] = useState(false);
-  // Discovered box addresses (+ their creation salt), independent of poll refreshes.
-  const accounts = useRef<Map<string, Hex>>(new Map());
+  // Discovered box addresses -> their creation salt + (for stealth boxes) the
+  // ephemeral pubkey that lets us later derive the key controlling the box's vault.
+  const accounts = useRef<Map<string, { salt: Hex; ephemeralPubKey?: Hex }>>(new Map());
 
   const refresh = useCallback(async () => {
     if (!session) {
@@ -65,8 +72,9 @@ export function useSubscriptions(session: Session | null): {
     const client = getPublicClient();
     const now = Math.floor(Date.now() / 1000);
     const built = await Promise.all(
-      [...accounts.current.entries()].map(async ([addrLc, salt]) => {
+      [...accounts.current.entries()].map(async ([addrLc, meta]) => {
         const account = addrLc as Address;
+        const { salt, ephemeralPubKey } = meta;
         try {
           const [state, balance] = await Promise.all([
             readAccount(client, account),
@@ -84,6 +92,7 @@ export function useSubscriptions(session: Session | null): {
             account,
             target: state.target,
             salt,
+            ...(ephemeralPubKey ? { ephemeralPubKey } : {}),
             cap,
             perPull,
             interval: state.interval,
@@ -107,9 +116,13 @@ export function useSubscriptions(session: Session | null): {
   const discover = useCallback(async () => {
     if (!session) return;
     const client = getPublicClient();
+    const latest = await client.getBlockNumber().catch(() => 0n);
+    const fromBlock = latest > DISCOVER_LOOKBACK ? latest - DISCOVER_LOOKBACK : 0n;
+
+    // Legacy boxes: created with owner = the wallet address, so they carry
+    // ownerHash = keccak(address) and are found by filtering on it. Kept so boxes
+    // made before stealth still appear.
     try {
-      const latest = await client.getBlockNumber();
-      const fromBlock = latest > DISCOVER_LOOKBACK ? latest - DISCOVER_LOOKBACK : 0n;
       const logs = await getLogsChunked<{ account?: Address; salt?: Hex }>(client, {
         address: SPEND_POLICY_FACTORY_ADDRESS,
         abi: spendPolicyFactoryAbi,
@@ -119,10 +132,24 @@ export function useSubscriptions(session: Session | null): {
       });
       for (const l of logs) {
         const a = l.args.account?.toLowerCase();
-        if (a && !accounts.current.has(a)) accounts.current.set(a, (l.args.salt ?? ('0x' as Hex)) as Hex);
+        if (a && !accounts.current.has(a)) accounts.current.set(a, { salt: (l.args.salt ?? ('0x' as Hex)) as Hex });
       }
     } catch {
       /* keep whatever we have */
+    }
+
+    // Stealth boxes: owned/vaulted by a fresh stealth address with no link to the
+    // wallet. Found by scanning the announcer with the viewing key (one signature).
+    // If the user declines to sign, we simply show only the legacy boxes.
+    try {
+      const keys = await getStealthKeys(session);
+      const found = await discoverStealthBoxes(client, STEALTH_ANNOUNCER_ADDRESS, keys, { fromBlock });
+      for (const b of found) {
+        const a = b.box.toLowerCase();
+        if (!accounts.current.has(a)) accounts.current.set(a, { salt: '0x' as Hex, ephemeralPubKey: b.ephemeralPubKey });
+      }
+    } catch {
+      /* no signature / scan failure: legacy-only view */
     }
   }, [session]);
 
