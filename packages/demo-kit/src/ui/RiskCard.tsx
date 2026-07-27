@@ -35,7 +35,14 @@ export function RiskCard({ report }: { report: RiskReport }) {
             });
             // Fall back to the SDK's English message for any code without a key.
             const text = translated === reasonKey ? r.message : translated;
-            return <li key={r.code}>{text}</li>;
+            // Colour each line by its OWN severity, not the card's. A blocked verdict
+            // usually carries a mix, and reading "no on-chain history" in the same red
+            // as the rule that actually stopped the send hides which one did.
+            return (
+              <li key={r.code} className={`risk__reason risk__reason--${r.severity}`}>
+                {text}
+              </li>
+            );
           })}
         </ul>
       )}
