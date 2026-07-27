@@ -1090,6 +1090,15 @@
   flex-direction: column;
   gap: var(--sp-2);
 }
+/* The transfer a claim is aimed at: settled, so it reads rather than asks. */
+.claim__picked {
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  color: var(--text-hi);
+}
+
 /* The bullet carries the severity, the text stays readable. */
 .risk__reason--safe::marker {
   color: var(--safe);
