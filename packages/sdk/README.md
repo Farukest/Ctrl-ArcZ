@@ -37,7 +37,7 @@ const { configId } = await registerConfig(clients, config);
 const amount = parseUnits('100', 6); // USDC has 6 decimals on Arc's ERC-20 interface
 await approveUsdc(clients, amount);
 
-const secret = generateClaimCode(); // { code, salt, claimHash }
+const secret = generateClaimCode(); // { secret, code, salt, claimHash }
 
 try {
   // The firewall runs inside sendProtected. A lookalike or a zero-value baiter
@@ -53,11 +53,14 @@ try {
     { config },
   );
 
-  // Share `secret.code` with the recipient out of band, and the claim link
-  //   `https://your-app/claim?tid=${transferId}&salt=${secret.salt}`.
+  // Hand `secret.secret` to the recipient yourself. It is the whole proof, so it
+  // must reach a person, not an address: any delivery keyed to the recipient
+  // address also reaches a poisoning attacker, who owns that address.
 
   // 3. The recipient releases it, or you relay for them. Funds always go to `to`.
-  await claim(clients, transferId, secret.code, secret.salt);
+  // The recipient types it back; fromSecret rebuilds what claim needs.
+  const { code, salt } = fromSecret(typedByRecipient);
+  await claim(clients, transferId, code, salt);
 } catch (e) {
   if (e instanceof RiskBlockedError) {
     // e.report is the full RiskReport: level, rule codes, lookalikeOf, complete.
@@ -121,7 +124,7 @@ The guard calls `check()`, which reads ArcScan. **If the indexer cannot be reach
 
 ## Security notes
 
-- **The salt is the secret, the code is the human factor.** A six-digit code is about twenty bits; if the salt were public it could be brute-forced offline. `generateClaimCode` mints a 256-bit salt. Deliver it in the claim link, never publish it. The chain only ever stores the hash.
+- **One secret, 80 bits, carried by a human.** `claim` pays the recipient recorded on-chain, and in a poisoning attack that recipient is the attacker: they hold `claimHash` and can grind it offline for as long as they like. So the secret is 16 Crockford base32 characters, not a six-digit code (twenty bits, milliseconds of work). The salt is derived from it, so there is no second half to deliver, and nothing to deliver BY ADDRESS. Use `normaliseSecret` on whatever the recipient types, then `fromSecret`. The chain only ever stores the hash.
 - **A wrong code does not revert** on-chain (the attempt counter has to survive so the five-guess lockout can bind). `claim` inspects the receipt and throws `WrongClaimCodeError` or `TransferLockedError`, so you never mistake a mined transaction for a successful claim.
 - **The firewall never degrades to "safe".** If a data source is unavailable, the report is `warning` at best, `complete: false`, and a lookalike that cannot be ruled out is a `block`.
 
@@ -136,7 +139,9 @@ The guard calls `check()`, which reads ArcScan. **If the indexer cannot be reach
 | `registerConfig(clients, config)`                                    | Register it on-chain, returns an idempotent `configId`                        |
 | `shouldBlockSend(config, level)`                                     | The single warning policy, shared by your UI and the SDK guard                |
 | `recommendTransferMode(config, amount)`                              | `plain` below `minProtectedAmount`, else `protected`                          |
-| `generateClaimCode()`                                                | `{ code, salt, claimHash }`                                                   |
+| `generateClaimCode()`                                                | `{ secret, code, salt, claimHash }`                                           |
+| `normaliseSecret(typed)`                                             | Normalised secret, or null                                                    |
+| `fromSecret(secret)`                                                 | `{ secret, code, salt, claimHash }` rebuilt from the string                   |
 | `approveUsdc(clients, amount)`                                       | ERC-20 approval to CtrlArcZ                                                   |
 | `sendProtected(clients, params, opts?)`                              | Firewall, then lock funds. Returns `{ transferId, txHash, deadline }`         |
 | `approvePermit2` / `sendProtectedWithPermit(clients, params, opts?)` | One-signature send via Permit2, no per-send approve tx                        |

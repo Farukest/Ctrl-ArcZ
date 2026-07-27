@@ -38,11 +38,20 @@ self-transfer guards, SafeERC20 on every movement, and no admin / upgrade /
 
 ## SDK (`packages/sdk`)
 
-- **Verified secure — claim code + commitment.** Code and 32-byte salt come from a
-  CSPRNG (`crypto.getRandomValues`), digits use rejection sampling (no modulo bias).
-  The on-chain commitment `keccak256(salt‖code)` is un-brute-forceable given the
-  secret 256-bit salt; security rests on salt secrecy, which the split (code spoken,
-  salt in the link) preserves.
+- **Verified secure — claim secret + commitment.** One 80-bit secret (16 Crockford
+  base32 characters) from a CSPRNG (`crypto.getRandomValues`) with rejection sampling,
+  so no modulo bias. The salt is derived from it
+  (`keccak256("ctrl-arcz:salt:v1"‖secret)`), so the on-chain commitment
+  `keccak256(salt‖code)` has 80 bits of preimage entropy. That is the number that
+  matters: `claim` pays the recipient recorded on-chain, and in a poisoning attack
+  that recipient IS the attacker, so they hold `claimHash` and can grind it offline
+  without limit. 80 bits survives that; the 20 bits of a 6-digit code would not.
+  **Delivery is part of the security property, not a UX detail:** the secret must
+  reach a HUMAN through a channel the attacker is not in. Any delivery keyed to the
+  address (on-chain ciphertext, a backend, a push, a link the app fetches) also
+  reaches the attacker, because the address is theirs. See the note at the end of
+  this file: this supersedes the earlier split-secret design and the findings written
+  against it.
 - **Verified secure — Permit2 signing.** Correct EIP-712 domain (`Permit2`, chainId,
   verifyingContract, no version field), `spender` bound in the typed data, bounded
   `deadline`, full-entropy unordered nonce → no cross-chain or same-chain replay.
@@ -128,8 +137,10 @@ self-transfer guards, SafeERC20 on every movement, and no admin / upgrade /
 - **Fixed — stored link injection.** Explorer URLs read back from localStorage are
   now scheme-checked (https only) before rendering as an `<a href>`, so a tampered
   history entry cannot smuggle a `javascript:`/`data:` link.
-- **Verified clean** — claim-link params (`tid`/`code`/`salt`) are sanitized before
-  use and never rendered as HTML; all `target="_blank"` links carry `rel="noreferrer"`;
+- **Verified clean** — no part of the claim secret is ever read from a URL (links leak
+  into history, Referer headers and chat previews); the only query param left is a
+  non-secret `tid` pointer, sanitized before use and never rendered as HTML; all
+  `target="_blank"` links carry `rel="noreferrer"`;
   no open-redirect; SDK-built explorer links are fixed-scheme.
 - **Documented — address truncation in list rows.** Counterparty/recipient rows show
   `0x1234…abcd`, the same ambiguous form poisoning exploits. The send flow is guarded
@@ -350,12 +361,45 @@ gaps rather than key/fund-theft vectors.
   allow-listed to known routes; registration is timestamped.
 
 ### Web + contracts
-- **LOW — claim code persisted to localStorage.** FIXED: the code is kept in memory for
-  the session only, never written to disk (the salt alone cannot claim). **LOW** — the
-  receiver no longer reads the secret code from a URL query param.
+- **LOW — claim code persisted to localStorage.** FIXED: kept in memory for the session
+  only, never written to disk. Under the single-secret design the salt is no longer
+  persisted either, since it is derived from the secret and writing it down would be
+  writing down the secret. **LOW** — the receiver no longer reads any part of the
+  secret from a URL query param.
 - **LOW — contract: `interval==0` disabled the PULL rate limit.** FIXED: `init` requires
   `interval > 0` for PULL. New `SpendPolicyFactory`
   (`0x8AB90Dfe39D9c9bFE8bdDa84545FA734c02442B9`) + implementation
   (`0xa06419b913abA4BFdfEeb9D1A8800DbC2E3A2C11`) redeployed and re-verified with the
   live create→pay→sweep E2E. **LOW** — the SDK now treats a benign deploy collision
   (someone force-deploys the identical account) as success rather than a hard error.
+
+## Claim secret: single 80-bit code (supersedes the split design)
+
+The claim proof used to be two parts: a spoken 6-digit code plus a 256-bit salt that
+travelled in a claim link. Splitting it is what forced the link to exist, and any
+attempt to deliver the second half some other way runs into the same wall: an
+on-chain ciphertext, a backend, a push, all of them are keyed to the recipient
+ADDRESS, and in a poisoning attack that address belongs to the attacker. Handing them
+the salt leaves 20 bits between them and the money, grindable offline in a second
+against the public `claimHash`.
+
+It is now one secret, 16 Crockford base32 characters, 80 bits, shown grouped as
+`A4K7-9QMX-2PR6-TH8D`. The salt is derived from it, so nothing travels but the string
+itself and it has to reach a person. `CodeClaimVerifier` puts no constraint on the
+code format, so this needed no contract change and no redeploy.
+
+Consequences for entries written against the old design:
+
+- **"Split the 6-digit code out-of-band from the salt QR"** (mobile, section C) no
+  longer applies as written. There is no salt to put in a QR; the mobile QR carries
+  only which transfer is meant, and the secret is typed. A QR carrying the secret
+  would make a photographable bearer credential, so it does not.
+- **"The salt alone cannot claim"** is no longer a reason to persist anything. The
+  secret is the whole credential and is never written to disk.
+- **Attempt lockout.** The 5-attempt limit still stands, now purely as an on-chain
+  guessing bound rather than as compensation for a small preimage.
+
+Verified on Arc Testnet: a transfer sent, a wrong secret rejected with the attempt
+counter, then settled with the right one including lowercase input and spaces in
+place of the dashes; and a gasless claim through the live API where the recipient
+received the full amount with their nonce unchanged.

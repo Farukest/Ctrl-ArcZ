@@ -32,7 +32,7 @@ Protected USDC transfers on Arc: an SDK and a single contract that screen a paym
 | **Protection** | Pre-send risk firewall, code-gated claim, sender cancel, automatic expiry refund      |
 | **Custody**    | None. Funds are with the user or in the contract. No owner, no pause, no upgrade path |
 | **Product**    | An SDK any wallet, exchange or payments app embeds. Not another wallet                |
-| **Tests**      | 61 Foundry tests (100 percent branch coverage), 61 SDK unit tests, live testnet runs  |
+| **Tests**      | 61 Foundry tests (100 percent branch coverage), 97 SDK unit tests, live testnet runs  |
 
 ## The problem
 
@@ -179,12 +179,12 @@ sequenceDiagram
 
     S->>SDK: check(target)
     SDK-->>S: safe
-    SDK->>SDK: generateClaimCode() -> code, salt, hash
+    SDK->>SDK: generateClaimCode() -> secret, hash
     S->>C: sendProtected(configId, to, amount, hash)
     C->>C: USDC pulled in, transfer PENDING
     S-->>R: the claim code, handed over directly
-    R->>C: claim(id, code, salt)
-    C->>C: verifier checks keccak256(salt, code)
+    R->>C: claim(id, secret)
+    C->>C: verifier checks the commitment
     C->>R: USDC released
     C-->>SDK: RecipientVerified
 ```
@@ -192,12 +192,12 @@ sequenceDiagram
 <table>
 <tr>
 <td width="33%"><img src="docs/screens/02-send-form.png" alt="The send form"></td>
-<td width="33%"><img src="docs/screens/06-send-locked.png" alt="Sent and locked, with the code and claim link"></td>
+<td width="33%"><img src="docs/screens/06-send-locked.png" alt="Sent and locked, with the claim code"></td>
 <td width="33%"><img src="docs/screens/08-claim.png" alt="The claim screen"></td>
 </tr>
 <tr>
 <td>Paste the recipient. The firewall runs as you type, on a debounce.</td>
-<td>The funds are locked. The link carries the salt, the code is spoken.</td>
+<td>The funds are locked. One code comes out, and it is shown once.</td>
 <td>The recipient claims, paying their own gas or letting a relayer pay.</td>
 </tr>
 </table>
@@ -380,7 +380,7 @@ import {
 
 const config = defineConfig({ recallWindow: 3600 });
 const { configId } = await registerConfig(clients, config);
-const secret = generateClaimCode(); // code, salt, claimHash
+const secret = generateClaimCode(); // secret, code, salt, claimHash
 
 await approveUsdc(clients, amount);
 
@@ -398,7 +398,7 @@ try {
 }
 ```
 
-The recipient claims with `claim(clients, transferId, code, salt)`. The sender can `cancel(clients, transferId)` at any time before that. Full signatures, and how to reuse a report your own UI already fetched, are in [`packages/sdk/README.md`](./packages/sdk/README.md).
+The recipient claims with `claim(clients, transferId, code, salt)`, where both come from `fromSecret(typed)`. The sender can `cancel(clients, transferId)` at any time before that. Full signatures, and how to reuse a report your own UI already fetched, are in [`packages/sdk/README.md`](./packages/sdk/README.md).
 
 The demos run without MetaMask if you drop a `.env.local` into each app; the wallet is then a local test signer that still broadcasts real transactions to Arc Testnet. See [`.env.example`](./.env.example).
 

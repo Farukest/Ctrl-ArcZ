@@ -32,7 +32,7 @@ Arc üzerinde korumalı USDC transferi: bir ödemeyi imzalanmadan önce tarayan,
 | **Koruma**  | Gönderim öncesi risk firewall'u, kodla claim, gönderen iptali, süre dolunca otomatik iade       |
 | **Custody** | Yok. Para ya kullanıcıda ya kontratta. Owner yok, pause yok, upgrade yolu yok                   |
 | **Ürün**    | Herhangi bir cüzdanın, borsanın veya ödeme uygulamasının gömdüğü bir SDK. Yeni bir cüzdan değil |
-| **Testler** | 61 Foundry testi (dal kapsamı yüzde 100), 61 SDK birim testi, canlı testnet koşuları            |
+| **Testler** | 61 Foundry testi (dal kapsamı yüzde 100), 97 SDK birim testi, canlı testnet koşuları            |
 
 ## Problem
 
@@ -148,7 +148,11 @@ stateDiagram-v2
     RECLAIMED --> [*]
 ```
 
-Kanıt bilinçli olarak ikiye bölünür. SDK, gönderenin alıcıya sözlü olarak ilettiği **6 haneli bir kod** ve claim linkinde giden **256 bitlik bir salt** üretir. Zincir yalnızca `keccak256(salt, code)` görür. Tek başına 6 hane 20 bit entropidir ve offline kırılması önemsizdir; entropiyi salt taşır, kodu ise insan taşır.
+Kanıt **80 bitlik tek bir koddur**: gönderenin alıcıya elden verdiği on altı karakter, `A4K7-9QMX-2PR6-TH8D` gibi. Zincir yalnızca bunun hash'ini görür.
+
+Bu biçimin arkasında iki karar var. **Offline kaba kuvvete dayanması gerekiyor**, çünkü zehirlenme saldırısında zincirde kayıtlı alıcı saldırganın kendisidir: hash elindedir ve istediği kadar deneyebilir. Altı haneli bir kod 20 bittir, bir milyon ihtimal, milisaniyelik iş. **Bir de tek parça hâlinde gitmesi gerekiyor.** Kanıtı bölüp yarısını adrese teslim etmek, ister linkte ister zincire yazılmış bir şifreli metinde ister bir backend üzerinden olsun, o yarıyı saldırgana da teslim eder, çünkü adres onundur. Kod, saldırganın içinde olmadığı bir kanaldan bir insana ulaşır; ikinci faktörün tamamı budur.
+
+Alfabe Crockford base32'dir, yani 1 ve 0 ile karışan I, L, O, U harfleri yoktur; alıcının yazdığı değer kontrol edilmeden önce normalize edilir.
 
 Kontratta bilinmesi gereken iki karar var:
 
@@ -175,12 +179,12 @@ sequenceDiagram
 
     S->>SDK: check(hedef)
     SDK-->>S: güvenli
-    SDK->>SDK: generateClaimCode() -> kod, salt, hash
+    SDK->>SDK: generateClaimCode() -> sir, hash
     S->>C: sendProtected(configId, to, amount, hash)
     C->>C: USDC çekildi, transfer PENDING
-    S-->>R: claim linki (salt), kod ayrı kanaldan
-    R->>C: claim(id, kod, salt)
-    C->>C: verifier keccak256(salt, kod) kontrol eder
+    S-->>R: claim kodu, elden veriliyor
+    R->>C: claim(id, sir)
+    C->>C: verifier taahhudu kontrol eder
     C->>R: USDC serbest
     C-->>SDK: RecipientVerified
 ```
@@ -188,12 +192,12 @@ sequenceDiagram
 <table>
 <tr>
 <td width="33%"><img src="docs/screens/02-send-form.png" alt="Gönderim formu"></td>
-<td width="33%"><img src="docs/screens/06-send-locked.png" alt="Gönderildi ve kilitlendi, kod ve claim linki"></td>
+<td width="33%"><img src="docs/screens/06-send-locked.png" alt="Gönderildi ve kilitlendi, claim kodu"></td>
 <td width="33%"><img src="docs/screens/08-claim.png" alt="Claim ekranı"></td>
 </tr>
 <tr>
 <td>Alıcıyı yapıştırın. Firewall siz yazarken, debounce ile çalışır.</td>
-<td>Para kilitlendi. Link salt'ı taşır, kod sözlü iletilir.</td>
+<td>Para kilitlendi. Tek bir kod çıkar ve bir kez gösterilir.</td>
 <td>Alıcı claim eder: kendi gas'ıyla ya da relayer ödeyerek.</td>
 </tr>
 </table>
@@ -376,7 +380,7 @@ import {
 
 const config = defineConfig({ recallWindow: 3600 });
 const { configId } = await registerConfig(clients, config);
-const secret = generateClaimCode(); // kod, salt, claimHash
+const secret = generateClaimCode(); // secret, code, salt, claimHash
 
 await approveUsdc(clients, amount);
 
@@ -394,7 +398,7 @@ try {
 }
 ```
 
-Alıcı `claim(clients, transferId, code, salt)` ile alır. Gönderen o ana kadar her an `cancel(clients, transferId)` diyebilir. Tüm imzalar ve UI'nizin zaten çektiği raporu nasıl yeniden kullanacağınız: [`packages/sdk/README.md`](./packages/sdk/README.md).
+Alıcı `claim(clients, transferId, code, salt)` ile alır; ikisi de `fromSecret(yazilan)` ile tek koddan türer. Gönderen o ana kadar her an `cancel(clients, transferId)` diyebilir. Tüm imzalar ve UI'nizin zaten çektiği raporu nasıl yeniden kullanacağınız: [`packages/sdk/README.md`](./packages/sdk/README.md).
 
 Demolar MetaMask olmadan da çalışır: her app'in klasörüne bir `.env.local` bırakın, cüzdan yerel bir test imzalayıcısı olur ve yine Arc Testnet'e gerçek işlem yayınlar. Bakınız [`.env.example`](./.env.example).
 

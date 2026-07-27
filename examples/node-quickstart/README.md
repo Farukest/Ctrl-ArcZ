@@ -48,9 +48,10 @@ const { transferId } = await sendProtected(clients, {
   amount,
   claimHash: secret.claimHash,
 });
-// give `secret.code` to the recipient over a separate channel + the salt link
+// hand `secret.secret` to the recipient yourself: one string, no link
 
 // 3. Recipient claims with the code.
+const { code, salt } = fromSecret(typedByRecipient);
 await claim(recipientClients, transferId, code, salt);
 ```
 
