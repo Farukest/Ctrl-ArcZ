@@ -37,6 +37,8 @@ import { saveTransfer } from '../store.js';
 
 const config = defineConfig({ recallWindow: 3600, onWarning: 'warn' });
 const RECEIVER_URL = import.meta.env.VITE_RECEIVER_URL ?? 'http://localhost:5174';
+/** How far back to scan for RecipientVerified. Matches the co-signer's fallback. */
+const VERIFIED_LOOKBACK_BLOCKS = 200_000;
 
 interface SentInfo {
   transferId: string;
@@ -79,7 +81,14 @@ export function SendTab({ session, onSent }: { session: Session; onSent: () => v
         return;
       }
       setChecking(true);
-      check(session.address as Address, target as Address, { client: getPublicClient() })
+      // Bound the RecipientVerified scan. Unbounded it walks from the deploy block in
+      // 10k chunks, which is hundreds of eth_getLogs per keystroke-debounced check and
+      // gets the RPC to rate limit us (429) until the whole scan throws. The server
+      // co-signer already uses the same bound as its cold-start fallback.
+      check(session.address as Address, target as Address, {
+        client: getPublicClient(),
+        verifiedRecipientsLookbackBlocks: VERIFIED_LOOKBACK_BLOCKS,
+      })
         .then((r) => {
           if (id === reqId.current) setReport(r);
         })
