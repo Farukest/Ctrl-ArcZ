@@ -20,7 +20,10 @@ export interface PendingClaim {
  * windows), which rate limited the RPC into 429s app-wide. The first pass looks back
  * this far, and each later pass covers only the blocks since the last one.
  */
-const FIRST_SCAN_LOOKBACK = 120_000n;
+const FIRST_SCAN_LOOKBACK = 20_000n;
+
+/** Poll period. Long enough that a slow scan finishes before the next one is due. */
+const POLL_MS = 20_000;
 
 /**
  * Incoming protected transfers addressed to the connected wallet that are still
@@ -36,12 +39,17 @@ export function usePendingClaims(session: Session | null): {
   // Scan cursor and the ids found so far, so a poll only covers new blocks.
   const cursor = useRef<bigint | null>(null);
   const seen = useRef<Set<string>>(new Set());
+  // A slow or rate-limited poll must not have the next one pile on top of it;
+  // overlapping scans are what turned one bad response into a request storm.
+  const inFlight = useRef(false);
 
   const reload = useCallback(async () => {
     if (!session) {
       setPending(null);
       return;
     }
+    if (inFlight.current) return;
+    inFlight.current = true;
     const client = getPublicClient();
     const me = session.address.toLowerCase();
     try {
@@ -72,6 +80,11 @@ export function usePendingClaims(session: Session | null): {
           transfer: await getTransfer({ publicClient: client }, BigInt(id)).catch(() => null),
         })),
       );
+      // Settled transfers can never become pending again, so stop re-reading them.
+      // Without this every poll re-read the whole history of this wallet.
+      for (const r of resolved) {
+        if (r.transfer && r.transfer.status !== 'PENDING') seen.current.delete(r.transferId.toString());
+      }
       setPending(
         resolved
           .filter((r): r is PendingClaim => r.transfer !== null && r.transfer.status === 'PENDING')
@@ -79,6 +92,8 @@ export function usePendingClaims(session: Session | null): {
       );
     } catch {
       setPending([]);
+    } finally {
+      inFlight.current = false;
     }
   }, [session]);
 
@@ -91,7 +106,7 @@ export function usePendingClaims(session: Session | null): {
 
   useEffect(() => {
     void reload();
-    const timer = setInterval(() => void reload(), 8000);
+    const timer = setInterval(() => void reload(), POLL_MS);
     return () => clearInterval(timer);
   }, [reload]);
 

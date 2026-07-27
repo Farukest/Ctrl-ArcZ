@@ -21,10 +21,17 @@ export const RPC_URL = 'https://rpc.testnet.arc.network' as const;
  * across this list with a fallback transport and move off any endpoint that limits
  * them. All are the same chain (5042002).
  */
+/**
+ * Ordered by measured reliability, not by name. Probed with 10 rapid
+ * eth_blockNumber calls: drpc 10/10, blockdaemon 10/10, quicknode 6/10 (429),
+ * the public endpoint 5/10. Putting a rate-limiting provider first made every
+ * read pay the retry cascade before falling through, so the two clean providers
+ * lead and the rate-limited ones are the last resort.
+ */
 export const RPC_URLS = [
-  'https://rpc.quicknode.testnet.arc.network',
   'https://rpc.drpc.testnet.arc.network',
   'https://rpc.blockdaemon.testnet.arc.network',
+  'https://rpc.quicknode.testnet.arc.network',
   RPC_URL,
 ] as const;
 export const WS_URL = 'wss://rpc.testnet.arc.network' as const;
