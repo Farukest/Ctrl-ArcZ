@@ -56,7 +56,11 @@ export class BlockscoutDataProvider implements IDataProvider {
   constructor(options: BlockscoutProviderOptions = {}) {
     this.apiUrl = options.apiUrl ?? EXPLORER_API_URL;
     this.timeoutMs = options.timeoutMs ?? 15_000;
-    this.fetchFn = options.fetchFn ?? fetch;
+    // Wrap rather than store the bare reference: in a browser `fetch` is a method of
+    // the global object and calling it as `this.fetchFn(...)` gives it the provider as
+    // its receiver, which some engines reject ("Illegal invocation"). Node does not
+    // care, so a broken browser path stays invisible to Node tests.
+    this.fetchFn = options.fetchFn ?? ((input, init) => fetch(input, init));
   }
 
   private async get<T>(path: string): Promise<T> {
