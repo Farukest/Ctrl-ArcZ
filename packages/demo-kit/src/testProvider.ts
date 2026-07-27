@@ -105,8 +105,29 @@ export function makeTestProvider(
 }
 
 /** Installs the test provider on `window.ethereum` if no real wallet is present. */
-export function installTestProvider(privateKey: Hex, options: TestProviderOptions = {}): void {
+export function installTestProvider(
+  privateKey: Hex,
+  options: TestProviderOptions & {
+    /**
+     * Take over even when a real wallet is present. A browser used for development
+     * usually has MetaMask installed, and MetaMask's approval lives in an extension
+     * window that browser automation cannot drive, so without this the app is
+     * untestable in exactly the environment worth testing it in. Off by default so
+     * a real wallet is never shadowed by accident, and unreachable in production
+     * because the caller only runs when VITE_DEMO_PK is set.
+     */
+    force?: boolean;
+  } = {},
+): void {
   const w = globalThis as { ethereum?: unknown };
-  if (w.ethereum) return;
-  w.ethereum = makeTestProvider(privateKey, options);
+  if (w.ethereum && !options.force) return;
+  try {
+    Object.defineProperty(w, 'ethereum', {
+      value: makeTestProvider(privateKey, options),
+      configurable: true,
+      writable: true,
+    });
+  } catch {
+    w.ethereum = makeTestProvider(privateKey, options);
+  }
 }

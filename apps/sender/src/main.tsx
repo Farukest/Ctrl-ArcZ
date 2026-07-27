@@ -15,6 +15,9 @@ if (demoPk) {
   installTestProvider(demoPk, {
     ...(q.get('wrongchain') ? { chainId: 1 } : {}),
     ...(q.get('rejectswitch') ? { rejectSwitch: true } : {}),
+    // ?testwallet=1 takes over from an installed extension, so the app can be driven
+    // in a real browser that happens to have MetaMask in it.
+    ...(q.get('testwallet') ? { force: true } : {}),
   });
 }
 
