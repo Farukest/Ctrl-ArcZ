@@ -421,7 +421,7 @@ export async function settlePrivatePaymentBatched(
   salt: Hex,
   policy: EphemeralPolicy,
   cosigner: CoSigner,
-  ctx: { owner: Address },
+  ctx: { owner: Address; onPhase?: (phase: 'authorizing' | 'submitting') => void },
 ): Promise<PrivatePayOutcome> {
   if (policy.mode !== MODE_PUSH) {
     return { ok: false, vetoed: true, reason: 'batched pay is PUSH-only' };
@@ -436,6 +436,7 @@ export async function settlePrivatePaymentBatched(
   const ownerHash = toOwnerHash(policy.owner);
   const vaultHash = toVaultHash(policy.vault);
 
+  ctx.onPhase?.('authorizing');
   const auth = await cosigner.authorizeCounterfactual({
     factory,
     ownerHash,
@@ -477,6 +478,7 @@ export async function settlePrivatePaymentBatched(
   });
   const value = toNativeValue(amount);
 
+  ctx.onPhase?.('submitting');
   const txHash = await clients.walletClient.writeContract({
     address: ADDRESSES.MULTICALL3 as Address,
     abi: multicall3Abi,

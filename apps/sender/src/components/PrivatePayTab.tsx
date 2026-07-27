@@ -65,13 +65,8 @@ export function PrivatePayTab({ session }: { session: Session }) {
     (phase === 'idle' || phase === 'done' || phase === 'vetoed');
 
   const steps: Step[] = useMemo(() => {
-    const order: Phase[] = ['machine', 'creating', 'funding', 'paying'];
-    const labels = [
-      t('ppay.step.machine'),
-      t('ppay.step.create'),
-      t('ppay.step.fund'),
-      t('ppay.step.pay'),
-    ];
+    const order: Phase[] = ['machine', 'paying'];
+    const labels = [t('ppay.step.machine'), t('ppay.step.pay')];
     const active = order.indexOf(phase);
     return labels.map((label, i) => ({
       label,
@@ -112,18 +107,14 @@ export function PrivatePayTab({ session }: { session: Session }) {
       const salt = randomSalt();
       const expiry = Math.floor(Date.now() / 1000) + EXPIRY_SECONDS;
 
-      // 1. The Machine checks FIRST — the firewall runs before anything exists. A
-      //    veto here means nothing is created and no funds ever move: the payment
-      //    is stopped before it can send, not clawed back after.
+      // Create + fund + pay in ONE transaction. The Machine signs for the box's
+      // counterfactual address (it does not exist yet); the CREATE2 salt commits the
+      // policy to that address, so signing nonce 0 for it is safe.
+      //
+      // There is no separate precheck call: it ran the same firewall behind a second
+      // wallet signature, and nothing exists on chain until the transaction below, so
+      // a veto here stops the payment just as early. One signature, one transaction.
       setPhase('machine');
-      const pre = await cosigner.precheck({ owner, target: to, amount: amt });
-      if (!pre.approved) return showVeto(pre.reason, pre.riskReasons);
-
-      // 2. Create + fund + pay in ONE transaction. The Machine signs for the box's
-      //    counterfactual address (it does not exist yet); the CREATE2 salt commits
-      //    the policy to that address, so signing nonce 0 for it is safe. The payer
-      //    approves once and pays one base fee instead of three.
-      setPhase('paying');
       const outcome = await settlePrivatePaymentBatched(
         clients,
         SPEND_POLICY_FACTORY_ADDRESS,
@@ -140,7 +131,7 @@ export function PrivatePayTab({ session }: { session: Session }) {
           mode: MODE_PUSH,
         },
         cosigner,
-        { owner },
+        { owner, onPhase: (p) => setPhase(p === 'submitting' ? 'paying' : 'machine') },
       );
       if (!outcome.ok) return showVeto(outcome.reason, outcome.riskReasons);
 
