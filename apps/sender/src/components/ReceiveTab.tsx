@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
 import { formatUnits, type Hex } from 'viem';
+import { findSalt } from '../store.js';
 import type { Session } from '@ctrl-arcz/demo-kit';
 import {
   Button,
@@ -79,10 +80,14 @@ export function ReceiveTab({
   // FROM the recipient, it is their half of the proof. Without this the manual form
   // could never complete a claim, it only ever told you to go find the link.
   const hasPending = (pending?.length ?? 0) > 0;
-  const saltFromLink = salt !== null;
   const [saltInput, setSaltInput] = useState<string>(salt ?? '');
   const saltValid = /^0x[0-9a-fA-F]{64}$/.test(saltInput.trim());
-  const effectiveSalt: Hex | null = saltValid ? (saltInput.trim() as Hex) : null;
+  // Three ways the salt can already be known, in order: the claim link, and this
+  // browser's own record of a transfer it created. Only when neither has it does the
+  // recipient get asked, which is the genuinely external case.
+  const knownSalt: Hex | null = salt ?? (tid ? findSalt(tid) : null);
+  const effectiveSalt: Hex | null = knownSalt ?? (saltValid ? (saltInput.trim() as Hex) : null);
+  const askForSalt = Boolean(tid) && knownSalt === null;
   const [busy, setBusy] = useState(false);
   const [claimedTx, setClaimedTx] = useState<Hex | null>(null);
   const [qr, setQr] = useState('');
@@ -220,7 +225,7 @@ export function ReceiveTab({
             />
           </Field>
         )}
-        {!saltFromLink && (
+        {askForSalt && (
           <div style={{ marginTop: 12 }}>
             <Field
               label={t('claim.salt')}

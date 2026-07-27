@@ -50,6 +50,32 @@ export function saveTransfer(sender: Address, transfer: StoredTransfer): void {
 }
 
 /**
+ * The salt for a transfer this browser created, whichever wallet sent it.
+ *
+ * Claiming needs the salt, and a recipient normally gets it from the claim link.
+ * But when the transfer was created here, asking for it back would be asking the
+ * app for something it already wrote down. Safe to hand over: the salt is not a
+ * bearer credential (see above, the code is the missing factor), and this only
+ * ever reads what this same origin stored.
+ */
+export function findSalt(transferId: string): Hex | null {
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (!k?.startsWith('ctrl-arcz:sender:')) continue;
+      const raw = localStorage.getItem(k);
+      if (!raw) continue;
+      const stored = JSON.parse(raw) as StoredTransfer[];
+      const hit = stored.find((t) => t.transferId === transferId);
+      if (hit?.salt) return hit.salt;
+    }
+  } catch {
+    /* unreadable storage: fall back to asking */
+  }
+  return null;
+}
+
+/**
  * Remembers CCTP bridges run from this browser. The bridge is signed server-side
  * with the shared demo key, so this history is per-browser, not per-wallet.
  */
