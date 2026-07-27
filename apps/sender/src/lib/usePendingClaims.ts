@@ -22,8 +22,9 @@ export interface PendingClaim {
  */
 const FIRST_SCAN_LOOKBACK = 20_000n;
 
-/** Poll period. Long enough that a slow scan finishes before the next one is due. */
-const POLL_MS = 20_000;
+/** Poll period. A steady-state poll is one getLogs over the blocks since the last
+ *  one, so this can be short without putting the RPC under load. */
+const POLL_MS = 8_000;
 
 /**
  * Incoming protected transfers addressed to the connected wallet that are still
@@ -107,7 +108,17 @@ export function usePendingClaims(session: Session | null): {
   useEffect(() => {
     void reload();
     const timer = setInterval(() => void reload(), POLL_MS);
-    return () => clearInterval(timer);
+    // Two windows side by side (one sending, one receiving) is the normal way to
+    // watch a transfer land, and coming back to a window should not mean waiting out
+    // the next tick.
+    const onFocus = () => void reload();
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onFocus);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onFocus);
+    };
   }, [reload]);
 
   return { pending, reload };

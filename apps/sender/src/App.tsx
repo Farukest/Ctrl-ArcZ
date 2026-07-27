@@ -86,7 +86,7 @@ export function App() {
                   <ActivityTab session={state.session} onChange={state.refreshBalance} />
                 )}
                 {tab === 'subscriptions' && <SubscriptionsTab session={state.session} />}
-                {tab === 'bridge' && <BridgeTab />}
+                {tab === 'bridge' && <BridgeTab session={state.session} />}
               </>
             ) : (
               <ReceiveTab

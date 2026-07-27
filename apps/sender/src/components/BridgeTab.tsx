@@ -1,4 +1,6 @@
 import { useMemo, useState } from 'react';
+import type { Session } from '@ctrl-arcz/demo-kit';
+import { signedPost } from '../lib/signedPost.js';
 import {
   BRIDGE_STEPS,
   GATEWAY_STEPS,
@@ -79,7 +81,7 @@ function bridgeHaystack(b: StoredBridge): string {
     .toLowerCase();
 }
 
-export function BridgeTab() {
+export function BridgeTab({ session }: { session: Session }) {
   const t = useT();
   const toast = useToast();
   const guard = useSubmitGuard();
@@ -151,15 +153,11 @@ export function BridgeTab() {
     setBusy(true);
     setResult(null);
     try {
-      const res = await fetch(engine === 'gateway' ? '/api/gateway' : '/api/bridge', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ from, to, amount }),
-      });
-      const data = (await res.json()) as BridgeOutcome | { error: string };
-      if (!res.ok || 'error' in data) {
-        throw new Error('error' in data ? data.error : `bridge failed (${res.status})`);
-      }
+      const data = await signedPost<BridgeOutcome>(
+        session,
+        engine === 'gateway' ? '/api/gateway' : '/api/bridge',
+        { from, to, amount },
+      );
       setResult(data);
       saveBridge({
         id: `${from}-${to}-${Date.now()}`,

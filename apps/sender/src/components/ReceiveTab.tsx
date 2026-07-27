@@ -1,13 +1,12 @@
 import { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
-import { formatUnits, keccak256, toBytes, type Hex } from 'viem';
+import { formatUnits, type Hex } from 'viem';
 import { getPublicClient, type Session } from '@ctrl-arcz/demo-kit';
 import {
   Button,
   Card,
   Field,
   Input,
-  Skeleton,
   useSubmitGuard,
   useT,
   useToast,
@@ -28,6 +27,8 @@ import {
 import { Confetti } from './Confetti.js';
 import type { PendingClaim } from '../lib/usePendingClaims.js';
 import { findByClaimHash, type FoundTransfer } from '../lib/findByClaim.js';
+import { signedPost } from '../lib/signedPost.js';
+import { ReceivedTab } from './ReceivedTab.js';
 
 // Gasless claims are signed server-side (/api/gasless-claim) so the relayer and
 // Circle keys never reach the browser bundle. Non-secret flag only.
@@ -39,38 +40,28 @@ const gaslessEnabled = import.meta.env.VITE_GASLESS_ENABLED !== 'false';
  * each caller and makes a captured request single-use. That costs the recipient one
  * wallet signature, and no transaction.
  */
+interface GaslessResult {
+  ok?: boolean;
+  txHash?: string;
+  error?: { kind?: string; attemptsRemaining?: number; reason?: string; message?: string };
+}
+
 async function gaslessClaimViaServer(
   session: Session,
   transferId: bigint,
   code: string,
   salt: Hex,
 ): Promise<Hex> {
-  const path = '/api/gasless-claim';
-  const body = JSON.stringify({ transferId: transferId.toString(), code, salt });
-  const ts = String(Date.now());
-  const message = `Ctrl+ArcZ API request\npath: ${path}\nts: ${ts}\nbody: ${keccak256(toBytes(body))}`;
-  const signature = await session.clients.walletClient.signMessage({
-    account: session.clients.walletClient.account!,
-    message,
+  const data = await signedPost<GaslessResult>(session, '/api/gasless-claim', {
+    transferId: transferId.toString(),
+    code,
+    salt,
   });
-  const res = await fetch(path, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      'x-ctrl-address': session.address,
-      'x-ctrl-timestamp': ts,
-      'x-ctrl-signature': signature,
-    },
-    body,
-  });
-  const data = (await res.json()) as {
-    ok?: boolean;
-    txHash?: string;
-    error?: { kind: string; attemptsRemaining?: number; reason?: string; message?: string } | string;
-  };
-  if (res.ok && data.ok && data.txHash) return data.txHash as Hex;
+  if (data.ok && data.txHash) return data.txHash as Hex;
+  // A refused claim comes back as a typed reason, not an HTTP error, so it is
+  // rebuilt into the same errors the direct path throws and the UI reports both
+  // identically.
   const err = data.error;
-  if (typeof err === 'string') throw new Error(err);
   const zero = `0x${'0'.repeat(64)}` as Hex;
   if (err?.kind === 'wrong_code')
     throw new WrongClaimCodeError(transferId, err.attemptsRemaining ?? 0, zero);
@@ -306,32 +297,9 @@ export function ReceiveTab({
         </div>
       </Card>
 
-      {/* Inbox: protected transfers waiting for you */}
-      <Card title={t('claim.pendingTitle')} data-testid="pending-list">
-        {pending === null ? (
-          <Skeleton height={56} />
-        ) : pending.length === 0 ? (
-          <p className="muted">{t('claim.pendingEmpty')}</p>
-        ) : (
-          pending.map(({ transferId, transfer }) => (
-            <div className="trow trow--compact" key={transferId.toString()}>
-              <div className="row-between">
-                <div>
-                  <div className="trow__idline">
-                    <span className="trow__id">#{transferId.toString()}</span>
-                    <span className="trow__sep">·</span>
-                    <span className="trow__amount">{formatUnits(transfer.amount, 6)}</span>
-                    <span className="trow__unit">USDC</span>
-                  </div>
-                  <div className="trow__to">← {short(transfer.sender)}</div>
-                </div>
-                {/* No select button: the code identifies its own transfer, so this
-                    list is here to show what is waiting, not to be picked from. */}
-              </div>
-            </div>
-          ))
-        )}
-      </Card>
+      {/* Everything ever sent to this wallet, with what is still waiting as one
+          filter of it. A separate "waiting" card would have been the same rows twice. */}
+      <ReceivedTab session={session} />
     </div>
   );
 }
