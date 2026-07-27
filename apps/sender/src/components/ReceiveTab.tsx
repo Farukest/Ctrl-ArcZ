@@ -78,6 +78,7 @@ export function ReceiveTab({
   // The claim link prefills the salt, but it stays editable: it is not a secret kept
   // FROM the recipient, it is their half of the proof. Without this the manual form
   // could never complete a claim, it only ever told you to go find the link.
+  const hasPending = (pending?.length ?? 0) > 0;
   const saltFromLink = salt !== null;
   const [saltInput, setSaltInput] = useState<string>(salt ?? '');
   const saltValid = /^0x[0-9a-fA-F]{64}$/.test(saltInput.trim());
@@ -202,6 +203,11 @@ export function ReceiveTab({
               {t('claim.change')}
             </Button>
           </div>
+        ) : hasPending ? (
+          // The list below already knows every transfer waiting for this wallet, so
+          // asking the recipient to type a number they would have to read off that
+          // same list is busywork. The field is only the fallback for an empty list.
+          <p className="muted">{t('claim.pickBelow')}</p>
         ) : (
           <Field label={t('claim.transferId')}>
             <Input

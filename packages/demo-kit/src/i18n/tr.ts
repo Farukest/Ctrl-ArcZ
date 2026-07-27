@@ -275,6 +275,7 @@ export const tr: Record<TranslationKey, string> = {
   'claim.title': 'Transferi claim et',
   'claim.transferId': 'Transfer numarası',
   'claim.picked': 'Transfer #{id}',
+  'claim.pickBelow': 'Size gönderilen transferi aşağıdaki listeden seçin, sonra kodu girin.',
   'claim.change': 'Değiştir',
   'claim.salt': 'Claim anahtarı',
   'claim.saltInvalid': 'Claim anahtarı 0x ile başlayan 64 karakterlik bir değerdir',

@@ -279,6 +279,7 @@ export const en = {
   'claim.title': 'Claim the transfer',
   'claim.transferId': 'Transfer number',
   'claim.picked': 'Transfer #{id}',
+  'claim.pickBelow': 'Pick the transfer you were sent from the list below, then enter the code.',
   'claim.change': 'Change',
   'claim.salt': 'Claim key',
   'claim.saltInvalid': 'The claim key is a 0x address of 64 hex characters',
