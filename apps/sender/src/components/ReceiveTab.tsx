@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import QRCode from 'qrcode';
-import { formatUnits, type Hex } from 'viem';
+import { formatUnits, keccak256, toBytes, type Hex } from 'viem';
 import type { Session } from '@ctrl-arcz/demo-kit';
 import {
   Button,
@@ -32,11 +32,35 @@ import type { PendingClaim } from '../lib/usePendingClaims.js';
 // Circle keys never reach the browser bundle. Non-secret flag only.
 const gaslessEnabled = import.meta.env.VITE_GASLESS_ENABLED !== 'false';
 
-async function gaslessClaimViaServer(transferId: bigint, code: string, salt: Hex): Promise<Hex> {
-  const res = await fetch('/api/gasless-claim', {
+/**
+ * The relayer endpoint spends real gas, so it will not answer an anonymous caller:
+ * it wants a signature over path + timestamp + body hash, which also quota-limits
+ * each caller and makes a captured request single-use. That costs the recipient one
+ * wallet signature, and no transaction.
+ */
+async function gaslessClaimViaServer(
+  session: Session,
+  transferId: bigint,
+  code: string,
+  salt: Hex,
+): Promise<Hex> {
+  const path = '/api/gasless-claim';
+  const body = JSON.stringify({ transferId: transferId.toString(), code, salt });
+  const ts = String(Date.now());
+  const message = `Ctrl+ArcZ API request\npath: ${path}\nts: ${ts}\nbody: ${keccak256(toBytes(body))}`;
+  const signature = await session.clients.walletClient.signMessage({
+    account: session.clients.walletClient.account!,
+    message,
+  });
+  const res = await fetch(path, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ transferId: transferId.toString(), code, salt }),
+    headers: {
+      'content-type': 'application/json',
+      'x-ctrl-address': session.address,
+      'x-ctrl-timestamp': ts,
+      'x-ctrl-signature': signature,
+    },
+    body,
   });
   const data = (await res.json()) as {
     ok?: boolean;
@@ -107,7 +131,7 @@ export function ReceiveTab({
     setBusy(true);
     try {
       const tx = gasless
-        ? await gaslessClaimViaServer(id, parsed, salt)
+        ? await gaslessClaimViaServer(session, id, parsed, salt)
         : await claim(session.clients, id, parsed, salt);
       setClaimedTx(tx);
       await onClaimed();
