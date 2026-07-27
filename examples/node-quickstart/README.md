@@ -65,4 +65,4 @@ await claim(recipientClients, transferId, code, salt);
 - **Typed errors:** wrong code → `WrongClaimCodeError` (with `attemptsRemaining`),
   already-claimed/expired → `TransferUnavailableError` (with a `reason` code). Catch
   these instead of parsing raw revert strings.
-- **Want a UI?** See the reference web apps in `apps/sender` and `apps/receiver`.
+- **Want a UI?** See the reference web app in `apps/sender`.

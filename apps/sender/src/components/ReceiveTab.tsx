@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
 import { formatUnits, keccak256, toBytes, type Hex } from 'viem';
-import type { Session } from '@ctrl-arcz/demo-kit';
+import { getPublicClient, type Session } from '@ctrl-arcz/demo-kit';
 import {
   Button,
   Card,
@@ -27,6 +27,7 @@ import {
 } from '@ctrl-arcz/sdk';
 import { Confetti } from './Confetti.js';
 import type { PendingClaim } from '../lib/usePendingClaims.js';
+import { findByClaimHash, type FoundTransfer } from '../lib/findByClaim.js';
 
 // Gasless claims are signed server-side (/api/gasless-claim) so the relayer and
 // Circle keys never reach the browser bundle. Non-secret flag only.
@@ -107,15 +108,44 @@ export function ReceiveTab({
   // would hand them the secret. It has to reach a human.
   const parsed = normaliseSecret(secret);
 
-  // The secret says which transfer it belongs to: its commitment is on-chain, so the
-  // app recomputes the hash and finds the match among the transfers waiting for this
-  // wallet. Nobody has to read a transfer number off a list and type it back in.
-  const matched = useMemo(() => {
-    if (!parsed || !pending) return null;
-    const want = hashClaim(saltFromSecret(parsed), parsed).toLowerCase();
-    return pending.find((p) => p.transfer.claimHash.toLowerCase() === want) ?? null;
+  // The secret says which transfer it belongs to: its commitment is on the chain, so
+  // the app recomputes the hash and looks it up. No transfer number to type, and no
+  // requirement to be connected as the recipient, because `claim` always pays the
+  // recipient recorded at send time whoever submits it.
+  const [lookup, setLookup] = useState<{ found: FoundTransfer | null; searching: boolean }>({
+    found: null,
+    searching: false,
+  });
+  useEffect(() => {
+    if (!parsed) {
+      setLookup({ found: null, searching: false });
+      return;
+    }
+    let live = true;
+    setLookup({ found: null, searching: true });
+    const want = hashClaim(saltFromSecret(parsed), parsed);
+    const local = pending?.find((p) => p.transfer.claimHash.toLowerCase() === want.toLowerCase());
+    if (local) {
+      setLookup({
+        found: {
+          transferId: local.transferId,
+          to: local.transfer.to,
+          sender: local.transfer.sender,
+          amount: local.transfer.amount,
+        },
+        searching: false,
+      });
+      return;
+    }
+    findByClaimHash(getPublicClient(), want)
+      .then((f) => live && setLookup({ found: f, searching: false }))
+      .catch(() => live && setLookup({ found: null, searching: false }));
+    return () => {
+      live = false;
+    };
   }, [parsed, pending]);
-  const noMatch = Boolean(parsed) && pending !== null && matched === null;
+  const matched = lookup.found;
+  const noMatch = Boolean(parsed) && !lookup.searching && matched === null;
 
   useEffect(() => {
     QRCode.toDataURL(session.address, { margin: 1, width: 176 })
@@ -248,8 +278,8 @@ export function ReceiveTab({
             <span>
               {t('claim.matched', {
                 id: matched.transferId.toString(),
-                amount: formatUnits(matched.transfer.amount, 6),
-                from: short(matched.transfer.sender),
+                amount: formatUnits(matched.amount, 6),
+                from: short(matched.sender),
               })}
             </span>
           </div>

@@ -339,8 +339,7 @@ The full audit lives in [`SECURITY.md`](./SECURITY.md). The short version:
 | `packages/contracts` | `CtrlArcZ.sol`, `CodeClaimVerifier`, `IClaimVerifier`, Foundry tests    |
 | `packages/sdk`       | `@ctrl-arcz/sdk`, the thing an integrator actually installs             |
 | `packages/demo-kit`  | Shared wallet session, design system and the server-side bridge helpers |
-| `apps/sender`        | Sender demo, port 5173                                                  |
-| `apps/receiver`      | Recipient claim page, port 5174                                         |
+| `apps/sender`        | The web app, port 5173. Sending and receiving are two modes of it       |
 | `examples`           | A standalone Node quickstart, no framework                              |
 
 Every address, RPC and chain constant lives in exactly one file, `packages/sdk/src/chains/arcTestnet.ts`. The Foundry deploy script reads a JSON file generated from it, so no address is written down twice.
@@ -363,8 +362,7 @@ USDC is both gas and the asset on Arc, so fund the wallets with Arc Testnet USDC
 | `pnpm test`           | Foundry plus vitest                     |
 | `pnpm contracts:test` | Contract tests only                     |
 | `pnpm deploy:testnet` | Deploy `CtrlArcZ` to Arc Testnet        |
-| `pnpm dev:sender`     | Sender demo on http://localhost:5173    |
-| `pnpm dev:receiver`   | Recipient demo on http://localhost:5174 |
+| `pnpm dev:sender`     | The web app on http://localhost:5173    |
 
 Using the SDK is three calls, and the firewall is one of them whether you ask for it or not:
 

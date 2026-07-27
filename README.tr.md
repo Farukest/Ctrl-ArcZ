@@ -340,7 +340,6 @@ Denetimin tamamı [`SECURITY.md`](./SECURITY.md) içinde. Kısa hali:
 | `packages/sdk`       | `@ctrl-arcz/sdk`, entegratörün gerçekten kurduğu şey                      |
 | `packages/demo-kit`  | Ortak cüzdan oturumu, tasarım sistemi ve sunucu tarafı köprü yardımcıları |
 | `apps/sender`        | Gönderen demosu, port 5173                                                |
-| `apps/receiver`      | Alıcı claim sayfası, port 5174                                            |
 | `examples`           | Bağımsız bir Node quickstart'ı, çerçevesiz                                |
 
 Her adres, RPC ve chain sabiti tek bir dosyada durur: `packages/sdk/src/chains/arcTestnet.ts`. Foundry deploy script'i ondan üretilen bir JSON dosyasını okur, böylece hiçbir adres iki kez yazılmaz.
@@ -364,7 +363,6 @@ Arc'ta USDC hem gas hem varlık, o yüzden cüzdanları [faucet.circle.com](http
 | `pnpm contracts:test` | Yalnız kontrat testleri                 |
 | `pnpm deploy:testnet` | `CtrlArcZ`'yi Arc Testnet'e deploy eder |
 | `pnpm dev:sender`     | Gönderen demosu, http://localhost:5173  |
-| `pnpm dev:receiver`   | Alıcı demosu, http://localhost:5174     |
 
 SDK'yı kullanmak üç çağrı ve firewall istesen de istemesen de onlardan biri:
 
