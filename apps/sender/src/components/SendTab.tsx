@@ -36,14 +36,13 @@ import { IconExternal, IconLock } from '@ctrl-arcz/demo-kit/ui';
 import { saveTransfer } from '../store.js';
 
 const config = defineConfig({ recallWindow: 3600, onWarning: 'warn' });
-const RECEIVER_URL = import.meta.env.VITE_RECEIVER_URL ?? 'http://localhost:5174';
 /** How far back to scan for RecipientVerified. Matches the co-signer's fallback. */
 const VERIFIED_LOOKBACK_BLOCKS = 200_000;
 
 interface SentInfo {
   transferId: string;
-  code: string;
-  salt: `0x${string}`;
+  /** The one string the recipient needs. Nothing else is handed over. */
+  secret: string;
   txHash: `0x${string}`;
   amount: string;
 }
@@ -181,16 +180,14 @@ export function SendTab({ session, onSent }: { session: Session; onSent: () => v
         transferId: result.transferId.toString(),
         to: to as Address,
         amount,
-        code: secret.code,
-        salt: secret.salt,
+        secret: secret.secret,
         txHash: result.txHash,
         createdAt: Date.now(),
       });
 
       setSent({
         transferId: result.transferId.toString(),
-        code: secret.code,
-        salt: secret.salt,
+        secret: secret.secret,
         txHash: result.txHash,
         amount,
       });
@@ -217,7 +214,6 @@ export function SendTab({ session, onSent }: { session: Session; onSent: () => v
   }
 
   if (sent) {
-    const claimLink = `${RECEIVER_URL}/?tid=${sent.transferId}&salt=${sent.salt}`;
     return (
       <Card data-testid="send-success">
         <div className="row" style={{ color: 'var(--safe)', marginBottom: 8 }}>
@@ -227,27 +223,19 @@ export function SendTab({ session, onSent }: { session: Session; onSent: () => v
           </h2>
         </div>
         <p className="muted">{t('send.successBody', { amount: sent.amount })}</p>
+        {/* The whole credential, and the only thing that leaves this screen. It is
+            not persisted and not put in a link: it has to reach the recipient
+            through a channel an attacker is not in. */}
         <div className="code-reveal marked" data-testid="claim-code">
-          {sent.code}
+          {sent.secret}
         </div>
-
-        <div style={{ marginTop: 16 }}>
-          <div className="field__label">{t('send.claimLinkLabel')}</div>
-          <div className="row" style={{ marginTop: 6 }}>
-            <Input
-              className="grow"
-              readOnly
-              value={claimLink}
-              data-testid="claim-link"
-              onFocus={(e) => e.currentTarget.select()}
-            />
-            <CopyButton value={claimLink} />
-          </div>
-          <ul className="hintlist">
-            <li>{t('send.claimStep1')}</li>
-            <li>{t('send.claimStep2')}</li>
-          </ul>
+        <div className="row" style={{ marginTop: 10, justifyContent: 'center' }}>
+          <CopyButton value={sent.secret} />
         </div>
+        <ul className="hintlist">
+          <li>{t('send.claimStep1')}</li>
+          <li>{t('send.claimStep2')}</li>
+        </ul>
 
         <div className="row-between" style={{ marginTop: 16 }}>
           <a className="row" href={explorerTxUrl(sent.txHash)} target="_blank" rel="noreferrer">

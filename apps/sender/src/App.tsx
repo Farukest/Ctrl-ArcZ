@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { Hex } from 'viem';
 import { useSession } from '@ctrl-arcz/demo-kit';
 import { ConnectBar, SegmentedTabs, TopBar, useT, useToast } from '@ctrl-arcz/demo-kit/ui';
 import { PayTab } from './components/PayTab.js';
@@ -19,12 +18,13 @@ export function App() {
   const t = useT();
   const toast = useToast();
 
-  // Claim links carry only the non-secret tid + salt. If present, open in Receive.
+  // A `?tid=` only points at which transfer to open. No part of the claim secret ever
+  // travels in a URL: links leak into chat previews, history and Referer headers, and
+  // the secret has to reach a person, not an address.
   const params = useMemo(() => new URLSearchParams(window.location.search), []);
   const linkTid = params.get('tid') ?? undefined;
-  const linkSalt = (params.get('salt') as Hex | null) ?? null;
 
-  const [mode, setMode] = useState<Mode>(linkTid || linkSalt ? 'receive' : 'send');
+  const [mode, setMode] = useState<Mode>(linkTid ? 'receive' : 'send');
   const [tab, setTab] = useState<Tab>('pay');
 
   const { pending, reload } = usePendingClaims(state.session);
@@ -93,8 +93,6 @@ export function App() {
                 session={state.session}
                 pending={pending}
                 reload={reload}
-                salt={linkSalt}
-                initialTid={linkTid ?? ''}
                 balance={state.balance}
                 onClaimed={state.refreshBalance}
               />

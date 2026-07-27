@@ -22,6 +22,8 @@ import {
   explorerTxUrl,
   getLogsChunked,
   getTransfer,
+  normaliseSecret,
+  saltFromSecret,
   TransferLockedError,
   TransferUnavailableError,
   WrongClaimCodeError,
@@ -77,12 +79,11 @@ export function App() {
   const guard = useSubmitGuard();
   const params = useMemo(() => new URLSearchParams(window.location.search), []);
   const [tid, setTid] = useState(params.get('tid') ?? '');
-  // The claim code is NEVER read from the URL: a link carrying it would leak the
-  // secret into browser history, Referer headers, and chat link previews, defeating
-  // the out-of-band-code design. The recipient always types it in by hand. Only the
-  // non-secret transfer id and salt (which the sender shares via QR) come from the URL.
+  // No part of the claim secret is ever read from a URL: a link carrying it leaks into
+  // browser history, Referer headers and chat previews. One string, typed by hand, and
+  // it has to reach a human rather than an address.
   const [code, setCode] = useState('');
-  const salt = params.get('salt') as Hex | null;
+
 
   const [pending, setPending] = useState<Pending[] | null>(null);
   const [busy, setBusy] = useState(false);
@@ -129,19 +130,19 @@ export function App() {
     return () => clearInterval(timer);
   }, [loadPending]);
 
-  const codeValid = /^\d{6}$/.test(code);
+  const parsed = normaliseSecret(code);
 
   async function handleClaim(gasless: boolean) {
     if (!state.session) return;
     if (!tid) return toast.push(t('claim.needTid'), 'error');
-    if (!salt) return toast.push(t('claim.needSalt'), 'error');
-    if (!codeValid) return toast.push(t('claim.codeInvalid'), 'error');
+    if (!parsed) return toast.push(t('claim.codeInvalid'), 'error');
+    const salt = saltFromSecret(parsed);
 
     setBusy(true);
     try {
       const tx = gasless
-        ? await gaslessClaimViaServer(BigInt(tid), code, salt)
-        : await claim(state.session.clients, BigInt(tid), code, salt);
+        ? await gaslessClaimViaServer(BigInt(tid), parsed, salt)
+        : await claim(state.session.clients, BigInt(tid), parsed, salt);
       setClaimedTx(tx);
       await state.refreshBalance();
       await loadPending();
@@ -224,12 +225,12 @@ export function App() {
             <div style={{ marginTop: 12 }}>
               <Field
                 label={t('claim.code')}
-                error={code && !codeValid ? t('claim.codeInvalid') : null}
-                hint={!salt ? t('claim.needLink') : undefined}
+                error={code && !parsed ? t('claim.codeInvalid') : null}
+                hint={!code ? t('claim.codeHint') : undefined}
               >
                 <Input
                   mono
-                  invalid={Boolean(code) && !codeValid}
+                  invalid={Boolean(code) && !parsed}
                   value={code}
                   onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
                   placeholder="••••••"

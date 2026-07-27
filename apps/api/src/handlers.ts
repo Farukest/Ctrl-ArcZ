@@ -104,7 +104,10 @@ export async function gaslessPost(req: IncomingMessage, res: ServerResponse): Pr
     salt?: unknown;
   };
   if (typeof transferId !== 'string' || !/^\d{1,78}$/.test(transferId)) throw new HttpError(400, 'invalid transferId');
-  if (typeof code !== 'string' || !/^\d{6}$/.test(code)) throw new HttpError(400, 'invalid code');
+  // The claim code is 16 Crockford base32 characters. It arrives already normalised
+  // by the client, and a 6-digit value would be a pre-single-secret transfer.
+  if (typeof code !== 'string' || !/^[0-9A-HJKMNP-TV-Z]{16}$/.test(code))
+    throw new HttpError(400, 'invalid code');
   if (typeof salt !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(salt)) throw new HttpError(400, 'invalid salt');
 
   const cfg = {

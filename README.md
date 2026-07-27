@@ -148,7 +148,11 @@ stateDiagram-v2
     RECLAIMED --> [*]
 ```
 
-The proof is split in two on purpose. The SDK mints a **six-digit code**, which the sender speaks to the recipient, and a **256-bit salt**, which travels in the claim link. The chain only ever sees `keccak256(salt, code)`. Six digits alone would be twenty bits of entropy and trivial to grind offline; the salt carries the real entropy, and the code carries the human step.
+The proof is a **single 80-bit code**, sixteen characters the sender hands to the recipient: `A4K7-9QMX-2PR6-TH8D`. The chain only ever sees its hash.
+
+Two decisions are behind that shape. **It has to survive an offline brute force**, because in a poisoning attack the recipient recorded on-chain is the attacker: they hold the hash and can grind it for as long as they like. A six-digit code is twenty bits, a million guesses, milliseconds of work. **And it has to travel as one piece.** Splitting the proof and delivering half of it by address, in a link the app fetches, in an on-chain ciphertext, through a backend, hands that half to the attacker too, because the address is theirs. The code reaches a person through a channel the attacker is not in, and that is the whole of the second factor.
+
+The alphabet is Crockford base32, so there is no I, L, O or U to confuse with 1 and 0, and what the recipient types is normalised before it is checked.
 
 Two design decisions in the contract are worth knowing:
 
@@ -178,7 +182,7 @@ sequenceDiagram
     SDK->>SDK: generateClaimCode() -> code, salt, hash
     S->>C: sendProtected(configId, to, amount, hash)
     C->>C: USDC pulled in, transfer PENDING
-    S-->>R: claim link (salt), code spoken separately
+    S-->>R: the claim code, handed over directly
     R->>C: claim(id, code, salt)
     C->>C: verifier checks keccak256(salt, code)
     C->>R: USDC released

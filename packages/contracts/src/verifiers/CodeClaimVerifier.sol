@@ -7,23 +7,25 @@ import {IClaimVerifier} from "../interfaces/IClaimVerifier.sol";
 /// @notice ClaimMode.CODE: the recipient releases the funds by proving knowledge
 ///         of `keccak256(abi.encodePacked(salt, code))`.
 ///
-/// @dev SECURITY — why the salt carries the entropy, not the code.
+/// @dev SECURITY — the preimage must survive an OFFLINE brute force.
 ///
-///      The human-facing secret is a 6-digit code, which is only ~20 bits: a
-///      million guesses. If the salt were public, anyone watching the chain could
-///      brute-force the code offline in milliseconds and call `claim`. That would
-///      defeat the entire point, because in an address-poisoning attack the
-///      recipient recorded on-chain IS the attacker — a claim they trigger pays
-///      them.
+///      In an address-poisoning attack the recipient recorded on-chain IS the
+///      attacker: a claim they trigger pays them. They hold `claimHash` and can
+///      grind it for as long as they like, so the preimage cannot be small. A
+///      6-digit code is ~20 bits, a million guesses, milliseconds of work.
 ///
-///      So the salt is a 32-byte secret, generated per transfer by the SDK and
-///      handed to the recipient out-of-band (claim link / QR) alongside the
-///      spoken code. The preimage therefore has 256 bits of entropy and cannot be
-///      brute-forced offline. CtrlArcZ never emits the salt; only `claimHash`
-///      goes on-chain.
+///      The SDK therefore mints ONE 80-bit secret (16 Crockford base32 characters,
+///      grouped as A4K7-9QMX-2PR6-TH8D) and derives the salt from it, so the whole
+///      proof is a single string a person carries. This contract puts no constraint
+///      on the format; it only checks the hash.
 ///
-///      The 5-attempt lockout in CtrlArcZ is the second line of defence: it caps
-///      an ON-CHAIN guessing attack at 5 tries in 1,000,000 even if a salt leaks.
+///      Why one string and not two halves: any channel that delivers a second half
+///      BY ADDRESS (on-chain ciphertext, a backend, a push) delivers it to the
+///      attacker too, because the address is theirs. The secret has to reach a
+///      human through a channel the attacker is not in.
+///
+///      The 5-attempt lockout in CtrlArcZ is the second line of defence, capping
+///      an ON-CHAIN guessing attack regardless of the preimage size.
 contract CodeClaimVerifier is IClaimVerifier {
     /// @inheritdoc IClaimVerifier
     /// @param proof `abi.encode(bytes32 salt, string code)`

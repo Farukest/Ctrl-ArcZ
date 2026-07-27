@@ -3,25 +3,24 @@ import type { Hex } from 'viem';
 import type { WalletSession } from './wallet';
 
 /**
- * The claim reference a QR carries: the on-chain transfer id and the secret salt,
- * but NOT the 6-digit code. The code is a second factor and must be shared out of
- * band (spoken, texted), so a photographed or shoulder-surfed QR alone cannot
- * claim. The recipient scans this, then enters the code to call `claim`.
+ * The claim reference a QR carries: only which transfer to open. No part of the
+ * claim secret is in it. A QR can be photographed or shoulder-surfed, and under the
+ * single-secret scheme the secret is the whole credential, so it never rides along:
+ * the sender hands it over themselves and the recipient types it.
  */
 export interface ClaimPayload {
   transferId: bigint;
-  salt: Hex;
 }
 
 export function encodeClaim(p: ClaimPayload): string {
-  return JSON.stringify({ v: 2, t: p.transferId.toString(), s: p.salt });
+  return JSON.stringify({ v: 3, t: p.transferId.toString() });
 }
 
 export function decodeClaim(data: string): ClaimPayload | null {
   try {
-    const o = JSON.parse(data) as { t?: unknown; s?: unknown };
-    if (typeof o.t === 'string' && typeof o.s === 'string' && /^0x[0-9a-fA-F]{64}$/.test(o.s)) {
-      return { transferId: BigInt(o.t), salt: o.s as Hex };
+    const o = JSON.parse(data) as { t?: unknown };
+    if (typeof o.t === 'string' && /^\d+$/.test(o.t)) {
+      return { transferId: BigInt(o.t) };
     }
   } catch {
     // not our payload

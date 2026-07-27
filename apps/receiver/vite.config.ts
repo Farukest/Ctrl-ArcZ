@@ -86,7 +86,8 @@ function gaslessApi(env: Record<string, string>): Plugin {
           const { transferId, code, salt } = parsed;
           if (typeof transferId !== 'string' || !/^\d{1,78}$/.test(transferId))
             return send(400, { error: 'invalid transferId' });
-          if (typeof code !== 'string' || !/^\d{6}$/.test(code))
+          // 16 Crockford base32 characters, normalised by the client before it posts.
+          if (typeof code !== 'string' || !/^[0-9A-HJKMNP-TV-Z]{16}$/.test(code))
             return send(400, { error: 'invalid code' });
           if (typeof salt !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(salt))
             return send(400, { error: 'invalid salt' });

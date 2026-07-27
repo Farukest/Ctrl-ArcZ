@@ -11,8 +11,8 @@ export interface StoredTransfer {
   transferId: string;
   to: Address;
   amount: string;
-  code: string;
-  salt: Hex;
+  /** The claim secret. Held in memory for this session only, never written to disk. */
+  secret: string;
   txHash: Hex;
   createdAt: number;
 }
@@ -20,32 +20,31 @@ export interface StoredTransfer {
 const key = (sender: Address) => `ctrl-arcz:sender:${sender.toLowerCase()}`;
 
 /**
- * The claim `code` is the out-of-band secret that gates a claim, so it is NEVER
- * written to localStorage: on disk it would be a bearer credential that any future
- * script-injection on this origin could exfiltrate to drain every outstanding
- * transfer (the salt alone cannot claim; the code is the missing factor). Instead we
- * keep codes in memory for the current session only — enough for the active-transfers
- * tab to show a code you just minted, gone on refresh. Share the code when you send.
+ * The claim secret carries all 80 bits that gate a claim, so it is NEVER written to
+ * localStorage: on disk it is a credential that any future script-injection on this
+ * origin could exfiltrate to settle every outstanding transfer. It lives in memory
+ * for this session only, enough for the active-transfers tab to show a secret you
+ * just minted, gone on refresh. Hand it over when you send.
  */
-const sessionCodes = new Map<string, string>();
+const sessionSecrets = new Map<string, string>();
 
 export function loadTransfers(sender: Address): StoredTransfer[] {
   try {
     const raw = localStorage.getItem(key(sender));
     const stored = raw ? (JSON.parse(raw) as StoredTransfer[]) : [];
-    // Re-attach any code we still hold in memory for this session.
-    return stored.map((t) => ({ ...t, code: sessionCodes.get(t.transferId) ?? t.code ?? '' }));
+    // Re-attach any secret we still hold in memory for this session.
+    return stored.map((t) => ({ ...t, secret: sessionSecrets.get(t.transferId) ?? '' }));
   } catch {
     return [];
   }
 }
 
 export function saveTransfer(sender: Address, transfer: StoredTransfer): void {
-  if (transfer.code) sessionCodes.set(transfer.transferId, transfer.code);
+  if (transfer.secret) sessionSecrets.set(transfer.transferId, transfer.secret);
   const all = loadTransfers(sender);
   all.unshift(transfer);
-  // Persist everything EXCEPT the code.
-  const persistable = all.slice(0, 50).map(({ code: _code, ...rest }) => rest);
+  // Persist everything EXCEPT the secret.
+  const persistable = all.slice(0, 50).map(({ secret: _secret, ...rest }) => rest);
   localStorage.setItem(key(sender), JSON.stringify(persistable));
 }
 

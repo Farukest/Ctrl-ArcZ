@@ -106,8 +106,8 @@ export function SendScreen({ embedded = false }: { embedded?: boolean } = {}) {
       });
 
       setDone({
-        code: secret.code,
-        qr: encodeClaim({ transferId: res.transferId, salt: secret.salt }),
+        code: secret.secret,
+        qr: encodeClaim({ transferId: res.transferId }),
         to: recipient,
         amount,
       });

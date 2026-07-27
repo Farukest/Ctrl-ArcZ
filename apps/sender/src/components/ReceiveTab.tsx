@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import QRCode from 'qrcode';
 import { formatUnits, type Hex } from 'viem';
 import type { Session } from '@ctrl-arcz/demo-kit';
@@ -17,6 +17,9 @@ import {
 import {
   claim,
   explorerTxUrl,
+  hashClaim,
+  normaliseSecret,
+  saltFromSecret,
   TransferLockedError,
   TransferUnavailableError,
   WrongClaimCodeError,
@@ -56,16 +59,12 @@ export function ReceiveTab({
   session,
   pending,
   reload,
-  salt,
-  initialTid,
   balance,
   onClaimed,
 }: {
   session: Session;
   pending: PendingClaim[] | null;
   reload: () => Promise<void>;
-  salt: Hex | null;
-  initialTid?: string;
   balance: string;
   onClaimed: () => Promise<void> | void;
 }) {
@@ -73,20 +72,26 @@ export function ReceiveTab({
   const toast = useToast();
   const guard = useSubmitGuard();
 
-  const [tid, setTid] = useState(initialTid ?? '');
-  const [code, setCode] = useState('');
-  // The claim link prefills the salt, but it stays editable: it is not a secret kept
-  // FROM the recipient, it is their half of the proof. Without this the manual form
-  // could never complete a claim, it only ever told you to go find the link.
-  const hasPending = (pending?.length ?? 0) > 0;
-  // The salt comes from the claim link and nowhere else. Offering to type it, or
-  // reading it out of this browser's own records, would be a path that exists on the
-  // demo machine and nowhere else: a real recipient is another person on another
-  // device. When it is missing, say so instead of showing a form that cannot claim.
-  const effectiveSalt: Hex | null = salt;
+  const [secret, setSecret] = useState('');
   const [busy, setBusy] = useState(false);
   const [claimedTx, setClaimedTx] = useState<Hex | null>(null);
   const [qr, setQr] = useState('');
+
+  // One string carries the whole proof, so the recipient types it and nothing else.
+  // Deliberately not delivered by any address-keyed channel (chain, backend, push):
+  // in a poisoning attack the recorded recipient is the attacker, so such a channel
+  // would hand them the secret. It has to reach a human.
+  const parsed = normaliseSecret(secret);
+
+  // The secret says which transfer it belongs to: its commitment is on-chain, so the
+  // app recomputes the hash and finds the match among the transfers waiting for this
+  // wallet. Nobody has to read a transfer number off a list and type it back in.
+  const matched = useMemo(() => {
+    if (!parsed || !pending) return null;
+    const want = hashClaim(saltFromSecret(parsed), parsed).toLowerCase();
+    return pending.find((p) => p.transfer.claimHash.toLowerCase() === want) ?? null;
+  }, [parsed, pending]);
+  const noMatch = Boolean(parsed) && pending !== null && matched === null;
 
   useEffect(() => {
     QRCode.toDataURL(session.address, { margin: 1, width: 176 })
@@ -94,17 +99,16 @@ export function ReceiveTab({
       .catch(() => setQr(''));
   }, [session.address]);
 
-  const codeValid = /^\d{6}$/.test(code);
-
   async function handleClaim(gasless: boolean) {
-    if (!tid) return toast.push(t('claim.needTid'), 'error');
-    if (!effectiveSalt) return toast.push(t('claim.needSalt'), 'error');
-    if (!codeValid) return toast.push(t('claim.codeInvalid'), 'error');
+    if (!parsed) return toast.push(t('claim.codeInvalid'), 'error');
+    if (!matched) return toast.push(t('claim.noMatch'), 'error');
+    const salt = saltFromSecret(parsed);
+    const id = matched.transferId;
     setBusy(true);
     try {
       const tx = gasless
-        ? await gaslessClaimViaServer(BigInt(tid), code, effectiveSalt)
-        : await claim(session.clients, BigInt(tid), code, effectiveSalt);
+        ? await gaslessClaimViaServer(id, parsed, salt)
+        : await claim(session.clients, id, parsed, salt);
       setClaimedTx(tx);
       await onClaimed();
       await reload();
@@ -195,54 +199,42 @@ export function ReceiveTab({
 
       {/* Claim a protected transfer sent to you */}
       <Card title={t('claim.title')}>
-        {/* Once the transfer is known (from the link or the list) its number is
-            settled, so it reads as a line instead of asking to be filled in. */}
-        {tid ? (
-          <div className="row-between claim__picked">
-            <span className="mono">{t('claim.picked', { id: tid })}</span>
-            <Button variant="ghost" size="sm" onClick={() => setTid('')}>
-              {t('claim.change')}
-            </Button>
-          </div>
-        ) : hasPending ? (
-          // The list below already knows every transfer waiting for this wallet, so
-          // asking the recipient to type a number they would have to read off that
-          // same list is busywork. The field is only the fallback for an empty list.
-          <p className="muted">{t('claim.pickBelow')}</p>
-        ) : (
-          <Field label={t('claim.transferId')}>
-            <Input
-              mono
-              value={tid}
-              onChange={(e) => setTid(e.target.value.replace(/\D/g, ''))}
-              placeholder="8"
-              inputMode="numeric"
-              data-testid="tid-input"
-            />
-          </Field>
-        )}
-        <div style={{ marginTop: 12 }}>
+        <div>
           <Field
             label={t('claim.code')}
-            error={code && !codeValid ? t('claim.codeInvalid') : null}
-            hint={!effectiveSalt ? t('claim.needLink') : undefined}
+            error={
+              secret && !parsed ? t('claim.codeInvalid') : noMatch ? t('claim.noMatch') : null
+            }
+            hint={!secret ? t('claim.codeHint') : undefined}
           >
             <Input
               mono
-              invalid={Boolean(code) && !codeValid}
-              value={code}
-              onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-              placeholder="••••••"
-              inputMode="numeric"
+              invalid={Boolean(secret) && !parsed}
+              value={secret}
+              onChange={(e) => setSecret(e.target.value.toUpperCase())}
+              placeholder="XXXX-XXXX-XXXX-XXXX"
+              autoComplete="off"
+              spellCheck={false}
               data-testid="code-input"
             />
           </Field>
         </div>
+        {matched && (
+          <div className="row-between claim__picked" style={{ marginTop: 12 }}>
+            <span>
+              {t('claim.matched', {
+                id: matched.transferId.toString(),
+                amount: formatUnits(matched.transfer.amount, 6),
+                from: short(matched.transfer.sender),
+              })}
+            </span>
+          </div>
+        )}
         <div className="row wrap" style={{ marginTop: 14 }}>
           <Button
             onClick={() => void guard(() => handleClaim(false))}
             loading={busy}
-            disabled={busy || !session.onArc}
+            disabled={busy || !session.onArc || !matched}
             data-testid="claim-button"
           >
             {busy ? t('claim.claiming') : t('claim.claimOwnGas')}
@@ -279,9 +271,8 @@ export function ReceiveTab({
                   </div>
                   <div className="trow__to">← {short(transfer.sender)}</div>
                 </div>
-                <Button variant="ghost" size="sm" onClick={() => setTid(transferId.toString())}>
-                  {t('common.select')}
-                </Button>
+                {/* No select button: the code identifies its own transfer, so this
+                    list is here to show what is waiting, not to be picked from. */}
               </div>
             </div>
           ))

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from 'expo-camera';
 import { formatUnits } from 'viem';
-import { claim, getTransfer } from '@ctrl-arcz/sdk';
+import { claim, getTransfer, normaliseSecret, saltFromSecret } from '@ctrl-arcz/sdk';
 import { Screen, H1, Muted, Mono, Card, PrimaryButton, GhostButton } from '../ui';
 import { useWallet } from '../lib/wallet';
 import { decodeClaim, type ClaimPayload } from '../lib/claim';
@@ -17,7 +17,7 @@ export function ReceiveScreen() {
   const [payload, setPayload] = useState<ClaimPayload | null>(null);
   const [amount, setAmount] = useState<string | null>(null);
   const [manual, setManual] = useState('');
-  const [code, setCode] = useState(''); // the 6-digit code, entered separately from the QR
+  const [code, setCode] = useState(''); // the claim secret, never carried by the QR
   const [txHash, setTxHash] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -50,8 +50,9 @@ export function ReceiveScreen() {
 
   const doClaim = async () => {
     if (!session || !payload) return;
-    if (!/^\d{6}$/.test(code)) {
-      setError('Enter the 6-digit code the sender shared');
+    const secret = normaliseSecret(code);
+    if (!secret) {
+      setError('Enter the claim code the sender gave you');
       return;
     }
     setPhase('claiming');
@@ -60,8 +61,8 @@ export function ReceiveScreen() {
       const hash = await claim(
         { publicClient: session.publicClient, walletClient: session.walletClient },
         payload.transferId,
-        code,
-        payload.salt,
+        secret,
+        saltFromSecret(secret),
       );
       setTxHash(hash);
       setPhase('done');
@@ -110,7 +111,7 @@ export function ReceiveScreen() {
             <TextInput
               value={manual}
               onChangeText={setManual}
-              placeholder='{"v":1,"t":"...","c":"...","s":"0x..."}'
+              placeholder='{"v":3,"t":"..."}'
               placeholderTextColor={theme.muted}
               autoCapitalize="none"
               autoCorrect={false}
@@ -127,17 +128,22 @@ export function ReceiveScreen() {
         <Card>
           <Muted>Claiming transfer</Muted>
           <Text style={styles.amount}>{amount ? `${amount} USDC` : `#${payload.transferId.toString()}`}</Text>
-          <Muted>Enter the 6-digit code the sender shared separately</Muted>
+          <Muted>Enter the claim code the sender gave you</Muted>
           <TextInput
             value={code}
-            onChangeText={(t) => setCode(t.replace(/\D/g, '').slice(0, 6))}
-            keyboardType="number-pad"
-            maxLength={6}
-            placeholder="000000"
+            onChangeText={(t) => setCode(t.toUpperCase())}
+            autoCapitalize="characters"
+            autoCorrect={false}
+            maxLength={19}
+            placeholder="XXXX-XXXX-XXXX-XXXX"
             placeholderTextColor={theme.muted}
             style={styles.input}
           />
-          <PrimaryButton label="Claim to my wallet" onPress={doClaim} disabled={code.length !== 6} />
+          <PrimaryButton
+            label="Claim to my wallet"
+            onPress={doClaim}
+            disabled={normaliseSecret(code) === null}
+          />
           <GhostButton label="Cancel" onPress={reset} />
           {error && <Text style={styles.err}>{error}</Text>}
         </Card>

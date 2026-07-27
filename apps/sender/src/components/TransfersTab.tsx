@@ -40,7 +40,7 @@ function transferHaystack(r: Row): string {
     r.stored.amount,
     'usdc',
     r.stored.to,
-    r.stored.code,
+    r.stored.secret,
     r.chain?.status ?? '',
   ]
     .join(' ')
@@ -162,8 +162,8 @@ export function TransfersTab({ session, onChange }: { session: Session; onChange
                   <div className="trow__bottom">
                     <div className="trow__code">
                       <span className="trow__code-label">{t('active.code')}</span>
-                      <span className="trow__code-value">{stored.code}</span>
-                      <CopyButton value={stored.code} />
+                      <span className="trow__code-value">{stored.secret}</span>
+                      <CopyButton value={stored.secret} />
                     </div>
                     <div className="trow__actions">
                       <a

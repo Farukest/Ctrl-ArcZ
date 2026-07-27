@@ -63,7 +63,16 @@ export {
   type TransferStatus,
   type WatchTransferOptions,
 } from './transfer/transfer.js';
-export { generateClaimCode, hashClaim, type ClaimSecret } from './transfer/claimCode.js';
+export {
+  generateClaimCode,
+  fromSecret,
+  normaliseSecret,
+  formatSecret,
+  saltFromSecret,
+  hashClaim,
+  CLAIM_SECRET_BITS,
+  type ClaimSecret,
+} from './transfer/claimCode.js';
 export {
   approvePermit2,
   getPermit2Allowance,
