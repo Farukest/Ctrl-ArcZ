@@ -35,7 +35,6 @@ export const tr: Record<TranslationKey, string> = {
   'common.themeLight': 'Açık temaya geç',
   'common.themeDark': 'Koyu temaya geç',
 
-  'sender.subtitle': 'Gönderen paneli, korumalı USDC transferi',
   'app.subtitle': 'Arc üzerinde korumalı USDC transferleri',
   'mode.send': 'Gönder',
   'mode.receive': 'Al',
@@ -269,7 +268,6 @@ export const tr: Record<TranslationKey, string> = {
   'demo.notConfigured':
     'Senaryonun taklit edeceği adresi apps/sender/.env.local içindeki VITE_DEMO_RECEIVER değişkenine yazın.',
 
-  'receiver.subtitle': 'Alıcı, kodla claim',
   'claim.title': 'Transferi claim et',
   'claim.transferId': 'Transfer numarası',
   'claim.picked': 'Transfer #{id}',

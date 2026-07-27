@@ -39,7 +39,6 @@ export const en = {
   'common.themeLight': 'Switch to light theme',
   'common.themeDark': 'Switch to dark theme',
 
-  'sender.subtitle': 'Sender panel, protected USDC transfer',
   'app.subtitle': 'Protected USDC transfers on Arc',
   'mode.send': 'Send',
   'mode.receive': 'Receive',
@@ -273,7 +272,6 @@ export const en = {
   'demo.notConfigured':
     'Set VITE_DEMO_RECEIVER in apps/sender/.env.local to the address this scenario should imitate.',
 
-  'receiver.subtitle': 'Recipient, claim with code',
   'claim.title': 'Claim the transfer',
   'claim.transferId': 'Transfer number',
   'claim.picked': 'Transfer #{id}',
