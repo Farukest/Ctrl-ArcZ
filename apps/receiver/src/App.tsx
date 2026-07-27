@@ -82,14 +82,7 @@ export function App() {
   // the out-of-band-code design. The recipient always types it in by hand. Only the
   // non-secret transfer id and salt (which the sender shares via QR) come from the URL.
   const [code, setCode] = useState('');
-  // Prefilled by the claim link, but editable: the salt is not a secret kept FROM the
-  // recipient, it is the half of the proof meant for them. A sender who would rather
-  // not send a link can read it out or paste it, so the manual form actually works
-  // instead of dead-ending on "use the link".
-  const saltFromLink = params.get('salt') !== null;
-  const [saltInput, setSaltInput] = useState(params.get('salt') ?? '');
-  const saltValid = /^0x[0-9a-fA-F]{64}$/.test(saltInput.trim());
-  const salt = saltValid ? (saltInput.trim() as Hex) : null;
+  const salt = params.get('salt') as Hex | null;
 
   const [pending, setPending] = useState<Pending[] | null>(null);
   const [busy, setBusy] = useState(false);
@@ -228,28 +221,11 @@ export function App() {
                 />
               </Field>
             )}
-            {!saltFromLink && (
-              <div style={{ marginTop: 12 }}>
-                <Field
-                  label={t('claim.salt')}
-                  error={saltInput && !saltValid ? t('claim.saltInvalid') : null}
-                  hint={!saltInput ? t('claim.saltHint') : undefined}
-                >
-                  <Input
-                    mono
-                    invalid={Boolean(saltInput) && !saltValid}
-                    value={saltInput}
-                    onChange={(e) => setSaltInput(e.target.value.trim())}
-                    placeholder="0x…"
-                    data-testid="salt-input"
-                  />
-                </Field>
-              </div>
-            )}
             <div style={{ marginTop: 12 }}>
               <Field
                 label={t('claim.code')}
                 error={code && !codeValid ? t('claim.codeInvalid') : null}
+                hint={!salt ? t('claim.needLink') : undefined}
               >
                 <Input
                   mono

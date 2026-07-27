@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
 import { formatUnits, type Hex } from 'viem';
-import { findSalt } from '../store.js';
 import type { Session } from '@ctrl-arcz/demo-kit';
 import {
   Button,
@@ -80,14 +79,11 @@ export function ReceiveTab({
   // FROM the recipient, it is their half of the proof. Without this the manual form
   // could never complete a claim, it only ever told you to go find the link.
   const hasPending = (pending?.length ?? 0) > 0;
-  const [saltInput, setSaltInput] = useState<string>(salt ?? '');
-  const saltValid = /^0x[0-9a-fA-F]{64}$/.test(saltInput.trim());
-  // Three ways the salt can already be known, in order: the claim link, and this
-  // browser's own record of a transfer it created. Only when neither has it does the
-  // recipient get asked, which is the genuinely external case.
-  const knownSalt: Hex | null = salt ?? (tid ? findSalt(tid) : null);
-  const effectiveSalt: Hex | null = knownSalt ?? (saltValid ? (saltInput.trim() as Hex) : null);
-  const askForSalt = Boolean(tid) && knownSalt === null;
+  // The salt comes from the claim link and nowhere else. Offering to type it, or
+  // reading it out of this browser's own records, would be a path that exists on the
+  // demo machine and nowhere else: a real recipient is another person on another
+  // device. When it is missing, say so instead of showing a form that cannot claim.
+  const effectiveSalt: Hex | null = salt;
   const [busy, setBusy] = useState(false);
   const [claimedTx, setClaimedTx] = useState<Hex | null>(null);
   const [qr, setQr] = useState('');
@@ -225,28 +221,11 @@ export function ReceiveTab({
             />
           </Field>
         )}
-        {askForSalt && (
-          <div style={{ marginTop: 12 }}>
-            <Field
-              label={t('claim.salt')}
-              error={saltInput && !saltValid ? t('claim.saltInvalid') : null}
-              hint={!saltInput ? t('claim.saltHint') : undefined}
-            >
-              <Input
-                mono
-                invalid={Boolean(saltInput) && !saltValid}
-                value={saltInput}
-                onChange={(e) => setSaltInput(e.target.value.trim())}
-                placeholder="0x…"
-                data-testid="salt-input"
-              />
-            </Field>
-          </div>
-        )}
         <div style={{ marginTop: 12 }}>
           <Field
             label={t('claim.code')}
             error={code && !codeValid ? t('claim.codeInvalid') : null}
+            hint={!effectiveSalt ? t('claim.needLink') : undefined}
           >
             <Input
               mono
