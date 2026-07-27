@@ -1,5 +1,5 @@
 import { BridgeKit } from '@circle-fin/bridge-kit';
-import { createViemAdapterFromPrivateKey } from '@circle-fin/adapter-viem-v2';
+import { circleAdapter } from './circleAdapter.js';
 import {
   BRIDGE_STEPS,
   type BridgeChainName,
@@ -24,7 +24,7 @@ export async function bridgeUsdc(params: {
   onStep?: (step: BridgeStepName) => void;
 }): Promise<BridgeOutcome> {
   const kit = new BridgeKit();
-  const adapter = createViemAdapterFromPrivateKey({ privateKey: params.privateKey });
+  const adapter = circleAdapter(params.privateKey);
 
   if (params.onStep) {
     const on = kit.on.bind(kit) as (event: string, cb: () => void) => void;
@@ -38,12 +38,20 @@ export async function bridgeUsdc(params: {
   })) as {
     amount: string;
     state: string;
-    steps: { name: string; state: string; txHash?: string; explorerUrl?: string }[];
+    steps: {
+      name: string;
+      state: string;
+      txHash?: string;
+      explorerUrl?: string;
+      error?: unknown;
+    }[];
   };
 
   // Pick only serializable primitives. Bridge Kit's raw steps carry `data`/`error`
   // objects (viem receipts, gas as BigInt) that JSON.stringify cannot handle, so
-  // this helper never leaks them across the SDK/HTTP boundary.
+  // this helper never leaks them across the SDK/HTTP boundary. The error is
+  // flattened to one line rather than dropped: a failed bridge with no reason is
+  // undebuggable from the outside and unactionable from the inside.
   return {
     state: result.state,
     amount: result.amount,
@@ -52,6 +60,14 @@ export async function bridgeUsdc(params: {
       state: s.state,
       ...(s.txHash ? { txHash: s.txHash } : {}),
       ...(s.explorerUrl ? { explorerUrl: s.explorerUrl } : {}),
+      ...(s.error ? { error: shortError(s.error) } : {}),
     })),
   };
+}
+
+/** A one-line, serializable reason from whatever the kit threw. */
+function shortError(e: unknown): string {
+  if (typeof e === 'string') return e.slice(0, 300);
+  const o = e as { shortMessage?: string; details?: string; message?: string };
+  return (o?.shortMessage ?? o?.details ?? o?.message ?? String(e)).slice(0, 300);
 }

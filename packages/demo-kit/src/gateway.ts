@@ -1,5 +1,5 @@
 import { UnifiedBalanceKit } from '@circle-fin/unified-balance-kit';
-import { createViemAdapterFromPrivateKey } from '@circle-fin/adapter-viem-v2';
+import { circleAdapter } from './circleAdapter.js';
 import { privateKeyToAccount } from 'viem/accounts';
 import type { BridgeChainName, BridgeOutcome, GatewayChainName } from './bridgeChains.js';
 
@@ -30,7 +30,7 @@ export async function gatewayTransfer(params: {
   amount: string;
 }): Promise<BridgeOutcome> {
   const kit = new UnifiedBalanceKit();
-  const adapter = createViemAdapterFromPrivateKey({ privateKey: params.privateKey });
+  const adapter = circleAdapter(params.privateKey);
   const owner = privateKeyToAccount(params.privateKey).address;
   const amount = Number(params.amount);
 

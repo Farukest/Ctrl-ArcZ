@@ -282,6 +282,25 @@ export function BridgeTab({ session }: { session: Session }) {
         </div>
         {!bridgeEnabled && <p className="hint">{t('bridge.noKey')}</p>}
 
+        {/* A bridge can come back 200 and still have failed at a step. Rendering only
+            the success case left the screen unchanged, which reads as "the button
+            does nothing" rather than "CCTP refused this amount". */}
+        {result && result.state !== 'success' && (
+          <div className="risk risk--block" style={{ marginTop: 14 }} data-testid="bridge-error">
+            <div className="risk__head">{t('bridge.failed')}</div>
+            <ul className="risk__reasons">
+              {result.steps
+                .filter((s) => s.state !== 'success')
+                .map((s) => (
+                  <li key={s.name} className="risk__reason risk__reason--block">
+                    {stepLabel(activeSteps[stepIndexFor(s.name, activeSteps)] ?? 'mint')}
+                    {s.error ? `: ${s.error}` : ''}
+                  </li>
+                ))}
+            </ul>
+          </div>
+        )}
+
         {result?.state === 'success' && (
           <div className="row wrap" style={{ marginTop: 14 }} data-testid="bridge-success">
             {result.steps

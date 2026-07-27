@@ -35,6 +35,9 @@ export interface BridgeStep {
   state: string;
   txHash?: string;
   explorerUrl?: string;
+  /** Why this step failed, as a short line. Without it a failed bridge is a red
+   *  square with nothing to act on, for the user and in the server log alike. */
+  error?: string;
 }
 export interface BridgeOutcome {
   state: string;
