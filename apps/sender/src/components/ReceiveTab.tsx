@@ -75,6 +75,13 @@ export function ReceiveTab({
 
   const [tid, setTid] = useState(initialTid ?? '');
   const [code, setCode] = useState('');
+  // The claim link prefills the salt, but it stays editable: it is not a secret kept
+  // FROM the recipient, it is their half of the proof. Without this the manual form
+  // could never complete a claim, it only ever told you to go find the link.
+  const saltFromLink = salt !== null;
+  const [saltInput, setSaltInput] = useState<string>(salt ?? '');
+  const saltValid = /^0x[0-9a-fA-F]{64}$/.test(saltInput.trim());
+  const effectiveSalt: Hex | null = saltValid ? (saltInput.trim() as Hex) : null;
   const [busy, setBusy] = useState(false);
   const [claimedTx, setClaimedTx] = useState<Hex | null>(null);
   const [qr, setQr] = useState('');
@@ -89,13 +96,13 @@ export function ReceiveTab({
 
   async function handleClaim(gasless: boolean) {
     if (!tid) return toast.push(t('claim.needTid'), 'error');
-    if (!salt) return toast.push(t('claim.needSalt'), 'error');
+    if (!effectiveSalt) return toast.push(t('claim.needSalt'), 'error');
     if (!codeValid) return toast.push(t('claim.codeInvalid'), 'error');
     setBusy(true);
     try {
       const tx = gasless
-        ? await gaslessClaimViaServer(BigInt(tid), code, salt)
-        : await claim(session.clients, BigInt(tid), code, salt);
+        ? await gaslessClaimViaServer(BigInt(tid), code, effectiveSalt)
+        : await claim(session.clients, BigInt(tid), code, effectiveSalt);
       setClaimedTx(tx);
       await onClaimed();
       await reload();
@@ -186,21 +193,49 @@ export function ReceiveTab({
 
       {/* Claim a protected transfer sent to you */}
       <Card title={t('claim.title')}>
-        <Field label={t('claim.transferId')}>
-          <Input
-            mono
-            value={tid}
-            onChange={(e) => setTid(e.target.value.replace(/\D/g, ''))}
-            placeholder="8"
-            inputMode="numeric"
-            data-testid="tid-input"
-          />
-        </Field>
+        {/* Once the transfer is known (from the link or the list) its number is
+            settled, so it reads as a line instead of asking to be filled in. */}
+        {tid ? (
+          <div className="row-between claim__picked">
+            <span className="mono">{t('claim.picked', { id: tid })}</span>
+            <Button variant="ghost" size="sm" onClick={() => setTid('')}>
+              {t('claim.change')}
+            </Button>
+          </div>
+        ) : (
+          <Field label={t('claim.transferId')}>
+            <Input
+              mono
+              value={tid}
+              onChange={(e) => setTid(e.target.value.replace(/\D/g, ''))}
+              placeholder="8"
+              inputMode="numeric"
+              data-testid="tid-input"
+            />
+          </Field>
+        )}
+        {!saltFromLink && (
+          <div style={{ marginTop: 12 }}>
+            <Field
+              label={t('claim.salt')}
+              error={saltInput && !saltValid ? t('claim.saltInvalid') : null}
+              hint={!saltInput ? t('claim.saltHint') : undefined}
+            >
+              <Input
+                mono
+                invalid={Boolean(saltInput) && !saltValid}
+                value={saltInput}
+                onChange={(e) => setSaltInput(e.target.value.trim())}
+                placeholder="0x…"
+                data-testid="salt-input"
+              />
+            </Field>
+          </div>
+        )}
         <div style={{ marginTop: 12 }}>
           <Field
             label={t('claim.code')}
             error={code && !codeValid ? t('claim.codeInvalid') : null}
-            hint={!salt ? t('claim.needLink') : undefined}
           >
             <Input
               mono
