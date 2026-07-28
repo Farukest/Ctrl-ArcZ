@@ -10,7 +10,8 @@
     "./cctp": "./src/cctp.ts",
     "./gateway": "./src/gateway.ts",
     "./gasless": "./src/gaslessServer.ts",
-  "./cosign": "./src/cosignServer.ts"
+    "./cosign": "./src/cosignServer.ts",
+    "./relay": "./src/relayServer.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

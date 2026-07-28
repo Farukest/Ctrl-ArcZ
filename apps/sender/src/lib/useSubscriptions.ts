@@ -57,7 +57,7 @@ function statusOf(s: { balance: bigint; spent: bigint; cap: bigint; expiry: numb
 export function useSubscriptions(session: Session | null): {
   subs: Subscription[] | null;
   loading: boolean;
-  reload: () => Promise<void>;
+  reload: (expect?: Address) => Promise<void>;
 } {
   const [subs, setSubs] = useState<Subscription[] | null>(null);
   const [loading, setLoading] = useState(false);
@@ -160,19 +160,31 @@ export function useSubscriptions(session: Session | null): {
     }
   }, [session]);
 
-  const reload = useCallback(async () => {
-    setLoading(true);
-    try {
-      // Fast path first: scan the announcer, render the user's stealth boxes, then
-      // drop the spinner. The slower legacy scan fills in any older boxes after.
-      await discoverStealth();
+  const reload = useCallback(
+    async (expect?: Address) => {
+      setLoading(true);
+      try {
+        // Fast path first: scan the announcer, render the user's stealth boxes, then
+        // drop the spinner. The slower legacy scan fills in any older boxes after.
+        await discoverStealth();
+        await refresh();
+
+        // A box we just created may not be in the log index of whichever RPC this
+        // scan landed on, so a single pass can come back without it and the user is
+        // told nothing happened. Retry briefly for the address we are expecting.
+        for (let i = 0; expect && !accounts.current.has(expect.toLowerCase()) && i < 5; i++) {
+          await new Promise((r) => setTimeout(r, 2000));
+          await discoverStealth();
+          await refresh();
+        }
+      } finally {
+        setLoading(false);
+      }
+      await discoverLegacy();
       await refresh();
-    } finally {
-      setLoading(false);
-    }
-    await discoverLegacy();
-    await refresh();
-  }, [discoverStealth, discoverLegacy, refresh]);
+    },
+    [discoverStealth, discoverLegacy, refresh],
+  );
 
   useEffect(() => {
     accounts.current = new Map();

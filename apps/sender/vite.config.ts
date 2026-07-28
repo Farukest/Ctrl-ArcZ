@@ -249,6 +249,16 @@ export default defineConfig(({ command, mode }) => {
       ...(process.env.PUBLIC_HOST
         ? { allowedHosts: [process.env.PUBLIC_HOST, `www.${process.env.PUBLIC_HOST}`] }
         : {}),
+      // Preview does not run the dev server's /api middleware, so a local preview
+      // has no backend at all and every relayer-funded flow 404s. Forward /api to
+      // the real API service, which is exactly what nginx does in production. Inert
+      // when deployed: nginx answers /api before a request can reach preview.
+      proxy: {
+        '/api': {
+          target: `http://127.0.0.1:${process.env.API_PORT || 8787}`,
+          changeOrigin: false,
+        },
+      },
     },
   };
 });

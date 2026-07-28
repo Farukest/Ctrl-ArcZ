@@ -13,11 +13,8 @@ import {
 import { privateKeyToAccount } from 'viem/accounts';
 import {
   ADDRESSES,
-  SPEND_POLICY_FACTORY_ADDRESS,
-  STEALTH_ANNOUNCER_ADDRESS,
   RPC_URLS,
   arcTestnet,
-  createEphemeral,
   readAccount,
   submitPull,
   sweepToVault,
@@ -26,12 +23,11 @@ import {
   ACTION_PULL,
   explorerAddressUrl,
   newStealthOwner,
-  announceArgsFor,
-  announceStealthBox,
   computeStealthPrivateKey,
 } from '@ctrl-arcz/sdk';
 import { getPublicClient, type Session } from '@ctrl-arcz/demo-kit';
 import { getStealthKeys } from '../lib/stealthKeys.js';
+import { relayCreateBox, relayAnnounceBox, relayStealthGas } from '../lib/relay.js';
 import {
   Button,
   Card,
@@ -160,9 +156,13 @@ export function SubscriptionsTab({ session }: { session: Session }) {
       const keys = await getStealthKeys(session);
       const stealth = newStealthOwner(keys);
 
-      // 3. Deploy the PULL box with the policy: per-pull cap, interval, total cap, expiry.
+      // 3. Deploy the PULL box with the policy: per-pull cap, interval, total cap,
+      //    expiry. Submitted by the relayer, not by this wallet: the deploy names
+      //    whoever sends it, and there is no reason for that to be the payer. The
+      //    address is verified against our own prediction afterwards, so a relayer
+      //    that deployed something else is caught here rather than at funding.
       setPhase('creating');
-      const { account } = await createEphemeral(clients, SPEND_POLICY_FACTORY_ADDRESS, salt, {
+      const policy = {
         token: USDC,
         owner: stealth.stealthAddress,
         cosigner: cosignerAddress,
@@ -173,7 +173,8 @@ export function SubscriptionsTab({ session }: { session: Session }) {
         expiry,
         interval: intervalSecs,
         mode: MODE_PULL,
-      });
+      } as const;
+      const { account } = await relayCreateBox(session, salt, policy);
 
       // 4. Fund the box with the total budget.
       setPhase('funding');
@@ -187,8 +188,11 @@ export function SubscriptionsTab({ session }: { session: Session }) {
       });
       await clients.publicClient.waitForTransactionReceipt({ hash: fundHash });
 
-      // 5. Announce it so only your viewing key can rediscover this box.
-      await announceStealthBox(clients, STEALTH_ANNOUNCER_ADDRESS, announceArgsFor(stealth, account));
+      // 5. Announce it so only your viewing key can rediscover this box. Also
+      //    relayed: `StealthAnnouncer` indexes msg.sender, so announcing from this
+      //    wallet would publish "this address created a stealth box" and undo the
+      //    point of the fresh owner.
+      await relayAnnounceBox(session, stealth, account);
 
       if (label.trim()) setLabel(account, label);
       setPhase('done');
@@ -198,7 +202,7 @@ export function SubscriptionsTab({ session }: { session: Session }) {
       setSort('newest');
       setStatusFilter('all');
       setPage(0);
-      await reload();
+      await reload(account);
     } catch (e) {
       setPhase('idle');
       toast.push(e instanceof Error ? e.message : String(e), 'error');
@@ -252,8 +256,10 @@ export function SubscriptionsTab({ session }: { session: Session }) {
     try {
       if (sub.ephemeralPubKey) {
         // Stealth box: the vault is a fresh stealth address only we can derive. On
-        // Arc gas is USDC, so first send the vault a little gas, then it signs the
-        // sweep itself and the funds come home to your private vault address.
+        // Arc gas is USDC, so the vault needs a little gas before it can sign the
+        // sweep. That top-up comes from the relayer, not from this wallet: paying it
+        // ourselves would write "this wallet funded that stealth address" on chain,
+        // which is precisely the link the stealth address exists to avoid.
         const keys = await getStealthKeys(session);
         const stealthPriv = computeStealthPrivateKey({
           spendingKey: keys.spendingKey,
@@ -263,15 +269,7 @@ export function SubscriptionsTab({ session }: { session: Session }) {
         const stealthAccount = privateKeyToAccount(stealthPriv);
         const publicClient = getPublicClient();
 
-        const gasHash = await session.clients.walletClient.writeContract({
-          address: USDC,
-          abi: erc20Abi,
-          functionName: 'transfer',
-          args: [stealthAccount.address, parseUnits('0.05', 6)],
-          account: session.clients.walletClient.account!,
-          chain: session.clients.walletClient.chain ?? null,
-        });
-        await publicClient.waitForTransactionReceipt({ hash: gasHash });
+        await relayStealthGas(session, stealthAccount.address);
 
         const stealthWallet = createWalletClient({
           account: stealthAccount,

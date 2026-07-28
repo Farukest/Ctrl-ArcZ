@@ -16,7 +16,12 @@ function transportFor(chain: Chain) {
   return chain.id === arcTestnet.id ? fallback(RPC_URLS.map((u) => http(u))) : http();
 }
 
-export function circleAdapter(privateKey: `0x${string}`) {
+// The adapter's own return type names types the package does not re-export, which
+// `tsc --noEmit` rejects on an exported function (TS4058). Borrowing the factory's
+// return type keeps the annotation exact without importing anything unnameable.
+export function circleAdapter(
+  privateKey: `0x${string}`,
+): ReturnType<typeof createViemAdapterFromPrivateKey> {
   return createViemAdapterFromPrivateKey({
     privateKey,
     getPublicClient: ({ chain }) => createPublicClient({ chain, transport: transportFor(chain) }),

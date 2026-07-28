@@ -1,5 +1,6 @@
 import {
   createPublicClient,
+  fallback,
   http,
   isAddress,
   recoverMessageAddress,
@@ -15,7 +16,7 @@ import {
   VerifiedRecipientIndex,
   cosignAuthMessage,
   arcTestnet,
-  RPC_URL,
+  RPC_URLS,
   CTRL_ARCZ_ADDRESS,
   SPEND_POLICY_FACTORY_ADDRESS,
   spendPolicyFactoryAbi,
@@ -138,9 +139,15 @@ const usedOwnerSigs = new Map<string, number>();
  * load, which viem does not retry. Wrap the transport to back off and retry on
  * exactly that. Without this, the co-signer's `readAccount` (several reads at once)
  * can 502 on a rate-limit blip. Mirrors the browser session's transport.
+ *
+ * Few retries on purpose: this sits inside a `fallback` over the whole ranked RPC
+ * list, so the right response to one endpoint refusing is to try the next one, not
+ * to sit on the same endpoint for half a minute. Retrying hard against a single URL
+ * is what turned a rate-limit blip into "the risk check was incomplete" and a
+ * blocked payment, because the co-signer fails closed when the check throws.
  */
 function rlHttp(url: string): Transport {
-  const inner = http(url, { retryCount: 6, retryDelay: 1200, timeout: 30_000 });
+  const inner = http(url, { retryCount: 2, retryDelay: 800, timeout: 15_000 });
   return ((params) => {
     const t = inner(params);
     const request = async (args: unknown, opts?: unknown) => {
@@ -149,8 +156,8 @@ function rlHttp(url: string): Transport {
           return await (t.request as (a: unknown, o?: unknown) => Promise<unknown>)(args, opts);
         } catch (e) {
           const m = String((e as Error)?.message ?? e);
-          if (i < 20 && /request limit|rate limit|429|-32011/i.test(m)) {
-            await new Promise((r) => setTimeout(r, 1800));
+          if (i < 2 && /request limit|rate limit|429|-32011/i.test(m)) {
+            await new Promise((r) => setTimeout(r, 700));
             continue;
           }
           throw e;
@@ -163,7 +170,7 @@ function rlHttp(url: string): Transport {
 
 const publicClient = createPublicClient({
   chain: arcTestnet,
-  transport: rlHttp(RPC_URL),
+  transport: fallback(RPC_URLS.map((u) => rlHttp(u))),
   // Coalesce readAccount's several reads into one Multicall3 RPC request — this is
   // what keeps the policy read under the public RPC's rate limit.
   batch: { multicall: { wait: 20 } },
