@@ -202,13 +202,22 @@ sequenceDiagram
 </tr>
 </table>
 
-<p><img src="docs/screens/09-claim-received.png" alt="Received" width="330"></p>
+<table>
+<tr>
+<td width="50%"><img src="docs/screens/09-claim-received.png" alt="Received"></td>
+<td width="50%"><img src="docs/screens/14-received-history.png" alt="The received history, searchable and filterable"></td>
+</tr>
+<tr>
+<td>The recipient never had to hold gas: a zero-balance wallet claimed this through the relayer.</td>
+<td>Everything ever sent to this wallet, read from chain rather than from this browser, with search and status filters.</td>
+</tr>
+</table>
 
 Settlement is immediate, because Arc has sub-second deterministic finality. There is no pending limbo for the recipient to sit in.
 
 ### Case B: the firewall refuses
 
-The poisoning tab in the demo does the whole attack in one click: it crafts a **real** lookalike of an address this wallet trusts (same first and last four hex characters, random middle), then runs the firewall against it.
+The Send form does the whole attack in one click. It reads who this wallet has actually paid, crafts a **real** lookalike of one of them (same first and last four hex characters, random middle), and drops it into the recipient field, so the firewall you are about to trust is the one that judges it. Nothing is sent; the verdict appears where every verdict appears.
 
 <p><img src="docs/screens/05-poisoning-scenario.png" alt="A crafted lookalike, blocked by the firewall" width="330"></p>
 
@@ -422,11 +431,17 @@ The co-signer is a gatekeeper, not a custodian. Bringing the money home (`sweepT
 
 ![Subscription detail](./docs/screenshots/subscriptions-detail.png)
 
-Every screenshot above is a real subscription on Arc Testnet. The boxes were deployed and funded on-chain; the list is read from the factory's `AccountCreated` events keyed by the owner's hash, so no identity is stored on-chain; and cancelling really sweeps the box home. The same box in `MODE_PULL` powers the **agent wallet** case: hand an autonomous agent one tightly-scoped box and it can transact on its own, but never past the policy.
+Every screenshot above is a real subscription on Arc Testnet. The boxes were deployed and funded on-chain, and cancelling really sweeps the box home. The same box in `MODE_PULL` powers the **agent wallet** case: hand an autonomous agent one tightly-scoped box and it can transact on its own, but never past the policy.
+
+**A box is owned by a one-time address, and the payer stays off its transactions.** The owner and vault of each box is a fresh ERC-5564 stealth address, announced so that only the payer's viewing key can rediscover it; that is how the list above is built, without an identity or a wallet-derived tag on chain. The two transactions that would otherwise name the payer are relayed: the deploy, and the announcement (`StealthAnnouncer` indexes `msg.sender`, so announcing from your own wallet would publish "this wallet made a stealth box"). So is the small gas top-up a stealth address needs before it can sweep itself, since paying that from your own wallet would write the exact link the stealth address exists to avoid. None of the relayed calls can move a user's funds.
+
+What that does **not** hide is funding: the budget still moves from the payer's wallet into the box in the clear, and no amount of relaying changes that, because the money starts in a public balance. It closes when the transfer itself is confidential, which on Arc means APS. [`docs/privacy.md`](./docs/privacy.md) traces every USDC movement around one real box and states exactly what is and is not hidden.
 
 ## Known limits
 
 - The contract has not been audited. Testnet only.
 - The firewall depends on a single indexer (ArcScan). If it cannot be reached, the report degrades to a warning, or to a block when a lookalike cannot be ruled out. It never degrades to safe.
 - The lookalike in the poisoning scenario is constructed rather than ground out of a keypair. The firewall decides from the address alone, so no private key is needed to prove that it blocks a genuine lookalike.
+- A stealth box hides who owns it, not that it was funded. The budget still moves from the payer's wallet into the box in public. See [`docs/privacy.md`](./docs/privacy.md).
+- Privacy here is unlinkability inside a crowd, and the crowd is however many people use the relayer. The relayer also learns who asked it to submit, because requests are signed so each caller can be quota-limited.
 - Anyone can freeze a pending transfer by burning its five attempts. Funds stay safe; the sender cancels and re-sends.

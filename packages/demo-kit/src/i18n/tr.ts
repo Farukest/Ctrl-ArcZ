@@ -266,16 +266,12 @@ export const tr: Record<TranslationKey, string> = {
   'history.zeroValue': '0 değerli',
   'history.unknownToken': 'bilinmeyen token',
 
-  'demo.title': 'Zehirleme senaryosu',
-  'demo.body':
-    'Güvendiğiniz {addr} adresinin ilk ve son karakterleriyle aynı görünen gerçek bir sahte adres üretilir; firewall onu gönderimden önce bloklar.',
-  'demo.run': 'Sahte adresi üret ve tara',
+  'demo.tryIt': 'Zehirleme saldırısını dene',
+  'demo.craftedFrom':
+    '{addr} adresini taklit ediyor. Cüzdanda ikisi aynı görünür.',
+  'demo.noHistory':
+    'Henüz doğrulanmış alıcı yok. Önce bir korumalı transfer tamamla, senaryonun taklit edecek gerçek bir adresi olsun.',
   'demo.running': 'Üretiliyor ve taranıyor...',
-  'demo.realAddress': 'Gerçek adres',
-  'demo.fakeAddress': 'Üretilen sahte adres',
-  'demo.indistinguishable': 'İkisi de cüzdanda {addr} görünür, ayırt edilemez.',
-  'demo.notConfigured':
-    'Senaryonun taklit edeceği adresi apps/sender/.env.local içindeki VITE_DEMO_RECEIVER değişkenine yazın.',
 
   'claim.title': 'Transferi claim et',
   'claim.transferId': 'Transfer numarası',

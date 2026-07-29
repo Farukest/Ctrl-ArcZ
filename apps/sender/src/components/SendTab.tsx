@@ -32,8 +32,9 @@ import {
   useToast,
   type Step,
 } from '@ctrl-arcz/demo-kit/ui';
-import { IconExternal, IconLock } from '@ctrl-arcz/demo-kit/ui';
+import { IconExternal, IconLock, short } from '@ctrl-arcz/demo-kit/ui';
 import { saveTransfer } from '../store.js';
+import { craftLookalikeOfKnownRecipient } from '../lib/poisoning.js';
 
 const config = defineConfig({ recallWindow: 3600, onWarning: 'warn' });
 /** How far back to scan for RecipientVerified. Matches the co-signer's fallback. */
@@ -60,6 +61,9 @@ export function SendTab({ session, onSent }: { session: Session; onSent: () => v
   const [busy, setBusy] = useState(false);
   const [step, setStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  // The poisoning scenario: which real address the lookalike in the field imitates.
+  const [crafting, setCrafting] = useState(false);
+  const [poisonOf, setPoisonOf] = useState<string | null>(null);
   const [sent, setSent] = useState<SentInfo | null>(null);
   const debounce = useRef<ReturnType<typeof setTimeout>>();
   // Bumped on every check dispatch so a slow, stale response can never overwrite
@@ -133,6 +137,21 @@ export function SendTab({ session, onSent }: { session: Session; onSent: () => v
     { value: '3600', label: t('send.window1h') },
     { value: '86400', label: t('send.window24h') },
   ];
+
+  async function craftPoisoned() {
+    setCrafting(true);
+    try {
+      const crafted = await craftLookalikeOfKnownRecipient(session.address as Address);
+      if (!crafted) {
+        toast.push(t('demo.noHistory'), 'error');
+        return;
+      }
+      setPoisonOf(crafted.real);
+      setTo(crafted.fake); // the existing debounced check runs and renders the verdict
+    } finally {
+      setCrafting(false);
+    }
+  }
 
   async function handleSend() {
     setError(null);
@@ -263,6 +282,28 @@ export function SendTab({ session, onSent }: { session: Session; onSent: () => v
           autoComplete="off"
         />
       </Field>
+
+      {/* The attack, in one click, in the place it actually happens. It crafts a
+          real lookalike of someone this wallet has already paid and drops it into
+          the field above, so the firewall you are about to trust is the one that
+          judges it. Nothing is sent; the verdict appears where every verdict does. */}
+      <div style={{ marginTop: 8 }}>
+        <Button
+          variant="ghost"
+          size="sm"
+          loading={crafting}
+          disabled={crafting}
+          data-testid="poison-demo"
+          onClick={() => void craftPoisoned()}
+        >
+          {t('demo.tryIt')}
+        </Button>
+      </div>
+      {poisonOf && (
+        <p className="muted" style={{ marginTop: 6 }} data-testid="poison-note">
+          {t('demo.craftedFrom').replace('{addr}', short(poisonOf))}
+        </p>
+      )}
 
       {checking && (
         <div style={{ marginTop: 12 }}>

@@ -174,6 +174,6 @@ The report it returns can be handed straight to `sendProtected` as `report`, so 
 
 ## Live reference example
 
-`apps/sender` and `apps/receiver` in the repo are the reference integration: a React and Vite UI on top of this SDK, with real EIP-1193 wallet connection, the risk firewall, protected send (classic and Permit2), code or gasless claim, cancel, and the poisoning scenario. Run `pnpm dev:sender` and `pnpm dev:receiver`. They are the "grab and adapt" starting point for an integrator.
+`apps/sender` in the repo is the reference integration: a React and Vite UI on top of this SDK, with real EIP-1193 wallet connection, the risk firewall, protected send (classic and Permit2), code or gasless claim, cancel, and the poisoning scenario. Sending and receiving are two modes of the one app. Run `pnpm dev:sender`. It is the "grab and adapt" starting point for an integrator.
 
 Testnet only. Not audited. See the repo for the contract, tests, and live demos.

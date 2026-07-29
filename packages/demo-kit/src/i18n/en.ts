@@ -270,16 +270,12 @@ export const en = {
   'history.zeroValue': 'zero value',
   'history.unknownToken': 'unknown token',
 
-  'demo.title': 'Poisoning scenario',
-  'demo.body':
-    'A real lookalike of a trusted address {addr} is generated, sharing its first and last characters, and the firewall blocks it before sending.',
-  'demo.run': 'Generate lookalike and scan',
+  'demo.tryIt': 'Try the poisoning attack',
+  'demo.craftedFrom':
+    'Crafted to imitate {addr}. Both render the same in a wallet.',
+  'demo.noHistory':
+    'No verified recipient yet. Complete one protected transfer first, then the scenario has something real to imitate.',
   'demo.running': 'Generating and scanning...',
-  'demo.realAddress': 'Real address',
-  'demo.fakeAddress': 'Generated lookalike',
-  'demo.indistinguishable': 'Both show as {addr} in a wallet, indistinguishable.',
-  'demo.notConfigured':
-    'Set VITE_DEMO_RECEIVER in apps/sender/.env.local to the address this scenario should imitate.',
 
   'claim.title': 'Claim the transfer',
   'claim.transferId': 'Transfer number',
