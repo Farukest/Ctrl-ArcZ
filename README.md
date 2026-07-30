@@ -19,6 +19,8 @@ Protected USDC transfers on Arc: an SDK and a single contract that screen a paym
 - [Smart contracts](#smart-contracts)
 - [Security](#security)
 - [Tech stack](#tech-stack)
+- [The keeper: an agent with a wallet, bounded by the chain](#the-keeper-an-agent-with-a-wallet-bounded-by-the-chain)
+- [The investigator: the judgement a rule cannot make](#the-investigator-the-judgement-a-rule-cannot-make)
 - [Repository layout](#repository-layout)
 - [Getting started](#getting-started)
 - [Known limits](#known-limits)
@@ -32,7 +34,7 @@ Protected USDC transfers on Arc: an SDK and a single contract that screen a paym
 | **Protection** | Pre-send risk firewall, code-gated claim, sender cancel, automatic expiry refund      |
 | **Custody**    | None. Funds are with the user or in the contract. No owner, no pause, no upgrade path |
 | **Product**    | An SDK any wallet, exchange or payments app embeds. Not another wallet                |
-| **Tests**      | 61 Foundry tests (100 percent branch coverage), 97 SDK unit tests, live testnet runs  |
+| **Tests**      | 99 Foundry, 112 SDK, 33 keeper and 12 investigator unit tests, plus live testnet runs |
 
 ## The problem
 
@@ -349,6 +351,8 @@ The full audit lives in [`SECURITY.md`](./SECURITY.md). The short version:
 | `packages/sdk`       | `@ctrl-arcz/sdk`, the thing an integrator actually installs             |
 | `packages/demo-kit`  | Shared wallet session, design system and the server-side bridge helpers |
 | `apps/sender`        | The web app, port 5173. Sending and receiving are two modes of it       |
+| `apps/api`           | The backend: co-signer, relayer, bridge, gasless claim, investigator    |
+| `apps/keeper`        | The keeper agent: returns expired transfers, paid from a bounded box    |
 | `examples`           | A standalone Node quickstart, no framework                              |
 
 Every address, RPC and chain constant lives in exactly one file, `packages/sdk/src/chains/arcTestnet.ts`. The Foundry deploy script reads a JSON file generated from it, so no address is written down twice.
@@ -437,6 +441,47 @@ Every screenshot above is a real subscription on Arc Testnet. The boxes were dep
 
 What that does **not** hide is funding: the budget still moves from the payer's wallet into the box in the clear, and no amount of relaying changes that, because the money starts in a public balance. It closes when the transfer itself is confidential, which on Arc means APS. [`docs/privacy.md`](./docs/privacy.md) traces every USDC movement around one real box and states exactly what is and is not hidden.
 
+## The keeper: an agent with a wallet, bounded by the chain
+
+`reclaimExpired` is permissionless and always pays the original sender, so the
+refund needs no trusted party — but permissionless is not automatic. Until
+something calls it, an unclaimed transfer just sits in the contract. The keeper
+(`apps/keeper`) is that something, and it is where the agent-wallet claim stops
+being a diagram.
+
+It is not handed a funded wallet and trusted to behave. It is paid the way this
+product pays any recurring payee: from a `SpendPolicyAccount` in PULL mode whose
+policy is on chain — target locked to the keeper, a per-pull ceiling, a minimum
+interval, a total budget, an expiry. Its entire blast radius is a number the
+operator chose and can read back from chain, and on Arc that number is in the same
+asset it spends, because gas is USDC.
+
+Verified on Arc Testnet with the keeper's real key: it reclaimed transfer #50 and
+the `TransferReclaimed` event records `caller` as the keeper and `sender` as the
+original sender, while the recorded recipient received nothing. Then four attacks
+against its own budget — asking the co-signer for ten times the per-pull cap,
+forging the co-signer signature, sweeping the box to itself, and sweeping it to
+the correct vault — were each refused, and the operator revoked the remainder in
+one `sweepToVault`. Details and the full trace: [`apps/keeper/README.md`](./apps/keeper/README.md).
+
+## The investigator: the judgement a rule cannot make
+
+The firewall answers one question at a time, the same way every time. That is what
+makes it worth trusting, and it is also its ceiling: it says *"this address has no
+on-chain history"* about a colleague's fresh wallet and about a contract that
+would swallow the payment, because from any single rule those are identical. A
+real dossier from Arc Testnet shows the gap plainly — the rules rate the CtrlArcZ
+contract itself `safe / KNOWN_COUNTERPARTY`, because the sender has interacted
+with it, while `isContract: true` means a direct USDC transfer there is gone.
+
+`POST /api/investigate` gathers the signals a rule cannot combine and reports what
+they add up to. **It can only ever tighten.** Every answer is clamped to the rule
+engine's verdict before it leaves the server, so a wrong or prompt-injected reply
+can refuse a good payment but cannot approve a bad one or un-block a lookalike —
+the only operation available to it is `max`. And it is optional: with no API key,
+on a timeout, or on a malformed reply, the route returns the unchanged rule
+verdict and the app behaves exactly as it does without the feature.
+
 ## Known limits
 
 - The contract has not been audited. Testnet only.
@@ -445,3 +490,5 @@ What that does **not** hide is funding: the budget still moves from the payer's 
 - A stealth box hides who owns it, not that it was funded. The budget still moves from the payer's wallet into the box in public. See [`docs/privacy.md`](./docs/privacy.md).
 - Privacy here is unlinkability inside a crowd, and the crowd is however many people use the relayer. The relayer also learns who asked it to submit, because requests are signed so each caller can be quota-limited.
 - Anyone can freeze a pending transfer by burning its five attempts. Funds stay safe; the sender cancels and re-sends.
+- The keeper spends its own gas to return other people's money, so it never profits. It is a service the operator runs, not an incentivised keeper network.
+- The investigator has been verified end to end on its failure paths (disabled, unreachable, malformed, refused, prompt-injected) and against a stubbed model; the wording it produces with a live key is not covered by tests.

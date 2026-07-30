@@ -8,6 +8,7 @@ import {
   relayCreatePost,
   relayAnnouncePost,
   relayGasPost,
+  investigatePost,
 } from './handlers.js';
 import { registerHandler } from './notifications.js';
 import { startWatcher } from './watcher.js';
@@ -34,6 +35,9 @@ serve({
   'POST /api/relay/create': relayCreatePost,
   'POST /api/relay/announce': relayAnnouncePost,
   'POST /api/relay/gas': relayGasPost,
+
+  // Advisory only, and it can only ever tighten a verdict — never weaken one.
+  'POST /api/investigate': investigatePost,
 
   // Notifications
   'POST /api/notifications/register': registerHandler,

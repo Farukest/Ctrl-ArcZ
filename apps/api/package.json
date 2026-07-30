@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.115.0",
     "@ctrl-arcz/demo-kit": "workspace:*",
     "@ctrl-arcz/sdk": "workspace:*",
     "dotenv": "^16.4.7",

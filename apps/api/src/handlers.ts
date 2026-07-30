@@ -1,6 +1,18 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { isAddress, type Address, type Hex } from 'viem';
-import { ADDRESSES, MODE_PUSH, MODE_PULL, type EphemeralPolicy } from '@ctrl-arcz/sdk';
+import { createPublicClient, fallback, http, isAddress, type Address, type Hex } from 'viem';
+import {
+  ADDRESSES,
+  BlockscoutDataProvider,
+  CTRL_ARCZ_ADDRESS,
+  MODE_PUSH,
+  MODE_PULL,
+  RPC_URLS,
+  arcTestnet,
+  buildDossier,
+  check,
+  type EphemeralPolicy,
+} from '@ctrl-arcz/sdk';
+import { investigate, investigatorEnabled } from '@ctrl-arcz/demo-kit/investigator';
 import { cosign, cosignerAddress } from '@ctrl-arcz/demo-kit/cosign';
 import { bridgeUsdc } from '@ctrl-arcz/demo-kit/cctp';
 import { gatewayTransfer } from '@ctrl-arcz/demo-kit/gateway';
@@ -45,6 +57,16 @@ const GATEWAY_CHAIN_IDS = new Set([
   'Sonic_Testnet',
 ]);
 const MAX_BRIDGE_AMOUNT = 5; // USDC, testnet demo ceiling
+
+/** How far back the firewall scans for RecipientVerified. Matches the co-signer. */
+const VERIFIED_LOOKBACK_BLOCKS = 200_000;
+
+/** A read client for the firewall and the dossier, on the same ranked RPC list
+ *  the rest of the app uses so one rate-limited endpoint cannot stall it. */
+const riskClient = createPublicClient({
+  chain: arcTestnet,
+  transport: fallback(RPC_URLS.map((u) => http(u, { retryCount: 1 }))),
+});
 
 // --- co-signer ("The Machine") ---
 
@@ -238,6 +260,51 @@ export async function relayAnnouncePost(req: IncomingMessage, res: ServerRespons
 
   const result = await relayAnnounceBox(env.relayerPk, stealth, boxAddr);
   json(res, 200, result);
+}
+
+// --- the investigator: judgement the rule engine deliberately does not make ---
+//
+// The firewall answers one question at a time, the same way every time. That is
+// what makes it worth trusting, and it also means "this address has no on-chain
+// history" is all it can say about a colleague's new wallet and about a contract
+// that would swallow the payment. This route gathers the signals a single rule
+// cannot combine and reports what they add up to.
+//
+// It can only ever tighten. `investigate` clamps its answer to the rule engine's
+// verdict before returning, so a wrong or prompt-injected reply can refuse a good
+// payment but can never approve a bad one. And it is optional: with no API key,
+// on a timeout, or on a malformed reply it returns null and the app behaves
+// exactly as it does without the feature.
+
+export async function investigatePost(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  const raw = await readRaw(req);
+  // The caller is authenticated, so the sender whose history we read is proven,
+  // not claimed — and each caller is quota-limited against the operator's spend.
+  const sender = await requireSignedRequest(req, raw, '/api/investigate');
+  checkQuota(sender, 1);
+
+  const { target } = parseBody(raw) as { target?: unknown };
+  const targetAddress = addr(target, 'target');
+
+  const report = await check(sender, targetAddress, {
+    client: riskClient,
+    contractAddress: CTRL_ARCZ_ADDRESS,
+    verifiedRecipientsLookbackBlocks: VERIFIED_LOOKBACK_BLOCKS,
+  });
+
+  if (!investigatorEnabled(env.anthropicApiKey)) {
+    json(res, 200, { rule: report, advisory: null, dossier: null });
+    return;
+  }
+
+  const dossier = await buildDossier(report, {
+    publicClient: riskClient,
+    provider: new BlockscoutDataProvider(),
+    usdcAddress: ADDRESSES.USDC as Address,
+  });
+  const advisory = await investigate(env.anthropicApiKey, dossier);
+
+  json(res, 200, { rule: report, advisory, dossier });
 }
 
 export async function relayGasPost(req: IncomingMessage, res: ServerResponse): Promise<void> {

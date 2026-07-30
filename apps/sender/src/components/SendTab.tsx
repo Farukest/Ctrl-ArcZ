@@ -35,6 +35,7 @@ import {
 import { IconExternal, IconLock, short } from '@ctrl-arcz/demo-kit/ui';
 import { saveTransfer } from '../store.js';
 import { craftLookalikeOfKnownRecipient } from '../lib/poisoning.js';
+import { investigate, effectiveLevel, type Advisory } from '../lib/investigate.js';
 
 const config = defineConfig({ recallWindow: 3600, onWarning: 'warn' });
 /** How far back to scan for RecipientVerified. Matches the co-signer's fallback. */
@@ -64,6 +65,8 @@ export function SendTab({ session, onSent }: { session: Session; onSent: () => v
   // The poisoning scenario: which real address the lookalike in the field imitates.
   const [crafting, setCrafting] = useState(false);
   const [poisonOf, setPoisonOf] = useState<string | null>(null);
+  // The server's reasoned second opinion. Null whenever it is off or unreachable.
+  const [advisory, setAdvisory] = useState<Advisory | null>(null);
   const [sent, setSent] = useState<SentInfo | null>(null);
   const debounce = useRef<ReturnType<typeof setTimeout>>();
   // Bumped on every check dispatch so a slow, stale response can never overwrite
@@ -88,12 +91,19 @@ export function SendTab({ session, onSent }: { session: Session; onSent: () => v
       // 10k chunks, which is hundreds of eth_getLogs per keystroke-debounced check and
       // gets the RPC to rate limit us (429) until the whole scan throws. The server
       // co-signer already uses the same bound as its cold-start fallback.
+      setAdvisory(null);
       check(session.address as Address, target as Address, {
         client: getPublicClient(),
         verifiedRecipientsLookbackBlocks: VERIFIED_LOOKBACK_BLOCKS,
       })
         .then((r) => {
-          if (id === reqId.current) setReport(r);
+          if (id !== reqId.current) return;
+          setReport(r);
+          // Advisory is strictly additive: it arrives later, never gates the
+          // rule verdict, and can only make the outcome stricter.
+          void investigate(session, target as Address).then((a) => {
+            if (id === reqId.current) setAdvisory(a);
+          });
         })
         .catch(() => {
           if (id === reqId.current) setReport(null);
@@ -115,7 +125,10 @@ export function SendTab({ session, onSent }: { session: Session; onSent: () => v
   // a verdict for a previously-typed address is never shown for a new one.
   const activeReport =
     report && isAddress(to) && report.target.toLowerCase() === to.toLowerCase() ? report : null;
-  const blocked = activeReport ? shouldBlockSend(config, activeReport.level) : false;
+  // The advisory may only tighten. `effectiveLevel` is the max of the two, so a
+  // block can never be talked down and a caution can never become a green light.
+  const level = activeReport ? effectiveLevel(activeReport.level, advisory) : null;
+  const blocked = level ? shouldBlockSend(config, level) : false;
   const amountValue = (() => {
     try {
       return amount ? parseUnits(amount, 6) : 0n;
@@ -313,6 +326,21 @@ export function SendTab({ session, onSent }: { session: Session; onSent: () => v
       {!checking && activeReport && (
         <div style={{ marginTop: 12 }}>
           <RiskCard report={activeReport} />
+        </div>
+      )}
+      {!checking && activeReport && advisory && (
+        <div className={`risk risk--${advisory.level === 'safe' ? 'safe' : advisory.level === 'block' ? 'block' : 'warn'}`}
+          style={{ marginTop: 10 }}
+          data-testid="advisory"
+        >
+          <strong>{advisory.headline}</strong>
+          {advisory.points.length > 0 && (
+            <ul>
+              {advisory.points.map((p) => (
+                <li key={p}>{p}</li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
 

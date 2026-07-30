@@ -17,6 +17,7 @@ dev endpoints so the mobile app (and any real deployment) has a stable API.
 | POST | `/api/relay/create` | Deploy a stealth spend box, so the deploy does not name the payer. |
 | POST | `/api/relay/announce` | Announce that box (`StealthAnnouncer` indexes `msg.sender`). |
 | POST | `/api/relay/gas` | Fixed 0.05 USDC so a stealth address can pay for its own sweep. |
+| POST | `/api/investigate` | A reasoned second opinion on a recipient. Advisory only; it can only tighten a verdict. |
 | POST | `/api/notifications/register` | Register a device Expo push token for a wallet address. |
 
 The co-signer, bridge, gasless and gateway logic is reused from `@ctrl-arcz/demo-kit`
@@ -59,3 +60,29 @@ pnpm --filter @ctrl-arcz/api dev
 
 All keys are server-only and never reach a browser or the mobile bundle. In
 production this runs behind nginx (e.g. `api.ctrlarcz.xyz`) with TLS.
+
+## The investigator
+
+The rule engine answers one question at a time and answers it the same way every
+time. That is what makes it worth trusting, and it is also why it says "this
+address has no on-chain history" about a colleague's fresh wallet and about a
+contract that would swallow the payment — from any single rule those are the same
+address. `/api/investigate` gathers the signals a rule cannot combine (is it a
+contract, does it nearly collide with several people you have paid, has it sent
+you zero-value bait) and reports what they add up to.
+
+Two properties make it safe to have a model in a payment path:
+
+- **It can only tighten.** Every answer goes through `clampVerdict` before it
+  leaves the server, so the rule engine's verdict is a floor. A wrong, confused or
+  prompt-injected reply can refuse a good payment; it cannot approve a bad one and
+  cannot un-block a lookalike. The only operation available to it is `max`.
+- **It is optional.** No `ANTHROPIC_API_KEY`, a timeout, a malformed reply, a
+  refusal — each returns a null advisory alongside the unchanged rule verdict, and
+  the app behaves exactly as it does without the feature. The firewall never
+  depends on this being up.
+
+The dossier's contents are attacker-influenced, so it is passed as JSON inside a
+user turn and never concatenated into the instructions, and the reply is
+constrained to a fixed schema. Neither of those is what makes it safe — the clamp
+is.

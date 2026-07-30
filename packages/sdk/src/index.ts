@@ -19,6 +19,14 @@ export { getLogsChunked, type ChunkedEventsParams } from './events.js';
 export { check, type CheckOptions } from './risk/check.js';
 export { VerifiedRecipientIndex } from './risk/recipientIndex.js';
 export {
+  buildDossier,
+  clampVerdict,
+  findNearMisses,
+  type Advisory,
+  type BuildDossierOptions,
+  type Dossier,
+} from './risk/dossier.js';
+export {
   evaluateRisk,
   isLookalike,
   craftLookalike,
