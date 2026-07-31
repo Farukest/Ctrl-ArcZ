@@ -9,6 +9,7 @@ import {
   relayAnnouncePost,
   relayGasPost,
   investigatePost,
+  verifiedRecipientsGet,
 } from './handlers.js';
 import { registerHandler } from './notifications.js';
 import { startWatcher } from './watcher.js';
@@ -23,6 +24,7 @@ serve({
 
   // The Machine
   'GET /api/cosign': cosignGet,
+  'GET /api/verified-recipients': verifiedRecipientsGet,
   'POST /api/cosign': cosignPost,
 
   // Cross-chain (server-held relayer key)

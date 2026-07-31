@@ -3,6 +3,7 @@ import { createPublicClient, fallback, http, isAddress, type Address, type Hex }
 import {
   ADDRESSES,
   BlockscoutDataProvider,
+  CachingDataProvider,
   CTRL_ARCZ_ADDRESS,
   MODE_PUSH,
   MODE_PULL,
@@ -13,7 +14,7 @@ import {
   type EphemeralPolicy,
 } from '@ctrl-arcz/sdk';
 import { investigate, investigatorEnabled } from '@ctrl-arcz/demo-kit/investigator';
-import { cosign, cosignerAddress } from '@ctrl-arcz/demo-kit/cosign';
+import { cosign, cosignerAddress, verifiedRecipients } from '@ctrl-arcz/demo-kit/cosign';
 import { bridgeUsdc } from '@ctrl-arcz/demo-kit/cctp';
 import { gatewayTransfer } from '@ctrl-arcz/demo-kit/gateway';
 import { gaslessClaimToResult } from '@ctrl-arcz/demo-kit/gasless';
@@ -68,6 +69,10 @@ const riskClient = createPublicClient({
   transport: fallback(RPC_URLS.map((u) => http(u, { retryCount: 1 }))),
 });
 
+/** Shared across requests: the indexer walk for a sender's history is the slow
+ *  part, and a fresh provider per request would repeat it every time. */
+const riskProvider = new CachingDataProvider(new BlockscoutDataProvider(), { ttlMs: 60_000 });
+
 // --- co-signer ("The Machine") ---
 
 export async function cosignGet(_req: IncomingMessage, res: ServerResponse): Promise<void> {
@@ -80,6 +85,20 @@ export async function cosignPost(req: IncomingMessage, res: ServerResponse): Pro
   const body = await readJson(req);
   const result = await cosign({ privateKey: env.cosignerPk, body: body as never });
   json(res, 200, result);
+}
+
+/**
+ * Everyone this sender has completed a protected transfer to.
+ *
+ * Public and unauthenticated on purpose: it is derived from public events, and
+ * anyone can read the same logs. Making the browser sign for it would buy nothing
+ * and add a wallet prompt to the send form's first render.
+ */
+export async function verifiedRecipientsGet(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  const url = new URL(req.url ?? '', 'http://localhost');
+  const sender = url.searchParams.get('sender');
+  if (!sender || !isAddress(sender)) throw new HttpError(400, 'invalid sender');
+  json(res, 200, verifiedRecipients(sender as Address));
 }
 
 // --- cross-chain (shared validation for CCTP + Gateway) ---
@@ -288,6 +307,7 @@ export async function investigatePost(req: IncomingMessage, res: ServerResponse)
 
   const report = await check(sender, targetAddress, {
     client: riskClient,
+    provider: riskProvider,
     contractAddress: CTRL_ARCZ_ADDRESS,
     verifiedRecipientsLookbackBlocks: VERIFIED_LOOKBACK_BLOCKS,
   });
@@ -299,7 +319,7 @@ export async function investigatePost(req: IncomingMessage, res: ServerResponse)
 
   const dossier = await buildDossier(report, {
     publicClient: riskClient,
-    provider: new BlockscoutDataProvider(),
+    provider: riskProvider,
     usdcAddress: ADDRESSES.USDC as Address,
   });
   const advisory = await investigate(env.anthropicApiKey, dossier);

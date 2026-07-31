@@ -11,7 +11,14 @@ import {
   type WalletClient,
 } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { arcTestnet, ARC_TESTNET_CHAIN_ID, RPC_URL, RPC_URLS, type ClientPair } from '@ctrl-arcz/sdk';
+import {
+  arcTestnet,
+  ARC_TESTNET_CHAIN_ID,
+  RPC_URL,
+  RPC_URLS,
+  SIGNING_RPC_URLS,
+  type ClientPair,
+} from '@ctrl-arcz/sdk';
 
 /**
  * The public Arc RPC returns JSON-RPC error -32011 "request limit reached" under
@@ -49,6 +56,15 @@ function arcTransport(): Transport {
   );
 }
 
+/** The transport for anything that signs. See `SIGNING_RPC_URLS` for why the order
+ *  differs from the read path. */
+function arcSigningTransport(): Transport {
+  return fallback(
+    SIGNING_RPC_URLS.map((u) => rlHttp(u)),
+    { retryCount: 1 },
+  );
+}
+
 export interface Session {
   address: Address;
   clients: ClientPair;
@@ -81,7 +97,7 @@ export function localSigner(privateKey: `0x${string}`): ClientPair {
   const walletClient: WalletClient = createWalletClient({
     account,
     chain: arcTestnet,
-    transport: arcTransport(),
+    transport: arcSigningTransport(),
   });
   return { publicClient, walletClient };
 }

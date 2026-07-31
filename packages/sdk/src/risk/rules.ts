@@ -99,7 +99,24 @@ export function evaluateRisk(input: RiskInput, now: Date = new Date()): RiskRepo
 
   // Rule (b): no history, or history that started in the last 24 hours. A
   // poisoning address is minted for the attack, so it is almost always brand new.
-  if (input.targetActivity.transactionCount === 0 && input.targetActivity.firstSeenAt === null) {
+  //
+  // Both age rules are silenced for a verified recipient, and only for that. Age
+  // is a proxy for "we have never confirmed a human behind this address"; a
+  // settled protected transfer answers that question directly, because the claim
+  // needed a 16-character code that only the intended recipient was given. Once
+  // you hold that proof the address's age is evidence of nothing, and warning
+  // anyway is how a firewall teaches people to click past its warnings.
+  //
+  // Deliberately not extended to `exactMatch`: having sent a plain transfer to an
+  // address before is exactly what a successful poisoning looks like from the
+  // inside. And this suppresses nothing else — a lookalike or a zero-value bait
+  // still blocks, verified or not.
+  if (input.isVerifiedRecipient) {
+    // no age signal
+  } else if (
+    input.targetActivity.transactionCount === 0 &&
+    input.targetActivity.firstSeenAt === null
+  ) {
     reasons.push({
       code: 'NEW_ADDRESS',
       severity: 'warning',

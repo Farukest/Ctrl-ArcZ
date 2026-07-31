@@ -34,6 +34,31 @@ export const RPC_URLS = [
   'https://rpc.quicknode.testnet.arc.network',
   RPC_URL,
 ] as const;
+
+/**
+ * The same endpoints, ordered for a client that signs transactions.
+ *
+ * viem asks `eth_fillTransaction` while preparing every transaction. On Arc that
+ * is not a nicety: the reply carries `feeToken`, which is how a chain that bills
+ * gas in USDC tells the client what it is paying with. Two of the four public
+ * endpoints refuse the method — drpc answers -32601, blockdaemon returns 403
+ * "Request method filtered" — and a fallback transport hides the refusal by
+ * moving on. So every send quietly paid two doomed round trips before reaching a
+ * node that could answer, and the browser console filled with 400s and 403s that
+ * read like the app was broken.
+ *
+ * Reads keep `RPC_URLS`, where the pair that filters here is genuinely the fastest.
+ * The filtering pair stays at the back rather than being dropped: viem degrades to
+ * individual fee calls when the method is refused, so they remain a usable last
+ * resort if the two supporting endpoints are rate-limiting.
+ */
+export const SIGNING_RPC_URLS = [
+  'https://rpc.quicknode.testnet.arc.network',
+  RPC_URL,
+  'https://rpc.drpc.testnet.arc.network',
+  'https://rpc.blockdaemon.testnet.arc.network',
+] as const;
+
 export const WS_URL = 'wss://rpc.testnet.arc.network' as const;
 export const EXPLORER_URL = 'https://testnet.arcscan.app' as const;
 

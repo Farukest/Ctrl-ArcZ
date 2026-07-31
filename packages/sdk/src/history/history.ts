@@ -8,7 +8,8 @@ export interface HistoryEntry {
   /** Base units, in the token's own decimals. */
   amount: bigint;
   decimals: number;
-  tokenAddress: Address;
+  /** Null when the explorer named no token for the row — such a row is never clean. */
+  tokenAddress: Address | null;
   tokenSymbol: string;
   timestamp: Date;
 }
@@ -41,7 +42,14 @@ interface RawTransfer {
   from?: { hash?: string } | null;
   to?: { hash?: string } | null;
   total?: { value?: string | null; decimals?: string | null } | null;
-  token?: { address?: string; symbol?: string; decimals?: string } | null;
+  /**
+   * Blockscout serves the token's address as `address_hash`; older builds of it
+   * used `address`. Both are read, because reading only one of them is how this
+   * silently returned an empty history: every row was dropped for having no token
+   * address, so the clean view AND the spam list were empty for every wallet, and
+   * an empty list is indistinguishable from "you have no history".
+   */
+  token?: { address_hash?: string; address?: string; symbol?: string; decimals?: string } | null;
 }
 
 /**
@@ -83,8 +91,11 @@ export async function getCleanHistory(
   for (const raw of body.items ?? []) {
     const from = raw.from?.hash;
     const to = raw.to?.hash;
-    const tokenAddress = raw.token?.address;
-    if (!from || !to || !tokenAddress || !raw.transaction_hash) continue;
+    const tokenAddress = (raw.token?.address_hash ?? raw.token?.address ?? null) as Address | null;
+    // A row with no counterparty or no hash cannot be rendered at all. A row with
+    // no *token* can: it just cannot be allowlisted, so it goes to `filtered`
+    // rather than being dropped. Dropping was the shape of the last bug here.
+    if (!from || !to || !raw.transaction_hash) continue;
 
     const direction = to.toLowerCase() === self ? 'in' : 'out';
     const counterparty = (direction === 'in' ? from : to) as Address;
@@ -98,14 +109,14 @@ export async function getCleanHistory(
       counterparty,
       amount,
       decimals,
-      tokenAddress: tokenAddress as Address,
+      tokenAddress,
       tokenSymbol: raw.token?.symbol ?? '???',
       timestamp: raw.timestamp ? new Date(raw.timestamp) : new Date(0),
     };
 
     if (amount === 0n) {
       filtered.push({ ...entry, reason: 'ZERO_VALUE' });
-    } else if (!allowed.has(tokenAddress.toLowerCase())) {
+    } else if (!tokenAddress || !allowed.has(tokenAddress.toLowerCase())) {
       filtered.push({ ...entry, reason: 'UNKNOWN_TOKEN' });
     } else {
       entries.push(entry);

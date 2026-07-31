@@ -19,6 +19,10 @@ export { getLogsChunked, type ChunkedEventsParams } from './events.js';
 export { check, type CheckOptions } from './risk/check.js';
 export { VerifiedRecipientIndex } from './risk/recipientIndex.js';
 export {
+  CachingDataProvider,
+  type CachingProviderOptions,
+} from './risk/cachingProvider.js';
+export {
   buildDossier,
   clampVerdict,
   findNearMisses,

@@ -15,7 +15,10 @@ function transfer(overrides: Record<string, unknown>) {
     from: { hash: ME },
     to: { hash: REAL },
     total: { value: '5000000', decimals: '6' },
-    token: { address: ADDRESSES.USDC, symbol: 'USDC', decimals: '6' },
+    // The shape the explorer actually serves today. The fixture used to say
+    // `address`, which is why this suite stayed green while the live history was
+    // empty for every wallet.
+    token: { address_hash: ADDRESSES.USDC, symbol: 'USDC', decimals: '6' },
     ...overrides,
   };
 }
@@ -68,7 +71,7 @@ describe('getCleanHistory', () => {
           from: { hash: POISONER },
           to: { hash: ME },
           total: { value: '1000000', decimals: '6' },
-          token: { address: SCAM_TOKEN, symbol: 'USDC', decimals: '6' },
+          token: { address_hash: SCAM_TOKEN, symbol: 'USDC', decimals: '6' },
         }),
       ]),
     });
@@ -100,7 +103,7 @@ describe('getCleanHistory', () => {
     const history = await getCleanHistory(ME, {
       allowedTokens: [SCAM_TOKEN],
       fetchFn: fakeFetch([
-        transfer({ token: { address: SCAM_TOKEN, symbol: 'X', decimals: '18' } }),
+        transfer({ token: { address_hash: SCAM_TOKEN, symbol: 'X', decimals: '18' } }),
       ]),
     });
 
@@ -111,5 +114,26 @@ describe('getCleanHistory', () => {
     const failing = (async () => new Response('nope', { status: 503 })) as unknown as typeof fetch;
 
     await expect(getCleanHistory(ME, { fetchFn: failing })).rejects.toThrow(/503/);
+  });
+  it('still reads the legacy `address` field, for an older explorer build', async () => {
+    const legacy = {
+      ...transfer({}),
+      token: { address: ADDRESSES.USDC, symbol: 'USDC', decimals: '6' },
+    };
+    const history = await getCleanHistory(ME, { fetchFn: fakeFetch([legacy]) });
+
+    expect(history.entries).toHaveLength(1);
+    expect(history.entries[0]?.tokenAddress).toBe(ADDRESSES.USDC);
+  });
+
+  it('does not silently swallow a row whose token address is missing entirely', async () => {
+    const noToken = { ...transfer({}), token: { symbol: 'USDC', decimals: '6' } };
+    const history = await getCleanHistory(ME, { fetchFn: fakeFetch([noToken]) });
+
+    // Unidentifiable token, so it cannot be allowlisted; it belongs in `filtered`
+    // where the user can still see it, never dropped on the floor.
+    expect(history.entries).toHaveLength(0);
+    expect(history.filtered).toHaveLength(1);
+    expect(history.filtered[0]?.reason).toBe('UNKNOWN_TOKEN');
   });
 });

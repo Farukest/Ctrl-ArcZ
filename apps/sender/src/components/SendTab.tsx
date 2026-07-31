@@ -36,11 +36,25 @@ import { IconExternal, IconLock, short } from '@ctrl-arcz/demo-kit/ui';
 import { saveTransfer } from '../store.js';
 import { craftLookalikeOfKnownRecipient } from '../lib/poisoning.js';
 import { investigate, effectiveLevel, type Advisory } from '../lib/investigate.js';
+import { riskProvider, clearRiskCache } from '../lib/riskProvider.js';
+import { verifiedRecipients, clearVerifiedRecipients } from '../lib/verifiedRecipients.js';
 
-const config = defineConfig({ recallWindow: 3600, onWarning: 'warn' });
-/** How far back to scan for RecipientVerified. Matches the co-signer's fallback. */
-const VERIFIED_LOOKBACK_BLOCKS = 200_000;
-
+/**
+ * The SDK's 10 USDC default for `minProtectedAmount` is priced for a chain where
+ * two extra transactions cost real money. On Arc they cost 0.0017 USDC, measured,
+ * because gas is USDC and blocks are cheap. Leaving the default in place made the
+ * app tell every user that an unprotected transfer "may be cheaper" on every send
+ * a testnet faucet can fund — advice that is false here, and advice against the
+ * one thing this app exists to do.
+ *
+ * 0.05 USDC is roughly thirty times the measured protection cost, so below it the
+ * hint is true and above it the app stays quiet.
+ */
+const config = defineConfig({
+  recallWindow: 3600,
+  onWarning: 'warn',
+  minProtectedAmount: 50_000n,
+});
 interface SentInfo {
   transferId: string;
   /** The one string the recipient needs. Nothing else is handed over. */
@@ -92,15 +106,24 @@ export function SendTab({ session, onSent }: { session: Session; onSent: () => v
       // gets the RPC to rate limit us (429) until the whole scan throws. The server
       // co-signer already uses the same bound as its cold-start fallback.
       setAdvisory(null);
-      check(session.address as Address, target as Address, {
-        client: getPublicClient(),
-        verifiedRecipientsLookbackBlocks: VERIFIED_LOOKBACK_BLOCKS,
-      })
+      // The verified set comes from the server's index, which has no block
+      // window. Passing it in means `check` does no log scanning at all.
+      verifiedRecipients(session.address as Address)
+        .then(({ recipients }) =>
+          check(session.address as Address, target as Address, {
+            client: getPublicClient(),
+            provider: riskProvider(),
+            verifiedRecipients: recipients,
+          }),
+        )
         .then((r) => {
           if (id !== reqId.current) return;
           setReport(r);
           // Advisory is strictly additive: it arrives later, never gates the
-          // rule verdict, and can only make the outcome stricter.
+          // rule verdict, and can only make the outcome stricter. It is only
+          // worth asking when the rules were not already satisfied — a `safe`
+          // verdict has nothing to escalate and the round trip would be waste.
+          if (r.level === 'safe') return;
           void investigate(session, target as Address).then((a) => {
             if (id === reqId.current) setAdvisory(a);
           });
@@ -114,6 +137,20 @@ export function SendTab({ session, onSent }: { session: Session; onSent: () => v
     },
     [session.address],
   );
+
+  useEffect(() => {
+    clearRiskCache();
+    clearVerifiedRecipients();
+
+    // Warm both caches the moment a wallet connects. The firewall's slow half is
+    // walking this sender's history through the indexer — ten pages, several
+    // seconds each — and doing it lazily means the very first address a user
+    // types sits under a spinner for half a minute. Starting it here spends that
+    // time while they are still reading the form.
+    const sender = session.address as Address;
+    void riskProvider().getOutgoingCounterparties(sender).catch(() => {});
+    void verifiedRecipients(sender);
+  }, [session.address]);
 
   useEffect(() => {
     clearTimeout(debounce.current);
@@ -223,6 +260,7 @@ export function SendTab({ session, onSent }: { session: Session; onSent: () => v
         txHash: result.txHash,
         amount,
       });
+      clearVerifiedRecipients();
       toast.push(t('send.sentToast'), 'success');
       setTo('');
       setAmount('');

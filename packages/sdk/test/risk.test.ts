@@ -318,3 +318,78 @@ describe('check', () => {
     expect(report.level).toBe('block');
   });
 });
+
+describe('a verified recipient silences the age heuristics, and nothing else', () => {
+  const twoHoursAgo = new Date(NOW.getTime() - 2 * 60 * 60 * 1000);
+
+  it('drops FRESH_ADDRESS once a protected transfer settled with a code', () => {
+    const report = evaluateRisk(
+      baseInput({
+        isVerifiedRecipient: true,
+        targetActivity: { transactionCount: 3, firstSeenAt: twoHoursAgo },
+      }),
+      NOW,
+    );
+
+    expect(report.reasons.map((r) => r.code)).not.toContain('FRESH_ADDRESS');
+    expect(report.reasons.map((r) => r.code)).toContain('VERIFIED_RECIPIENT');
+    expect(report.level).toBe('safe');
+  });
+
+  it('drops NEW_ADDRESS too — no history is not a signal once the code proved a human', () => {
+    const report = evaluateRisk(
+      baseInput({
+        isVerifiedRecipient: true,
+        targetActivity: { transactionCount: 0, firstSeenAt: null },
+      }),
+      NOW,
+    );
+
+    expect(report.reasons.map((r) => r.code)).not.toContain('NEW_ADDRESS');
+    expect(report.level).toBe('safe');
+  });
+
+  it('keeps the warning for an address merely paid before, never code-verified', () => {
+    const report = evaluateRisk(
+      baseInput({
+        target: REAL,
+        isVerifiedRecipient: false,
+        targetActivity: { transactionCount: 3, firstSeenAt: twoHoursAgo },
+      }),
+      NOW,
+    );
+
+    // Having paid it before is what a successful poisoning looks like from the
+    // inside, so it earns no silence here.
+    expect(report.reasons.map((r) => r.code)).toContain('FRESH_ADDRESS');
+    expect(report.level).toBe('warning');
+  });
+
+  it('still BLOCKS a lookalike that is somehow also flagged verified', () => {
+    const report = evaluateRisk(
+      baseInput({
+        target: LOOKALIKE,
+        isVerifiedRecipient: true,
+        targetActivity: { transactionCount: 0, firstSeenAt: null },
+      }),
+      NOW,
+    );
+
+    expect(report.level).toBe('block');
+    expect(report.reasons.map((r) => r.code)).toContain('LOOKALIKE_ADDRESS');
+  });
+
+  it('still BLOCKS a zero-value baiter that is flagged verified', () => {
+    const report = evaluateRisk(
+      baseInput({
+        isVerifiedRecipient: true,
+        zeroValueBait: { count: 3 },
+        targetActivity: { transactionCount: 1, firstSeenAt: twoHoursAgo },
+      }),
+      NOW,
+    );
+
+    expect(report.level).toBe('block');
+    expect(report.reasons.map((r) => r.code)).toContain('ZERO_VALUE_BAIT');
+  });
+});

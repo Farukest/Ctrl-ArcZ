@@ -64,5 +64,12 @@ ARC_FINDINGS.md
 ARC_ISSUE83_COMMENT_DRAFT.md
 ctrl-arcz-claude-code-prompt.md
 
+# throwaway test wallets, one-off probe scripts and the two-wallet browser builds.
+# `.tmp-wallets.json` holds a private key in the clear and the `dist-<role>` copies
+# inline a demo key into the JS bundle, so an accidental `git add -A` here would
+# publish keys. Ignored by pattern, not by remembering to skip them.
+.tmp-*
+apps/*/dist-*/
+
 # scratch
 /tmp

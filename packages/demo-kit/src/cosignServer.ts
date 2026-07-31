@@ -183,6 +183,20 @@ const recipientIndex = new VerifiedRecipientIndex(publicClient, CTRL_ARCZ_ADDRES
 void recipientIndex.start();
 
 /**
+ * The sender's verified recipients, from the index the co-signer already keeps
+ * warm. Exposed so the browser can stop guessing with a block lookback.
+ *
+ * A bounded scan cannot answer this question. Arc produces roughly nineteen
+ * blocks a second, so the 200k-block window the client used covers about three
+ * hours — meaning the lookalike rule silently stopped protecting anyone paid
+ * before that. This index backfills from the deploy block once and then follows
+ * the chain, so `complete` means complete.
+ */
+export function verifiedRecipients(sender: Address): { recipients: Address[]; complete: boolean } {
+  return { recipients: recipientIndex.recipientsOf(sender), complete: recipientIndex.isReady() };
+}
+
+/**
  * Firewall-backed risk source: the SDK poisoning check, mapped to a verdict.
  *
  * The check runs a chunked `eth_getLogs` scan, which is the heaviest RPC path
