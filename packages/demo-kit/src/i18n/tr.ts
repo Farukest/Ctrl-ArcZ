@@ -246,6 +246,7 @@ export const tr: Record<TranslationKey, string> = {
   'risk.reason.VERIFIED_RECIPIENT':
     'Bu adrese daha önce korumalı bir gönderim yapıldı ve alıcı kodla claim etti.',
   'risk.reason.KNOWN_COUNTERPARTY': 'Bu adrese daha önce gönderim yaptınız.',
+  'risk.investigating': 'Kuralların göremediği şeyler kontrol ediliyor...',
   'risk.reason.DATA_UNAVAILABLE':
     'Risk kontrolü eksik yapıldı ({sources} yanıt vermedi). Tam tarama olmadan "güvenli" diyemeyiz.',
 

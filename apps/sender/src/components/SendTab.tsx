@@ -36,6 +36,7 @@ import { IconExternal, IconLock, short } from '@ctrl-arcz/demo-kit/ui';
 import { saveTransfer } from '../store.js';
 import { craftLookalikeOfKnownRecipient } from '../lib/poisoning.js';
 import { investigate, effectiveLevel, type Advisory } from '../lib/investigate.js';
+import { apiToken, clearApiToken } from '../lib/apiToken.js';
 import { riskProvider, clearRiskCache } from '../lib/riskProvider.js';
 import { verifiedRecipients, clearVerifiedRecipients } from '../lib/verifiedRecipients.js';
 
@@ -81,6 +82,7 @@ export function SendTab({ session, onSent }: { session: Session; onSent: () => v
   const [poisonOf, setPoisonOf] = useState<string | null>(null);
   // The server's reasoned second opinion. Null whenever it is off or unreachable.
   const [advisory, setAdvisory] = useState<Advisory | null>(null);
+  const [investigating, setInvestigating] = useState(false);
   const [sent, setSent] = useState<SentInfo | null>(null);
   const debounce = useRef<ReturnType<typeof setTimeout>>();
   // Bumped on every check dispatch so a slow, stale response can never overwrite
@@ -106,6 +108,7 @@ export function SendTab({ session, onSent }: { session: Session; onSent: () => v
       // gets the RPC to rate limit us (429) until the whole scan throws. The server
       // co-signer already uses the same bound as its cold-start fallback.
       setAdvisory(null);
+      setInvestigating(false);
       // The verified set comes from the server's index, which has no block
       // window. Passing it in means `check` does no log scanning at all.
       verifiedRecipients(session.address as Address)
@@ -120,13 +123,23 @@ export function SendTab({ session, onSent }: { session: Session; onSent: () => v
           if (id !== reqId.current) return;
           setReport(r);
           // Advisory is strictly additive: it arrives later, never gates the
-          // rule verdict, and can only make the outcome stricter. It is only
-          // worth asking when the rules were not already satisfied — a `safe`
-          // verdict has nothing to escalate and the round trip would be waste.
-          if (r.level === 'safe') return;
-          void investigate(session, target as Address).then((a) => {
-            if (id === reqId.current) setAdvisory(a);
-          });
+          // rule verdict, and can only make the outcome stricter.
+          //
+          // It is asked on `safe` too, and that case is the reason it exists.
+          // The clamp is `max(rule, advisory)`, so `safe` is the only verdict
+          // with anywhere to go — skipping it as "nothing to escalate" read the
+          // clamp backwards. It also skipped exactly the failure this feature
+          // was built for: a contract you have genuinely paid before rates
+          // `safe / KNOWN_COUNTERPARTY`, while a plain USDC transfer to it is
+          // gone. No rule can see that; the dossier can.
+          setInvestigating(true);
+          void investigate(session, target as Address)
+            .then((a) => {
+              if (id === reqId.current) setAdvisory(a);
+            })
+            .finally(() => {
+              if (id === reqId.current) setInvestigating(false);
+            });
         })
         .catch(() => {
           if (id === reqId.current) setReport(null);
@@ -150,7 +163,15 @@ export function SendTab({ session, onSent }: { session: Session; onSent: () => v
     const sender = session.address as Address;
     void riskProvider().getOutgoingCounterparties(sender).catch(() => {});
     void verifiedRecipients(sender);
-  }, [session.address]);
+
+    // Take the investigator's one signature here, next to the wallet connect the
+    // user just performed, rather than letting it surprise them mid-address. A
+    // prompt that appears while someone is typing a recipient reads as if the
+    // app is asking to sign the payment, which is the last thing it should be
+    // ambiguous about.
+    clearApiToken();
+    void apiToken(session);
+  }, [session]);
 
   useEffect(() => {
     clearTimeout(debounce.current);
@@ -364,6 +385,18 @@ export function SendTab({ session, onSent }: { session: Session; onSent: () => v
       {!checking && activeReport && (
         <div style={{ marginTop: 12 }}>
           <RiskCard report={activeReport} />
+        </div>
+      )}
+      {/* The investigator answers seconds after the rules do. Without a line
+          saying so, its box simply materialised later and nothing had told the
+          user that a second opinion was even being sought — the feature looked
+          like a glitch, or like nothing at all. */}
+      {!checking && activeReport && investigating && !advisory && (
+        <div style={{ marginTop: 10 }} data-testid="advisory-pending">
+          <p className="muted" style={{ marginBottom: 6 }}>
+            {t('risk.investigating')}
+          </p>
+          <Skeleton height={48} />
         </div>
       )}
       {!checking && activeReport && advisory && (

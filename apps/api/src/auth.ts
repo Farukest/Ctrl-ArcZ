@@ -1,5 +1,14 @@
 import type { IncomingMessage } from 'node:http';
-import { keccak256, recoverMessageAddress, toBytes, isAddress, type Address, type Hex } from 'viem';
+import { randomBytes } from 'node:crypto';
+import {
+  bytesToHex,
+  keccak256,
+  recoverMessageAddress,
+  toBytes,
+  isAddress,
+  type Address,
+  type Hex,
+} from 'viem';
 import { HttpError } from './http.js';
 
 const MAX_SKEW_MS = 120_000;
@@ -58,6 +67,66 @@ export async function requireSignedRequest(
   usedSignatures.set(nonce, now);
   return address;
 }
+
+/**
+ * A short-lived bearer token standing in for the per-request signature, for the
+ * one route that is read-only and asked constantly.
+ *
+ * `requireSignedRequest` costs a wallet signature per call, which is correct for
+ * a route that moves money: the user should see a prompt every time something is
+ * spent on their behalf. The investigator is neither. It reads public chain data
+ * and returns an opinion that can only tighten a verdict, and the firewall asks
+ * it about every address the user types. Charging a MetaMask popup per keystroke
+ * -debounced check is how a feature meant to run quietly in the background turns
+ * into something a user learns to dismiss.
+ *
+ * So the wallet is proven once, at the cost of one signature, and the token
+ * carries that proof for half an hour. The token is a bearer credential and is
+ * treated as one: it is random, it expires, it is bound to the address that
+ * proved ownership, and it is accepted *only* on routes that spend nothing. The
+ * funded routes keep demanding a fresh signature per call, because for those the
+ * prompt is the point.
+ */
+const TOKEN_TTL_MS = 30 * 60_000;
+const tokens = new Map<string, { address: Address; expiresAt: number }>();
+
+export function issueSessionToken(address: Address): { token: string; expiresAt: number } {
+  const token = bytesToHex(randomBytes(32));
+  const expiresAt = Date.now() + TOKEN_TTL_MS;
+  tokens.set(token, { address, expiresAt });
+  return { token, expiresAt };
+}
+
+/**
+ * Authenticate a read-only request by bearer token, falling back to a full
+ * signature when none is presented.
+ *
+ * Never use this on a route that spends. The fallback keeps every existing
+ * caller working, and keeps the route usable from a script that would rather
+ * sign each call than hold a token.
+ */
+export async function requireReadAuth(
+  req: IncomingMessage,
+  rawBody: string,
+  path: string,
+): Promise<Address> {
+  const presented = header(req, 'x-ctrl-token');
+  if (presented) {
+    const entry = tokens.get(presented);
+    if (!entry) throw new HttpError(401, 'unknown token');
+    if (Date.now() > entry.expiresAt) {
+      tokens.delete(presented);
+      throw new HttpError(401, 'token expired');
+    }
+    return entry.address;
+  }
+  return requireSignedRequest(req, rawBody, path);
+}
+
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, v] of tokens) if (now > v.expiresAt) tokens.delete(k);
+}, TOKEN_TTL_MS).unref?.();
 
 /** Single-use nonce store for signed requests (keyed by signature hash). Swept so
  *  it only holds signatures still inside the freshness window. */

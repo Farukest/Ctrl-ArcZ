@@ -2,6 +2,7 @@ import type { Address } from 'viem';
 import type { RiskLevel } from '@ctrl-arcz/sdk';
 import type { Session } from '@ctrl-arcz/demo-kit';
 import { signedPost } from './signedPost.js';
+import { apiToken } from './apiToken.js';
 
 /**
  * Ask the server for a reasoned second opinion on a recipient.
@@ -23,6 +24,21 @@ export interface Advisory {
 
 export async function investigate(session: Session, target: Address): Promise<Advisory | null> {
   try {
+    // A session token where possible, so consulting the investigator does not
+    // cost a wallet prompt per address typed. Falls back to signing this one
+    // call if no token can be had, which keeps the feature working rather than
+    // silently disappearing.
+    const token = await apiToken(session);
+    if (token) {
+      const res = await fetch('/api/investigate', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-ctrl-token': token },
+        body: JSON.stringify({ target }),
+      });
+      if (!res.ok) return null;
+      const body = (await res.json()) as { advisory?: Advisory | null };
+      return body.advisory ?? null;
+    }
     const res = await signedPost<{ advisory: Advisory | null }>(session, '/api/investigate', {
       target,
     });

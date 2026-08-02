@@ -250,6 +250,7 @@ export const en = {
   'risk.reason.VERIFIED_RECIPIENT':
     'A protected transfer to this address settled before, claimed with a code.',
   'risk.reason.KNOWN_COUNTERPARTY': 'You have paid this exact address before.',
+  'risk.investigating': 'Checking what the rules cannot see...',
   'risk.reason.DATA_UNAVAILABLE':
     'The risk check was incomplete ({sources} did not respond). We will not say "safe" without a full scan.',
 
