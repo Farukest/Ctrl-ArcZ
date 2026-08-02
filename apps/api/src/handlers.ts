@@ -26,7 +26,7 @@ import {
 } from '@ctrl-arcz/demo-kit/relay';
 import { env } from './env.js';
 import { json, readJson, readRaw, HttpError } from './http.js';
-import { requireSignedRequest, requireReadAuth, issueSessionToken, checkQuota } from './auth.js';
+import { requireSignedRequest, checkQuota, takeInvestigatorBudget } from './auth.js';
 
 /** JSON-parse a raw body already read for signature verification. */
 function parseBody(raw: string): unknown {
@@ -296,17 +296,24 @@ export async function relayAnnouncePost(req: IncomingMessage, res: ServerRespons
 // exactly as it does without the feature.
 
 export async function investigatePost(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  // Unauthenticated on purpose. This route moves no money: it reads public chain
+  // data and returns an opinion that can only tighten a verdict. Demanding a
+  // wallet signature made the user pay a prompt to be warned about their own
+  // payment, and made the app ask for one on every page load -- which is how
+  // people are trained to click through the prompts that do matter.
+  //
+  // The per-IP window in `http.ts` covers a single abuser; `takeInvestigatorBudget`
+  // bounds the operator's model spend however many addresses or IPs show up.
   const raw = await readRaw(req);
-  // Still authenticated, so the sender whose history we read is proven rather
-  // than claimed, and still quota-limited against the operator's spend. The
-  // proof may now arrive as a session token: the firewall asks about every
-  // address a user types, and a signature prompt per check trained people to
-  // dismiss the one prompt that matters. Nothing here spends, so a bearer
-  // credential is the right weight. See `requireReadAuth`.
-  const sender = await requireReadAuth(req, raw, '/api/investigate');
-  checkQuota(sender, 1);
-
-  const { target } = parseBody(raw) as { target?: unknown };
+  const { target, sender: claimedSender } = parseBody(raw) as {
+    target?: unknown;
+    sender?: unknown;
+  };
+  // The sender is claimed rather than proven, and that is fine here: everything
+  // read about it is already public on the explorer, and nothing is spent on its
+  // behalf. It never authorises anything -- it only selects whose history the
+  // lookalike rule compares against.
+  const sender = addr(claimedSender, 'sender');
   const targetAddress = addr(target, 'target');
 
   const report = await check(sender, targetAddress, {
@@ -316,7 +323,9 @@ export async function investigatePost(req: IncomingMessage, res: ServerResponse)
     verifiedRecipientsLookbackBlocks: VERIFIED_LOOKBACK_BLOCKS,
   });
 
-  if (!investigatorEnabled(env.anthropicApiKey)) {
+  // No key, or the day's model budget is spent: answer with the rules alone. The
+  // app is built to behave identically when the investigator says nothing.
+  if (!investigatorEnabled(env.anthropicApiKey) || !takeInvestigatorBudget()) {
     json(res, 200, { rule: report, advisory: null, dossier: null });
     return;
   }
@@ -329,19 +338,6 @@ export async function investigatePost(req: IncomingMessage, res: ServerResponse)
   const advisory = await investigate(env.anthropicApiKey, dossier);
 
   json(res, 200, { rule: report, advisory, dossier });
-}
-
-/**
- * Trade one wallet signature for a short-lived token usable on read-only routes.
- *
- * This route itself demands the signature; it is the single place the wallet is
- * proven. It grants nothing that a signature would not have granted on the same
- * routes, and it is accepted nowhere that money moves.
- */
-export async function sessionPost(req: IncomingMessage, res: ServerResponse): Promise<void> {
-  const raw = await readRaw(req);
-  const caller = await requireSignedRequest(req, raw, '/api/session');
-  json(res, 200, issueSessionToken(caller));
 }
 
 export async function relayGasPost(req: IncomingMessage, res: ServerResponse): Promise<void> {

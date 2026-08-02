@@ -36,7 +36,6 @@ import { IconExternal, IconLock, short } from '@ctrl-arcz/demo-kit/ui';
 import { saveTransfer } from '../store.js';
 import { craftLookalikeOfKnownRecipient } from '../lib/poisoning.js';
 import { investigate, effectiveLevel, type Advisory } from '../lib/investigate.js';
-import { apiToken, clearApiToken } from '../lib/apiToken.js';
 import { riskProvider, clearRiskCache } from '../lib/riskProvider.js';
 import { verifiedRecipients, clearVerifiedRecipients } from '../lib/verifiedRecipients.js';
 
@@ -163,15 +162,7 @@ export function SendTab({ session, onSent }: { session: Session; onSent: () => v
     const sender = session.address as Address;
     void riskProvider().getOutgoingCounterparties(sender).catch(() => {});
     void verifiedRecipients(sender);
-
-    // Take the investigator's one signature here, next to the wallet connect the
-    // user just performed, rather than letting it surprise them mid-address. A
-    // prompt that appears while someone is typing a recipient reads as if the
-    // app is asking to sign the payment, which is the last thing it should be
-    // ambiguous about.
-    clearApiToken();
-    void apiToken(session);
-  }, [session]);
+  }, [session.address]);
 
   useEffect(() => {
     clearTimeout(debounce.current);

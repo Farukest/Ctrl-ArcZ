@@ -9,7 +9,6 @@ import {
   relayAnnouncePost,
   relayGasPost,
   investigatePost,
-  sessionPost,
   verifiedRecipientsGet,
 } from './handlers.js';
 import { registerHandler } from './notifications.js';
@@ -38,10 +37,6 @@ serve({
   'POST /api/relay/create': relayCreatePost,
   'POST /api/relay/announce': relayAnnouncePost,
   'POST /api/relay/gas': relayGasPost,
-
-  // One signature, exchanged for a token the read-only routes accept. Spends
-  // nothing, and is refused by every route that does.
-  'POST /api/session': sessionPost,
 
   // Advisory only, and it can only ever tighten a verdict — never weaken one.
   'POST /api/investigate': investigatePost,

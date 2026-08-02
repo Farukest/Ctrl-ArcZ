@@ -1,7 +1,5 @@
 import type { IncomingMessage } from 'node:http';
-import { randomBytes } from 'node:crypto';
 import {
-  bytesToHex,
   keccak256,
   recoverMessageAddress,
   toBytes,
@@ -69,64 +67,32 @@ export async function requireSignedRequest(
 }
 
 /**
- * A short-lived bearer token standing in for the per-request signature, for the
- * one route that is read-only and asked constantly.
+ * A daily ceiling on investigator calls, counted for the whole process.
  *
- * `requireSignedRequest` costs a wallet signature per call, which is correct for
- * a route that moves money: the user should see a prompt every time something is
- * spent on their behalf. The investigator is neither. It reads public chain data
- * and returns an opinion that can only tighten a verdict, and the firewall asks
- * it about every address the user types. Charging a MetaMask popup per keystroke
- * -debounced check is how a feature meant to run quietly in the background turns
- * into something a user learns to dismiss.
+ * The route is deliberately unauthenticated: it reads public chain data and
+ * returns an opinion, it moves no money, and it is the firewall's second half.
+ * Making someone sign a wallet prompt to be told an address looks wrong is
+ * asking the user to pay for their own protection, and a prompt on every page
+ * load is how people learn to click through prompts.
  *
- * So the wallet is proven once, at the cost of one signature, and the token
- * carries that proof for half an hour. The token is a bearer credential and is
- * treated as one: it is random, it expires, it is bound to the address that
- * proved ownership, and it is accepted *only* on routes that spend nothing. The
- * funded routes keep demanding a fresh signature per call, because for those the
- * prompt is the point.
+ * What actually needs defending is the operator's model spend, and an address
+ * proves nothing about that -- addresses are free to mint. The per-IP sliding
+ * window in `http.ts` blunts a single abuser; this bounds the bill no matter how
+ * many addresses or IPs are involved. Past the ceiling the route still answers,
+ * with the rule verdict alone, which is exactly how it behaves with no API key.
  */
-const TOKEN_TTL_MS = 30 * 60_000;
-const tokens = new Map<string, { address: Address; expiresAt: number }>();
+const INVESTIGATOR_DAILY_LIMIT = 1_000;
+let investigatorUsage = { day: -1, used: 0 };
 
-export function issueSessionToken(address: Address): { token: string; expiresAt: number } {
-  const token = bytesToHex(randomBytes(32));
-  const expiresAt = Date.now() + TOKEN_TTL_MS;
-  tokens.set(token, { address, expiresAt });
-  return { token, expiresAt };
+/** True when there is budget for one more model call today. Never throws: running
+ *  out must degrade the advisory, not fail the risk check that carries it. */
+export function takeInvestigatorBudget(): boolean {
+  const day = Math.floor(Date.now() / 86_400_000);
+  if (investigatorUsage.day !== day) investigatorUsage = { day, used: 0 };
+  if (investigatorUsage.used >= INVESTIGATOR_DAILY_LIMIT) return false;
+  investigatorUsage.used += 1;
+  return true;
 }
-
-/**
- * Authenticate a read-only request by bearer token, falling back to a full
- * signature when none is presented.
- *
- * Never use this on a route that spends. The fallback keeps every existing
- * caller working, and keeps the route usable from a script that would rather
- * sign each call than hold a token.
- */
-export async function requireReadAuth(
-  req: IncomingMessage,
-  rawBody: string,
-  path: string,
-): Promise<Address> {
-  const presented = header(req, 'x-ctrl-token');
-  if (presented) {
-    const entry = tokens.get(presented);
-    if (!entry) throw new HttpError(401, 'unknown token');
-    if (Date.now() > entry.expiresAt) {
-      tokens.delete(presented);
-      throw new HttpError(401, 'token expired');
-    }
-    return entry.address;
-  }
-  return requireSignedRequest(req, rawBody, path);
-}
-
-setInterval(() => {
-  const now = Date.now();
-  for (const [k, v] of tokens) if (now > v.expiresAt) tokens.delete(k);
-}, TOKEN_TTL_MS).unref?.();
 
 /** Single-use nonce store for signed requests (keyed by signature hash). Swept so
  *  it only holds signatures still inside the freshness window. */
