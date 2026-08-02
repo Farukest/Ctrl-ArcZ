@@ -30,15 +30,35 @@ export function App() {
   const { pending, reload } = usePendingClaims(state.session);
   const pendingCount = pending?.length ?? 0;
 
-  // Notify when a protected payment arrives while the user is on the Send side, so
-  // they can switch over and claim it — the "someone paid you" moment, in one app.
-  const prevCount = useRef(pendingCount);
+  // Announce an arriving payment wherever the user is standing.
+  //
+  // This used to fire only on the Send side, on the reasoning that the Receive
+  // side shows it anyway. It does not, in the way that matters: the list is
+  // searched, filtered and paged, so a new row can land off-screen, and the
+  // person most likely to be sitting on the Receive tab is exactly the one
+  // waiting to be told.
+  //
+  // `seeded` keeps the first successful poll quiet. Without it, opening the app
+  // with transfers already waiting announces them as if they had just arrived.
+  const seeded = useRef(false);
+  const prevCount = useRef(0);
   useEffect(() => {
-    if (pendingCount > prevCount.current && mode === 'send') {
-      toast.push(t('receive.newIncoming'), 'success');
+    if (pending === null) return; // still loading; nothing to compare against
+    const count = pending.length;
+    if (!seeded.current) {
+      seeded.current = true;
+      prevCount.current = count;
+      return;
     }
-    prevCount.current = pendingCount;
-  }, [pendingCount, mode, toast, t]);
+    if (count > prevCount.current) toast.push(t('receive.newIncoming'), 'success');
+    prevCount.current = count;
+  }, [pending, toast, t]);
+
+  // A different wallet has a different inbox, so the next poll is a first poll.
+  useEffect(() => {
+    seeded.current = false;
+    prevCount.current = 0;
+  }, [state.session?.address]);
 
   // Three primary destinations; SegmentedTabs shows none highlighted while the
   // secondary Bridge view is open, which is the intended "you left the main tabs" cue.

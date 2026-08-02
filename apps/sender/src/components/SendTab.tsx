@@ -82,6 +82,10 @@ export function SendTab({ session, onSent }: { session: Session; onSent: () => v
   // The server's reasoned second opinion. Null whenever it is off or unreachable.
   const [advisory, setAdvisory] = useState<Advisory | null>(null);
   const [investigating, setInvestigating] = useState(false);
+  // Both verdicts fold independently. They stack, they are wordy by design, and on
+  // a phone the amount field can end up below the fold because of them.
+  const [ruleOpen, setRuleOpen] = useState(true);
+  const [advisoryOpen, setAdvisoryOpen] = useState(true);
   const [sent, setSent] = useState<SentInfo | null>(null);
   const debounce = useRef<ReturnType<typeof setTimeout>>();
   // Bumped on every check dispatch so a slow, stale response can never overwrite
@@ -108,6 +112,8 @@ export function SendTab({ session, onSent }: { session: Session; onSent: () => v
       // co-signer already uses the same bound as its cold-start fallback.
       setAdvisory(null);
       setInvestigating(false);
+      setRuleOpen(true);
+      setAdvisoryOpen(true);
       // The verified set comes from the server's index, which has no block
       // window. Passing it in means `check` does no log scanning at all.
       verifiedRecipients(session.address as Address)
@@ -364,7 +370,7 @@ export function SendTab({ session, onSent }: { session: Session; onSent: () => v
           real lookalike of someone this wallet has already paid and drops it into
           the field above, so the firewall you are about to trust is the one that
           judges it. Nothing is sent; the verdict appears where every verdict does. */}
-      <div style={{ marginTop: 8 }}>
+      <div className="row wrap" style={{ marginTop: 8 }}>
         <Button
           variant="ghost"
           size="sm"
@@ -375,6 +381,20 @@ export function SendTab({ session, onSent }: { session: Session; onSent: () => v
         >
           {t('demo.tryIt')}
         </Button>
+        {activeReport && (
+          <Button
+            variant="ghost"
+            size="sm"
+            data-testid="verdicts-toggle-all"
+            onClick={() => {
+              const open = !(ruleOpen && advisoryOpen);
+              setRuleOpen(open);
+              setAdvisoryOpen(open);
+            }}
+          >
+            {t(ruleOpen && advisoryOpen ? 'risk.collapseAll' : 'risk.expandAll')}
+          </Button>
+        )}
       </div>
       {poisonOf && (
         <p className="muted" style={{ marginTop: 6 }} data-testid="poison-note">
@@ -389,7 +409,11 @@ export function SendTab({ session, onSent }: { session: Session; onSent: () => v
       )}
       {!checking && activeReport && (
         <div style={{ marginTop: 12 }}>
-          <RiskCard report={activeReport} />
+          <RiskCard
+            report={activeReport}
+            collapsed={!ruleOpen}
+            onToggle={() => setRuleOpen((v) => !v)}
+          />
         </div>
       )}
       {/* The investigator answers seconds after the rules do. Without a line
@@ -409,8 +433,21 @@ export function SendTab({ session, onSent }: { session: Session; onSent: () => v
           style={{ marginTop: 10 }}
           data-testid="advisory"
         >
-          <strong>{advisory.headline}</strong>
-          {advisory.points.length > 0 && (
+          <div className="risk__head">
+            <strong>{advisory.headline}</strong>
+            {advisory.points.length > 0 && (
+              <button
+                type="button"
+                className="risk__toggle"
+                onClick={() => setAdvisoryOpen((v) => !v)}
+                aria-expanded={advisoryOpen}
+                data-testid="advisory-toggle"
+              >
+                {t(advisoryOpen ? 'risk.hide' : 'risk.show')}
+              </button>
+            )}
+          </div>
+          {advisoryOpen && advisory.points.length > 0 && (
             <ul>
               {advisory.points.map((p) => (
                 <li key={p}>{p}</li>

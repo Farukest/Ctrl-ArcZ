@@ -10,9 +10,24 @@ const META: Record<RiskReport['level'], { key: TranslationKey; Icon: typeof Icon
   block: { key: 'risk.block', Icon: IconBlock },
 };
 
-export function RiskCard({ report }: { report: RiskReport }) {
+/**
+ * @param collapsed Hides the reason list, never the verdict. A verdict the user
+ *   can fold away entirely is a verdict they can miss, so the headline and its
+ *   colour always stay on screen; only the explanation folds.
+ * @param onToggle Omit to render with no control at all.
+ */
+export function RiskCard({
+  report,
+  collapsed = false,
+  onToggle,
+}: {
+  report: RiskReport;
+  collapsed?: boolean;
+  onToggle?: (() => void) | undefined;
+}) {
   const { t } = useI18n();
   const { key, Icon } = META[report.level];
+  const hasDetail = report.reasons.length > 0;
 
   return (
     <div
@@ -23,8 +38,19 @@ export function RiskCard({ report }: { report: RiskReport }) {
       <div className="risk__head">
         <Icon width={18} height={18} />
         {t(key)}
+        {onToggle && hasDetail && (
+          <button
+            type="button"
+            className="risk__toggle"
+            onClick={onToggle}
+            aria-expanded={!collapsed}
+            data-testid="risk-toggle"
+          >
+            {t(collapsed ? 'risk.show' : 'risk.hide')}
+          </button>
+        )}
       </div>
-      {report.reasons.length > 0 && (
+      {!collapsed && hasDetail && (
         <ul className="risk__reasons">
           {report.reasons.map((r) => {
             const reasonKey = `risk.reason.${r.code}` as TranslationKey;
