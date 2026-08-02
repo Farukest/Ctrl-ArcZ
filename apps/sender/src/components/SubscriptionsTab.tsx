@@ -96,11 +96,31 @@ export function SubscriptionsTab({ session }: { session: Session }) {
 
   // List controls
   const [query, setQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<SubStatus | 'all'>('all');
+  // Active by default. Cancelled and completed boxes accumulate forever and are
+  // never what someone opening this tab came to see; the counts on the chips keep
+  // the rest one click away.
+  const [statusFilter, setStatusFilter] = useState<SubStatus | 'all'>('active');
   const [sort, setSort] = useState<SortKey>('newest');
   const [page, setPage] = useState(0);
-  const [busyAccount, setBusyAccount] = useState<string | null>(null);
+  // Which box, and which action on it. One flag put the spinner on whichever
+  // button happened to read it first, so pressing Cancel span "Pull now" -- the
+  // opposite operation, on money.
+  const [busy, setBusy] = useState<{ account: string; action: 'pull' | 'cancel' } | null>(null);
   const [openDetail, setOpenDetail] = useState<string | null>(null);
+
+  const creating = phase !== 'idle' && phase !== 'done' && phase !== 'vetoed';
+  /**
+   * One operation at a time, across every row and the create form.
+   *
+   * Every box is pulled and swept by the same wallet, and each authorisation is
+   * signed against the account's current `nonce`, read at the start. Two of these
+   * running at once read the same nonce and the second signature is dead on
+   * arrival -- or worse, both transactions go out and one silently replaces the
+   * other. Locking per box was not enough, because the collision is between rows.
+   */
+  const locked = busy !== null || creating;
+  // Recomputed each render, which is all the precision a "not yet" needs.
+  const nowSec = Math.floor(Date.now() / 1000);
 
   const validTarget = isAddress(target);
   const perPullNum = Number(perPull);
@@ -210,7 +230,7 @@ export function SubscriptionsTab({ session }: { session: Session }) {
   }
 
   async function pullNow(sub: Subscription) {
-    setBusyAccount(sub.account);
+    setBusy({ account: sub.account, action: 'pull' });
     const clients = session.clients;
     const owner = session.address as Address;
     try {
@@ -246,13 +266,13 @@ export function SubscriptionsTab({ session }: { session: Session }) {
     } catch (e) {
       toast.push(e instanceof Error ? e.message : String(e), 'error');
     } finally {
-      setBusyAccount(null);
+      setBusy(null);
     }
   }
 
   async function cancel(sub: Subscription) {
     if (!window.confirm(t('sub.cancelConfirm'))) return;
-    setBusyAccount(sub.account);
+    setBusy({ account: sub.account, action: 'cancel' });
     try {
       if (sub.ephemeralPubKey) {
         // Stealth box: the vault is a fresh stealth address only we can derive. On
@@ -286,7 +306,7 @@ export function SubscriptionsTab({ session }: { session: Session }) {
     } catch (e) {
       toast.push(e instanceof Error ? e.message : String(e), 'error');
     } finally {
-      setBusyAccount(null);
+      setBusy(null);
     }
   }
 
@@ -376,7 +396,7 @@ export function SubscriptionsTab({ session }: { session: Session }) {
               </select>
             </Field>
           </div>
-          <Button onClick={() => void guard(create)} disabled={!canCreate} loading={phase !== 'idle' && phase !== 'done' && phase !== 'vetoed'} data-testid="sub-submit">
+          <Button onClick={() => void guard(create)} disabled={!canCreate || busy !== null} loading={creating} data-testid="sub-submit">
             {t('sub.createButton')}
           </Button>
           {phase !== 'idle' && phase !== 'vetoed' && <Stepper steps={createSteps} />}
@@ -420,7 +440,18 @@ export function SubscriptionsTab({ session }: { session: Session }) {
               const name = getLabel(s.account);
               const pct = s.cap > 0n ? Number((s.spent * 100n) / s.cap) : 0;
               const open = openDetail === s.account;
-              const busy = busyAccount === s.account;
+              const mine = busy?.account === s.account;
+              // Why the pull is unavailable, in words, instead of a dead button.
+              const pullHint =
+                s.pullableNow > 0n
+                  ? undefined
+                  : s.status !== 'active'
+                    ? t(`sub.filter.${s.status}` as never)
+                    : nowSec < s.nextPullAt
+                      ? t('sub.nextPullAt', { when: new Date(s.nextPullAt * 1000).toLocaleTimeString() })
+                      : s.balance === 0n
+                        ? t('sub.notFundedYet')
+                        : t('sub.budgetSpent');
               return (
                 <div className="sub-row" key={s.account} data-testid="sub-item">
                   <div className="row-between">
@@ -444,10 +475,10 @@ export function SubscriptionsTab({ session }: { session: Session }) {
                       </Button>
                       {s.status === 'active' && (
                         <>
-                          <Button size="sm" disabled={busy || s.pullableNow === 0n} loading={busy} onClick={() => void guard(() => pullNow(s))} data-testid="sub-pull">
+                          <Button size="sm" title={pullHint} disabled={locked || s.pullableNow === 0n} loading={mine && busy?.action === 'pull'} onClick={() => void guard(() => pullNow(s))} data-testid="sub-pull">
                             {s.pullableNow > 0n ? t('sub.pullNow') : t('sub.tooSoon')}
                           </Button>
-                          <Button variant="ghost" size="sm" disabled={busy} onClick={() => void cancel(s)} data-testid="sub-cancel">
+                          <Button variant="ghost" size="sm" disabled={locked} loading={mine && busy?.action === 'cancel'} onClick={() => void guard(() => cancel(s))} data-testid="sub-cancel">
                             {t('sub.cancel')}
                           </Button>
                         </>
