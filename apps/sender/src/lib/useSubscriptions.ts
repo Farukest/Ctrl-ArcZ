@@ -59,7 +59,7 @@ export function useSubscriptions(session: Session | null): {
   loading: boolean;
   reload: (expect?: Address) => Promise<void>;
   /** Record a box this browser just created, so it appears immediately. */
-  track: (account: Address, ephemeralPubKey?: Hex) => void;
+  track: (account: Address, ephemeralPubKey?: Hex) => Promise<void>;
   /** True when the wallet refused to derive the viewing key, so the stealth boxes
    *  cannot be found. An empty list would otherwise read as "you have none". */
   stealthLocked: boolean;
@@ -215,15 +215,22 @@ export function useSubscriptions(session: Session | null): {
    * this box's address and its ephemeral key first hand; there is nothing to
    * discover. The scan still runs and is still what finds boxes made elsewhere.
    */
-  const track = useCallback((account: Address, ephemeralPubKey?: Hex) => {
-    const a = account.toLowerCase();
-    if (!accounts.current.has(a)) {
-      accounts.current.set(a, {
-        salt: '0x' as Hex,
-        ...(ephemeralPubKey ? { ephemeralPubKey } : {}),
-      });
-    }
-  }, []);
+  const track = useCallback(
+    async (account: Address, ephemeralPubKey?: Hex) => {
+      const a = account.toLowerCase();
+      if (!accounts.current.has(a)) {
+        accounts.current.set(a, {
+          salt: '0x' as Hex,
+          ...(ephemeralPubKey ? { ephemeralPubKey } : {}),
+        });
+      }
+      // Read this one box and render it now. Registering it without refreshing
+      // still left the caller waiting on the announcer scan that `reload` starts
+      // with -- which is the very wait this exists to remove.
+      await refresh();
+    },
+    [refresh],
+  );
 
   /** Ask again after a refusal. The prompt only ever follows a deliberate click. */
   const unlockStealth = useCallback(async () => {

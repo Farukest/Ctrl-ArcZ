@@ -63,7 +63,7 @@ const DURATIONS = [
 ] as const;
 
 type SortKey = 'newest' | 'oldest' | 'amountHigh' | 'amountLow' | 'endsSoon';
-type CreatePhase = 'idle' | 'machine' | 'creating' | 'funding' | 'done' | 'vetoed';
+type CreatePhase = 'idle' | 'machine' | 'creating' | 'funding' | 'listing' | 'done' | 'vetoed';
 
 function randomSalt(): Hex {
   const b = new Uint8Array(32);
@@ -132,8 +132,8 @@ export function SubscriptionsTab({ session }: { session: Session }) {
     (phase === 'idle' || phase === 'done' || phase === 'vetoed');
 
   const createSteps: Step[] = useMemo(() => {
-    const order: CreatePhase[] = ['machine', 'creating', 'funding'];
-    const labels = [t('sub.step.machine'), t('sub.step.create'), t('sub.step.fund')];
+    const order: CreatePhase[] = ['machine', 'creating', 'funding', 'listing'];
+    const labels = [t('sub.step.machine'), t('sub.step.create'), t('sub.step.fund'), t('sub.step.listing')];
     const active = order.indexOf(phase);
     return labels.map((l, i) => ({
       label: l,
@@ -212,18 +212,27 @@ export function SubscriptionsTab({ session }: { session: Session }) {
       });
       await clients.publicClient.waitForTransactionReceipt({ hash: fundHash });
 
-      // We made this box; there is nothing to discover about it. Registering it
-      // here is what stops the list waiting on an RPC log index to catch up.
-      track(account, stealth.ephemeralPubKey);
+      // We made this box; there is nothing to discover about it. Registering and
+      // rendering it here is what stops the list waiting on an RPC log index.
       if (label.trim()) setLabel(account, label);
+      // Land on Active, where the thing just created actually is. This used to
+      // switch to All, which drops a brand-new subscription into a list led by
+      // every cancelled box the wallet has ever had.
+      setStatusFilter('active');
+      setSort('newest');
+      setPage(0);
+      setPhase('listing');
+      await track(account, stealth.ephemeralPubKey);
+
+      // Only now is the row on screen, so only now is the step list finished.
+      // Marking it done before this left the user watching a completed progress
+      // indicator above a list that did not yet contain what it had just made.
       setPhase('done');
       toast.push(t('sub.createdToast'), 'success');
       setLbl('');
       setTarget('');
-      setSort('newest');
-      setStatusFilter('all');
-      setPage(0);
-      await reload(account);
+      // The slow scans, after the user already has what they asked for.
+      void reload(account);
     } catch (e) {
       setPhase('idle');
       toast.push(e instanceof Error ? e.message : String(e), 'error');
@@ -496,7 +505,16 @@ export function SubscriptionsTab({ session }: { session: Session }) {
                       {s.status === 'active' && (
                         <>
                           <Button size="sm" title={pullHint} disabled={locked || s.pullableNow === 0n} loading={mine && busy?.action === 'pull'} onClick={() => void guard(() => pullNow(s))} data-testid="sub-pull">
-                            {s.pullableNow > 0n ? t('sub.pullNow') : t('sub.tooSoon')}
+                            {/* While the charge is in flight the label stays on the
+                                action. `pullableNow` drops to zero the instant the
+                                pull lands, so reading it here put a spinner on a
+                                button that already said "Not yet" -- the state
+                                after the thing that had not finished happening. */}
+                            {mine && busy?.action === 'pull'
+                              ? t('sub.pulling')
+                              : s.pullableNow > 0n
+                                ? t('sub.pullNow')
+                                : t('sub.tooSoon')}
                           </Button>
                           <Button variant="ghost" size="sm" disabled={locked} loading={mine && busy?.action === 'cancel'} onClick={() => void guard(() => cancel(s))} data-testid="sub-cancel">
                             {t('sub.cancel')}
