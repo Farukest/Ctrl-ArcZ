@@ -196,8 +196,22 @@ export function SendTab({ session, onSent }: { session: Session; onSent: () => v
   })();
   const mode = amountValue > 0n ? recommendTransferMode(config, amountValue) : null;
 
+  // `!investigating` is part of arming the button, not a nicety. The advisory is
+  // only allowed to tighten, and a verdict that can only tighten protects nobody
+  // if the send can be signed before it lands: the rules say safe, the button
+  // arms, and the escalation arrives for a transfer that already left. Waiting
+  // the extra second is the difference between "it can only tighten" and "it can
+  // only tighten if you were slow enough". A failed or disabled investigator
+  // resolves immediately, so the feature being off costs nothing here.
   const canSend =
-    session.onArc && isAddress(to) && !isSelf && amountValue > 0n && !blocked && !busy && !checking;
+    session.onArc &&
+    isAddress(to) &&
+    !isSelf &&
+    amountValue > 0n &&
+    !blocked &&
+    !busy &&
+    !checking &&
+    !investigating;
 
   const steps: Step[] = [t('send.stepConfig'), t('send.stepApprove'), t('send.stepLock')].map(
     (label, i) => ({ label, status: step > i ? 'done' : step === i ? 'active' : 'pending' }),
@@ -228,7 +242,7 @@ export function SendTab({ session, onSent }: { session: Session; onSent: () => v
     setError(null);
     if (!isAddress(to) || isSelf) return setError(t('send.invalidAddress'));
     if (amountValue <= 0n) return setError(t('send.invalidAmount'));
-    if (blocked || !session.onArc) return;
+    if (blocked || investigating || !session.onArc) return;
 
     setBusy(true);
     setStep(0);
@@ -464,7 +478,9 @@ export function SendTab({ session, onSent }: { session: Session; onSent: () => v
               ? t('send.blocked')
               : !session.onArc
                 ? t('send.switchFirst')
-                : t('send.button')}
+                : investigating
+                  ? t('send.waitingAdvisory')
+                  : t('send.button')}
         </Button>
       </div>
       {error && (

@@ -214,6 +214,7 @@ export const en = {
   'send.invalidAmount': 'Invalid amount',
   'send.selfSend': 'You cannot send to your own address',
   'send.amount': 'Amount (USDC)',
+  'send.waitingAdvisory': 'Waiting for the second opinion...',
   'send.window': 'Cancel / claim window',
   'send.window60s': '60 seconds',
   'send.window1h': '1 hour',

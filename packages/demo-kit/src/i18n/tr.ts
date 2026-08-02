@@ -210,6 +210,7 @@ export const tr: Record<TranslationKey, string> = {
   'send.invalidAmount': 'Geçersiz tutar',
   'send.selfSend': 'Kendi adresinize gönderemezsiniz',
   'send.amount': 'Tutar (USDC)',
+  'send.waitingAdvisory': 'İkinci görüş bekleniyor...',
   'send.window': 'İptal / claim penceresi',
   'send.window60s': '60 saniye',
   'send.window1h': '1 saat',
