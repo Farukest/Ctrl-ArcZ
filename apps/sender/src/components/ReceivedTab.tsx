@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
 import { formatUnits } from 'viem';
-import { explorerAddressUrl, type TransferStatus } from '@ctrl-arcz/sdk';
+import { explorerAddressUrl, reclaimExpired, type TransferStatus } from '@ctrl-arcz/sdk';
 import type { Session } from '@ctrl-arcz/demo-kit';
 import {
+  Button,
   Card,
   IconExternal,
   PagedList,
@@ -13,6 +14,7 @@ import {
   paginate,
   short,
   useT,
+  useToast,
 } from '@ctrl-arcz/demo-kit/ui';
 import { useIncoming, type IncomingTransfer } from '../lib/useIncoming.js';
 
@@ -47,12 +49,49 @@ function haystack(r: IncomingTransfer): string {
  * wallet, not just the claimable ones. Read from the chain, so it is the same on any
  * device and survives clearing the browser.
  */
+/**
+ * A transfer whose window has lapsed while the money is still in the contract.
+ *
+ * The chain has no such status: it stays PENDING until somebody calls
+ * `reclaimExpired`, so this is the one state the recipient can see and act on
+ * that no status pill names.
+ */
+function isReturnable(transfer: IncomingTransfer['transfer']): boolean {
+  const open = transfer.status === 'PENDING' || transfer.status === 'LOCKED';
+  return open && Date.now() > transfer.deadline.getTime();
+}
+
 export function ReceivedTab({ session }: { session: Session }) {
   const t = useT();
+  const toast = useToast();
   const { rows } = useIncoming(session);
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
   const [page, setPage] = useState(0);
+  const [returning, setReturning] = useState<string | null>(null);
+
+  /**
+   * Send an expired transfer back to whoever sent it.
+   *
+   * `cancel` is the sender's alone, and rightly: unclaimed money is theirs. But
+   * that left the recipient of a payment they never wanted with nothing to do
+   * about it, which is the wrong side of this product to be helpless on. The
+   * contract already allows this -- `reclaimExpired` is permissionless and pays
+   * `t.sender` and nobody else -- so the recipient could always do it and simply
+   * had no button. Handing the attacker in a poisoning attack this same button
+   * costs nothing either: the only thing it can do is give the money back.
+   */
+  async function returnToSender(transferId: bigint) {
+    setReturning(transferId.toString());
+    try {
+      await reclaimExpired(session.clients, transferId);
+      toast.push(t('received.returned'), 'success');
+    } catch (e) {
+      toast.push(e instanceof Error ? e.message : String(e), 'error');
+    } finally {
+      setReturning(null);
+    }
+  }
 
   const counts = useMemo(() => {
     const c: Record<Filter, number> = { all: 0, pending: 0, claimed: 0, cancelled: 0, expired: 0 };
@@ -140,6 +179,23 @@ export function ReceivedTab({ session }: { session: Session }) {
                     {short(transfer.sender)} <IconExternal width={12} height={12} />
                   </a>
                 </div>
+                {isReturnable(transfer) && (
+                  <div style={{ marginTop: 8 }}>
+                    <p className="muted" style={{ marginBottom: 6 }}>
+                      {t('received.expiredHint')}
+                    </p>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      loading={returning === transferId.toString()}
+                      disabled={returning !== null}
+                      onClick={() => void returnToSender(transferId)}
+                      data-testid={`return-${transferId.toString()}`}
+                    >
+                      {t('received.returnToSender')}
+                    </Button>
+                  </div>
+                )}
               </div>
             ))}
           </div>

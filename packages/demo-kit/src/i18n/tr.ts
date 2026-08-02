@@ -43,6 +43,10 @@ export const tr: Record<TranslationKey, string> = {
   'receive.newIncoming': 'Korumalı bir ödeme geldi. Almak için Al moduna geç.',
   'received.title': 'Gelenler',
   'received.search': 'Tutar, gönderen veya numaraya göre ara',
+   'received.returnToSender': 'Gönderene iade et',
+  'received.expiredHint':
+    'Claim süresi doldu. Artık claim edemezsin ama gönderene geri yollayabilirsin.',
+  'received.returned': 'Gönderene iade edildi.',
   'received.empty': 'Bu cüzdana henüz bir şey gönderilmedi.',
   'received.noMatch': 'Eşleşme yok',
   'received.filter.all': 'Tümü',

@@ -47,6 +47,10 @@ export const en = {
   'receive.newIncoming': 'A protected payment arrived. Switch to Receive to claim it.',
   'received.title': 'Received',
   'received.search': 'Search by amount, sender or id',
+   'received.returnToSender': 'Return it to the sender',
+  'received.expiredHint':
+    'The claim window has lapsed. You cannot claim this any more, but you can send it back.',
+  'received.returned': 'Sent back to the sender.',
   'received.empty': 'Nothing has been sent to this wallet yet.',
   'received.noMatch': 'No match',
   'received.filter.all': 'All',
