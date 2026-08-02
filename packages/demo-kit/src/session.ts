@@ -65,6 +65,70 @@ function arcSigningTransport(): Transport {
   );
 }
 
+/**
+ * The only things an injected wallet is actually needed for: proving who the user
+ * is, and signing. Everything else is a plain chain read that any node can answer.
+ */
+const WALLET_ONLY = new Set([
+  'eth_accounts',
+  'eth_requestAccounts',
+  'eth_chainId',
+  'eth_sendTransaction',
+  'eth_signTransaction',
+  'eth_sign',
+  'personal_sign',
+  'eth_signTypedData',
+  'eth_signTypedData_v3',
+  'eth_signTypedData_v4',
+  'eth_decrypt',
+  'eth_getEncryptionPublicKey',
+]);
+
+/**
+ * Route reads to our own RPCs and leave the wallet to sign.
+ *
+ * MetaMask rate-limits a site by how many requests that site makes through
+ * `window.ethereum`, and it answers with "Request is being rate limited." Viem
+ * surfaces that as a *contract revert reason*, so a throttled send reads as
+ * `The contract function "memo" reverted with the following reason: Request is
+ * being rate limited` — a revert for a transaction that was never simulated,
+ * naming a contract that is fine.
+ *
+ * Preparing one Arc transaction is not one request. Viem fills fees, nonce, gas
+ * and — because Arc bills gas in USDC — `eth_fillTransaction` for the `feeToken`.
+ * Pointed at the wallet, a single send spends most of a dozen requests of the
+ * site's budget, and a two-step flow (approve, then send) doubles it. That is why
+ * the failure lands on the last step, and sometimes on the second.
+ *
+ * None of those reads need the wallet. They are the same public chain reads the
+ * app already makes through `arcTransport`, which spreads across four endpoints
+ * and backs off on `-32011`. Only identity and signing stay on the wallet, so the
+ * user still approves every transaction in MetaMask exactly as before, and the
+ * site's request budget goes to the things that genuinely require it.
+ *
+ * `eth_chainId` deliberately stays on the wallet: it must report the chain the
+ * *user* is on, not the one we would like them to be on, or the guard banner
+ * would never fire on a wrong network.
+ *
+ * The reads go through `arcSigningTransport`, not the plain read one. This client
+ * prepares transactions, so it asks `eth_fillTransaction`, and the read ordering
+ * leads with the two endpoints that refuse that method.
+ */
+function injectedTransport(provider: EIP1193Provider): Transport {
+  const reads = arcSigningTransport();
+  return ((params) => {
+    const wallet = custom(provider)(params);
+    const rpc = reads(params);
+    const request = async (args: unknown, opts?: unknown) => {
+      const { method } = (args ?? {}) as { method?: string };
+      const target =
+        method && (WALLET_ONLY.has(method) || method.startsWith('wallet_')) ? wallet : rpc;
+      return (target.request as (a: unknown, o?: unknown) => Promise<unknown>)(args, opts);
+    };
+    return { ...wallet, request } as typeof wallet;
+  }) as Transport;
+}
+
 export interface Session {
   address: Address;
   clients: ClientPair;
@@ -141,7 +205,7 @@ export async function injectedSession({ silent = false } = {}): Promise<Session 
   const walletClient: WalletClient = createWalletClient({
     account: address,
     chain: arcTestnet,
-    transport: custom(provider),
+    transport: injectedTransport(provider),
   });
 
   return {
