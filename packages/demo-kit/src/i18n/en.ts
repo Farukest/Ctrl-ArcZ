@@ -90,6 +90,11 @@ export const en = {
   'sub.iv.day7': '7 days',
   'sub.iv.day30': '30 days',
   'sub.iv.day90': '90 days',
+  'sub.stealthNote':
+    'Your subscriptions are owned by one-time addresses with nothing on chain linking them to you. Finding your own takes a key only your wallet can derive, so it asks for one signature per visit. Nothing is spent, and the key never leaves this browser.',
+  'sub.stealthLocked':
+    'Your private subscriptions are hidden. Finding them needs a key derived from one wallet signature, and that signature was declined.',
+  'sub.stealthUnlock': 'Find my subscriptions',
   'sub.listTitle': 'Your subscriptions',
   'sub.searchPh': 'Search by name or address',
   'sub.empty': 'No subscriptions yet.',

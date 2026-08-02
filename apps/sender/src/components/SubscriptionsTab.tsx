@@ -82,7 +82,7 @@ export function SubscriptionsTab({ session }: { session: Session }) {
   const t = useT();
   const toast = useToast();
   const guard = useSubmitGuard();
-  const { subs, loading, reload } = useSubscriptions(session);
+  const { subs, loading, reload, stealthLocked, unlockStealth } = useSubscriptions(session);
 
   // Create form
   const [label, setLbl] = useState('');
@@ -412,6 +412,25 @@ export function SubscriptionsTab({ session }: { session: Session }) {
 
       {/* LIST */}
       <Card title={t('sub.listTitle')} data-testid="sub-list">
+        {/* Said before the wallet asks, not after. These boxes are owned by fresh
+            stealth addresses with nothing on chain tying them to this wallet, so
+            the only way to find your own is to scan for them with a key derived
+            from one signature. Without this line the user meets a bare signature
+            request in the middle of a payments app and has no idea what it buys. */}
+        {stealthLocked ? (
+          <div className="veto" data-testid="sub-stealth-locked">
+            <div className="veto__reason">{t('sub.stealthLocked')}</div>
+            <div style={{ marginTop: 8 }}>
+              <Button size="sm" onClick={() => void unlockStealth()} data-testid="sub-stealth-unlock">
+                {t('sub.stealthUnlock')}
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <p className="muted" style={{ marginTop: 0, marginBottom: 10 }} data-testid="sub-stealth-note">
+            {t('sub.stealthNote')}
+          </p>
+        )}
         <div className="sub-toolbar">
           <Input className="grow" value={query} onChange={(e) => { setQuery(e.target.value); setPage(0); }} placeholder={t('sub.searchPh')} data-testid="sub-search" />
           <select className="sub-select" value={sort} onChange={(e) => setSort(e.target.value as SortKey)} data-testid="sub-sort">

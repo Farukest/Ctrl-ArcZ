@@ -86,6 +86,11 @@ export const tr: Record<TranslationKey, string> = {
   'sub.iv.day7': '7 gün',
   'sub.iv.day30': '30 gün',
   'sub.iv.day90': '90 gün',
+  'sub.stealthNote':
+    'Abonelikleriniz, zincirde sizinle bağlantısı olmayan tek kullanımlık adreslere ait. Kendi kutularınızı bulmak yalnızca cüzdanınızın türetebileceği bir anahtar gerektiriyor, bu yüzden her ziyarette tek bir imza isteniyor. Hiçbir şey harcanmıyor ve anahtar bu tarayıcıdan çıkmıyor.',
+  'sub.stealthLocked':
+    'Gizli abonelikleriniz görünmüyor. Onları bulmak tek bir cüzdan imzasından türetilen bir anahtar gerektiriyor ve o imza reddedildi.',
+  'sub.stealthUnlock': 'Aboneliklerimi bul',
   'sub.listTitle': 'Aboneliklerin',
   'sub.searchPh': 'İsim veya adrese göre ara',
   'sub.empty': 'Henüz abonelik yok.',

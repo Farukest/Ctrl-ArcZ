@@ -13,7 +13,7 @@ import {
   discoverStealthBoxes,
   MODE_PULL,
 } from '@ctrl-arcz/sdk';
-import { getStealthKeys } from './stealthKeys.js';
+import { getStealthKeys, stealthKeysDeclined, allowStealthPrompt } from './stealthKeys.js';
 
 const USDC = ADDRESSES.USDC as Address;
 // Bound the one-time discovery scan (the factory is recent; this keeps the initial
@@ -58,8 +58,14 @@ export function useSubscriptions(session: Session | null): {
   subs: Subscription[] | null;
   loading: boolean;
   reload: (expect?: Address) => Promise<void>;
+  /** True when the wallet refused to derive the viewing key, so the stealth boxes
+   *  cannot be found. An empty list would otherwise read as "you have none". */
+  stealthLocked: boolean;
+  /** Ask for that signature again. Only ever called from a deliberate click. */
+  unlockStealth: () => Promise<void>;
 } {
   const [subs, setSubs] = useState<Subscription[] | null>(null);
+  const [stealthLocked, setStealthLocked] = useState(false);
   const [loading, setLoading] = useState(false);
   // Discovered box addresses -> their creation salt + (for stealth boxes) the
   // ephemeral pubkey that lets us later derive the key controlling the box's vault.
@@ -133,6 +139,9 @@ export function useSubscriptions(session: Session | null): {
     } catch {
       /* no signature / scan failure: legacy-only view */
     }
+    // Surface a refusal, so the tab can say the private boxes are hidden rather
+    // than quietly showing an empty list that looks like "you have none".
+    setStealthLocked(stealthKeysDeclined(session.address));
   }, [session]);
 
   // Legacy boxes: created with owner = the wallet address (ownerHash = keccak(addr)).
@@ -194,5 +203,12 @@ export function useSubscriptions(session: Session | null): {
     return () => clearInterval(timer);
   }, [session, reload, refresh]);
 
-  return { subs, loading, reload };
+  /** Ask again after a refusal. The prompt only ever follows a deliberate click. */
+  const unlockStealth = useCallback(async () => {
+    allowStealthPrompt(session?.address);
+    setStealthLocked(false);
+    await reload();
+  }, [session, reload]);
+
+  return { subs, loading, reload, stealthLocked, unlockStealth };
 }
