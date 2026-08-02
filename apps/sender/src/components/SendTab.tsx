@@ -32,7 +32,7 @@ import {
   useToast,
   type Step,
 } from '@ctrl-arcz/demo-kit/ui';
-import { IconExternal, IconLock, short } from '@ctrl-arcz/demo-kit/ui';
+import { IconButton, IconChevron, IconExternal, IconLock, short } from '@ctrl-arcz/demo-kit/ui';
 import { saveTransfer } from '../store.js';
 import { craftLookalikeOfKnownRecipient } from '../lib/poisoning.js';
 import { investigate, effectiveLevel, type Advisory } from '../lib/investigate.js';
@@ -370,7 +370,7 @@ export function SendTab({ session, onSent }: { session: Session; onSent: () => v
           real lookalike of someone this wallet has already paid and drops it into
           the field above, so the firewall you are about to trust is the one that
           judges it. Nothing is sent; the verdict appears where every verdict does. */}
-      <div className="row wrap" style={{ marginTop: 8 }}>
+      <div className="row-between wrap" style={{ marginTop: 8 }}>
         <Button
           variant="ghost"
           size="sm"
@@ -382,9 +382,9 @@ export function SendTab({ session, onSent }: { session: Session; onSent: () => v
           {t('demo.tryIt')}
         </Button>
         {activeReport && (
-          <Button
-            variant="ghost"
-            size="sm"
+          <IconButton
+            label={t(ruleOpen && advisoryOpen ? 'risk.collapseAll' : 'risk.expandAll')}
+            className={`verdict-fold${ruleOpen && advisoryOpen ? ' is-open' : ''}`}
             data-testid="verdicts-toggle-all"
             onClick={() => {
               const open = !(ruleOpen && advisoryOpen);
@@ -392,8 +392,8 @@ export function SendTab({ session, onSent }: { session: Session; onSent: () => v
               setAdvisoryOpen(open);
             }}
           >
-            {t(ruleOpen && advisoryOpen ? 'risk.collapseAll' : 'risk.expandAll')}
-          </Button>
+            <IconChevron width={16} height={16} />
+          </IconButton>
         )}
       </div>
       {poisonOf && (
@@ -438,12 +438,14 @@ export function SendTab({ session, onSent }: { session: Session; onSent: () => v
             {advisory.points.length > 0 && (
               <button
                 type="button"
-                className="risk__toggle"
+                className={`risk__toggle${advisoryOpen ? ' is-open' : ''}`}
                 onClick={() => setAdvisoryOpen((v) => !v)}
                 aria-expanded={advisoryOpen}
+                aria-label={t(advisoryOpen ? 'risk.hide' : 'risk.show')}
+                title={t(advisoryOpen ? 'risk.hide' : 'risk.show')}
                 data-testid="advisory-toggle"
               >
-                {t(advisoryOpen ? 'risk.hide' : 'risk.show')}
+                <IconChevron width={15} height={15} />
               </button>
             )}
           </div>

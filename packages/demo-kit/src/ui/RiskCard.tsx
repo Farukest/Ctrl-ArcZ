@@ -1,7 +1,7 @@
 import type { RiskReport } from '@ctrl-arcz/sdk';
 import { useI18n } from '../i18n/context.js';
 import type { TranslationKey } from '../i18n/en.js';
-import { IconShield, IconAlert, IconBlock } from './icons.js';
+import { IconShield, IconAlert, IconBlock, IconChevron } from './icons.js';
 import { short } from './components.js';
 
 const META: Record<RiskReport['level'], { key: TranslationKey; Icon: typeof IconShield }> = {
@@ -41,12 +41,14 @@ export function RiskCard({
         {onToggle && hasDetail && (
           <button
             type="button"
-            className="risk__toggle"
+            className={`risk__toggle${collapsed ? '' : ' is-open'}`}
             onClick={onToggle}
             aria-expanded={!collapsed}
+            aria-label={t(collapsed ? 'risk.show' : 'risk.hide')}
+            title={t(collapsed ? 'risk.show' : 'risk.hide')}
             data-testid="risk-toggle"
           >
-            {t(collapsed ? 'risk.show' : 'risk.hide')}
+            <IconChevron width={15} height={15} />
           </button>
         )}
       </div>

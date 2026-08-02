@@ -1836,19 +1836,40 @@
 }
 
 /* Fold control for a risk verdict. Pushed to the far right of the head row and
-   kept quiet: it must never compete with the verdict it sits beside. */
+   kept quiet: it must never compete with the verdict it sits beside. The chevron
+   points down when folded and up when open, so its direction states what a click
+   will do rather than what the state currently is. */
 .risk__toggle {
   margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   appearance: none;
-  border: 1px solid var(--border-subtle);
+  border: 0;
   background: transparent;
-  color: var(--text-mid);
-  border-radius: 999px;
-  padding: 1px 9px;
-  font: inherit;
-  font-size: var(--fs-xs, 11px);
-  font-weight: 600;
-  line-height: 1.6;
+  color: currentColor;
+  opacity: 0.65;
+  padding: 2px;
+  border-radius: var(--r-sm, 6px);
   cursor: pointer;
+  transition: opacity var(--dur-2, 160ms) var(--ease, ease);
 }
-.risk__toggle:hover { color: var(--text-hi); border-color: var(--border-strong); }
+.risk__toggle svg {
+  transition: transform var(--dur-2, 160ms) var(--ease, ease);
+}
+.risk__toggle.is-open svg {
+  transform: rotate(180deg);
+}
+.risk__toggle:hover {
+  opacity: 1;
+}
+
+/* The expand/collapse-all beside the poisoning button. Same chevron language, and
+   deliberately not a Button: it is a control over the page, not another action
+   competing with the one next to it. */
+.verdict-fold svg {
+  transition: transform var(--dur-2, 160ms) var(--ease, ease);
+}
+.verdict-fold.is-open svg {
+  transform: rotate(180deg);
+}
