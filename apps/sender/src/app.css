@@ -237,3 +237,8 @@
   min-height: 32px;
   padding: 0 var(--sp-4);
 }
+
+/* The two claim buttons share the row equally. Sized by their own labels, the
+   left one shrank the moment it went into its loading state and pushed the
+   gasless button sideways -- out from under a cursor already on its way there. */
+.claim-actions .btn { flex: 1 1 0; }

@@ -89,7 +89,12 @@ export function ReceiveTab({
   const guard = useSubmitGuard();
 
   const [secret, setSecret] = useState('');
-  const [busy, setBusy] = useState(false);
+  // Which claim is running, not merely that one is. A single shared flag put the
+  // spinner and the "Claiming" label on the left button no matter which was
+  // pressed, so pressing "relayer pays" looked like the app had started the
+  // other claim -- the one that spends the user's own gas.
+  const [claiming, setClaiming] = useState<'own' | 'gasless' | null>(null);
+  const busy = claiming !== null;
   const [claimedTx, setClaimedTx] = useState<Hex | null>(null);
   const [qr, setQr] = useState('');
 
@@ -149,7 +154,7 @@ export function ReceiveTab({
     if (!matched) return toast.push(t('claim.noMatch'), 'error');
     const salt = saltFromSecret(parsed);
     const id = matched.transferId;
-    setBusy(true);
+    setClaiming(gasless ? 'gasless' : 'own');
     try {
       const tx = gasless
         ? await gaslessClaimViaServer(session, id, parsed, salt)
@@ -173,7 +178,7 @@ export function ReceiveTab({
         toast.push(e instanceof Error ? e.message : String(e), 'error');
       }
     } finally {
-      setBusy(false);
+      setClaiming(null);
     }
   }
 
@@ -275,20 +280,24 @@ export function ReceiveTab({
             </span>
           </div>
         )}
-        <div className="row wrap" style={{ marginTop: 14 }}>
+        {/* `claim-actions` splits the row evenly so neither button is sized by its
+            own label. The left one used to swap to "Claiming" mid-flight, shrink,
+            and shove the gasless button sideways under the cursor. */}
+        <div className="row wrap claim-actions" style={{ marginTop: 14 }}>
           <Button
             onClick={() => void guard(() => handleClaim(false))}
-            loading={busy}
+            loading={claiming === 'own'}
             disabled={busy || !session.onArc || !matched}
             data-testid="claim-button"
           >
-            {busy ? t('claim.claiming') : t('claim.claimOwnGas')}
+            {t('claim.claimOwnGas')}
           </Button>
           {gaslessEnabled && (
             <Button
               variant="ghost"
               onClick={() => void guard(() => handleClaim(true))}
-              disabled={busy}
+              loading={claiming === 'gasless'}
+              disabled={busy || !session.onArc || !matched}
               data-testid="gasless-claim-button"
             >
               {t('claim.claimGasless')}
