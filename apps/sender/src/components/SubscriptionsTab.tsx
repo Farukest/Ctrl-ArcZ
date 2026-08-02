@@ -27,7 +27,7 @@ import {
 } from '@ctrl-arcz/sdk';
 import { getPublicClient, type Session } from '@ctrl-arcz/demo-kit';
 import { getStealthKeys } from '../lib/stealthKeys.js';
-import { relayCreateBox, relayAnnounceBox, relayStealthGas } from '../lib/relay.js';
+import { relayCreateBox, relayStealthGas } from '../lib/relay.js';
 import {
   Button,
   Card,
@@ -82,7 +82,7 @@ export function SubscriptionsTab({ session }: { session: Session }) {
   const t = useT();
   const toast = useToast();
   const guard = useSubmitGuard();
-  const { subs, loading, reload, stealthLocked, unlockStealth } = useSubscriptions(session);
+  const { subs, loading, reload, track, stealthLocked, unlockStealth } = useSubscriptions(session);
 
   // Create form
   const [label, setLbl] = useState('');
@@ -194,9 +194,13 @@ export function SubscriptionsTab({ session }: { session: Session }) {
         interval: intervalSecs,
         mode: MODE_PULL,
       } as const;
-      const { account } = await relayCreateBox(session, salt, policy);
+      // Deployed and announced in one relayed call, on one signature. Announcing
+      // separately afterwards cost a second wallet dialog for the other half of an
+      // action the user had already approved.
+      const { account } = await relayCreateBox(session, salt, policy, stealth);
 
-      // 4. Fund the box with the total budget.
+      // 4. Fund the box with the total budget. The only transaction this wallet
+      //    signs in the whole flow, and the only step that moves the user's money.
       setPhase('funding');
       const fundHash = await clients.walletClient.writeContract({
         address: USDC,
@@ -208,12 +212,9 @@ export function SubscriptionsTab({ session }: { session: Session }) {
       });
       await clients.publicClient.waitForTransactionReceipt({ hash: fundHash });
 
-      // 5. Announce it so only your viewing key can rediscover this box. Also
-      //    relayed: `StealthAnnouncer` indexes msg.sender, so announcing from this
-      //    wallet would publish "this address created a stealth box" and undo the
-      //    point of the fresh owner.
-      await relayAnnounceBox(session, stealth, account);
-
+      // We made this box; there is nothing to discover about it. Registering it
+      // here is what stops the list waiting on an RPC log index to catch up.
+      track(account, stealth.ephemeralPubKey);
       if (label.trim()) setLabel(account, label);
       setPhase('done');
       toast.push(t('sub.createdToast'), 'success');

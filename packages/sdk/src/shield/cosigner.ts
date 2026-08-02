@@ -333,7 +333,9 @@ export class RemoteCoSigner implements CoSigner {
         owner: req.owner,
         target: req.target,
         amount: req.amount.toString(),
-        ...(await this.authBody(req.owner, { target: req.target, amount: req.amount })),
+        // No owner-auth here: the pre-flight issues no signature and moves nothing,
+        // so this would be a wallet prompt bought for nothing. Every phase that
+        // does co-sign still sends it.
       }),
     });
     const data = (await res.json()) as PrecheckResult;

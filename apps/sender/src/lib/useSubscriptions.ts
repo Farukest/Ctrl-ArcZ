@@ -58,6 +58,8 @@ export function useSubscriptions(session: Session | null): {
   subs: Subscription[] | null;
   loading: boolean;
   reload: (expect?: Address) => Promise<void>;
+  /** Record a box this browser just created, so it appears immediately. */
+  track: (account: Address, ephemeralPubKey?: Hex) => void;
   /** True when the wallet refused to derive the viewing key, so the stealth boxes
    *  cannot be found. An empty list would otherwise read as "you have none". */
   stealthLocked: boolean;
@@ -203,6 +205,26 @@ export function useSubscriptions(session: Session | null): {
     return () => clearInterval(timer);
   }, [session, reload, refresh]);
 
+  /**
+   * Adopt a box we created ourselves instead of waiting to rediscover it.
+   *
+   * Discovery works by scanning the announcer's logs, and an RPC's log index lags
+   * its chain head by an unbounded amount -- observed at over a minute. So a
+   * subscription that was already deployed, funded and announced sat missing from
+   * the list that had just created it, with nothing to say it was coming. We know
+   * this box's address and its ephemeral key first hand; there is nothing to
+   * discover. The scan still runs and is still what finds boxes made elsewhere.
+   */
+  const track = useCallback((account: Address, ephemeralPubKey?: Hex) => {
+    const a = account.toLowerCase();
+    if (!accounts.current.has(a)) {
+      accounts.current.set(a, {
+        salt: '0x' as Hex,
+        ...(ephemeralPubKey ? { ephemeralPubKey } : {}),
+      });
+    }
+  }, []);
+
   /** Ask again after a refusal. The prompt only ever follows a deliberate click. */
   const unlockStealth = useCallback(async () => {
     allowStealthPrompt(session?.address);
@@ -210,5 +232,5 @@ export function useSubscriptions(session: Session | null): {
     await reload();
   }, [session, reload]);
 
-  return { subs, loading, reload, stealthLocked, unlockStealth };
+  return { subs, loading, reload, track, stealthLocked, unlockStealth };
 }

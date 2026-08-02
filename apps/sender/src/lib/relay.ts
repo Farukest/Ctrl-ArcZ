@@ -40,14 +40,27 @@ function wire(policy: EphemeralPolicy) {
   };
 }
 
+/**
+ * Deploy the box and, in the same request, publish the announcement that makes it
+ * findable. One signature for one user action, instead of one per relayed half.
+ */
 export async function relayCreateBox(
   session: Session,
   salt: Hex,
   policy: EphemeralPolicy,
+  announce?: { stealthAddress: Address; ephemeralPubKey: Hex },
 ): Promise<{ account: Address; txHash: Hex }> {
   const result = await signedPost<{ account: Address; txHash: Hex }>(session, '/api/relay/create', {
     salt,
     policy: wire(policy),
+    ...(announce
+      ? {
+          announce: {
+            stealthAddress: announce.stealthAddress,
+            ephemeralPubKey: announce.ephemeralPubKey,
+          },
+        }
+      : {}),
   });
 
   // Verify locally rather than trusting the answer. The CREATE2 address commits to

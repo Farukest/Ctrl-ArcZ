@@ -363,8 +363,18 @@ export async function cosign(
   const machine = new LocalCoSigner(params.privateKey, { riskCheck });
 
   // F3: authenticate the payer before doing anything with their `owner` scope.
-  const authFail = await verifyOwnerAuth(params.body);
-  if (authFail) return authFail;
+  //
+  // Not for the pre-flight. That phase issues no co-signature, touches no account
+  // and moves nothing: it runs the poisoning firewall over two public addresses
+  // and says yes or no. A signature there proved only that the asker owned the
+  // address they were asking about, which is not a fact worth a wallet dialog --
+  // and it cost one, in the middle of a form, before the box being asked about
+  // even existed. Every phase that puts the co-signer's name on something still
+  // authenticates, because those spend.
+  if (params.body.phase !== 'precheck') {
+    const authFail = await verifyOwnerAuth(params.body);
+    if (authFail) return authFail;
+  }
 
   // Pre-flight: firewall only, before any account exists. No chain read, no sig.
   if (params.body.phase === 'precheck') {

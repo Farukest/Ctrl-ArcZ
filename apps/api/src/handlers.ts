@@ -250,9 +250,38 @@ export async function relayCreatePost(req: IncomingMessage, res: ServerResponse)
   const caller = await requireSignedRequest(req, raw, '/api/relay/create');
   checkQuota(caller, 1);
   if (!env.relayerPk) throw new HttpError(400, 'no relayer key configured');
-  const { salt, policy } = parsePolicy(parseBody(raw));
+  const body = parseBody(raw);
+  const { salt, policy } = parsePolicy(body);
   const result = await relayCreateBox(env.relayerPk, salt, policy);
-  json(res, 200, result);
+
+  // Announce in the same call, when asked to.
+  //
+  // Deploying a stealth box and publishing the announcement that makes it findable
+  // are one act from the user's side, and splitting them across two signed requests
+  // charged them a second wallet dialog for the second half of something they had
+  // already authorised. Doing it here also removes the ordering hazard the split
+  // had: the announcement now cannot be published before the box it names exists,
+  // because the deploy above is awaited.
+  const announce = (body as { announce?: { stealthAddress?: unknown; ephemeralPubKey?: unknown } })
+    .announce;
+  let announceTx: { txHash: Hex } | null = null;
+  if (announce) {
+    if (
+      typeof announce.ephemeralPubKey !== 'string' ||
+      !/^0x[0-9a-fA-F]{66}$/.test(announce.ephemeralPubKey)
+    ) {
+      throw new HttpError(400, 'invalid ephemeralPubKey');
+    }
+    announceTx = await relayAnnounceBox(
+      env.relayerPk,
+      {
+        stealthAddress: addr(announce.stealthAddress, 'stealthAddress'),
+        ephemeralPubKey: announce.ephemeralPubKey as Hex,
+      },
+      result.account,
+    );
+  }
+  json(res, 200, { ...result, announceTx });
 }
 
 export async function relayAnnouncePost(req: IncomingMessage, res: ServerResponse): Promise<void> {
