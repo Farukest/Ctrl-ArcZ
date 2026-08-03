@@ -237,6 +237,19 @@ export default defineConfig(({ command, mode }) => {
         : {}),
       // Disable HMR in production so no websocket needs proxying through nginx.
       ...(process.env.NO_HMR ? { hmr: false as const } : {}),
+      // The dev server answers a couple of /api routes from plugins above, and
+      // nothing else -- so subscriptions, private pay, the stealth relay and the
+      // gasless claim all 404 here while looking perfectly healthy in the UI. The
+      // 404 surfaces as a generic failure toast, which is a long way from "the
+      // dev server has no backend". Forward the rest to the real API, exactly as
+      // preview and nginx do, so `pnpm dev:sender` exercises the same paths
+      // production does.
+      proxy: {
+        '/api': {
+          target: `http://127.0.0.1:${process.env.API_PORT || 8787}`,
+          changeOrigin: false,
+        },
+      },
     },
     // Production serves a static build via `vite preview` behind the same nginx
     // proxy, so it needs the same host allow-list as the dev server above (preview
