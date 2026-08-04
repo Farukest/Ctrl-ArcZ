@@ -66,7 +66,7 @@ production this runs behind nginx (e.g. `api.ctrlarcz.xyz`) with TLS.
 The rule engine answers one question at a time and answers it the same way every
 time. That is what makes it worth trusting, and it is also why it says "this
 address has no on-chain history" about a colleague's fresh wallet and about a
-contract that would swallow the payment — from any single rule those are the same
+contract that would swallow the payment: from any single rule those are the same
 address. `/api/investigate` gathers the signals a rule cannot combine (is it a
 contract, does it nearly collide with several people you have paid, has it sent
 you zero-value bait) and reports what they add up to.
@@ -78,11 +78,11 @@ Two properties make it safe to have a model in a payment path:
   prompt-injected reply can refuse a good payment; it cannot approve a bad one and
   cannot un-block a lookalike. The only operation available to it is `max`.
 - **It is optional.** No `ANTHROPIC_API_KEY`, a timeout, a malformed reply, a
-  refusal — each returns a null advisory alongside the unchanged rule verdict, and
+  refusal. Each returns a null advisory alongside the unchanged rule verdict, and
   the app behaves exactly as it does without the feature. The firewall never
   depends on this being up.
 
 The dossier's contents are attacker-influenced, so it is passed as JSON inside a
 user turn and never concatenated into the instructions, and the reply is
-constrained to a fixed schema. Neither of those is what makes it safe — the clamp
+constrained to a fixed schema. Neither of those is what makes it safe. The clamp
 is.

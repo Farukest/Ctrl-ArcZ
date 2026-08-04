@@ -2,6 +2,8 @@
 
 **Refuse the bad send. Lock the good one. Return the money if nobody claims it.**
 
+[![Watch the demo](https://img.shields.io/badge/Watch_the_demo-FF0000?style=flat-square&logo=youtube&logoColor=white)](https://www.youtube.com/watch?v=fcgyqBUbkcg) [![Live app](https://img.shields.io/badge/Live-ctrlarcz.xyz-4b9fff?style=flat-square)](https://ctrlarcz.xyz) [![Docs](https://img.shields.io/badge/Docs-docs.ctrlarcz.xyz-8b93a1?style=flat-square)](https://docs.ctrlarcz.xyz) [![Arc Testnet](https://img.shields.io/badge/Arc_Testnet-5042002-2fbf71?style=flat-square)](https://testnet.arcscan.app/address/0x8dAb7148cdc31DAcad6d7e12161AA3DEDb572Dca) [![Tests](https://img.shields.io/badge/tests-273_passing-2fbf71?style=flat-square)](#tech-stack) [![Custody](https://img.shields.io/badge/custody-none-8b93a1?style=flat-square)](#security)
+
 Protected USDC transfers on Arc: an SDK and a single contract that screen a payment before it is signed, hold it until the recipient proves they were meant to have it, and give it back to the sender if they never do.
 
 [Turkish version](./README.tr.md)
@@ -444,14 +446,14 @@ What that does **not** hide is funding: the budget still moves from the payer's 
 ## The keeper: an agent with a wallet, bounded by the chain
 
 `reclaimExpired` is permissionless and always pays the original sender, so the
-refund needs no trusted party — but permissionless is not automatic. Until
+refund needs no trusted party, but permissionless is not automatic. Until
 something calls it, an unclaimed transfer just sits in the contract. The keeper
 (`apps/keeper`) is that something, and it is where the agent-wallet claim stops
 being a diagram.
 
 It is not handed a funded wallet and trusted to behave. It is paid the way this
 product pays any recurring payee: from a `SpendPolicyAccount` in PULL mode whose
-policy is on chain — target locked to the keeper, a per-pull ceiling, a minimum
+policy is on chain: target locked to the keeper, a per-pull ceiling, a minimum
 interval, a total budget, an expiry. Its entire blast radius is a number the
 operator chose and can read back from chain, and on Arc that number is in the same
 asset it spends, because gas is USDC.
@@ -459,9 +461,9 @@ asset it spends, because gas is USDC.
 Verified on Arc Testnet with the keeper's real key: it reclaimed transfer #50 and
 the `TransferReclaimed` event records `caller` as the keeper and `sender` as the
 original sender, while the recorded recipient received nothing. Then four attacks
-against its own budget — asking the co-signer for ten times the per-pull cap,
+against its own budget (asking the co-signer for ten times the per-pull cap,
 forging the co-signer signature, sweeping the box to itself, and sweeping it to
-the correct vault — were each refused, and the operator revoked the remainder in
+the correct vault) were each refused, and the operator revoked the remainder in
 one `sweepToVault`. Details and the full trace: [`apps/keeper/README.md`](./apps/keeper/README.md).
 
 ## The investigator: the judgement a rule cannot make
@@ -470,14 +472,14 @@ The firewall answers one question at a time, the same way every time. That is wh
 makes it worth trusting, and it is also its ceiling: it says *"this address has no
 on-chain history"* about a colleague's fresh wallet and about a contract that
 would swallow the payment, because from any single rule those are identical. A
-real dossier from Arc Testnet shows the gap plainly — the rules rate the CtrlArcZ
+real dossier from Arc Testnet shows the gap plainly. The rules rate the CtrlArcZ
 contract itself `safe / KNOWN_COUNTERPARTY`, because the sender has interacted
 with it, while `isContract: true` means a direct USDC transfer there is gone.
 
 `POST /api/investigate` gathers the signals a rule cannot combine and reports what
 they add up to. **It can only ever tighten.** Every answer is clamped to the rule
 engine's verdict before it leaves the server, so a wrong or prompt-injected reply
-can refuse a good payment but cannot approve a bad one or un-block a lookalike —
+can refuse a good payment but cannot approve a bad one or un-block a lookalike:
 the only operation available to it is `max`. And it is optional: with no API key,
 on a timeout, or on a malformed reply, the route returns the unchanged rule
 verdict and the app behaves exactly as it does without the feature.

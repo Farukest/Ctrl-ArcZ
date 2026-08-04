@@ -2,6 +2,8 @@
 
 **Yanlış gönderimi reddet. Doğrusunu kilitle. Kimse almazsa parayı geri ver.**
 
+[![Demoyu izle](https://img.shields.io/badge/Demoyu_izle-FF0000?style=flat-square&logo=youtube&logoColor=white)](https://www.youtube.com/watch?v=fcgyqBUbkcg) [![Canlı uygulama](https://img.shields.io/badge/Canl%C4%B1-ctrlarcz.xyz-4b9fff?style=flat-square)](https://ctrlarcz.xyz) [![Dokümanlar](https://img.shields.io/badge/Dok%C3%BCmanlar-docs.ctrlarcz.xyz-8b93a1?style=flat-square)](https://docs.ctrlarcz.xyz) [![Arc Testnet](https://img.shields.io/badge/Arc_Testnet-5042002-2fbf71?style=flat-square)](https://testnet.arcscan.app/address/0x8dAb7148cdc31DAcad6d7e12161AA3DEDb572Dca) [![Testler](https://img.shields.io/badge/test-273_ge%C3%A7iyor-2fbf71?style=flat-square)](#teknoloji) [![Emanet](https://img.shields.io/badge/emanet-yok-8b93a1?style=flat-square)](#g%C3%BCvenlik)
+
 Arc üzerinde korumalı USDC transferi: bir ödemeyi imzalanmadan önce tarayan, alıcı kendisine ait olduğunu kanıtlayana kadar kontratta tutan ve hiç talep edilmezse gönderene iade eden bir SDK ve tek bir kontrat.
 
 [English version](./README.md)

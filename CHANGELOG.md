@@ -2,15 +2,15 @@
 
 Bu proje [Keep a Changelog](https://keepachangelog.com/) biçimini izler.
 
-## [0.1.0] — 2026-07-11
+## [0.1.0]: 2026-07-11
 
 İlk sürüm. Arc Testnet üzerinde korumalı USDC transferi: gönderim öncesi risk taraması, kodla claim, gönderen iptali, otomatik iade.
 
 ### Kontrat (`packages/contracts`)
 
-- `CtrlArcZ.sol` — tek deploy, çok kiracılı korumalı transfer kontratı: `createConfig` / `createConfigWithVerifier` / `sendProtected` / `claim` / `cancel` / `reclaimExpired` / `isVerifiedRecipient`.
+- `CtrlArcZ.sol`: tek deploy, çok kiracılı korumalı transfer kontratı: `createConfig` / `createConfigWithVerifier` / `sendProtected` / `claim` / `cancel` / `reclaimExpired` / `isVerifiedRecipient`.
 - `IClaimVerifier` pluggable arayüzü + `CodeClaimVerifier` (kod ile claim). SIGNATURE/REGISTERED modları arayüzde rezerve.
-- Sahipsiz, pause'suz, upgrade'siz — admin drenajı yok.
+- Sahipsiz, pause'suz, upgrade'siz. Admin drenajı yok.
 - 5-deneme brute-force kilidi (yanlış kod revert etmez, sayaç zincire yazılır).
 - 61 Foundry testi; coverage satır %99, ifade %100, dal %100.
 - Arc Testnet'e deploy edildi:
@@ -19,11 +19,11 @@ Bu proje [Keep a Changelog](https://keepachangelog.com/) biçimini izler.
 
 ### SDK (`@ctrl-arcz/sdk`)
 
-- `risk/` — firewall: benzer-adres (prefix/suffix), taze adres, 0-değerli bait kuralları. Saf kural motoru + `IDataProvider` (Blockscout). Doğrulanmış alıcılar (`RecipientVerified` event'lerinden) lookalike karşılaştırmasına dahil.
-- `transfer/` — `sendProtected` (Memo-sarmalı), `claim` (makbuz okur, `WrongClaimCodeError`/`TransferLockedError` fırlatır), `cancel`, `reclaimExpired`, `getTransfer`, `watchTransfer`, `generateClaimCode` (256-bit salt).
-- `history/` — `getCleanHistory`: 0-değerli ve bilinmeyen-token satırlarını filtreler (silmez, ayırır).
-- `config/` — `defineConfig`, `registerConfig`, `recommendTransferMode`, `shouldBlockSend`.
-- `getLogsChunked` — Arc'ın 10k blok `eth_getLogs` limitini aşan event sorguları.
+- `risk/`: firewall: benzer-adres (prefix/suffix), taze adres, 0-değerli bait kuralları. Saf kural motoru + `IDataProvider` (Blockscout). Doğrulanmış alıcılar (`RecipientVerified` event'lerinden) lookalike karşılaştırmasına dahil.
+- `transfer/`: `sendProtected` (Memo-sarmalı), `claim` (makbuz okur, `WrongClaimCodeError`/`TransferLockedError` fırlatır), `cancel`, `reclaimExpired`, `getTransfer`, `watchTransfer`, `generateClaimCode` (256-bit salt).
+- `history/`: `getCleanHistory`: 0-değerli ve bilinmeyen-token satırlarını filtreler (silmez, ayırır).
+- `config/`: `defineConfig`, `registerConfig`, `recommendTransferMode`, `shouldBlockSend`.
+- `getLogsChunked`: Arc'ın 10k blok `eth_getLogs` limitini aşan event sorguları.
 - tsup: ESM + CJS + `.d.ts`. 58 vitest unit testi + 6 testnet entegrasyon testi.
 
 ### Demo (`apps/sender`, `apps/receiver`, `packages/demo-kit`)

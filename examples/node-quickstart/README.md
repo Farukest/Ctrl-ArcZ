@@ -1,8 +1,8 @@
-# Node quickstart — `@ctrl-arcz/sdk`
+# Node quickstart: `@ctrl-arcz/sdk`
 
 The smallest complete integration: firewall check, protected send, and claim,
 headless (no UI), against Arc testnet. This is exactly how a dApp backend or
-script uses the SDK — you bring your own [viem](https://viem.sh) clients, the SDK
+script uses the SDK: you bring your own [viem](https://viem.sh) clients, the SDK
 never touches wallets.
 
 ## Run
@@ -35,11 +35,11 @@ import {
   claim,
 } from '@ctrl-arcz/sdk';
 
-// 1. Firewall — ALWAYS run before sending. `block` means: do not send.
+// 1. Firewall: ALWAYS run before sending. `block` means: do not send.
 const risk = await check(sender, recipient, { client: publicClient });
 if (shouldBlockSend(config, risk.level)) return;
 
-// 2. Protected send — funds are locked under a one-time code.
+// 2. Protected send: funds are locked under a one-time code.
 const { configId } = await registerConfig(clients, defineConfig({ recallWindow: 3600 }));
 const secret = generateClaimCode();
 const { transferId } = await sendProtected(clients, {
