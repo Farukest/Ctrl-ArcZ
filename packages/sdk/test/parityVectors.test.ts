@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { getAddress } from 'viem';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { vectors } from '../scripts/gen-parity-vectors.js';
@@ -69,6 +70,34 @@ describe('parity vectors describe a working protocol', () => {
 
   it('a wrong view tag matches nothing', () => {
     expect(vectors.stealth.viewTagMismatch.matchedWithWrongTag).toBeNull();
+  });
+
+  it('every address is EIP-55 checksummed, and every stealth address too', () => {
+    // The divergence the first cross-implementation run actually found: the SDK
+    // renders checksummed, the Kotlin port rendered lowercase. The chain does not
+    // care, and the one comparison that existed used ignoreCase, so nothing was
+    // broken -- but the two clients were naming the same box differently, and
+    // checksum is the typo protection a user relies on when reading an address off
+    // a screen. Comparing the source constants would never have caught it: both
+    // files held identical strings, only the rendered output differed.
+    for (const [name, addr] of Object.entries(vectors.chain.addresses)) {
+      expect(addr, name).toBe(getAddress(addr));
+    }
+    for (const a of vectors.stealth.addresses) {
+      expect(a.stealthAddress).toBe(getAddress(a.stealthAddress));
+      expect(a.recovered).toBe(getAddress(a.recovered!));
+    }
+  });
+
+  it('the chain constants are the ones every client must agree on', () => {
+    expect(vectors.chain.chainId).toBe(5042002);
+    expect(vectors.chain.usdcDecimals).toBe(6);
+    expect(vectors.chain.cctpDomain).toBe(26);
+    // Arc caps an eth_getLogs range here; a client scanning wider gets -32614.
+    expect(vectors.chain.maxLogRange).toBe(10000);
+    expect(vectors.chain.deployBlocks.ctrlArcZ).toBeLessThan(
+      vectors.chain.deployBlocks.stealthAnnouncer,
+    );
   });
 
   it('the key-derivation message is byte-exact', () => {
