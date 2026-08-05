@@ -18,7 +18,7 @@ export default tseslint.config(
   prettier,
   {
     // Node scripts, examples, and config files run outside the browser.
-    files: ['scripts/**/*.mjs', 'examples/**/*.mjs', '**/*.config.{js,ts,mjs}'],
+    files: ['**/scripts/**/*.{mjs,ts}', 'examples/**/*.mjs', '**/*.config.{js,ts,mjs}'],
     languageOptions: {
       globals: {
         console: 'readonly',

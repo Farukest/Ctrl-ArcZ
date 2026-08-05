@@ -48,7 +48,7 @@ function chainState(overrides: Partial<Record<string, unknown>> = {}) {
 }
 
 function clients(state = chainState()) {
-  const writeContract = vi.fn(async () => '0xfeed' as Hex);
+  const writeContract = vi.fn(async (_args: { address: Address; args: unknown[] }) => '0xfeed' as Hex);
   const waitForTransactionReceipt = vi.fn(async () => ({ status: 'success' }));
   return {
     clients: {
@@ -70,7 +70,7 @@ describe('fundEphemeral — the deployed policy is checked before any money move
     const { clients: c, writeContract } = clients();
     await expect(call(c)).resolves.toBe('0xfeed');
     expect(writeContract).toHaveBeenCalledTimes(1);
-    const arg = writeContract.mock.calls[0][0] as { address: Address; args: unknown[] };
+    const arg = writeContract.mock.calls[0]![0];
     // Paid in the policy's own token, to the box, for the requested amount.
     expect(arg.address).toBe(TOKEN);
     expect(arg.args).toEqual([BOX, 50_000n]);
