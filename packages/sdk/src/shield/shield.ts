@@ -1,4 +1,4 @@
-import { encodeFunctionData, type Address, type Hex, type PublicClient, type WalletClient, type Account } from 'viem';
+import { encodeFunctionData, erc20Abi, type Address, type Hex, type PublicClient, type WalletClient, type Account } from 'viem';
 import { spendPolicyFactoryAbi, spendPolicyAccountAbi, vaultAbi } from './abi.js';
 import { ownerHash as toOwnerHash, vaultHash as toVaultHash, ACTION_PAY } from './digest.js';
 import { ADDRESSES } from '../chains/arcTestnet.js';
@@ -210,6 +210,48 @@ async function assertDeployedPolicy(
   if (!ok) {
     throw new Error('ephemeral account policy mismatch: refusing to fund (possible front-run)');
   }
+}
+
+/**
+ * Fund a spend box from the caller's own wallet, after proving the box on chain is
+ * the one they asked for.
+ *
+ * Funding is a plain ERC-20 transfer, which is why it kept being written by hand at
+ * the call site: three lines, nothing to get wrong. The part that is easy to get
+ * wrong is the line before it. `createEphemeral` ends by calling the deployed-policy
+ * guard, and its own contract with the caller is that the guard has run before any
+ * money moves. A caller who deploys some other way -- through a relayer, from a
+ * server, from a previous session -- and then transfers directly has skipped it, and
+ * skipped it silently, because a transfer to an address that exists always succeeds.
+ *
+ * The address alone is not the check. It is a strong one, since CREATE2 commits to
+ * the whole policy, but it only holds while the derivation stays exactly as it is
+ * today. This reads the deployed target, cosigner, vault hash, caps, interval,
+ * expiry and mode back off chain and compares every one of them, so the box being
+ * funded is the box that was specified even if the address derivation ever loosens.
+ *
+ * Throws before transferring if anything differs. Nothing partially happens: either
+ * the policy matched and the money moved, or neither.
+ */
+export async function fundEphemeral(
+  clients: ShieldClients,
+  account: Address,
+  amount: bigint,
+  policy: EphemeralPolicy,
+): Promise<Hex> {
+  if (amount <= 0n) throw new Error('fund amount must be positive');
+  const owner = requireAccount(clients.walletClient);
+  await assertDeployedPolicy(clients.publicClient, account, policy);
+  const txHash = await clients.walletClient.writeContract({
+    address: policy.token,
+    abi: erc20Abi,
+    functionName: 'transfer',
+    args: [account, amount],
+    account: owner,
+    chain: clients.walletClient.chain ?? null,
+  });
+  await clients.publicClient.waitForTransactionReceipt({ hash: txHash });
+  return txHash;
 }
 
 /** Fund an ephemeral account from the vault (owner only). The APS-confidential leg. */

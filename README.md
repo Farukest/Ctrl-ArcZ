@@ -2,7 +2,7 @@
 
 **Refuse the bad send. Lock the good one. Return the money if nobody claims it.**
 
-[![Watch the demo](https://img.shields.io/badge/Watch_the_demo-FF0000?style=flat-square&logo=youtube&logoColor=white)](https://www.youtube.com/watch?v=fcgyqBUbkcg) [![Live app](https://img.shields.io/badge/Live-ctrlarcz.xyz-4b9fff?style=flat-square)](https://ctrlarcz.xyz) [![Docs](https://img.shields.io/badge/Docs-docs.ctrlarcz.xyz-8b93a1?style=flat-square)](https://docs.ctrlarcz.xyz) [![Arc Testnet](https://img.shields.io/badge/Arc_Testnet-5042002-2fbf71?style=flat-square)](https://testnet.arcscan.app/address/0x8dAb7148cdc31DAcad6d7e12161AA3DEDb572Dca) [![Tests](https://img.shields.io/badge/tests-273_passing-2fbf71?style=flat-square)](#tech-stack) [![Custody](https://img.shields.io/badge/custody-none-8b93a1?style=flat-square)](#security)
+[![Watch the demo](https://img.shields.io/badge/Watch_the_demo-FF0000?style=flat-square&logo=youtube&logoColor=white)](https://www.youtube.com/watch?v=fcgyqBUbkcg) [![Live app](https://img.shields.io/badge/Live-ctrlarcz.xyz-4b9fff?style=flat-square)](https://ctrlarcz.xyz) [![Docs](https://img.shields.io/badge/Docs-docs.ctrlarcz.xyz-8b93a1?style=flat-square)](https://docs.ctrlarcz.xyz) [![Arc Testnet](https://img.shields.io/badge/Arc_Testnet-5042002-2fbf71?style=flat-square)](https://testnet.arcscan.app/address/0x8dAb7148cdc31DAcad6d7e12161AA3DEDb572Dca) [![Tests](https://img.shields.io/badge/tests-285_passing-2fbf71?style=flat-square)](#tech-stack) [![Custody](https://img.shields.io/badge/custody-none-8b93a1?style=flat-square)](#security)
 
 Protected USDC transfers on Arc: an SDK and a single contract that screen a payment before it is signed, hold it until the recipient proves they were meant to have it, and give it back to the sender if they never do.
 
@@ -36,7 +36,7 @@ Protected USDC transfers on Arc: an SDK and a single contract that screen a paym
 | **Protection** | Pre-send risk firewall, code-gated claim, sender cancel, automatic expiry refund      |
 | **Custody**    | None. Funds are with the user or in the contract. No owner, no pause, no upgrade path |
 | **Product**    | An SDK any wallet, exchange or payments app embeds. Not another wallet                |
-| **Tests**      | 99 Foundry, 112 SDK, 33 keeper and 12 investigator unit tests, plus live testnet runs |
+| **Tests**      | 285 in total: 99 Foundry, 141 SDK, 33 keeper, 12 investigator, plus live testnet runs |
 
 ## The problem
 
@@ -321,7 +321,7 @@ Deploy block `51326557`. Nothing is deployed to mainnet, and nothing will be.
 | `reclaimExpired(id)`                        | Anyone      | Refund an expired transfer. Only ever to the sender              |
 | `isVerifiedRecipient(sender, recipient)`    | Anyone      | Layer 3, read by the firewall                                    |
 
-The contract is **ownerless**: no owner, no pause, no proxy, no upgrade path, no admin function that can touch a locked transfer. A protected-transfer contract that an admin can drain protects nobody. There are 61 Foundry tests, including fuzz tests for value conservation, the fee split, cancel, and the property that a valid proof only ever pays the recorded recipient. Branch coverage is 100 percent.
+The contract is **ownerless**: no owner, no pause, no proxy, no upgrade path, no admin function that can touch a locked transfer. A protected-transfer contract that an admin can drain protects nobody. There are 61 Foundry tests on this contract alone and 99 across the suite, including fuzz tests for value conservation, the fee split, cancel, and the property that a valid proof only ever pays the recorded recipient. Branch coverage is 100 percent.
 
 ## Security
 

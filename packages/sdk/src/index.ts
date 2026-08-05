@@ -159,6 +159,7 @@ export {
 export {
   predictEphemeral,
   createEphemeral,
+  fundEphemeral,
   fundFromVault,
   readAccount,
   submitPay,

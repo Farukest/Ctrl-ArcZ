@@ -2,7 +2,7 @@
 
 **Yanlış gönderimi reddet. Doğrusunu kilitle. Kimse almazsa parayı geri ver.**
 
-[![Demoyu izle](https://img.shields.io/badge/Demoyu_izle-FF0000?style=flat-square&logo=youtube&logoColor=white)](https://www.youtube.com/watch?v=fcgyqBUbkcg) [![Canlı uygulama](https://img.shields.io/badge/Canl%C4%B1-ctrlarcz.xyz-4b9fff?style=flat-square)](https://ctrlarcz.xyz) [![Dokümanlar](https://img.shields.io/badge/Dok%C3%BCmanlar-docs.ctrlarcz.xyz-8b93a1?style=flat-square)](https://docs.ctrlarcz.xyz) [![Arc Testnet](https://img.shields.io/badge/Arc_Testnet-5042002-2fbf71?style=flat-square)](https://testnet.arcscan.app/address/0x8dAb7148cdc31DAcad6d7e12161AA3DEDb572Dca) [![Testler](https://img.shields.io/badge/test-273_ge%C3%A7iyor-2fbf71?style=flat-square)](#teknoloji) [![Emanet](https://img.shields.io/badge/emanet-yok-8b93a1?style=flat-square)](#g%C3%BCvenlik)
+[![Demoyu izle](https://img.shields.io/badge/Demoyu_izle-FF0000?style=flat-square&logo=youtube&logoColor=white)](https://www.youtube.com/watch?v=fcgyqBUbkcg) [![Canlı uygulama](https://img.shields.io/badge/Canl%C4%B1-ctrlarcz.xyz-4b9fff?style=flat-square)](https://ctrlarcz.xyz) [![Dokümanlar](https://img.shields.io/badge/Dok%C3%BCmanlar-docs.ctrlarcz.xyz-8b93a1?style=flat-square)](https://docs.ctrlarcz.xyz) [![Arc Testnet](https://img.shields.io/badge/Arc_Testnet-5042002-2fbf71?style=flat-square)](https://testnet.arcscan.app/address/0x8dAb7148cdc31DAcad6d7e12161AA3DEDb572Dca) [![Testler](https://img.shields.io/badge/test-285_ge%C3%A7iyor-2fbf71?style=flat-square)](#teknoloji) [![Emanet](https://img.shields.io/badge/emanet-yok-8b93a1?style=flat-square)](#g%C3%BCvenlik)
 
 Arc üzerinde korumalı USDC transferi: bir ödemeyi imzalanmadan önce tarayan, alıcı kendisine ait olduğunu kanıtlayana kadar kontratta tutan ve hiç talep edilmezse gönderene iade eden bir SDK ve tek bir kontrat.
 
@@ -34,7 +34,7 @@ Arc üzerinde korumalı USDC transferi: bir ödemeyi imzalanmadan önce tarayan,
 | **Koruma**  | Gönderim öncesi risk firewall'u, kodla claim, gönderen iptali, süre dolunca otomatik iade       |
 | **Custody** | Yok. Para ya kullanıcıda ya kontratta. Owner yok, pause yok, upgrade yolu yok                   |
 | **Ürün**    | Herhangi bir cüzdanın, borsanın veya ödeme uygulamasının gömdüğü bir SDK. Yeni bir cüzdan değil |
-| **Testler** | 61 Foundry testi (dal kapsamı yüzde 100), 97 SDK birim testi, canlı testnet koşuları            |
+| **Testler** | Toplam 285: 99 Foundry, 141 SDK, 33 keeper, 12 investigator, artı canlı testnet koşuları |
 
 ## Problem
 
@@ -310,7 +310,7 @@ Deploy bloğu `51326557`. Mainnet'e hiçbir şey deploy edilmedi ve edilmeyecek.
 | `reclaimExpired(id)`                        | Herkes          | Süresi dolan transferi iade eder. Yalnızca gönderene  |
 | `isVerifiedRecipient(gönderen, alıcı)`      | Herkes          | Katman 3, firewall tarafından okunur                  |
 
-Kontrat **sahipsizdir**: owner yok, pause yok, proxy yok, upgrade yolu yok, kilitli bir transfere dokunabilecek admin fonksiyonu yok. Admin'in drenajlayabildiği bir korumalı transfer kontratı kimseyi korumaz. 61 Foundry testi var; içinde değer korunumu, fee bölüşümü, iptal ve geçerli bir kanıtın yalnızca kayıtlı alıcıya ödeme yaptığı özelliği için fuzz testleri de bulunuyor. Dal kapsamı yüzde 100.
+Kontrat **sahipsizdir**: owner yok, pause yok, proxy yok, upgrade yolu yok, kilitli bir transfere dokunabilecek admin fonksiyonu yok. Admin'in drenajlayabildiği bir korumalı transfer kontratı kimseyi korumaz. Bu kontrat için 61, tüm pakette 99 Foundry testi var; içinde değer korunumu, fee bölüşümü, iptal ve geçerli bir kanıtın yalnızca kayıtlı alıcıya ödeme yaptığı özelliği için fuzz testleri de bulunuyor. Dal kapsamı yüzde 100.
 
 ## Güvenlik
 

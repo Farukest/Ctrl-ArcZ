@@ -3,7 +3,6 @@ import {
   parseUnits,
   formatUnits,
   isAddress,
-  erc20Abi,
   createWalletClient,
   http,
   fallback,
@@ -17,6 +16,7 @@ import {
   arcTestnet,
   readAccount,
   submitPull,
+  fundEphemeral,
   sweepToVault,
   RemoteCoSigner,
   MODE_PULL,
@@ -201,16 +201,14 @@ export function SubscriptionsTab({ session }: { session: Session }) {
 
       // 4. Fund the box with the total budget. The only transaction this wallet
       //    signs in the whole flow, and the only step that moves the user's money.
+      //
+      //    Through the SDK rather than a raw transfer, because `fundEphemeral` reads
+      //    the deployed policy back off chain and refuses to pay a box whose target,
+      //    co-signer, vault, caps, interval, expiry or mode is not the one we asked
+      //    for. The relayer deploys this box, so that check is the difference between
+      //    trusting it and verifying it.
       setPhase('funding');
-      const fundHash = await clients.walletClient.writeContract({
-        address: USDC,
-        abi: erc20Abi,
-        functionName: 'transfer',
-        args: [account, capAmt],
-        account: clients.walletClient.account!,
-        chain: clients.walletClient.chain ?? null,
-      });
-      await clients.publicClient.waitForTransactionReceipt({ hash: fundHash });
+      await fundEphemeral(clients, account, capAmt, policy);
 
       // We made this box; there is nothing to discover about it. Registering and
       // rendering it here is what stops the list waiting on an RPC log index.
