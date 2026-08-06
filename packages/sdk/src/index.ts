@@ -201,3 +201,20 @@ export {
   type StealthBox,
   type RawAnnouncement,
 } from './shield/stealthBox.js';
+
+// Non-custodial CCTP: the sender's own USDC is burned and minted back to them, so
+// no relayer has to hold liquidity for anyone else's transfer.
+export {
+  bridgeFromWallet,
+  quoteBridge,
+  waitForForwardedMint,
+  CCTP_CHAINS,
+  CCTP_TOKEN_MESSENGER,
+  IRIS_TESTNET,
+  FORWARDING_HOOK,
+  type CctpChain,
+  type CctpChainName,
+  type CctpStep,
+  type BridgeQuote,
+  type BridgeResult as CctpBridgeResult,
+} from './bridge/cctp.js';
