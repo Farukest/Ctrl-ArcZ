@@ -224,6 +224,10 @@ export const tr: Record<TranslationKey, string> = {
   'bridge.withdrawButton': 'Cüzdanıma çek',
   'bridge.withdrawHint':
     'Aynı zincire çıkış: USDC Gateway’den çıkıp bu zincirdeki cüzdanınıza döner. Ücreti, zincirler arası transferin yaklaşık üçte biridir.',
+  'bridge.recipient': 'Alıcı (opsiyonel)',
+  'bridge.recipientHint': 'Boş bırakırsanız kendinize gönderilir; köprü genelde bu demektir.',
+  'bridge.recipientPlaceholder': 'Kendi adresiniz',
+  'bridge.recipientBad': 'Bu geçerli bir adres değil.',
   'bridge.done': 'Köprülendi. USDC hedef zincire ulaştı.',
   'bridge.recovered': 'Yarım kalan transfer tamamlandı: {amount} USDC hedef zincire ulaştı.',
   'bridge.failed': 'Köprüleme başarısız.',

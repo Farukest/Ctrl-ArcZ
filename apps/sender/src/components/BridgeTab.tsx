@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Session } from '@ctrl-arcz/demo-kit';
-import { parseUnits } from 'viem';
+import { isAddress, parseUnits, type Address } from 'viem';
 import {
   bridgeFromWallet,
   chainLabel,
@@ -43,6 +43,8 @@ import {
   SearchField,
   SegmentedTabs,
   Select,
+  RiskCard,
+  Skeleton,
   Stepper,
   TxLink,
   useSubmitGuard,
@@ -51,6 +53,7 @@ import {
   type Step,
 } from '@ctrl-arcz/demo-kit/ui';
 import { loadBridges, saveBridge, type StoredBridge } from '../store.js';
+import { useRecipientRisk } from '../lib/useRecipientRisk.js';
 
 // The bridge signs server-side (/api/bridge), so the client never needs the key;
 // gate on a non-secret flag instead of inlining a private key just to read a bool.
@@ -154,6 +157,14 @@ export function BridgeTab({ session }: { session: Session }) {
   const [gwOnSource, setGwOnSource] = useState<bigint | null>(null);
   const [gwFee, setGwFee] = useState<bigint | null>(null);
   const [depositing, setDepositing] = useState(false);
+  /**
+   * Empty means "send it to myself", which is what a bridge normally is. Typing an
+   * address here turns the transfer into a payment, and a payment to a hand-typed
+   * address is exactly where poisoning lives -- so it goes through the same
+   * firewall the send screen uses, not a second, laxer copy of it.
+   */
+  const [recipient, setRecipient] = useState('');
+  const [riskOpen, setRiskOpen] = useState(true);
   const [amount, setAmount] = useState('0.1');
   const [result, setResult] = useState<BridgeOutcome | null>(null);
   /** Every transfer this browser is following, live from the server. */
@@ -176,6 +187,8 @@ export function BridgeTab({ session }: { session: Session }) {
   const [histEngine, setHistEngine] = useState<'all' | BridgeEngine>('all');
   const [histPage, setHistPage] = useState(0);
 
+  const risk = useRecipientRisk(session, recipient);
+  const recipientBad = recipient.trim() !== '' && !isAddress(recipient.trim());
   const amountValue = Number(amount);
   const sameChain = from === to;
 
@@ -207,7 +220,12 @@ export function BridgeTab({ session }: { session: Session }) {
   const walletOnDepositChain = !gwSource || session.chainId === CCTP_CHAINS[gwSource].chainId;
 
   const running = jobs.filter((j) => j.state === 'running').length;
-  const canBridge = bridgeEnabled && amountValue > 0 && (!sameChain || engine === 'gateway');
+  const canBridge =
+    bridgeEnabled &&
+    amountValue > 0 &&
+    (!sameChain || engine === 'gateway') &&
+    !recipientBad &&
+    !risk.blocked;
 
   // Prefer the demo-kit label where one exists (it carries the brand spelling);
   // fall back to the SDK's, so a newly added chain still reads properly.
@@ -513,6 +531,7 @@ export function BridgeTab({ session }: { session: Session }) {
             from: gwSource,
             to: to as GatewayChain,
             amount: parseUnits(amount, 6),
+            ...(isAddress(recipient.trim()) ? { recipient: recipient.trim() as Address } : {}),
             onStep: (step, txHash) => {
               const name = GW_STEP_TO_UI[step];
               if (!name) return;
@@ -591,6 +610,7 @@ export function BridgeTab({ session }: { session: Session }) {
           from,
           to,
           amount: parseUnits(amount, 6),
+          ...(isAddress(recipient.trim()) ? { recipient: recipient.trim() as Address } : {}),
           onStep: (step, txHash) => {
             const name = SDK_STEP_TO_UI[step];
             if (!name) return; // quoting is instant; it has no row in the stepper
@@ -777,6 +797,38 @@ export function BridgeTab({ session }: { session: Session }) {
             />
           </Field>
         </div>
+
+        <div style={{ marginTop: 16 }}>
+          <Field
+            label={t('bridge.recipient')}
+            hint={t('bridge.recipientHint')}
+            {...(recipientBad ? { error: t('bridge.recipientBad') } : {})}
+          >
+            <Input
+              value={recipient}
+              onChange={(e) => setRecipient(e.target.value)}
+              placeholder={t('bridge.recipientPlaceholder')}
+              data-testid="bridge-recipient"
+            />
+          </Field>
+        </div>
+
+        {/* Same firewall as the send screen, same verdict, same block. A payment
+            that skipped it would be the one an attacker aims at. */}
+        {risk.checking && (
+          <div style={{ marginTop: 12 }}>
+            <Skeleton height={56} />
+          </div>
+        )}
+        {!risk.checking && risk.report && (
+          <div style={{ marginTop: 12 }} data-testid="bridge-risk">
+            <RiskCard
+              report={risk.report}
+              collapsed={!riskOpen}
+              onToggle={() => setRiskOpen((v) => !v)}
+            />
+          </div>
+        )}
 
         {(result || job || selfBridge) && <Stepper steps={steps} highlightIndex={hoverIdx} />}
 

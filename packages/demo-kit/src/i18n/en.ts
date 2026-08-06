@@ -230,6 +230,10 @@ export const en = {
   'bridge.withdrawButton': 'Withdraw to my wallet',
   'bridge.withdrawHint':
     'Same chain in and out: this takes the USDC out of Gateway and back into your wallet on this chain. It costs about a third of a cross-chain transfer.',
+  'bridge.recipient': 'Recipient (optional)',
+  'bridge.recipientHint': 'Leave empty to send to yourself, which is what a bridge usually means.',
+  'bridge.recipientPlaceholder': 'Your own address',
+  'bridge.recipientBad': 'That is not a valid address.',
   'bridge.done': 'Bridged. USDC arrived on the destination chain.',
   'bridge.recovered':
     'An interrupted transfer finished: {amount} USDC arrived on the destination chain.',
