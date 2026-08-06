@@ -219,6 +219,9 @@ export const tr: Record<TranslationKey, string> = {
   'bridge.gwDepositWait': '{chain} üzerinde yatırılan tutarın sayılması yaklaşık {wait} sürer.',
   'bridge.depositButton': '{chain} üzerinde {amount} USDC yatır',
   'bridge.deposited': '{amount} USDC yatırıldı. Yaklaşık {wait} içinde harcanabilir olur.',
+  'bridge.withdrawButton': 'Cüzdanıma çek',
+  'bridge.withdrawHint':
+    'Aynı zincire çıkış: USDC Gateway’den çıkıp bu zincirdeki cüzdanınıza döner. Ücreti, zincirler arası transferin yaklaşık üçte biridir.',
   'bridge.done': 'Köprülendi. USDC hedef zincire ulaştı.',
   'bridge.recovered': 'Yarım kalan transfer tamamlandı: {amount} USDC hedef zincire ulaştı.',
   'bridge.failed': 'Köprüleme başarısız.',

@@ -7,6 +7,7 @@ import {
   quoteGatewaySpend,
   spendFromGateway,
   waitForGatewayMint,
+  isGatewayWithdrawal,
   GATEWAY_WALLET,
   GATEWAY_MINTER,
   GATEWAY_CHAIN_NAMES,
@@ -186,15 +187,62 @@ describe('the spend is authorised by the sender signature, not by a server', () 
     // message has to name the deposit that would fix it.
     const a = api({ balances: [{ domain: 26, balance: '1.000000' }] });
     const w = wallet();
-    await expect(run(a, w)).rejects.toThrow(/Deposit into Gateway first/i);
+    await expect(run(a, w)).rejects.toThrow(/Deposit on Arc Testnet first/i);
     expect(w.signTypedData).not.toHaveBeenCalled();
   });
 
-  it('refuses a same-chain or non-positive spend', async () => {
+  it('checks the source chain balance, not the total across chains', async () => {
+    // Measured against Circle: an intent sourced where the depositor holds nothing
+    // comes back "available 0", however much they hold elsewhere. Comparing against
+    // the total passes the check and is then rejected after the user has signed.
+    const a = api({
+      balances: [
+        { domain: 26, balance: '50.000000' }, // plenty on Arc
+        { domain: 6, balance: '0' }, // nothing on Base, which is the source here
+      ],
+    });
     const w = wallet();
-    await expect(run(api(), w, { to: 'Arc_Testnet' })).rejects.toThrow(/must differ/i);
+    await expect(run(a, w, { from: 'Base_Sepolia', to: 'Arc_Testnet' })).rejects.toThrow(
+      /balance on Base Sepolia is 0/i,
+    );
+    expect(w.signTypedData).not.toHaveBeenCalled();
+  });
+
+  it('says where the rest of the money is, so the refusal is actionable', async () => {
+    const a = api({
+      balances: [
+        { domain: 26, balance: '50.000000' },
+        { domain: 6, balance: '0' },
+      ],
+    });
+    await expect(run(a, wallet(), { from: 'Base_Sepolia', to: 'Arc_Testnet' })).rejects.toThrow(
+      /You hold 50 on other chains, but a transfer spends only the balance on its source chain/i,
+    );
+  });
+
+  it('refuses a non-positive spend', async () => {
+    const w = wallet();
     await expect(run(api(), w, { amount: 0n })).rejects.toThrow(/positive/i);
     expect(w.signTypedData).not.toHaveBeenCalled();
+  });
+
+  it('allows a same-chain transfer, because that is how money comes back out', async () => {
+    // This was refused, which left a door money could go in but not out of: the
+    // only way back to the chain you started on was to bridge away and bridge home.
+    const a = api();
+    const w = wallet();
+    await run(a, w, { to: 'Arc_Testnet' });
+    const spec = (
+      w.signTypedData.mock.calls[0]![0] as { message: { spec: Record<string, number> } }
+    ).message.spec;
+    expect(spec.sourceDomain).toBe(26);
+    expect(spec.destinationDomain).toBe(26);
+    expect(w.signTypedData).toHaveBeenCalledTimes(1);
+  });
+
+  it('names a same-chain move as a withdrawal', () => {
+    expect(isGatewayWithdrawal({ from: 'Arc_Testnet', to: 'Arc_Testnet' })).toBe(true);
+    expect(isGatewayWithdrawal({ from: 'Arc_Testnet', to: 'Base_Sepolia' })).toBe(false);
   });
 
   it('surfaces a refusal from Circle rather than inventing a transfer', async () => {

@@ -140,6 +140,20 @@ function jsonBigints(value: unknown): string {
   return JSON.stringify(value, (_k, v) => (typeof v === 'bigint' ? v.toString() : v));
 }
 
+/** USDC subunits as a readable figure, for the messages a person has to act on. */
+function usdc(v: bigint): string {
+  return String(Number(v) / 1e6);
+}
+
+/**
+ * True when this "transfer" is really money coming back out to the same wallet on
+ * the chain it was deposited on. Worth naming, because a caller should not present
+ * it as a transfer and Circle prices it differently.
+ */
+export function isGatewayWithdrawal(params: { from: GatewayChain; to: GatewayChain }): boolean {
+  return params.from === params.to;
+}
+
 export interface GatewayBalance {
   /** Spendable now, across every chain, in USDC subunits. */
   total: bigint;
@@ -365,6 +379,15 @@ export interface GatewaySpendResult {
  * The wallet signs an intent and Circle mints on the destination. This is the part
  * that makes the deposit worth having: once the balance is confirmed, every spend is
  * a signature, and the same balance can go to any supported chain in any split.
+ *
+ * `from` and `to` may be the same chain, and that case is not a mistake to be
+ * refused: it is the way money comes back out. Same-chain means Circle debits the
+ * balance and mints straight back to the wallet on that chain, which is the only
+ * quick exit a depositor has. Rejecting it, as this did, left a door that money
+ * could go in but not out of -- the only way back to the chain you started on was
+ * to bridge away and bridge home, paying twice to end up where you began.
+ * Measured: it settles in about seven seconds and costs roughly a third of a
+ * cross-chain transfer, because Circle charges no transfer fee within one chain.
  */
 export async function spendFromGateway(
   clients: { walletClient: WalletClient },
@@ -391,7 +414,6 @@ export async function spendFromGateway(
     salt?: Hex;
   },
 ): Promise<GatewaySpendResult> {
-  if (params.from === params.to) throw new Error('Source and destination must differ.');
   if (params.amount <= 0n) throw new Error('Amount must be positive.');
   const account = clients.walletClient.account;
   if (!account) throw new Error('No wallet account to spend from.');
@@ -411,17 +433,31 @@ export async function spendFromGateway(
     ...(params.fetchImpl ? { fetchImpl: params.fetchImpl } : {}),
   });
 
-  // Refuse before signing when the balance cannot cover it. The API would refuse
-  // too, but the point of checking here is to say which number is short and by how
-  // much, and to name the deposit that would fix it.
+  /**
+   * Refuse before signing when the balance cannot cover it, and check the balance
+   * that actually pays: the one on the source chain.
+   *
+   * "Unified balance" is unified for reading, not for spending. One intent names one
+   * `sourceDomain` and draws only from that chain's deposit. Measured against Circle:
+   * an intent sourced on Ethereum came back "available 0, required 1.114129" while
+   * the same depositor held plenty on Arc. Comparing against the total, as this did,
+   * would pass the check and then be rejected after the user had signed -- which
+   * defeats the whole point of checking first.
+   */
   const balance = await gatewayBalance({
     depositor: account.address,
     apiBase,
     ...(params.fetchImpl ? { fetchImpl: params.fetchImpl } : {}),
   });
-  if (balance.total < quote.total) {
+  const onSource = balance.byChain[params.from] ?? 0n;
+  if (onSource < quote.total) {
+    const label = chainLabel(params.from);
+    const elsewhere = balance.total - onSource;
     throw new Error(
-      `Your Gateway balance is ${Number(balance.total) / 1e6} USDC and this transfer needs ${Number(quote.total) / 1e6} including the ${Number(quote.maxFee) / 1e6} fee. Deposit into Gateway first.`,
+      `Your Gateway balance on ${label} is ${usdc(onSource)} USDC and this transfer needs ${usdc(quote.total)} including the ${usdc(quote.maxFee)} fee.` +
+        (elsewhere > 0n
+          ? ` You hold ${usdc(elsewhere)} on other chains, but a transfer spends only the balance on its source chain. Deposit on ${label}, or send from a chain you have funded.`
+          : ` Deposit on ${label} first.`),
     );
   }
 

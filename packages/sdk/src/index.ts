@@ -229,6 +229,7 @@ export {
   waitForGatewayMint,
   findGatewayMint,
   isGatewayChain,
+  isGatewayWithdrawal,
   GATEWAY_WALLET,
   GATEWAY_MINTER,
   GATEWAY_API_TESTNET,

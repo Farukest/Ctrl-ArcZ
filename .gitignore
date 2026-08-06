@@ -78,3 +78,4 @@ apps/*/dist-*/
 # authorised them, written wherever the API runs.
 .bridge-jobs.json
 .bridge-jobs.json.tmp
+.circle-entity-recovery.txt

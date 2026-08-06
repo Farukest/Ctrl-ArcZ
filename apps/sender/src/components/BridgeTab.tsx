@@ -193,10 +193,15 @@ export function BridgeTab({ session }: { session: Session }) {
     engine === 'gateway' && isGatewayChain(from) ? (from as GatewayChain) : undefined;
   const gwNeeded = gwFee != null ? BigInt(Math.round(amountValue * 1e6)) + gwFee : null;
   const gwShort = gwBalance != null && gwNeeded != null && gwBalance < gwNeeded;
+  /**
+   * Same chain in and out is not a mistake in Gateway, it is the way money comes
+   * back. Calling it a bridge would be wrong, so the button says what it does.
+   */
+  const gwWithdraw = engine === 'gateway' && sameChain;
   const walletOnDepositChain = !gwSource || session.chainId === CCTP_CHAINS[gwSource].chainId;
 
   const running = jobs.filter((j) => j.state === 'running').length;
-  const canBridge = bridgeEnabled && amountValue > 0 && !sameChain;
+  const canBridge = bridgeEnabled && amountValue > 0 && (!sameChain || engine === 'gateway');
 
   // Prefer the demo-kit label where one exists (it carries the brand spelling);
   // fall back to the SDK's, so a newly added chain still reads properly.
@@ -713,7 +718,8 @@ export function BridgeTab({ session }: { session: Session }) {
             </Field>
           </div>
         </div>
-        {sameChain && <p className="hint">{t('bridge.sameChain')}</p>}
+        {sameChain && !gwWithdraw && <p className="hint">{t('bridge.sameChain')}</p>}
+        {gwWithdraw && <p className="hint">{t('bridge.withdrawHint')}</p>}
         {/* Whose money moves is the thing that changed, so say it plainly rather
             than leaving the user to infer it from a MetaMask prompt. */}
         {engine === 'cctp' && (
@@ -822,7 +828,11 @@ export function BridgeTab({ session }: { session: Session }) {
               disabled={!canBridge}
               data-testid="bridge-button"
             >
-              {running > 0 ? t('bridge.buttonAnother') : t('bridge.button')}
+              {gwWithdraw
+                ? t('bridge.withdrawButton')
+                : running > 0
+                  ? t('bridge.buttonAnother')
+                  : t('bridge.button')}
             </Button>
           )}
         </div>

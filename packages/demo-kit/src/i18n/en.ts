@@ -225,6 +225,9 @@ export const en = {
   'bridge.gwDepositWait': 'Depositing on {chain} takes about {wait} to count.',
   'bridge.depositButton': 'Deposit {amount} USDC on {chain}',
   'bridge.deposited': 'Deposited {amount} USDC. It becomes spendable in about {wait}.',
+  'bridge.withdrawButton': 'Withdraw to my wallet',
+  'bridge.withdrawHint':
+    'Same chain in and out: this takes the USDC out of Gateway and back into your wallet on this chain. It costs about a third of a cross-chain transfer.',
   'bridge.done': 'Bridged. USDC arrived on the destination chain.',
   'bridge.recovered':
     'An interrupted transfer finished: {amount} USDC arrived on the destination chain.',
