@@ -241,7 +241,10 @@ export function BridgeTab({ session }: { session: Session }) {
     amountValue > 0 &&
     (!sameChain || engine === 'gateway') &&
     !recipientBad &&
-    !risk.blocked;
+    !risk.blocked &&
+    // Gateway needs both ends to be chains it serves. Without this the button was
+    // clickable in a state where `run` could only return without doing anything.
+    (engine !== 'gateway' || (!!gwSource && isGatewayChain(to)));
 
   // Prefer the demo-kit label where one exists (it carries the brand spelling);
   // fall back to the SDK's, so a newly added chain still reads properly.
@@ -537,7 +540,14 @@ export function BridgeTab({ session }: { session: Session }) {
   async function run() {
     setResult(null);
     if (engine === 'gateway') {
-      if (!gwSource || !isGatewayChain(to)) return;
+      // Should be unreachable: the button is disabled without both chains. Kept as
+      // a spoken refusal rather than a silent `return`, because a button that does
+      // nothing at all and says nothing is indistinguishable from a broken app, and
+      // that is exactly how this read when it happened.
+      if (!gwSource || !isGatewayChain(to)) {
+        toast.push(t('bridge.gwChainMissing'), 'error');
+        return;
+      }
       setSelfBridge({ steps: [], state: 'running' });
       try {
         // No wallet client bound to a chain: a spend is a signature, so it works
