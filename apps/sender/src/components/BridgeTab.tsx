@@ -4,23 +4,27 @@ import { parseUnits } from 'viem';
 import {
   bridgeFromWallet,
   chainLabel,
+  chainExplorerTxUrl,
   findForwardedMint,
+  findGatewayMint,
+  gatewayBalance,
+  depositToGateway,
+  spendFromGateway,
+  quoteGatewaySpend,
+  isGatewayChain,
   CCTP_CHAINS,
+  GATEWAY_CHAIN_NAMES,
+  DEPOSIT_CONFIRMATION_SECONDS,
   type CctpChainName,
   type CctpStep,
+  type GatewayChain,
+  type GatewayStep,
 } from '@ctrl-arcz/sdk';
 import { bridgeClients, switchWalletChain } from '@ctrl-arcz/demo-kit';
-import {
-  activeJobIds,
-  forgetJob,
-  readBridgeJob,
-  startBridgeJob,
-  type BridgeJob,
-} from '../lib/bridgeJob.js';
+import { activeJobIds, forgetJob, readBridgeJob, type BridgeJob } from '../lib/bridgeJob.js';
 import {
   BRIDGE_STEPS,
   GATEWAY_STEPS,
-  GATEWAY_CHAINS,
   bridgeChainLabel,
   type BridgeChainName,
   type BridgeEngine,
@@ -65,6 +69,26 @@ const SDK_STEP_TO_UI: Record<CctpStep, string | undefined> = {
   attest: 'fetchAttestation',
   forward: 'mint',
 };
+
+/** Same idea for Gateway, whose four rows are deposit, sign, attestation, mint. */
+const GW_STEP_TO_UI: Record<GatewayStep, string | undefined> = {
+  approve: 'deposit',
+  deposit: 'deposit',
+  quote: undefined,
+  sign: 'sign',
+  transfer: 'attestation',
+  mint: 'mint',
+};
+
+/**
+ * One step row, with an explorer link only when the chain actually has one.
+ * `exactOptionalPropertyTypes` means an explicit `undefined` is not the same as an
+ * absent field, and the stored record should simply not carry a link it cannot make.
+ */
+function stepRow(name: string, txHash?: string, chain?: CctpChainName) {
+  const url = txHash && chain ? chainExplorerTxUrl(chain, txHash) : undefined;
+  return { name, ...(txHash ? { txHash } : {}), ...(url ? { explorerUrl: url } : {}) };
+}
 
 /** Map a server step name to its index in the active engine's step list. */
 function stepIndexFor(name: string, list: readonly string[]): number {
@@ -118,6 +142,13 @@ export function BridgeTab({ session }: { session: Session }) {
   const [to, setTo] = useState<CctpChainName>('Base_Sepolia');
   /** Set while the wallet is being asked to move to the source chain. */
   const [switching, setSwitching] = useState(false);
+  /**
+   * What this wallet can spend through Gateway right now, in USDC subunits.
+   * `null` until read; a deposit that has not reached its confirmations is not here.
+   */
+  const [gwBalance, setGwBalance] = useState<bigint | null>(null);
+  const [gwFee, setGwFee] = useState<bigint | null>(null);
+  const [depositing, setDepositing] = useState(false);
   const [amount, setAmount] = useState('0.1');
   const [result, setResult] = useState<BridgeOutcome | null>(null);
   /** Every transfer this browser is following, live from the server. */
@@ -152,6 +183,18 @@ export function BridgeTab({ session }: { session: Session }) {
   const cctpSource = engine === 'cctp' ? CCTP_CHAINS[from as CctpChainName] : undefined;
   const walletOnSource = !cctpSource || session.chainId === cctpSource.chainId;
 
+  /**
+   * Gateway's source chain says where the money is deposited, not where the wallet
+   * has to be. Spending is a signature and nothing else, so the wallet can sit on
+   * any network while it happens. Only a deposit is an on-chain transaction, and
+   * only that needs the wallet moved.
+   */
+  const gwSource =
+    engine === 'gateway' && isGatewayChain(from) ? (from as GatewayChain) : undefined;
+  const gwNeeded = gwFee != null ? BigInt(Math.round(amountValue * 1e6)) + gwFee : null;
+  const gwShort = gwBalance != null && gwNeeded != null && gwBalance < gwNeeded;
+  const walletOnDepositChain = !gwSource || session.chainId === CCTP_CHAINS[gwSource].chainId;
+
   const running = jobs.filter((j) => j.state === 'running').length;
   const canBridge = bridgeEnabled && amountValue > 0 && !sameChain;
 
@@ -164,7 +207,7 @@ export function BridgeTab({ session }: { session: Session }) {
 
   const chainOptions = (
     engine === 'gateway'
-      ? GATEWAY_CHAINS
+      ? GATEWAY_CHAIN_NAMES.map((id) => ({ id, label: labelFor(id) }))
       : (Object.keys(CCTP_CHAINS) as CctpChainName[]).map((id) => ({ id, label: labelFor(id) }))
   ).map((c) => ({
     value: c.id,
@@ -179,11 +222,47 @@ export function BridgeTab({ session }: { session: Session }) {
   const changeEngine = (e: BridgeEngine) => {
     setEngine(e);
     if (e === 'gateway') {
-      const ids = GATEWAY_CHAINS.map((c) => c.id as string);
-      if (!ids.includes(from)) setFrom('Arc_Testnet');
-      if (!ids.includes(to)) setTo('Base_Sepolia');
+      if (!isGatewayChain(from)) setFrom('Arc_Testnet');
+      if (!isGatewayChain(to)) setTo('Base_Sepolia');
     }
   };
+
+  /**
+   * Read the Gateway balance and what a spend of this size would cost.
+   *
+   * Both come from Circle and neither needs the wallet, so this runs whenever the
+   * tab is on Gateway. The fee turns out to be flat, but it is asked for rather than
+   * assumed: a hardcoded fee that drifts becomes an intent Circle rejects.
+   */
+  useEffect(() => {
+    if (engine !== 'gateway' || !gwSource || !isGatewayChain(to)) return;
+    let live = true;
+    const read = async () => {
+      try {
+        const [bal, quote] = await Promise.all([
+          gatewayBalance({ depositor: session.address }),
+          quoteGatewaySpend({
+            from: gwSource,
+            to: to as GatewayChain,
+            amount: 1_000_000n,
+            depositor: session.address,
+          }),
+        ]);
+        if (!live) return;
+        setGwBalance(bal.total);
+        setGwFee(quote.maxFee);
+      } catch {
+        // Leave the last known figures rather than blanking the screen on one
+        // failed poll. The button stays honest because it checks again before it acts.
+      }
+    };
+    void read();
+    const timer = setInterval(() => void read(), 15000);
+    return () => {
+      live = false;
+      clearInterval(timer);
+    };
+  }, [engine, gwSource, to, session.address]);
 
   const activeSteps = engine === 'gateway' ? GATEWAY_STEPS : BRIDGE_STEPS;
   const stepLabel = (name: string) =>
@@ -303,13 +382,25 @@ export function BridgeTab({ session }: { session: Session }) {
   useEffect(() => {
     let live = true;
     const resume = async () => {
-      const stalled = loadBridges().filter(
-        (b) =>
-          b.state === 'pending' &&
-          (b.engine ?? 'cctp') === 'cctp' &&
-          b.steps.some((s) => s.name === 'burn' && s.txHash),
-      );
-      for (const b of stalled) {
+      for (const b of loadBridges().filter((x) => x.state === 'pending')) {
+        if ((b.engine ?? 'cctp') === 'gateway') {
+          // Gateway's receipt is the transferId, and Circle answers on it forever.
+          const status = await findGatewayMint({ transferId: b.id });
+          if (!live || status.state === 'pending') continue;
+          saveBridge({
+            ...b,
+            state: status.state === 'done' ? 'success' : 'error',
+            steps:
+              status.state === 'done' && status.mintTxHash
+                ? [...b.steps, stepRow('mint', status.mintTxHash, b.to as CctpChainName)]
+                : b.steps,
+          });
+          setBridges(loadBridges());
+          if (status.state === 'done') {
+            toast.push(t('bridge.recovered').replace('{amount}', b.amount), 'success');
+          }
+          continue;
+        }
         const burnTxHash = b.steps.find((s) => s.name === 'burn')?.txHash;
         const source = CCTP_CHAINS[b.from as CctpChainName];
         if (!burnTxHash || !source) continue;
@@ -321,7 +412,11 @@ export function BridgeTab({ session }: { session: Session }) {
         saveBridge({
           ...b,
           state: 'success',
-          steps: [...b.steps, { name: 'fetchAttestation' }, { name: 'mint', txHash: forward }],
+          steps: [
+            ...b.steps,
+            stepRow('fetchAttestation'),
+            stepRow('mint', forward, b.to as CctpChainName),
+          ],
         });
         setBridges(loadBridges());
         toast.push(t('bridge.recovered').replace('{amount}', b.amount), 'success');
@@ -343,16 +438,130 @@ export function BridgeTab({ session }: { session: Session }) {
    * server key is involved. Gateway's kit is Node-first and cannot run here, so it
    * remains a relayer-funded job until it can.
    */
+  /**
+   * Put the wallet's own USDC into its Gateway balance.
+   *
+   * Separate from sending on purpose. The deposit is the only on-chain transaction
+   * in Gateway and the only part that waits, and how long it waits depends entirely
+   * on the chain: half a second on Arc, up to nineteen minutes on Base. Burying that
+   * inside a "send" button would make one transfer mysteriously take a quarter of an
+   * hour, and it is also a thing you do once and then stop thinking about.
+   */
+  async function deposit() {
+    if (!gwSource) return;
+    setDepositing(true);
+    setSelfBridge({ steps: [], state: 'running' });
+    try {
+      const res = await depositToGateway(
+        bridgeClients(CCTP_CHAINS[gwSource].chainId, session.address),
+        {
+          chain: gwSource,
+          amount: parseUnits(amount, 6),
+          onStep: (step, txHash) => {
+            const name = GW_STEP_TO_UI[step];
+            if (!name) return;
+            setSelfBridge((prev) => ({
+              state: 'running',
+              steps: [
+                ...(prev?.steps ?? []).filter((x) => x.name !== name),
+                { name, ...(txHash ? { txHash } : {}) },
+              ],
+            }));
+          },
+        },
+      );
+      setSelfBridge(null);
+      const wait = DEPOSIT_CONFIRMATION_SECONDS[gwSource];
+      toast.push(
+        t('bridge.deposited')
+          .replace('{amount}', amount)
+          .replace('{wait}', wait < 60 ? `${wait}s` : `${Math.round(wait / 60)}m`),
+        'success',
+      );
+      void res;
+    } catch (e) {
+      setSelfBridge(null);
+      toast.push(e instanceof Error ? e.message : String(e), 'error');
+    } finally {
+      setDepositing(false);
+    }
+  }
+
   async function run() {
     setResult(null);
     if (engine === 'gateway') {
+      if (!gwSource || !isGatewayChain(to)) return;
+      setSelfBridge({ steps: [], state: 'running' });
       try {
-        const jobId = await startBridgeJob(session, engine, { from, to, amount });
-        setJobs((prev) => [
-          ...prev,
-          { jobId, engine, from, to, amount, state: 'running', steps: [], startedAt: Date.now() },
-        ]);
+        // No wallet client bound to a chain: a spend is a signature, so it works
+        // wherever the wallet happens to be.
+        const res = await spendFromGateway(
+          { walletClient: session.clients.walletClient },
+          {
+            from: gwSource,
+            to: to as GatewayChain,
+            amount: parseUnits(amount, 6),
+            onStep: (step, txHash) => {
+              const name = GW_STEP_TO_UI[step];
+              if (!name) return;
+              setSelfBridge((prev) => ({
+                state: 'running',
+                steps: [
+                  ...(prev?.steps ?? []).filter((x) => x.name !== name),
+                  { name, ...(txHash ? { txHash } : {}) },
+                ],
+              }));
+            },
+            // Write the receipt down the moment Circle accepts the intent, not when
+            // the mint lands. The wait in between is where a tab gets closed, and
+            // without this the transferId would be gone with it.
+            onTransferId: (transferId) => {
+              saveBridge({
+                id: transferId,
+                engine: 'gateway',
+                from,
+                to,
+                fromLabel,
+                toLabel,
+                amount,
+                state: 'pending',
+                steps: [{ name: 'deposit' }, { name: 'sign' }, { name: 'attestation' }],
+                createdAt: Date.now(),
+              });
+              setBridges(loadBridges());
+              setHistPage(0);
+            },
+          },
+        );
+        const steps = [
+          { name: 'deposit' },
+          { name: 'sign' },
+          { name: 'attestation' },
+          ...(res.mintTxHash ? [stepRow('mint', res.mintTxHash, to)] : []),
+        ];
+        setSelfBridge({ state: res.mintTxHash ? 'success' : 'running', steps });
+        saveBridge({
+          // The transferId is the receipt here, the way the burn hash is for CCTP.
+          id: res.transferId,
+          engine: 'gateway',
+          from,
+          to,
+          fromLabel,
+          toLabel,
+          amount,
+          state: res.mintTxHash ? 'success' : 'pending',
+          steps,
+          createdAt: Date.now(),
+        });
+        setBridges(loadBridges());
+        setHistPage(0);
+        setGwBalance(null);
+        toast.push(
+          res.mintTxHash ? t('bridge.done') : t('bridge.forwardPending'),
+          res.mintTxHash ? 'success' : 'info',
+        );
       } catch (e) {
+        setSelfBridge(null);
         toast.push(e instanceof Error ? e.message : String(e), 'error');
       }
       return;
@@ -393,7 +602,7 @@ export function BridgeTab({ session }: { session: Session }) {
                 toLabel,
                 amount,
                 state: 'pending',
-                steps: [{ name: 'burn', txHash }],
+                steps: [stepRow('burn', txHash, from)],
                 createdAt: Date.now(),
               });
               setBridges(loadBridges());
@@ -403,12 +612,12 @@ export function BridgeTab({ session }: { session: Session }) {
         },
       );
       const steps = [
-        ...(res.approveTxHash ? [{ name: 'approve', txHash: res.approveTxHash }] : []),
-        { name: 'burn', txHash: res.burnTxHash },
+        ...(res.approveTxHash ? [stepRow('approve', res.approveTxHash, from)] : []),
+        stepRow('burn', res.burnTxHash, from),
         // The attestation has no transaction of its own, but leaving it out of the
         // final list left it showing as pending underneath a completed mint.
         ...(res.forwardTxHash
-          ? [{ name: 'fetchAttestation' }, { name: 'mint', txHash: res.forwardTxHash }]
+          ? [stepRow('fetchAttestation'), stepRow('mint', res.forwardTxHash, to)]
           : []),
       ];
       setSelfBridge({ state: res.forwardTxHash ? 'success' : 'running', steps });
@@ -514,6 +723,28 @@ export function BridgeTab({ session }: { session: Session }) {
               : t('bridge.wrongSourceChain').replace('{chain}', fromLabel)}
           </p>
         )}
+        {/* The balance is the whole story in Gateway, so it is stated rather than
+            left for the user to discover through a refusal. */}
+        {engine === 'gateway' && (
+          <p className="hint" data-testid="gateway-balance">
+            {gwBalance == null
+              ? t('bridge.gwBalanceLoading')
+              : t('bridge.gwBalance')
+                  .replace('{balance}', String(Number(gwBalance) / 1e6))
+                  .replace('{fee}', gwFee == null ? '?' : String(Number(gwFee) / 1e6))}
+            {gwSource && gwShort
+              ? ' ' +
+                t('bridge.gwDepositWait')
+                  .replace('{chain}', fromLabel)
+                  .replace(
+                    '{wait}',
+                    DEPOSIT_CONFIRMATION_SECONDS[gwSource] < 60
+                      ? `${DEPOSIT_CONFIRMATION_SECONDS[gwSource]}s`
+                      : `${Math.round(DEPOSIT_CONFIRMATION_SECONDS[gwSource] / 60)}m`,
+                  )
+              : ''}
+          </p>
+        )}
 
         <div style={{ marginTop: 16 }}>
           <Field label={t('bridge.amount')} hint={t('bridge.feeNote')}>
@@ -531,7 +762,40 @@ export function BridgeTab({ session }: { session: Session }) {
         <div style={{ marginTop: 16 }}>
           {/* Being on the wrong network is a step, not a failure. Offering the
               switch is one click; a disabled button is a dead end. */}
-          {!walletOnSource && cctpSource ? (
+          {engine === 'gateway' && gwShort ? (
+            !walletOnDepositChain && gwSource ? (
+              <Button
+                full
+                disabled={switching}
+                data-testid="bridge-switch"
+                onClick={() =>
+                  void (async () => {
+                    setSwitching(true);
+                    try {
+                      await switchWalletChain(CCTP_CHAINS[gwSource].chainId, fromLabel);
+                    } catch (e) {
+                      toast.push(e instanceof Error ? e.message : String(e), 'error');
+                    } finally {
+                      setSwitching(false);
+                    }
+                  })()
+                }
+              >
+                {t('bridge.switchTo').replace('{chain}', fromLabel)}
+              </Button>
+            ) : (
+              <Button
+                full
+                disabled={!canBridge || depositing}
+                data-testid="gateway-deposit"
+                onClick={() => void guard(deposit)}
+              >
+                {t('bridge.depositButton')
+                  .replace('{amount}', amount)
+                  .replace('{chain}', fromLabel)}
+              </Button>
+            )
+          ) : !walletOnSource && cctpSource ? (
             <Button
               full
               disabled={switching}

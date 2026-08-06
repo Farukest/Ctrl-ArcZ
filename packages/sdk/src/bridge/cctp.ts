@@ -154,6 +154,48 @@ export function chainLabel(name: CctpChainName): string {
   return name.replace(/_/g, ' ');
 }
 
+/**
+ * Block explorers, read out of viem's own chain registry rather than typed from
+ * memory. They are inlined instead of imported because reaching them needs
+ * `import * as chains from 'viem/chains'`, which defeats tree-shaking and drags the
+ * whole registry into a browser bundle for twenty strings.
+ *
+ * Sonic Testnet and Morph Hoodi have no viem definition, so they have no entry and
+ * get no link. A guessed explorer URL is a link that quietly goes nowhere, or worse,
+ * somewhere else.
+ */
+const EXPLORERS: Partial<Record<CctpChainName, string>> = {
+  Arc_Testnet: 'https://testnet.arcscan.app',
+  Ethereum_Sepolia: 'https://sepolia.etherscan.io',
+  Avalanche_Fuji: 'https://testnet.snowtrace.io',
+  OP_Sepolia: 'https://optimism-sepolia.blockscout.com',
+  Arbitrum_Sepolia: 'https://sepolia.arbiscan.io',
+  Base_Sepolia: 'https://sepolia.basescan.org',
+  Polygon_Amoy: 'https://amoy.polygonscan.com',
+  Unichain_Sepolia: 'https://sepolia.uniscan.xyz',
+  Linea_Sepolia: 'https://sepolia.lineascan.build',
+  Codex_Testnet: 'https://explorer.codex-stg.xyz',
+  World_Chain_Sepolia: 'https://sepolia.worldscan.org',
+  Monad_Testnet: 'https://testnet.monadexplorer.com',
+  Sei_Testnet: 'https://testnet.seiscan.io',
+  XDC_Apothem: 'https://testnet.xdcscan.com',
+  Ink_Testnet: 'https://explorer-sepolia.inkonchain.com',
+  Plume_Testnet: 'https://testnet-explorer.plume.org',
+  Injective_Testnet: 'https://testnet.blockscout.injective.network',
+  Cronos_Testnet: 'https://explorer.cronos.org/testnet',
+};
+
+/**
+ * Where to look this transaction up, or undefined when no explorer is known.
+ *
+ * Undefined is the honest answer for a chain with no published explorer, and the
+ * caller should render no link rather than a broken one.
+ */
+export function chainExplorerTxUrl(chain: CctpChainName, txHash: string): string | undefined {
+  const base = EXPLORERS[chain];
+  return base ? `${base}/tx/${txHash}` : undefined;
+}
+
 export type CctpChainName = keyof typeof CCTP_CHAINS;
 
 const tokenMessengerAbi = [

@@ -219,6 +219,12 @@ export const en = {
   'bridge.step.mint': 'Minting on the destination chain...',
   'bridge.forwardPending':
     'Burned. Circle is minting on the destination; the burn hash is your receipt.',
+  'bridge.gwBalance':
+    'Gateway balance: {balance} USDC. A transfer costs a flat {fee} USDC whatever the amount.',
+  'bridge.gwBalanceLoading': 'Reading your Gateway balance...',
+  'bridge.gwDepositWait': 'Depositing on {chain} takes about {wait} to count.',
+  'bridge.depositButton': 'Deposit {amount} USDC on {chain}',
+  'bridge.deposited': 'Deposited {amount} USDC. It becomes spendable in about {wait}.',
   'bridge.done': 'Bridged. USDC arrived on the destination chain.',
   'bridge.recovered':
     'An interrupted transfer finished: {amount} USDC arrived on the destination chain.',

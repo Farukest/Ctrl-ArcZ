@@ -213,6 +213,12 @@ export const tr: Record<TranslationKey, string> = {
   'bridge.step.fetchAttestation': 'Circle attestation bekleniyor...',
   'bridge.step.mint': 'Hedef zincirde basılıyor...',
   'bridge.forwardPending': 'Yakıldı. Circle hedefte basıyor; burn hash makbuzunuz.',
+  'bridge.gwBalance':
+    'Gateway bakiyesi: {balance} USDC. Transfer ücreti tutardan bağımsız sabit {fee} USDC.',
+  'bridge.gwBalanceLoading': 'Gateway bakiyeniz okunuyor...',
+  'bridge.gwDepositWait': '{chain} üzerinde yatırılan tutarın sayılması yaklaşık {wait} sürer.',
+  'bridge.depositButton': '{chain} üzerinde {amount} USDC yatır',
+  'bridge.deposited': '{amount} USDC yatırıldı. Yaklaşık {wait} içinde harcanabilir olur.',
   'bridge.done': 'Köprülendi. USDC hedef zincire ulaştı.',
   'bridge.recovered': 'Yarım kalan transfer tamamlandı: {amount} USDC hedef zincire ulaştı.',
   'bridge.failed': 'Köprüleme başarısız.',

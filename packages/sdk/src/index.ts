@@ -18,10 +18,7 @@ export { getLogsChunked, type ChunkedEventsParams } from './events.js';
 // Layer 1
 export { check, type CheckOptions } from './risk/check.js';
 export { VerifiedRecipientIndex } from './risk/recipientIndex.js';
-export {
-  CachingDataProvider,
-  type CachingProviderOptions,
-} from './risk/cachingProvider.js';
+export { CachingDataProvider, type CachingProviderOptions } from './risk/cachingProvider.js';
 export {
   buildDossier,
   clampVerdict,
@@ -210,6 +207,7 @@ export {
   waitForForwardedMint,
   findForwardedMint,
   chainLabel,
+  chainExplorerTxUrl,
   CCTP_CHAINS,
   CCTP_TOKEN_MESSENGER,
   IRIS_TESTNET,
@@ -220,3 +218,26 @@ export {
   type BridgeQuote,
   type BridgeResult as CctpBridgeResult,
 } from './bridge/cctp.js';
+
+// Circle Gateway, also non-custodial: the user deposits their own USDC and signs
+// each spend, so no operator balance stands behind anyone else's transfer.
+export {
+  depositToGateway,
+  spendFromGateway,
+  quoteGatewaySpend,
+  gatewayBalance,
+  waitForGatewayMint,
+  findGatewayMint,
+  isGatewayChain,
+  GATEWAY_WALLET,
+  GATEWAY_MINTER,
+  GATEWAY_API_TESTNET,
+  GATEWAY_CHAIN_NAMES,
+  DEPOSIT_CONFIRMATION_SECONDS,
+  type GatewayChain,
+  type GatewayStep,
+  type GatewayQuote,
+  type GatewayBalance,
+  type GatewaySpendResult,
+  type GatewayTransferStatus,
+} from './bridge/gateway.js';
