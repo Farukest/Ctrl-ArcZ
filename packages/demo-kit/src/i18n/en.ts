@@ -205,6 +205,7 @@ export const en = {
   'bridge.amount': 'Amount (USDC)',
   'bridge.feeNote': 'A small network fee applies, so the amount must exceed it.',
   'bridge.button': 'Bridge',
+  'bridge.buttonAnother': 'Bridge another',
   'bridge.bridging': 'Bridging...',
   'bridge.step.approve': 'Approving USDC...',
   'bridge.step.burn': 'Burning on the source chain...',

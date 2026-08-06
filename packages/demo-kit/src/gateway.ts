@@ -28,6 +28,15 @@ export async function gatewayTransfer(params: {
   from: BridgeChainName;
   to: BridgeChainName;
   amount: string;
+  /**
+   * Live progress. `UnifiedBalanceKit` has no event emitter, and the `sign`,
+   * `attestation` and `mint` states all arrive together from one `spend()` call, so
+   * those three cannot be reported while they run. The three boundaries this
+   * function drives itself can be, and one of them matters: the confirmation loop
+   * below waits up to two minutes, which is long enough for a silent screen to read
+   * as a frozen one.
+   */
+  onStep?: (step: { name: string; txHash?: string }) => void;
 }): Promise<BridgeOutcome> {
   const kit = new UnifiedBalanceKit();
   const adapter = circleAdapter(params.privateKey);
@@ -51,6 +60,10 @@ export async function gatewayTransfer(params: {
   const min = minSpendable(amount);
   const confirmed = await readConfirmed();
   if (confirmed < min) {
+    // Named for the step the UI already shows rather than for the call being made.
+    // Inventing `checking`/`confirming` would have added states no label exists for,
+    // and the confirmation wait genuinely is still "funding the unified balance".
+    params.onStep?.({ name: 'deposit' });
     const topUp = (fundTarget(amount) - confirmed).toFixed(6);
     const dep = (await kit.deposit({
       from: { adapter, chain: params.from as GatewayChainName },
@@ -73,6 +86,9 @@ export async function gatewayTransfer(params: {
   }
 
   // 2) Spend instantly to the destination via the forwarder (no destination gas).
+  // `sign` is the first thing spend() does, and the first of the three states it
+  // returns together at the end.
+  params.onStep?.({ name: 'sign' });
   const spend = (await kit.spend({
     amount: params.amount,
     token: 'USDC',

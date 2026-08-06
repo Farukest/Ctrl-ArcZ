@@ -13,7 +13,14 @@ export * from './bridgeChains.js';
  * Server-only. Moves USDC across chains with Circle CCTP via Bridge Kit: burn on
  * the source, Circle-signed attestation, mint on the destination. `useForwarder`
  * lets Circle submit the destination mint, so the user needs no gas on the
- * destination chain. `onStep` fires as each CCTP step begins, for live progress.
+ * destination chain.
+ *
+ * `onStep` fires as each CCTP step completes, carrying that step's transaction hash
+ * when it has one. The hash matters more than the progress does: a burn whose hash
+ * nobody wrote down is USDC destroyed on the source chain with no cheap way to find
+ * the attestation that would mint it on the destination. Circle's own guidance is to
+ * "save the bridge transfer state for recovery scenarios", and this is the only
+ * moment that state exists before the call returns.
  * Imports Bridge Kit, so it must never be loaded in the browser (see bridgeChains.ts).
  */
 export async function bridgeUsdc(params: {
@@ -21,14 +28,26 @@ export async function bridgeUsdc(params: {
   from: BridgeChainName;
   to: BridgeChainName;
   amount: string;
-  onStep?: (step: BridgeStepName) => void;
+  onStep?: (step: { name: BridgeStepName; txHash?: string }) => void;
 }): Promise<BridgeOutcome> {
   const kit = new BridgeKit();
   const adapter = circleAdapter(params.privateKey);
 
   if (params.onStep) {
-    const on = kit.on.bind(kit) as (event: string, cb: () => void) => void;
-    for (const step of BRIDGE_STEPS) on(step, () => params.onStep?.(step));
+    // The emitter hands back `{ method, values }`, and `values.txHash` is what makes
+    // an interrupted transfer recoverable. Subscribing per step name rather than to
+    // '*' keeps anything the kit adds later out of our reported steps until we have
+    // decided what it means.
+    const on = kit.on.bind(kit) as (
+      event: string,
+      cb: (payload: { values?: { txHash?: string } }) => void,
+    ) => void;
+    for (const step of BRIDGE_STEPS) {
+      on(step, (payload) => {
+        const txHash = payload?.values?.txHash;
+        params.onStep?.({ name: step, ...(txHash ? { txHash } : {}) });
+      });
+    }
   }
 
   const result = (await kit.bridge({

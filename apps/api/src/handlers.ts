@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { createPublicClient, fallback, http, isAddress, type Address, type Hex } from 'viem';
+import { createPublicClient, erc20Abi, fallback, http, isAddress, type Address, type Hex } from 'viem';
+import { privateKeyToAccount } from 'viem/accounts';
 import {
   ADDRESSES,
   BlockscoutDataProvider,
@@ -25,7 +26,8 @@ import {
   boxExists,
 } from '@ctrl-arcz/demo-kit/relay';
 import { env } from './env.js';
-import { json, readJson, readRaw, HttpError } from './http.js';
+import { createJob, finishJob, getJob, recordStep } from './jobs.js';
+import { json, readJson, readRaw, HttpError, classify } from './http.js';
 import { requireSignedRequest, checkQuota, takeInvestigatorBudget } from './auth.js';
 
 /** JSON-parse a raw body already read for signature verification. */
@@ -101,12 +103,63 @@ export async function verifiedRecipientsGet(req: IncomingMessage, res: ServerRes
   json(res, 200, verifiedRecipients(sender as Address));
 }
 
+/**
+ * Health, plus the one number that has twice been the invisible cause of a "broken"
+ * feature.
+ *
+ * Every bridge in this demo spends the relayer's own USDC, not the user's. When that
+ * wallet empties, every route fails at once and the app can only report that
+ * something went wrong. That happened on 5 August: 0.4158 USDC on Arc against a demo
+ * that sends 0.5, and the first signal was a person unable to use the app.
+ *
+ * The address is public and the balance is on a block explorer, so nothing here is a
+ * secret. What is new is that it can be read without knowing which address to look
+ * at, which is the whole difficulty when it fails.
+ */
+export async function healthGet(_req: IncomingMessage, res: ServerResponse): Promise<void> {
+  if (!env.relayerPk) return json(res, 200, { ok: true, relayer: null });
+  const address = privateKeyToAccount(env.relayerPk).address;
+  const usdc = await riskClient
+    .readContract({
+      address: ADDRESSES.USDC as Address,
+      abi: erc20Abi,
+      functionName: 'balanceOf',
+      args: [address],
+    })
+    .catch(() => null);
+  // On Arc the USDC balance is also the gas balance, so one number covers both. Low
+  // is a warning, not an error: the API is healthy, its wallet is not.
+  const balance = usdc == null ? null : Number(usdc) / 1e6;
+  json(res, 200, {
+    ok: true,
+    relayer: {
+      address,
+      arcUsdc: balance,
+      low: balance != null && balance < LOW_RELAYER_BALANCE,
+      ...(balance != null && balance < LOW_RELAYER_BALANCE
+        ? { warning: `Relayer USDC on Arc is ${balance}. Bridges fail below the amount they send.` }
+        : {}),
+    },
+  });
+}
+
+/** Below this, a demo-sized bridge is one transfer away from failing. */
+const LOW_RELAYER_BALANCE = 5;
+
 // --- cross-chain (shared validation for CCTP + Gateway) ---
 
 function parseCrossChain(body: unknown, allowed: Set<string>) {
   const { from, to, amount } = (body ?? {}) as { from?: unknown; to?: unknown; amount?: unknown };
-  if (typeof from !== 'string' || !allowed.has(from)) throw new HttpError(400, 'invalid source chain');
-  if (typeof to !== 'string' || !allowed.has(to)) throw new HttpError(400, 'invalid destination chain');
+  // Name the accepted values. They are underscored (`Arc_Testnet`, not
+  // `Arc Testnet`), which nobody guesses, and the set is right here in this file --
+  // there is no reason to make a caller discover it by trial.
+  const accepted = [...allowed].join(', ');
+  if (typeof from !== 'string' || !allowed.has(from)) {
+    throw new HttpError(400, `invalid source chain. Accepted: ${accepted}`);
+  }
+  if (typeof to !== 'string' || !allowed.has(to)) {
+    throw new HttpError(400, `invalid destination chain. Accepted: ${accepted}`);
+  }
   if (from === to) throw new HttpError(400, 'source and destination must differ');
   // Canonical USDC decimal only: no scientific notation, no whitespace, at most 6
   // decimals. We forward exactly the validated string, so the bound that was
@@ -120,24 +173,103 @@ function parseCrossChain(body: unknown, allowed: Set<string>) {
   return { from, to, amount: amtStr };
 }
 
-export async function bridgePost(req: IncomingMessage, res: ServerResponse): Promise<void> {
+/**
+ * Run a bridge as a tracked job, or inline, depending on what the caller asked for.
+ *
+ * `async: true` in the body returns a jobId immediately and leaves the transfer
+ * running; anything else keeps the original blocking behaviour, because a client
+ * this repo does not own (the Android app) depends on that response shape and
+ * changing it out from under it would break a working product to add a feature.
+ *
+ * Either way the job is recorded, so a transfer started inline is still recoverable
+ * from its hashes if this process dies partway through it.
+ */
+async function runCrossChain(
+  req: IncomingMessage,
+  res: ServerResponse,
+  engine: 'cctp' | 'gateway',
+): Promise<void> {
+  const path = engine === 'cctp' ? '/api/bridge' : '/api/gateway';
   const raw = await readRaw(req);
-  const caller = await requireSignedRequest(req, raw, '/api/bridge');
-  const { from, to, amount } = parseCrossChain(parseBody(raw), BRIDGE_CHAIN_IDS);
+  const caller = await requireSignedRequest(req, raw, path);
+  const body = parseBody(raw);
+  const chains = engine === 'cctp' ? BRIDGE_CHAIN_IDS : GATEWAY_CHAIN_IDS;
+  const { from, to, amount } = parseCrossChain(body, chains);
   checkQuota(caller, Number(amount));
   if (!env.relayerPk) throw new HttpError(400, 'no relayer key configured');
-  const result = await bridgeUsdc({ privateKey: env.relayerPk, from, to, amount } as never);
-  json(res, 200, result);
+
+  const job = createJob({ engine, from, to, amount, caller });
+  const onStep = (step: { name: string; txHash?: string }) =>
+    recordStep(job.jobId, { ...step, state: 'running' });
+
+  const work =
+    engine === 'cctp'
+      ? bridgeUsdc({ privateKey: env.relayerPk, from, to, amount, onStep } as never)
+      : gatewayTransfer({ privateKey: env.relayerPk, from, to, amount, onStep } as never);
+
+  const settle = work.then(
+    (result) => {
+      finishJob(job.jobId, {
+        state: result.state === 'success' ? 'success' : 'failed',
+        steps: result.steps as never,
+        ...(result.state === 'success' ? {} : { error: 'the transfer did not complete' }),
+      });
+      return result;
+    },
+    (e: unknown) => {
+      const { message } = classify(e);
+      finishJob(job.jobId, { state: 'failed', error: message });
+      throw e;
+    },
+  );
+
+  const wantsJob = (body as { async?: unknown } | null)?.async === true;
+  if (!wantsJob) {
+    json(res, 200, await settle);
+    return;
+  }
+
+  // Nobody is waiting on this promise any more, so an unhandled rejection would
+  // take the process down with it. The job already records why it failed.
+  settle.catch(() => {});
+  json(res, 202, { jobId: job.jobId, state: 'running' });
 }
 
-export async function gatewayPost(req: IncomingMessage, res: ServerResponse): Promise<void> {
-  const raw = await readRaw(req);
-  const caller = await requireSignedRequest(req, raw, '/api/gateway');
-  const { from, to, amount } = parseCrossChain(parseBody(raw), GATEWAY_CHAIN_IDS);
-  checkQuota(caller, Number(amount));
-  if (!env.relayerPk) throw new HttpError(400, 'no relayer key configured');
-  const result = await gatewayTransfer({ privateKey: env.relayerPk, from, to, amount } as never);
-  json(res, 200, result);
+export function bridgePost(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  return runCrossChain(req, res, 'cctp');
+}
+
+export function gatewayPost(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  return runCrossChain(req, res, 'gateway');
+}
+
+/**
+ * The state of one transfer.
+ *
+ * Unauthenticated: a jobId is 128 bits of randomness handed only to the caller who
+ * started the transfer, and the response carries nothing that is not already public
+ * on a block explorer. Demanding a signature to poll would cost a wallet prompt
+ * every second or two.
+ *
+ * An id this process has never seen is `unknown`, never `failed`. A restart drops
+ * the in-memory index while the burn may well have landed, and answering "failed"
+ * about money that is one attestation away from arriving is the worst thing this
+ * endpoint could say.
+ */
+export function bridgeJobGet(
+  _req: IncomingMessage,
+  res: ServerResponse,
+  params: Record<string, string>,
+): void {
+  const job = getJob(params.jobId ?? '');
+  if (!job) {
+    return json(res, 404, {
+      state: 'unknown',
+      error:
+        'No record of this transfer. It may have been started before a restart; check the relayer address on the explorer before assuming it did not happen.',
+    });
+  }
+  json(res, 200, job);
 }
 
 // --- gasless claim (Circle Gas Station) ---

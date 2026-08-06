@@ -1,6 +1,12 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Session } from '@ctrl-arcz/demo-kit';
-import { signedPost } from '../lib/signedPost.js';
+import {
+  activeJobIds,
+  forgetJob,
+  readBridgeJob,
+  startBridgeJob,
+  type BridgeJob,
+} from '../lib/bridgeJob.js';
 import {
   BRIDGE_STEPS,
   GATEWAY_STEPS,
@@ -89,8 +95,16 @@ export function BridgeTab({ session }: { session: Session }) {
   const [from, setFrom] = useState<BridgeChainName>('Arc_Testnet');
   const [to, setTo] = useState<BridgeChainName>('Base_Sepolia');
   const [amount, setAmount] = useState('0.1');
-  const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<BridgeOutcome | null>(null);
+  /** Every transfer this browser is following, live from the server. */
+  const [jobs, setJobs] = useState<BridgeJob[]>([]);
+  /** Jobs already written to history, so polling cannot write them twice. */
+  const saved = useRef<Set<string>>(new Set());
+  /** The one the stepper describes: the newest still running, else the newest. */
+  const job = useMemo(
+    () => jobs.find((j) => j.state === 'running') ?? jobs[jobs.length - 1] ?? null,
+    [jobs],
+  );
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
   const [bridges, setBridges] = useState<StoredBridge[]>(() => loadBridges());
   const [histQuery, setHistQuery] = useState('');
@@ -99,7 +113,8 @@ export function BridgeTab({ session }: { session: Session }) {
 
   const amountValue = Number(amount);
   const sameChain = from === to;
-  const canBridge = bridgeEnabled && amountValue > 0 && !sameChain && !busy;
+  const running = jobs.filter((j) => j.state === 'running').length;
+  const canBridge = bridgeEnabled && amountValue > 0 && !sameChain;
 
   const chainOptions = chainsForEngine(engine).map((c) => ({
     value: c.id,
@@ -129,12 +144,23 @@ export function BridgeTab({ session }: { session: Session }) {
     );
 
   const steps: Step[] = useMemo(() => {
-    const done = result?.state === 'success';
-    return activeSteps.map((name) => ({
-      label: stepLabel(name),
-      status: done ? 'done' : busy ? 'active' : 'pending',
-    }));
-  }, [busy, result, t, engine]);
+    // Which step is actually running, from the server, rather than lighting all of
+    // them up for the duration. The job reports each one as it happens; before this
+    // the indicator could only say "something is in progress" for half a minute.
+    const reported = job?.steps ?? [];
+    const finished = job && job.state !== 'running';
+    return activeSteps.map((name) => {
+      const at = reported.findIndex((r) => r.name === name);
+      if (finished) {
+        const st = reported[at]?.state;
+        return { label: stepLabel(name), status: st === 'error' ? 'error' : at >= 0 ? 'done' : 'pending' };
+      }
+      if (at < 0) return { label: stepLabel(name), status: 'pending' };
+      // The most recent report is the one still running; anything before it is done.
+      const isLast = at === reported.length - 1;
+      return { label: stepLabel(name), status: isLast ? 'active' : 'done' };
+    }) as Step[];
+  }, [job, activeSteps, t, engine]);
 
   const filteredHistory = useMemo(() => {
     const q = histQuery.trim().toLowerCase();
@@ -149,42 +175,81 @@ export function BridgeTab({ session }: { session: Session }) {
   const page = Math.min(histPage, pageCount - 1);
   const pageRows = paginate(filteredHistory, page, HISTORY_PAGE_SIZE);
 
+  /**
+   * Follow the running transfer, including one this browser did not start in this
+   * page load. A reload used to lose the bridge entirely; the id outlives the tab,
+   * so picking it back up is just reading it.
+   */
+  /**
+   * Follow every running transfer, including ones this browser did not start in this
+   * page load. A reload used to lose the bridge entirely; the ids outlive the tab, so
+   * picking them back up is just reading them.
+   */
+  useEffect(() => {
+    let live = true;
+    const tick = async () => {
+      const ids = activeJobIds();
+      if (!ids.length) return;
+      const seen = await Promise.all(ids.map((id) => readBridgeJob(id)));
+      if (!live) return;
+      const got = seen.filter((j): j is BridgeJob => j !== null);
+      setJobs(got);
+
+      for (const next of got) {
+        if (next.state === 'running' || saved.current.has(next.jobId)) continue;
+        // Record once. The poll runs every two seconds, and a finished job would
+        // otherwise be appended to history on every tick until the user left.
+        saved.current.add(next.jobId);
+        forgetJob(next.jobId);
+        if (next.state !== 'unknown') {
+          setResult({ state: next.state, amount: next.amount, steps: next.steps } as BridgeOutcome);
+          saveBridge({
+            id: next.jobId,
+            engine: next.engine,
+            from: next.from as BridgeChainName,
+            to: next.to as BridgeChainName,
+            fromLabel: bridgeChainLabel(next.from as BridgeChainName),
+            toLabel: bridgeChainLabel(next.to as BridgeChainName),
+            amount: next.amount,
+            state: next.state,
+            steps: next.steps.map((st) => ({
+              name: st.name,
+              ...(st.txHash ? { txHash: st.txHash } : {}),
+              ...(st.explorerUrl ? { explorerUrl: st.explorerUrl } : {}),
+            })),
+            createdAt: next.startedAt,
+          });
+          setBridges(loadBridges());
+          setHistPage(0);
+        }
+        toast.push(
+          next.state === 'success' ? t('bridge.done') : next.error || t('bridge.failed'),
+          next.state === 'success' ? 'success' : 'error',
+        );
+      }
+    };
+    void tick();
+    const timer = setInterval(() => void tick(), 2000);
+    return () => {
+      live = false;
+      clearInterval(timer);
+    };
+  }, [t, toast]);
+
   async function run() {
-    setBusy(true);
     setResult(null);
     try {
-      const data = await signedPost<BridgeOutcome>(
-        session,
-        engine === 'gateway' ? '/api/gateway' : '/api/bridge',
-        { from, to, amount },
-      );
-      setResult(data);
-      saveBridge({
-        id: `${from}-${to}-${Date.now()}`,
-        engine,
-        from,
-        to,
-        fromLabel: bridgeChainLabel(from),
-        toLabel: bridgeChainLabel(to),
-        amount,
-        state: data.state,
-        steps: data.steps.map((s) => ({
-          name: s.name,
-          ...(s.txHash ? { txHash: s.txHash } : {}),
-          ...(s.explorerUrl ? { explorerUrl: s.explorerUrl } : {}),
-        })),
-        createdAt: Date.now(),
-      });
-      setBridges(loadBridges());
-      setHistPage(0);
-      toast.push(
-        data.state === 'success' ? t('bridge.done') : t('bridge.failed'),
-        data.state === 'success' ? 'success' : 'error',
-      );
+      const jobId = await startBridgeJob(session, engine, { from, to, amount });
+      // The server owns the transfer now. Everything after this is observation, so
+      // the form goes straight back to usable: a second bridge does not have to wait
+      // half a minute for the first, and locking the button was only ever a symptom
+      // of the page having nowhere to keep more than one.
+      setJobs((prev) => [
+        ...prev,
+        { jobId, engine, from, to, amount, state: 'running', steps: [], startedAt: Date.now() },
+      ]);
     } catch (e) {
       toast.push(e instanceof Error ? e.message : String(e), 'error');
-    } finally {
-      setBusy(false);
     }
   }
 
@@ -267,17 +332,16 @@ export function BridgeTab({ session }: { session: Session }) {
           </Field>
         </div>
 
-        {(busy || result) && <Stepper steps={steps} highlightIndex={hoverIdx} />}
+        {(result || job) && <Stepper steps={steps} highlightIndex={hoverIdx} />}
 
         <div style={{ marginTop: 16 }}>
           <Button
             full
             onClick={() => void guard(run)}
-            loading={busy}
             disabled={!canBridge}
             data-testid="bridge-button"
           >
-            {busy ? t('bridge.bridging') : t('bridge.button')}
+            {running > 0 ? t('bridge.buttonAnother') : t('bridge.button')}
           </Button>
         </div>
         {!bridgeEnabled && <p className="hint">{t('bridge.noKey')}</p>}

@@ -1,4 +1,4 @@
-import { serve, json } from './http.js';
+import { serve } from './http.js';
 import {
   cosignGet,
   cosignPost,
@@ -9,6 +9,8 @@ import {
   relayAnnouncePost,
   relayGasPost,
   investigatePost,
+  bridgeJobGet,
+  healthGet,
   verifiedRecipientsGet,
 } from './handlers.js';
 import { registerHandler } from './notifications.js';
@@ -20,7 +22,7 @@ import { startWatcher } from './watcher.js';
  * push registration, and the Arc event watcher that delivers notifications.
  */
 serve({
-  'GET /api/health': (_req, res) => json(res, 200, { ok: true }),
+  'GET /api/health': healthGet,
 
   // The Machine
   'GET /api/cosign': cosignGet,
@@ -30,6 +32,9 @@ serve({
   // Cross-chain (server-held relayer key)
   'POST /api/bridge': bridgePost,
   'POST /api/gateway': gatewayPost,
+  // The state of one transfer, for a client that left and came back. Serves both
+  // engines: a Gateway transfer is a bridge as far as anyone using this is concerned.
+  'GET /api/bridge/:jobId': bridgeJobGet,
   'POST /api/gasless-claim': gaslessPost,
 
   // Stealth relay: the box's deploy and announcement go out as the relayer, so

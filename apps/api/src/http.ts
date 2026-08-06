@@ -123,8 +123,81 @@ setInterval(() => {
   }
 }, RATE_WINDOW_MS).unref?.();
 
-export type Handler = (req: IncomingMessage, res: ServerResponse) => Promise<void> | void;
+export type Handler = (
+  req: IncomingMessage,
+  res: ServerResponse,
+  params: Record<string, string>,
+) => Promise<void> | void;
 export type Routes = Record<string, Handler>;
+
+/**
+ * Faults the caller can act on, told apart from faults they cannot.
+ *
+ * Everything unrecognised used to become `502 internal error`. The bridge outage of
+ * 5 August was `Insufficient USDC balance on Arc Testnet` -- known exactly, logged
+ * exactly, and reported to the client as an unexplained gateway failure. The app
+ * then said "bridge service is not answering", which was false; the service was up
+ * and its wallet was empty. Working that out took another engineer an afternoon of
+ * elimination across four routes.
+ *
+ * 502 also claims something untrue. It means upstream did not answer. Upstream
+ * answered and knew the reason.
+ *
+ * These patterns match messages the Circle kits and viem already produce. Anything
+ * unmatched still becomes a 502, which is what that status was for.
+ */
+const KNOWN_FAULTS: Array<{ test: RegExp; status: number }> = [
+  { test: /insufficient|not enough|exceeds balance|balance to cover/i, status: 400 },
+  { test: /unsupported|not supported|invalid chain|unknown chain/i, status: 400 },
+  { test: /user rejected|denied|declined/i, status: 400 },
+  { test: /timeout|timed out|deadline/i, status: 504 },
+  { test: /rate limit|429|request limit/i, status: 429 },
+];
+
+/** The status a thrown error deserves, and a message safe to hand a caller. */
+export function classify(e: unknown): { status: number; message: string } {
+  if (e instanceof HttpError) return { status: e.status, message: e.message };
+  const raw = e instanceof Error ? e.message : String(e);
+  const hit = KNOWN_FAULTS.find((f) => f.test.test(raw));
+  // Only a matched, known fault is echoed back. An unrecognised message could carry
+  // an RPC URL, a key fragment or a stack, so it stays in the log where it belongs.
+  if (hit) return { status: hit.status, message: raw.slice(0, 300) };
+  return { status: 502, message: 'internal error' };
+}
+
+/**
+ * One level of `:param`, resolved only after an exact match misses. Enough for
+ * `GET /api/bridge/:jobId` and not a router; the day this needs more than that is
+ * the day it should stop being hand-written.
+ */
+function matchRoute(
+  routes: Routes,
+  method: string,
+  pathname: string,
+): { handler: Handler; params: Record<string, string> } | null {
+  const parts = pathname.split('/');
+  for (const [key, handler] of Object.entries(routes)) {
+    const [routeMethod, routePath] = key.split(' ');
+    if (routeMethod !== method || !routePath?.includes('/:')) continue;
+    const routeParts = routePath.split('/');
+    if (routeParts.length !== parts.length) continue;
+    const params: Record<string, string> = {};
+    let ok = true;
+    for (let i = 0; i < routeParts.length; i++) {
+      const rp = routeParts[i] as string;
+      const p = parts[i] as string;
+      if (rp.startsWith(':')) {
+        if (!p) { ok = false; break; }
+        params[rp.slice(1)] = decodeURIComponent(p);
+      } else if (rp !== p) {
+        ok = false;
+        break;
+      }
+    }
+    if (ok) return { handler, params };
+  }
+  return null;
+}
 
 export function serve(routes: Routes): void {
   const server = createServer(async (req, res) => {
@@ -137,13 +210,22 @@ export function serve(routes: Routes): void {
       }
       const key = `${req.method} ${url.pathname}`;
       const handler = routes[key];
-      if (!handler) return json(res, 404, { error: 'not found' });
-      await handler(req, res);
+      if (handler) {
+        await handler(req, res, {});
+      } else {
+        const matched = matchRoute(routes, req.method ?? 'GET', url.pathname);
+        if (!matched) return json(res, 404, { error: 'not found' });
+        await matched.handler(req, res, matched.params);
+      }
     } catch (e) {
-      if (e instanceof HttpError) return json(res, e.status, { error: e.message });
-      // eslint-disable-next-line no-console
-      console.error(`${req.method} ${req.url} failed:`, e instanceof Error ? e.message : e);
-      json(res, 502, { error: 'internal error' });
+      const { status, message } = classify(e);
+      // Log the original either way: the caller gets a curated line, whoever is
+      // debugging gets all of it.
+      if (status >= 500) {
+        // eslint-disable-next-line no-console
+        console.error(`${req.method} ${req.url} failed:`, e instanceof Error ? e.message : e);
+      }
+      json(res, status, { error: message });
     }
   });
   // Bind to loopback only: the API is reached exclusively through the nginx

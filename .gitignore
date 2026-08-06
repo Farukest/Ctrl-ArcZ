@@ -73,3 +73,8 @@ apps/*/dist-*/
 
 # scratch
 /tmp
+
+# The bridge job store. Runtime state: transfer hashes and the addresses that
+# authorised them, written wherever the API runs.
+.bridge-jobs.json
+.bridge-jobs.json.tmp

@@ -43,7 +43,7 @@ export const tr: Record<TranslationKey, string> = {
   'receive.newIncoming': 'Korumalı bir ödeme geldi. Almak için Al moduna geç.',
   'received.title': 'Gelenler',
   'received.search': 'Tutar, gönderen veya numaraya göre ara',
-   'received.returnToSender': 'Gönderene iade et',
+  'received.returnToSender': 'Gönderene iade et',
   'received.expiredHint':
     'Claim süresi doldu. Artık claim edemezsin ama gönderene geri yollayabilirsin.',
   'received.returned': 'Gönderene iade edildi.',
@@ -201,6 +201,7 @@ export const tr: Record<TranslationKey, string> = {
   'bridge.amount': 'Tutar (USDC)',
   'bridge.feeNote': 'Küçük bir ağ ücreti var; tutar bundan büyük olmalı.',
   'bridge.button': 'Köprüle',
+  'bridge.buttonAnother': 'Bir tane daha köprüle',
   'bridge.bridging': 'Köprüleniyor...',
   'bridge.step.approve': 'USDC onaylanıyor...',
   'bridge.step.burn': 'Kaynak zincirde yakılıyor...',
