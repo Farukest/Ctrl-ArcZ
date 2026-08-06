@@ -36,7 +36,13 @@ function fetchStub(overrides: { fees?: unknown; messages?: unknown } = {}) {
   });
 }
 
-function clients(balance: bigint, allowance = 0n) {
+/**
+ * @param balance USDC held on the source chain.
+ * @param allowance Existing allowance to the TokenMessenger.
+ * @param native Native gas token held. Defaults high enough not to be the thing
+ *   under test; the gas tests set it deliberately.
+ */
+function clients(balance: bigint, allowance = 0n, native = 10n ** 18n) {
   const writeContract = vi.fn(
     async (_a: { address: Address; args: unknown[] }) => '0xapprove' as Hex,
   );
@@ -49,6 +55,11 @@ function clients(balance: bigint, allowance = 0n) {
         readContract: vi.fn(async ({ functionName }: { functionName: string }) =>
           functionName === 'balanceOf' ? balance : allowance,
         ),
+        // 1 gwei against a 330k gas ceiling is 0.00033 native tokens.
+        estimateContractGas: vi.fn(async () => 80_000n),
+        estimateFeesPerGas: vi.fn(async () => ({ maxFeePerGas: 1_000_000_000n })),
+        getGasPrice: vi.fn(async () => 1_000_000_000n),
+        getBalance: vi.fn(async () => native),
         waitForTransactionReceipt: vi.fn(async () => ({ status: 'success' })),
       },
       walletClient: { account: { address: WALLET }, chain: null, writeContract, sendTransaction },
@@ -117,7 +128,7 @@ describe('bridgeFromWallet burns the sender own funds', () => {
     // 1 USDC balance against a 1.0021 USDC total. The chain would refuse too, but
     // only after the user had approved a transaction.
     const c = clients(1_000_000n);
-    await expect(run(c)).rejects.toThrow(/holds .* and the transfer needs/i);
+    await expect(run(c)).rejects.toThrow(/holds 1 USDC on Arc Testnet.*transfer needs 1\.0021/is);
     expect(c.writeContract).not.toHaveBeenCalled();
     expect(c.sendTransaction).not.toHaveBeenCalled();
   });
@@ -193,9 +204,20 @@ describe('chain data matches Circle documentation', () => {
   it.each(VERIFIED)(
     '%s carries the domain, chain id and USDC that were verified',
     (name, domain, chainId, usdc) => {
-      expect(CCTP_CHAINS[name]).toEqual({ domain, chainId, usdc });
+      // Arc is the one chain that charges gas in the USDC being bridged.
+      const gas = name === 'Arc_Testnet' ? { gasToken: 'usdc' } : {};
+      expect(CCTP_CHAINS[name]).toEqual({ domain, chainId, usdc, ...gas });
     },
   );
+
+  it('marks exactly one chain as charging gas in USDC', () => {
+    // If a second such chain is ever added, the affordability check has to know
+    // about it or it will ask that chain's users for a gas balance they cannot have.
+    const usdcGas = Object.entries(CCTP_CHAINS)
+      .filter(([, c]) => 'gasToken' in c)
+      .map(([n]) => n);
+    expect(usdcGas).toEqual(['Arc_Testnet']);
+  });
 
   it('ships every chain that was verified, and none that was not', () => {
     expect(Object.keys(CCTP_CHAINS).sort()).toEqual(VERIFIED.map(([n]) => n).sort());
@@ -217,6 +239,71 @@ describe('chain data matches Circle documentation', () => {
 
   it('uses the one TokenMessenger address Circle deploys to every testnet', () => {
     expect(CCTP_TOKEN_MESSENGER).toBe('0x8FE6B999Dc680CcFDD5Bf7EB0974218be2542DAA');
+  });
+});
+
+describe('gas is checked before signing, in the token the chain actually charges', () => {
+  /**
+   * USDC arrives by bridging; ETH and AVAX do not. A sender who has just received
+   * USDC on Base has no Base gas, so this is the ordinary case rather than the edge
+   * one, and finding out about it after approving the allowance is the worst place.
+   */
+  const run = (c: ReturnType<typeof clients>, extra = {}) =>
+    bridgeFromWallet(c.clients as never, {
+      from: 'Base_Sepolia',
+      to: 'Arc_Testnet',
+      amount: 1_000_000n,
+      fetchImpl: fetchStub() as never,
+      ...extra,
+    });
+
+  it('refuses when the wallet has the USDC but none of the native gas token', async () => {
+    const c = clients(10_000_000n, 0n, 0n);
+    await expect(run(c)).rejects.toThrow(/charges gas in its own native token/i);
+    expect(c.writeContract).not.toHaveBeenCalled();
+    expect(c.sendTransaction).not.toHaveBeenCalled();
+  });
+
+  it('names the chain, so the user knows which balance to top up', async () => {
+    const c = clients(10_000_000n, 0n, 0n);
+    await expect(run(c)).rejects.toThrow(/Base Sepolia/);
+  });
+
+  it('proceeds once the native balance covers it', async () => {
+    // 330k gas at 1 gwei is 0.00033; give it a little over.
+    const c = clients(10_000_000n, 0n, 400_000_000_000_000n);
+    await run(c);
+    expect(c.sendTransaction).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not ask for a native balance on Arc, where gas is the USDC itself', async () => {
+    // Zero native, which on every other chain would refuse. Arc reports the same
+    // holdings through the ERC-20, so the USDC balance is the only question.
+    const c = clients(10_000_000n, 0n, 0n);
+    await run(c, { from: 'Arc_Testnet', to: 'Base_Sepolia' });
+    expect(c.clients.publicClient.getBalance).not.toHaveBeenCalled();
+    expect(c.sendTransaction).toHaveBeenCalledTimes(1);
+  });
+
+  it('counts Arc gas against the same USDC balance, not as a separate pot', async () => {
+    // Exactly the transfer total and not a subunit more. The transfer is affordable
+    // and sending it is not; before this check that difference was only discovered
+    // after the user had approved the allowance.
+    const c = clients(1_002_100n, 0n, 0n);
+    await expect(run(c, { from: 'Arc_Testnet', to: 'Base_Sepolia' })).rejects.toThrow(
+      /also charges in USDC/i,
+    );
+    expect(c.writeContract).not.toHaveBeenCalled();
+  });
+
+  it('falls back to a flat gas price where the chain is not EIP-1559', async () => {
+    const c = clients(10_000_000n, 0n, 0n);
+    c.clients.publicClient.estimateFeesPerGas = vi.fn(async () => {
+      throw new Error('method not supported');
+    }) as never;
+    // Still refuses, which means it priced the gas rather than giving up on it.
+    await expect(run(c)).rejects.toThrow(/native token/i);
+    expect(c.clients.publicClient.getGasPrice).toHaveBeenCalled();
   });
 });
 

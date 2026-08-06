@@ -69,6 +69,14 @@ export interface CctpChain {
   chainId: number;
   /** USDC on that chain. */
   usdc: Address;
+  /**
+   * Set where gas is paid in the same USDC being bridged, which is Arc and nowhere
+   * else here. It changes the affordability question rather than decorating it: on
+   * Arc the transfer and its gas come out of one balance, so they have to be checked
+   * against that one balance together. Checking them separately would wave through a
+   * wallet that can pay for the transfer and then cannot pay to send it.
+   */
+  gasToken?: 'usdc';
 }
 
 /**
@@ -90,7 +98,12 @@ export interface CctpChain {
  * asks per transfer and refuses out loud when the answer is no.
  */
 export const CCTP_CHAINS = {
-  Arc_Testnet: { domain: 26, chainId: 5042002, usdc: '0x3600000000000000000000000000000000000000' },
+  Arc_Testnet: {
+    domain: 26,
+    chainId: 5042002,
+    usdc: '0x3600000000000000000000000000000000000000',
+    gasToken: 'usdc',
+  },
   Ethereum_Sepolia: {
     domain: 0,
     chainId: 11155111,
@@ -257,8 +270,10 @@ export async function bridgeFromWallet(
   const account = clients.walletClient.account;
   if (!account) throw new Error('No wallet account to bridge from.');
 
-  const src = CCTP_CHAINS[params.from];
-  const dst = CCTP_CHAINS[params.to];
+  // Widened deliberately: `as const` narrows each entry to its own literal shape, so
+  // `gasToken` would only be visible on the one chain that declares it.
+  const src: CctpChain = CCTP_CHAINS[params.from];
+  const dst: CctpChain = CCTP_CHAINS[params.to];
   const recipient = params.recipient ?? account.address;
 
   // A wallet on the wrong network would read a balance from the wrong USDC contract
@@ -286,11 +301,6 @@ export async function bridgeFromWallet(
     functionName: 'balanceOf',
     args: [account.address],
   })) as bigint;
-  if (balance < quote.total) {
-    throw new Error(
-      `This wallet holds ${Number(balance) / 1e6} USDC on ${params.from.replace(/_/g, ' ')} and the transfer needs ${Number(quote.total) / 1e6} including fees.`,
-    );
-  }
 
   // Approve exactly the total. An unbounded approval to a contract that can move
   // USDC is a standing risk for a one-off transfer.
@@ -301,8 +311,55 @@ export async function bridgeFromWallet(
     args: [account.address, CCTP_TOKEN_MESSENGER],
   })) as bigint;
 
+  const needsApproval = allowance < quote.total;
+  const label = chainLabel(params.from);
+
+  /**
+   * Gas is the other way this fails after the user has already approved something.
+   *
+   * Arc pays gas in the USDC being bridged, so there the transfer and its gas come
+   * out of one balance and are checked against it together. Everywhere else the gas
+   * is a separate native token the sender very often does not have -- USDC arrives
+   * by bridging, ETH or AVAX does not -- so it gets its own check and its own
+   * message naming the token, because "insufficient funds" sends someone to look at
+   * the wrong balance.
+   */
+  const gasCost = await estimateBridgeGas(clients.publicClient, {
+    account: account.address,
+    usdc: src.usdc,
+    needsApproval,
+    total: quote.total,
+  });
+
+  if (src.gasToken === 'usdc') {
+    // One balance, two representations, and they are not in the same unit. Arc's
+    // native currency is USDC with 18 decimals while the ERC-20 at 0x3600.. reports
+    // the same holdings with 6, so a gas figure in wei is 1e12 times too large to
+    // add to a USDC figure. Measured on chain rather than assumed: native / 1e12
+    // equals the ERC-20 balance exactly. Rounded up, because rounding gas down is
+    // how a check like this passes a wallet that then cannot send.
+    const gasInUsdc = (gasCost + NATIVE_PER_USDC - 1n) / NATIVE_PER_USDC;
+    if (balance < quote.total + gasInUsdc) {
+      throw new Error(
+        `This wallet holds ${usdc(balance)} USDC on ${label}. The transfer needs ${usdc(quote.total)} including fees, plus about ${usdc(gasInUsdc)} for gas, which ${label} also charges in USDC.`,
+      );
+    }
+  } else {
+    if (balance < quote.total) {
+      throw new Error(
+        `This wallet holds ${usdc(balance)} USDC on ${label} and the transfer needs ${usdc(quote.total)} including fees.`,
+      );
+    }
+    const native = await clients.publicClient.getBalance({ address: account.address });
+    if (native < gasCost) {
+      throw new Error(
+        `This wallet has enough USDC, but ${label} charges gas in its own native token and this wallet holds ${formatGas(native)} of it. Sending the transfer needs about ${formatGas(gasCost)}. Fund the wallet with ${label} gas and try again.`,
+      );
+    }
+  }
+
   let approveTxHash: Hex | undefined;
-  if (allowance < quote.total) {
+  if (needsApproval) {
     approveTxHash = await clients.walletClient.writeContract({
       address: src.usdc,
       abi: erc20Abi,
@@ -354,6 +411,81 @@ export async function bridgeFromWallet(
     ...(forwardTxHash ? { forwardTxHash } : {}),
     quote,
   };
+}
+
+/**
+ * Wei per USDC subunit on a chain whose gas token is USDC: 18 native decimals
+ * against the ERC-20's 6. Verified against Arc rather than inferred, by reading the
+ * same wallet both ways and confirming `native / 1e12 === balanceOf`.
+ */
+const NATIVE_PER_USDC = 10n ** 12n;
+
+/** USDC subunits as a readable figure. Six decimals, trailing zeros dropped. */
+function usdc(v: bigint): string {
+  return String(Number(v) / 1e6);
+}
+
+/** Native token wei as a readable figure. Kept short; this goes in a sentence. */
+function formatGas(v: bigint): string {
+  const eth = Number(v) / 1e18;
+  return eth < 0.000001 ? '<0.000001' : eth.toFixed(6).replace(/0+$/, '').replace(/\.$/, '');
+}
+
+/**
+ * `depositForBurnWithHook` cannot be simulated before the approval exists, because
+ * without an allowance it reverts. So the burn is not estimated at all: this is a
+ * ceiling, used only to answer "can this wallet afford to send the transaction" and
+ * never to cap the gas actually spent.
+ *
+ * A real burn on Arc used 121,652 gas, so this is roughly double. The headroom is
+ * deliberate rather than lazy: on OP-stack chains (Base, OP, Ink, Unichain here) the
+ * L1 data fee is a real cost that `estimateFeesPerGas` does not report, so a ceiling
+ * tightened to the measured number would under-estimate on exactly the chains most
+ * likely to be a source. Erring high turns away a wallet that was marginally
+ * fundable; erring low takes someone's approval and strands them.
+ */
+const BURN_GAS_CEILING = 250_000n;
+
+/** Approve is a plain ERC-20 write and does estimate cleanly, but not on every RPC. */
+const APPROVE_GAS_CEILING = 80_000n;
+
+/**
+ * What it will cost to send this transfer, in the source chain's gas token.
+ *
+ * Covers both transactions when an approval is needed, since a wallet that can pay
+ * for the approval and not the burn ends up in exactly the stranded state this whole
+ * check exists to prevent.
+ */
+async function estimateBridgeGas(
+  publicClient: PublicClient,
+  params: { account: Address; usdc: Address; needsApproval: boolean; total: bigint },
+): Promise<bigint> {
+  let approveGas = 0n;
+  if (params.needsApproval) {
+    try {
+      approveGas = await publicClient.estimateContractGas({
+        address: params.usdc,
+        abi: erc20Abi,
+        functionName: 'approve',
+        args: [CCTP_TOKEN_MESSENGER, params.total],
+        account: params.account,
+      });
+    } catch {
+      approveGas = APPROVE_GAS_CEILING;
+    }
+  }
+
+  // Prefer the EIP-1559 estimate and fall back to a flat gas price, because several
+  // of these testnets are not 1559 chains and the first call simply fails there.
+  let pricePerGas: bigint;
+  try {
+    const fees = await publicClient.estimateFeesPerGas();
+    pricePerGas = fees.maxFeePerGas ?? (await publicClient.getGasPrice());
+  } catch {
+    pricePerGas = await publicClient.getGasPrice();
+  }
+
+  return (approveGas + BURN_GAS_CEILING) * pricePerGas;
 }
 
 /**
