@@ -1,5 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Session } from '@ctrl-arcz/demo-kit';
+import { parseUnits } from 'viem';
+import {
+  bridgeFromWallet,
+  chainLabel,
+  findForwardedMint,
+  CCTP_CHAINS,
+  type CctpChainName,
+  type CctpStep,
+} from '@ctrl-arcz/sdk';
+import { bridgeClients, switchWalletChain } from '@ctrl-arcz/demo-kit';
 import {
   activeJobIds,
   forgetJob,
@@ -11,7 +21,6 @@ import {
   BRIDGE_STEPS,
   GATEWAY_STEPS,
   GATEWAY_CHAINS,
-  chainsForEngine,
   bridgeChainLabel,
   type BridgeChainName,
   type BridgeEngine,
@@ -43,6 +52,19 @@ import { loadBridges, saveBridge, type StoredBridge } from '../store.js';
 // gate on a non-secret flag instead of inlining a private key just to read a bool.
 const bridgeEnabled = import.meta.env.VITE_BRIDGE_ENABLED !== 'false';
 const HISTORY_PAGE_SIZE = 5;
+
+/**
+ * The SDK names its steps after what CCTP does; the stepper is labelled for what a
+ * person sees. They are close but not identical, and mapping here keeps the SDK from
+ * carrying this app's vocabulary. `quote` has no row: it is one HTTP call.
+ */
+const SDK_STEP_TO_UI: Record<CctpStep, string | undefined> = {
+  quote: undefined,
+  approve: 'approve',
+  burn: 'burn',
+  attest: 'fetchAttestation',
+  forward: 'mint',
+};
 
 /** Map a server step name to its index in the active engine's step list. */
 function stepIndexFor(name: string, list: readonly string[]): number {
@@ -92,12 +114,19 @@ export function BridgeTab({ session }: { session: Session }) {
   const toast = useToast();
   const guard = useSubmitGuard();
   const [engine, setEngine] = useState<BridgeEngine>('cctp');
-  const [from, setFrom] = useState<BridgeChainName>('Arc_Testnet');
-  const [to, setTo] = useState<BridgeChainName>('Base_Sepolia');
+  const [from, setFrom] = useState<CctpChainName>('Arc_Testnet');
+  const [to, setTo] = useState<CctpChainName>('Base_Sepolia');
+  /** Set while the wallet is being asked to move to the source chain. */
+  const [switching, setSwitching] = useState(false);
   const [amount, setAmount] = useState('0.1');
   const [result, setResult] = useState<BridgeOutcome | null>(null);
   /** Every transfer this browser is following, live from the server. */
   const [jobs, setJobs] = useState<BridgeJob[]>([]);
+  /** A CCTP transfer signed by this wallet. It has no server job behind it. */
+  const [selfBridge, setSelfBridge] = useState<{
+    state: string;
+    steps: { name: string; txHash?: string }[];
+  } | null>(null);
   /** Jobs already written to history, so polling cannot write them twice. */
   const saved = useRef<Set<string>>(new Set());
   /** The one the stepper describes: the newest still running, else the newest. */
@@ -113,10 +142,31 @@ export function BridgeTab({ session }: { session: Session }) {
 
   const amountValue = Number(amount);
   const sameChain = from === to;
+
+  /**
+   * CCTP burns the connected wallet's own USDC, so the source is whichever chain
+   * that wallet is on. That is a prerequisite, not a restriction: every testnet
+   * Circle publishes is offered, and picking one the wallet is not on turns the
+   * button into the switch it needs rather than greying it out with no explanation.
+   */
+  const cctpSource = engine === 'cctp' ? CCTP_CHAINS[from as CctpChainName] : undefined;
+  const walletOnSource = !cctpSource || session.chainId === cctpSource.chainId;
+
   const running = jobs.filter((j) => j.state === 'running').length;
   const canBridge = bridgeEnabled && amountValue > 0 && !sameChain;
 
-  const chainOptions = chainsForEngine(engine).map((c) => ({
+  // Prefer the demo-kit label where one exists (it carries the brand spelling);
+  // fall back to the SDK's, so a newly added chain still reads properly.
+  const labelFor = (id: string) =>
+    bridgeChainLabel(id) === id ? chainLabel(id as CctpChainName) : bridgeChainLabel(id);
+  const fromLabel = labelFor(from);
+  const toLabel = labelFor(to);
+
+  const chainOptions = (
+    engine === 'gateway'
+      ? GATEWAY_CHAINS
+      : (Object.keys(CCTP_CHAINS) as CctpChainName[]).map((id) => ({ id, label: labelFor(id) }))
+  ).map((c) => ({
     value: c.id,
     label: c.label,
     text: c.label,
@@ -129,7 +179,7 @@ export function BridgeTab({ session }: { session: Session }) {
   const changeEngine = (e: BridgeEngine) => {
     setEngine(e);
     if (e === 'gateway') {
-      const ids = GATEWAY_CHAINS.map((c) => c.id);
+      const ids = GATEWAY_CHAINS.map((c) => c.id as string);
       if (!ids.includes(from)) setFrom('Arc_Testnet');
       if (!ids.includes(to)) setTo('Base_Sepolia');
     }
@@ -147,20 +197,23 @@ export function BridgeTab({ session }: { session: Session }) {
     // Which step is actually running, from the server, rather than lighting all of
     // them up for the duration. The job reports each one as it happens; before this
     // the indicator could only say "something is in progress" for half a minute.
-    const reported = job?.steps ?? [];
-    const finished = job && job.state !== 'running';
+    const reported = selfBridge?.steps ?? job?.steps ?? [];
+    const finished = selfBridge ? selfBridge.state !== 'running' : job && job.state !== 'running';
     return activeSteps.map((name) => {
       const at = reported.findIndex((r) => r.name === name);
       if (finished) {
-        const st = reported[at]?.state;
-        return { label: stepLabel(name), status: st === 'error' ? 'error' : at >= 0 ? 'done' : 'pending' };
+        const st = (reported[at] as { state?: string } | undefined)?.state;
+        return {
+          label: stepLabel(name),
+          status: st === 'error' ? 'error' : at >= 0 ? 'done' : 'pending',
+        };
       }
       if (at < 0) return { label: stepLabel(name), status: 'pending' };
       // The most recent report is the one still running; anything before it is done.
       const isLast = at === reported.length - 1;
       return { label: stepLabel(name), status: isLast ? 'active' : 'done' };
     }) as Step[];
-  }, [job, activeSteps, t, engine]);
+  }, [job, selfBridge, activeSteps, t, engine]);
 
   const filteredHistory = useMemo(() => {
     const q = histQuery.trim().toLowerCase();
@@ -236,19 +289,151 @@ export function BridgeTab({ session }: { session: Session }) {
     };
   }, [t, toast]);
 
+  /**
+   * Finish transfers that were interrupted between the burn and the mint.
+   *
+   * A wallet-signed bridge has no server job watching it, so closing the tab during
+   * the wait used to leave a row saying "pending" with no way past it -- even though
+   * the money had arrived. Nothing needs to be re-signed or re-sent to find out: the
+   * burn hash is enough to ask Circle where it went, so every pending burn is asked
+   * again on load and every half minute after.
+   *
+   * Recovery, not retry. It never touches the wallet and never moves funds.
+   */
+  useEffect(() => {
+    let live = true;
+    const resume = async () => {
+      const stalled = loadBridges().filter(
+        (b) =>
+          b.state === 'pending' &&
+          (b.engine ?? 'cctp') === 'cctp' &&
+          b.steps.some((s) => s.name === 'burn' && s.txHash),
+      );
+      for (const b of stalled) {
+        const burnTxHash = b.steps.find((s) => s.name === 'burn')?.txHash;
+        const source = CCTP_CHAINS[b.from as CctpChainName];
+        if (!burnTxHash || !source) continue;
+        const forward = await findForwardedMint({
+          sourceDomain: source.domain,
+          burnTxHash: burnTxHash as `0x${string}`,
+        });
+        if (!live || !forward) continue;
+        saveBridge({
+          ...b,
+          state: 'success',
+          steps: [...b.steps, { name: 'fetchAttestation' }, { name: 'mint', txHash: forward }],
+        });
+        setBridges(loadBridges());
+        toast.push(t('bridge.recovered').replace('{amount}', b.amount), 'success');
+      }
+    };
+    void resume();
+    const timer = setInterval(() => void resume(), 30000);
+    return () => {
+      live = false;
+      clearInterval(timer);
+    };
+  }, [t, toast]);
+
+  /**
+   * CCTP goes through the connected wallet; Gateway still goes through the server.
+   *
+   * They are genuinely different flows now, not two buttons on one. CCTP burns the
+   * user's own USDC and Circle mints it back to them, so the browser signs and no
+   * server key is involved. Gateway's kit is Node-first and cannot run here, so it
+   * remains a relayer-funded job until it can.
+   */
   async function run() {
     setResult(null);
+    if (engine === 'gateway') {
+      try {
+        const jobId = await startBridgeJob(session, engine, { from, to, amount });
+        setJobs((prev) => [
+          ...prev,
+          { jobId, engine, from, to, amount, state: 'running', steps: [], startedAt: Date.now() },
+        ]);
+      } catch (e) {
+        toast.push(e instanceof Error ? e.message : String(e), 'error');
+      }
+      return;
+    }
+
+    setSelfBridge({ steps: [], state: 'running' });
     try {
-      const jobId = await startBridgeJob(session, engine, { from, to, amount });
-      // The server owns the transfer now. Everything after this is observation, so
-      // the form goes straight back to usable: a second bridge does not have to wait
-      // half a minute for the first, and locking the button was only ever a symptom
-      // of the page having nowhere to keep more than one.
-      setJobs((prev) => [
-        ...prev,
-        { jobId, engine, from, to, amount, state: 'running', steps: [], startedAt: Date.now() },
-      ]);
+      // Clients bound to the source chain, not to Arc. The wallet is already there
+      // -- the button would have offered to switch otherwise -- but the app's own
+      // client is pinned to Arc and would tag the burn with the wrong chain id.
+      const res = await bridgeFromWallet(
+        bridgeClients(CCTP_CHAINS[from].chainId, session.address),
+        {
+          from,
+          to,
+          amount: parseUnits(amount, 6),
+          onStep: (step, txHash) => {
+            const name = SDK_STEP_TO_UI[step];
+            if (!name) return; // quoting is instant; it has no row in the stepper
+            setSelfBridge((prev) => ({
+              state: 'running',
+              steps: [
+                ...(prev?.steps ?? []).filter((x) => x.name !== name),
+                { name, ...(txHash ? { txHash } : {}) },
+              ],
+            }));
+            // Write the burn down the moment it confirms, not when the whole
+            // transfer resolves. The wait for Circle is the long part and a reload
+            // during it would otherwise lose the one hash the money can be traced
+            // and recovered from. `pending` is honest: burned, not yet minted.
+            if (step === 'burn' && txHash) {
+              saveBridge({
+                id: txHash,
+                engine: 'cctp',
+                from,
+                to,
+                fromLabel,
+                toLabel,
+                amount,
+                state: 'pending',
+                steps: [{ name: 'burn', txHash }],
+                createdAt: Date.now(),
+              });
+              setBridges(loadBridges());
+              setHistPage(0);
+            }
+          },
+        },
+      );
+      const steps = [
+        ...(res.approveTxHash ? [{ name: 'approve', txHash: res.approveTxHash }] : []),
+        { name: 'burn', txHash: res.burnTxHash },
+        // The attestation has no transaction of its own, but leaving it out of the
+        // final list left it showing as pending underneath a completed mint.
+        ...(res.forwardTxHash
+          ? [{ name: 'fetchAttestation' }, { name: 'mint', txHash: res.forwardTxHash }]
+          : []),
+      ];
+      setSelfBridge({ state: res.forwardTxHash ? 'success' : 'running', steps });
+      saveBridge({
+        id: res.burnTxHash,
+        engine: 'cctp',
+        from,
+        to,
+        fromLabel,
+        toLabel,
+        amount,
+        // No forward hash yet is not a failure: the burn is permanent and Circle
+        // will still mint. Recording it as pending keeps the receipt either way.
+        state: res.forwardTxHash ? 'success' : 'pending',
+        steps,
+        createdAt: Date.now(),
+      });
+      setBridges(loadBridges());
+      setHistPage(0);
+      toast.push(
+        res.forwardTxHash ? t('bridge.done') : t('bridge.forwardPending'),
+        res.forwardTxHash ? 'success' : 'info',
+      );
     } catch (e) {
+      setSelfBridge(null);
       toast.push(e instanceof Error ? e.message : String(e), 'error');
     }
   }
@@ -292,7 +477,7 @@ export function BridgeTab({ session }: { session: Session }) {
               <Select
                 value={from}
                 options={chainOptions}
-                onChange={(v) => setFrom(v as BridgeChainName)}
+                onChange={(v) => setFrom(v as CctpChainName)}
                 ariaLabel={t('bridge.from')}
                 searchable
                 searchPlaceholder={t('bridge.searchChain')}
@@ -309,7 +494,7 @@ export function BridgeTab({ session }: { session: Session }) {
               <Select
                 value={to}
                 options={chainOptions}
-                onChange={(v) => setTo(v as BridgeChainName)}
+                onChange={(v) => setTo(v as CctpChainName)}
                 ariaLabel={t('bridge.to')}
                 searchable
                 searchPlaceholder={t('bridge.searchChain')}
@@ -320,6 +505,15 @@ export function BridgeTab({ session }: { session: Session }) {
           </div>
         </div>
         {sameChain && <p className="hint">{t('bridge.sameChain')}</p>}
+        {/* Whose money moves is the thing that changed, so say it plainly rather
+            than leaving the user to infer it from a MetaMask prompt. */}
+        {engine === 'cctp' && (
+          <p className="hint" data-testid="bridge-selfnote">
+            {walletOnSource
+              ? t('bridge.selfFunded')
+              : t('bridge.wrongSourceChain').replace('{chain}', fromLabel)}
+          </p>
+        )}
 
         <div style={{ marginTop: 16 }}>
           <Field label={t('bridge.amount')} hint={t('bridge.feeNote')}>
@@ -332,17 +526,41 @@ export function BridgeTab({ session }: { session: Session }) {
           </Field>
         </div>
 
-        {(result || job) && <Stepper steps={steps} highlightIndex={hoverIdx} />}
+        {(result || job || selfBridge) && <Stepper steps={steps} highlightIndex={hoverIdx} />}
 
         <div style={{ marginTop: 16 }}>
-          <Button
-            full
-            onClick={() => void guard(run)}
-            disabled={!canBridge}
-            data-testid="bridge-button"
-          >
-            {running > 0 ? t('bridge.buttonAnother') : t('bridge.button')}
-          </Button>
+          {/* Being on the wrong network is a step, not a failure. Offering the
+              switch is one click; a disabled button is a dead end. */}
+          {!walletOnSource && cctpSource ? (
+            <Button
+              full
+              disabled={switching}
+              data-testid="bridge-switch"
+              onClick={() =>
+                void (async () => {
+                  setSwitching(true);
+                  try {
+                    await switchWalletChain(cctpSource.chainId, fromLabel);
+                  } catch (e) {
+                    toast.push(e instanceof Error ? e.message : String(e), 'error');
+                  } finally {
+                    setSwitching(false);
+                  }
+                })()
+              }
+            >
+              {t('bridge.switchTo').replace('{chain}', fromLabel)}
+            </Button>
+          ) : (
+            <Button
+              full
+              onClick={() => void guard(run)}
+              disabled={!canBridge}
+              data-testid="bridge-button"
+            >
+              {running > 0 ? t('bridge.buttonAnother') : t('bridge.button')}
+            </Button>
+          )}
         </div>
         {!bridgeEnabled && <p className="hint">{t('bridge.noKey')}</p>}
 

@@ -208,6 +208,8 @@ export {
   bridgeFromWallet,
   quoteBridge,
   waitForForwardedMint,
+  findForwardedMint,
+  chainLabel,
   CCTP_CHAINS,
   CCTP_TOKEN_MESSENGER,
   IRIS_TESTNET,

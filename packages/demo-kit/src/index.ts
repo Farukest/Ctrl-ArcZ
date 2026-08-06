@@ -6,6 +6,8 @@ export {
   switchToArc,
   watchWallet,
   localSigner,
+  bridgeClients,
+  switchWalletChain,
   type Session,
 } from './session.js';
 export { useSession, type SessionState } from './useSession.js';

@@ -197,6 +197,11 @@ export const tr: Record<TranslationKey, string> = {
   'bridge.from': 'Kaynak',
   'bridge.to': 'Hedef',
   'bridge.searchChain': 'Ağ ara',
+  'bridge.selfFunded':
+    'Bu kendi USDC’nizi taşır: cüzdanınız yakma işlemini imzalar, Circle da hedefte size geri bastırır. Orada gaza ihtiyacınız yok.',
+  'bridge.wrongSourceChain':
+    'USDC’yi {chain} üzerinde yakmak için cüzdanınızın o ağda olması gerekir. Aşağıdan geçebilirsiniz.',
+  'bridge.switchTo': 'Cüzdanı {chain} ağına geçir',
   'bridge.sameChain': 'İki farklı zincir seçin.',
   'bridge.amount': 'Tutar (USDC)',
   'bridge.feeNote': 'Küçük bir ağ ücreti var; tutar bundan büyük olmalı.',
@@ -207,7 +212,9 @@ export const tr: Record<TranslationKey, string> = {
   'bridge.step.burn': 'Kaynak zincirde yakılıyor...',
   'bridge.step.fetchAttestation': 'Circle attestation bekleniyor...',
   'bridge.step.mint': 'Hedef zincirde basılıyor...',
+  'bridge.forwardPending': 'Yakıldı. Circle hedefte basıyor; burn hash makbuzunuz.',
   'bridge.done': 'Köprülendi. USDC hedef zincire ulaştı.',
+  'bridge.recovered': 'Yarım kalan transfer tamamlandı: {amount} USDC hedef zincire ulaştı.',
   'bridge.failed': 'Köprüleme başarısız.',
   'bridge.noKey': 'Köprüleme demo cüzdan anahtarı gerektirir (test modu).',
   'bridge.historyTitle': 'Köprü geçmişi',
@@ -241,8 +248,10 @@ export const tr: Record<TranslationKey, string> = {
   'send.stepLock': 'Kilitleme',
   'send.successTitle': 'Gönderildi ve kilitlendi',
   'send.successBody': '{amount} USDC kilitlendi. Alıcıya vereceğiniz kod:',
-  'send.claimStep1': 'Kodu alıcıya kendiniz iletin: söyleyin ya da yalnızca onun okuyabileceği bir kanaldan gönderin.',
-  'send.claimStep2': 'Bir kez gösterilir, hiçbir yere kaydedilmez. Benzer bir adresin parayı almasını engelleyen tek şey odur.',
+  'send.claimStep1':
+    'Kodu alıcıya kendiniz iletin: söyleyin ya da yalnızca onun okuyabileceği bir kanaldan gönderin.',
+  'send.claimStep2':
+    'Bir kez gösterilir, hiçbir yere kaydedilmez. Benzer bir adresin parayı almasını engelleyen tek şey odur.',
   'send.newTransfer': 'Yeni gönderim',
   'send.sentToast': 'Gönderildi ve kilitlendi.',
   'send.failedToast': 'Gönderim başarısız.',
@@ -288,8 +297,7 @@ export const tr: Record<TranslationKey, string> = {
   'history.unknownToken': 'bilinmeyen token',
 
   'demo.tryIt': 'Zehirleme saldırısını dene',
-  'demo.craftedFrom':
-    '{addr} adresini taklit ediyor. Cüzdanda ikisi aynı görünür.',
+  'demo.craftedFrom': '{addr} adresini taklit ediyor. Cüzdanda ikisi aynı görünür.',
   'demo.noHistory':
     'Henüz doğrulanmış alıcı yok. Önce bir korumalı transfer tamamla, senaryonun taklit edecek gerçek bir adresi olsun.',
   'demo.running': 'Üretiliyor ve taranıyor...',

@@ -82,8 +82,17 @@ export function loadBridges(): StoredBridge[] {
   }
 }
 
+/**
+ * Record a transfer, replacing any earlier record of the same one.
+ *
+ * A wallet-signed bridge is written twice: once the moment the burn confirms, and
+ * again when Circle's mint lands. The first write is the point -- it is what
+ * survives a reload between the two, and the burn hash in it is what a stalled
+ * transfer is recovered from. Appending blindly would leave the same transfer in
+ * the list twice, once stuck on "pending" forever.
+ */
 export function saveBridge(bridge: StoredBridge): void {
-  const all = loadBridges();
+  const all = loadBridges().filter((b) => b.id !== bridge.id);
   all.unshift(bridge);
   localStorage.setItem(BRIDGES_KEY, JSON.stringify(all.slice(0, 50)));
 }

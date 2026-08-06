@@ -47,7 +47,7 @@ export const en = {
   'receive.newIncoming': 'A protected payment arrived. Switch to Receive to claim it.',
   'received.title': 'Received',
   'received.search': 'Search by amount, sender or id',
-   'received.returnToSender': 'Return it to the sender',
+  'received.returnToSender': 'Return it to the sender',
   'received.expiredHint':
     'The claim window has lapsed. You cannot claim this any more, but you can send it back.',
   'received.returned': 'Sent back to the sender.',
@@ -145,7 +145,8 @@ export const en = {
   'ppay.title': 'Private Pay',
   'ppay.body':
     'Pay a merchant from a fresh, single-use address that carries none of your identity on-chain. Like a disposable virtual card.',
-  'ppay.summary': 'Pay from a fresh, single-use address that carries none of your identity on-chain.',
+  'ppay.summary':
+    'Pay from a fresh, single-use address that carries none of your identity on-chain.',
   'ppay.info.aria': 'How Private Pay works',
   'ppay.info.k1': 'Disposable address',
   'ppay.info.k2': 'The Machine',
@@ -201,6 +202,11 @@ export const en = {
   'bridge.from': 'From',
   'bridge.to': 'To',
   'bridge.searchChain': 'Search network',
+  'bridge.selfFunded':
+    'This moves your own USDC: your wallet signs the burn and Circle mints it back to you on the destination. No gas needed there.',
+  'bridge.wrongSourceChain':
+    'Your wallet needs to be on {chain} to burn USDC there. Switch it below.',
+  'bridge.switchTo': 'Switch wallet to {chain}',
   'bridge.sameChain': 'Choose two different chains.',
   'bridge.amount': 'Amount (USDC)',
   'bridge.feeNote': 'A small network fee applies, so the amount must exceed it.',
@@ -211,7 +217,11 @@ export const en = {
   'bridge.step.burn': 'Burning on the source chain...',
   'bridge.step.fetchAttestation': 'Waiting for Circle attestation...',
   'bridge.step.mint': 'Minting on the destination chain...',
+  'bridge.forwardPending':
+    'Burned. Circle is minting on the destination; the burn hash is your receipt.',
   'bridge.done': 'Bridged. USDC arrived on the destination chain.',
+  'bridge.recovered':
+    'An interrupted transfer finished: {amount} USDC arrived on the destination chain.',
   'bridge.failed': 'Bridge failed.',
   'bridge.noKey': 'Bridging needs the demo wallet key (test mode).',
   'bridge.historyTitle': 'Bridge history',
@@ -245,8 +255,10 @@ export const en = {
   'send.stepLock': 'Lock',
   'send.successTitle': 'Sent and locked',
   'send.successBody': '{amount} USDC locked. Give the recipient this code:',
-  'send.claimStep1': 'Hand the code to the recipient yourself: say it, or send it over a channel only they can read.',
-  'send.claimStep2': 'It is shown once and never saved. It is the only thing that stops a lookalike address from taking the money.',
+  'send.claimStep1':
+    'Hand the code to the recipient yourself: say it, or send it over a channel only they can read.',
+  'send.claimStep2':
+    'It is shown once and never saved. It is the only thing that stops a lookalike address from taking the money.',
   'send.newTransfer': 'New transfer',
   'send.sentToast': 'Sent and locked.',
   'send.failedToast': 'Send failed.',
@@ -292,8 +304,7 @@ export const en = {
   'history.unknownToken': 'unknown token',
 
   'demo.tryIt': 'Try the poisoning attack',
-  'demo.craftedFrom':
-    'Crafted to imitate {addr}. Both render the same in a wallet.',
+  'demo.craftedFrom': 'Crafted to imitate {addr}. Both render the same in a wallet.',
   'demo.noHistory':
     'No verified recipient yet. Complete one protected transfer first, then the scenario has something real to imitate.',
   'demo.running': 'Generating and scanning...',

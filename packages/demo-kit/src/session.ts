@@ -264,6 +264,69 @@ export async function switchToArc(): Promise<void> {
   await ensureArcChain(getProvider(), { throwOnReject: true });
 }
 
+/**
+ * Clients for signing on a chain other than Arc.
+ *
+ * The app's own wallet client is pinned to Arc, which is right for everything else
+ * it does and wrong for a bridge: CCTP burns the sender's own USDC, so the source
+ * chain is wherever their money is. Signing with an Arc-tagged client while the
+ * wallet sits on Base produces a transaction the wallet refuses, for a reason it
+ * cannot explain well.
+ *
+ * Reads go through the wallet's own provider rather than an RPC list, because the
+ * provider is by definition on the chain the user is on -- one fewer thing to keep
+ * correct for twenty chains. Arc is the exception: it keeps our own endpoints, so
+ * the common path spends none of MetaMask's per-site request budget.
+ */
+export function bridgeClients(chainId: number, account: Address): ClientPair {
+  const provider = getProvider();
+  // viem needs the id to tag the transaction. The rest of a chain definition only
+  // matters to transports that dial an RPC, and this one delegates to the wallet.
+  const chain = {
+    id: chainId,
+    name: `chain-${chainId}`,
+    nativeCurrency: arcTestnet.nativeCurrency,
+    rpcUrls: { default: { http: [] as string[] } },
+  };
+  return {
+    publicClient:
+      chainId === ARC_TESTNET_CHAIN_ID
+        ? publicClient
+        : (createPublicClient({
+            transport: custom(provider),
+            pollingInterval: 4000,
+          }) as PublicClient),
+    walletClient: createWalletClient({
+      account,
+      chain: chain as never,
+      transport: custom(provider),
+    }) as WalletClient,
+  };
+}
+
+/**
+ * Ask the wallet to move to a chain it already knows.
+ *
+ * Deliberately does not fall back to `wallet_addEthereumChain`: adding a network
+ * means naming an RPC endpoint, and an endpoint invented here would be one the user
+ * silently trusts with every request they make on that chain afterwards. Better to
+ * say the network is missing and let them add the one they choose.
+ */
+export async function switchWalletChain(chainId: number, label: string): Promise<void> {
+  const provider = getProvider();
+  try {
+    await provider.request({
+      method: 'wallet_switchEthereumChain',
+      params: [{ chainId: `0x${chainId.toString(16)}` }],
+    });
+  } catch (err) {
+    if ((err as { code?: number }).code === 4902) {
+      throw new Error(`${label} is not in your wallet yet. Add the network, then try again.`);
+    }
+    throw err;
+  }
+}
+
 /** Subscribes to wallet account/chain changes. Returns an unsubscribe function. */
 export function watchWallet(onChange: () => void): () => void {
   const provider = (globalThis as { ethereum?: EIP1193Provider }).ethereum;
