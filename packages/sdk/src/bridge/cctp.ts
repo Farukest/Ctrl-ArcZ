@@ -42,8 +42,9 @@ export const CCTP_TOKEN_MESSENGER = '0x8FE6B999Dc680CcFDD5Bf7EB0974218be2542DAA'
 export const IRIS_TESTNET = 'https://iris-api-sandbox.circle.com' as const;
 
 /**
- * Tells Circle to submit the destination mint itself. Verified against the
- * quickstart; it is `ctp-forward` in ASCII, right-padded to 32 bytes.
+ * Tells Circle to submit the destination mint itself. It is the ASCII bytes of
+ * `cctp-forward`, right-padded to 32 bytes; decoded and checked against the value
+ * in Circle's quickstart rather than copied on faith.
  */
 export const FORWARDING_HOOK =
   '0x636374702d666f72776172640000000000000000000000000000000000000000' as const;
