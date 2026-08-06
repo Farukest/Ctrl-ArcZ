@@ -228,6 +228,8 @@ export const tr: Record<TranslationKey, string> = {
   'bridge.recipientHint': 'Boş bırakırsanız kendinize gönderilir; köprü genelde bu demektir.',
   'bridge.recipientPlaceholder': 'Kendi adresiniz',
   'bridge.recipientBad': 'Bu geçerli bir adres değil.',
+  'bridge.gwBalanceShort': '{chain} üzerinde {here} USDC. Ücret {fee}.',
+  'bridge.gwUseFunded': '{chain} kullan ({amount} USDC orada)',
   'bridge.done': 'Köprülendi. USDC hedef zincire ulaştı.',
   'bridge.recovered': 'Yarım kalan transfer tamamlandı: {amount} USDC hedef zincire ulaştı.',
   'bridge.failed': 'Köprüleme başarısız.',

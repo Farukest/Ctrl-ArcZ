@@ -155,6 +155,8 @@ export function BridgeTab({ session }: { session: Session }) {
    * total would tell someone with money on Arc that they can send from Base.
    */
   const [gwOnSource, setGwOnSource] = useState<bigint | null>(null);
+  /** Every chain that holds something, so the UI can offer the funded one. */
+  const [gwByChain, setGwByChain] = useState<Partial<Record<GatewayChain, bigint>>>({});
   const [gwFee, setGwFee] = useState<bigint | null>(null);
   const [depositing, setDepositing] = useState(false);
   /**
@@ -218,6 +220,20 @@ export function BridgeTab({ session }: { session: Session }) {
    */
   const gwWithdraw = engine === 'gateway' && sameChain;
   const walletOnDepositChain = !gwSource || session.chainId === CCTP_CHAINS[gwSource].chainId;
+  /**
+   * The funded chain worth offering: the richest one that is not already selected
+   * and that could actually cover this transfer. Null when there is nothing to
+   * suggest, which is when the hint should say nothing at all.
+   */
+  const gwElsewhere = (() => {
+    if (engine !== 'gateway' || !gwSource || gwNeeded == null) return null;
+    let best: { chain: GatewayChain; amount: bigint } | null = null;
+    for (const [name, amount] of Object.entries(gwByChain) as [GatewayChain, bigint][]) {
+      if (name === gwSource || amount < gwNeeded) continue;
+      if (!best || amount > best.amount) best = { chain: name, amount };
+    }
+    return best;
+  })();
 
   const running = jobs.filter((j) => j.state === 'running').length;
   const canBridge =
@@ -280,6 +296,7 @@ export function BridgeTab({ session }: { session: Session }) {
         if (!live) return;
         setGwBalance(bal.total);
         setGwOnSource(bal.byChain[gwSource] ?? 0n);
+        setGwByChain(bal.byChain);
         setGwFee(quote.maxFee);
       } catch {
         // Leave the last known figures rather than blanking the screen on one
@@ -757,34 +774,43 @@ export function BridgeTab({ session }: { session: Session }) {
               : t('bridge.wrongSourceChain').replace('{chain}', fromLabel)}
           </p>
         )}
-        {/* The balance is the whole story in Gateway, so it is stated rather than
-            left for the user to discover through a refusal. */}
+        {/*
+          One short line, then a way out of the problem it describes.
+
+          This was a paragraph explaining unified balances, per-chain spending and
+          confirmation times. All of it true, none of it what someone wants at the
+          moment they are trying to send money. Where the old text explained that
+          the funds were on another chain, there is now a button that moves the
+          picker there; where it explained a shortfall, the deposit button below
+          already carries the amount. Nobody reads the essay, and the essay was
+          only ever describing a click we could make for them.
+        */}
         {engine === 'gateway' && (
-          <p className="hint" data-testid="gateway-balance">
-            {gwBalance == null || gwOnSource == null
-              ? t('bridge.gwBalanceLoading')
-              : t('bridge.gwBalanceHere')
-                  .replace('{chain}', fromLabel)
-                  .replace('{here}', String(Number(gwOnSource) / 1e6))
-                  .replace('{total}', String(Number(gwBalance) / 1e6)) +
-                (gwBalance > gwOnSource ? ' ' + t('bridge.gwBalanceElsewhere') : '') +
-                ' ' +
-                t('bridge.gwBalance').replace(
-                  '{fee}',
-                  gwFee == null ? '?' : String(Number(gwFee) / 1e6),
-                )}
-            {gwSource && gwShort
-              ? ' ' +
-                t('bridge.gwDepositWait')
-                  .replace('{chain}', fromLabel)
-                  .replace(
-                    '{wait}',
-                    DEPOSIT_CONFIRMATION_SECONDS[gwSource] < 60
-                      ? `${DEPOSIT_CONFIRMATION_SECONDS[gwSource]}s`
-                      : `${Math.round(DEPOSIT_CONFIRMATION_SECONDS[gwSource] / 60)}m`,
-                  )
-              : ''}
-          </p>
+          <div className="gwbal" data-testid="gateway-balance">
+            <span className="hint">
+              {gwBalance == null || gwOnSource == null
+                ? t('bridge.gwBalanceLoading')
+                : t('bridge.gwBalanceShort')
+                    .replace('{here}', String(Number(gwOnSource) / 1e6))
+                    .replace('{chain}', fromLabel)
+                    .replace('{fee}', gwFee == null ? '?' : String(Number(gwFee) / 1e6))}
+            </span>
+            {/* The money is somewhere else. Offer the chain, do not describe it. */}
+            {gwElsewhere && (
+              <Button
+                variant="ghost"
+                data-testid="gateway-use-funded"
+                onClick={() => {
+                  setFrom(gwElsewhere.chain);
+                  if (to === gwElsewhere.chain) setTo(from);
+                }}
+              >
+                {t('bridge.gwUseFunded')
+                  .replace('{chain}', labelFor(gwElsewhere.chain))
+                  .replace('{amount}', String(Number(gwElsewhere.amount) / 1e6))}
+              </Button>
+            )}
+          </div>
         )}
 
         <div style={{ marginTop: 16 }}>

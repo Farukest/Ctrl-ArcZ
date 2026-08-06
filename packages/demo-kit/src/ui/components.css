@@ -1873,3 +1873,23 @@
 .verdict-fold.is-open svg {
   transform: rotate(180deg);
 }
+
+/* Gateway balance: one short line and, when there is one, the click that fixes it.
+   The row keeps them on the same optical line so the action reads as part of the
+   sentence rather than a second thing to consider. */
+.gwbal {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+.gwbal .hint {
+  margin: 0;
+}
+.gwbal .btn {
+  padding: 4px 10px;
+  font-size: 12px;
+  min-height: 0;
+  width: auto;
+}

@@ -234,6 +234,8 @@ export const en = {
   'bridge.recipientHint': 'Leave empty to send to yourself, which is what a bridge usually means.',
   'bridge.recipientPlaceholder': 'Your own address',
   'bridge.recipientBad': 'That is not a valid address.',
+  'bridge.gwBalanceShort': '{here} USDC on {chain}. Fee {fee}.',
+  'bridge.gwUseFunded': 'Use {chain} instead ({amount} USDC there)',
   'bridge.done': 'Bridged. USDC arrived on the destination chain.',
   'bridge.recovered':
     'An interrupted transfer finished: {amount} USDC arrived on the destination chain.',
