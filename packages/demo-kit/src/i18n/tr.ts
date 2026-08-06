@@ -179,7 +179,7 @@ export const tr: Record<TranslationKey, string> = {
   'bridge.gateway.title': 'USDC Köprüle (Gateway)',
   'bridge.gateway.body': 'Circle Gateway ile USDC’yi zincirler arası taşı.',
   'bridge.gateway.point1': 'Birleşik USDC bakiyesine bir kez yatır.',
-  'bridge.gateway.point2': 'Oradan istediğin zincire anında harca, Arc’ta bir saniye kadar.',
+  'bridge.gateway.point2': 'Oradan istediğin zincire saniyeler içinde harca, işlem göndermeden.',
   'bridge.gateway.point3': 'Hedefte Circle’ın forwarder’ı basar, orada gas gerekmez.',
   'bridge.engine.cctp': 'CCTP',
   'bridge.engine.gateway': 'Gateway',
@@ -213,8 +213,10 @@ export const tr: Record<TranslationKey, string> = {
   'bridge.step.fetchAttestation': 'Circle attestation bekleniyor...',
   'bridge.step.mint': 'Hedef zincirde basılıyor...',
   'bridge.forwardPending': 'Yakıldı. Circle hedefte basıyor; burn hash makbuzunuz.',
-  'bridge.gwBalance':
-    'Gateway bakiyesi: {balance} USDC. Transfer ücreti tutardan bağımsız sabit {fee} USDC.',
+  'bridge.gwBalanceHere': '{chain} üzerinde: {total} USDC bakiyenizin {here} USDC’si.',
+  'bridge.gwBalanceElsewhere':
+    'Kalanı başka zincirlerde duruyor; bir transfer yalnız kaynak zincirdeki bakiyeyi harcar.',
+  'bridge.gwBalance': 'Transfer ücreti tutardan bağımsız sabit {fee} USDC.',
   'bridge.gwBalanceLoading': 'Gateway bakiyeniz okunuyor...',
   'bridge.gwDepositWait': '{chain} üzerinde yatırılan tutarın sayılması yaklaşık {wait} sürer.',
   'bridge.depositButton': '{chain} üzerinde {amount} USDC yatır',

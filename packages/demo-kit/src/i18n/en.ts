@@ -184,7 +184,7 @@ export const en = {
   'bridge.gateway.title': 'Bridge USDC (Gateway)',
   'bridge.gateway.body': 'Move USDC across chains with Circle Gateway.',
   'bridge.gateway.point1': 'Deposit once into a unified USDC balance.',
-  'bridge.gateway.point2': 'Spend from it instantly on any chain, about a second on Arc.',
+  'bridge.gateway.point2': 'Spend from it on any chain in seconds, with no transaction to send.',
   'bridge.gateway.point3': "Circle's forwarder mints on the destination, so you need no gas there.",
   'bridge.engine.cctp': 'CCTP',
   'bridge.engine.gateway': 'Gateway',
@@ -219,8 +219,10 @@ export const en = {
   'bridge.step.mint': 'Minting on the destination chain...',
   'bridge.forwardPending':
     'Burned. Circle is minting on the destination; the burn hash is your receipt.',
-  'bridge.gwBalance':
-    'Gateway balance: {balance} USDC. A transfer costs a flat {fee} USDC whatever the amount.',
+  'bridge.gwBalanceHere': 'On {chain}: {here} USDC of your {total} USDC Gateway balance.',
+  'bridge.gwBalanceElsewhere':
+    'The rest sits on other chains, and a transfer spends only the balance on its source chain.',
+  'bridge.gwBalance': 'A transfer costs a flat {fee} USDC whatever the amount.',
   'bridge.gwBalanceLoading': 'Reading your Gateway balance...',
   'bridge.gwDepositWait': 'Depositing on {chain} takes about {wait} to count.',
   'bridge.depositButton': 'Deposit {amount} USDC on {chain}',

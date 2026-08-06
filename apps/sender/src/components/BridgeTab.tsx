@@ -147,6 +147,11 @@ export function BridgeTab({ session }: { session: Session }) {
    * `null` until read; a deposit that has not reached its confirmations is not here.
    */
   const [gwBalance, setGwBalance] = useState<bigint | null>(null);
+  /**
+   * Per chain, because that is what a transfer actually spends. Showing only the
+   * total would tell someone with money on Arc that they can send from Base.
+   */
+  const [gwOnSource, setGwOnSource] = useState<bigint | null>(null);
   const [gwFee, setGwFee] = useState<bigint | null>(null);
   const [depositing, setDepositing] = useState(false);
   const [amount, setAmount] = useState('0.1');
@@ -192,7 +197,8 @@ export function BridgeTab({ session }: { session: Session }) {
   const gwSource =
     engine === 'gateway' && isGatewayChain(from) ? (from as GatewayChain) : undefined;
   const gwNeeded = gwFee != null ? BigInt(Math.round(amountValue * 1e6)) + gwFee : null;
-  const gwShort = gwBalance != null && gwNeeded != null && gwBalance < gwNeeded;
+  // Short against the SOURCE chain, not the total: the check that matters.
+  const gwShort = gwOnSource != null && gwNeeded != null && gwOnSource < gwNeeded;
   /**
    * Same chain in and out is not a mistake in Gateway, it is the way money comes
    * back. Calling it a bridge would be wrong, so the button says what it does.
@@ -255,6 +261,7 @@ export function BridgeTab({ session }: { session: Session }) {
         ]);
         if (!live) return;
         setGwBalance(bal.total);
+        setGwOnSource(bal.byChain[gwSource] ?? 0n);
         setGwFee(quote.maxFee);
       } catch {
         // Leave the last known figures rather than blanking the screen on one
@@ -561,6 +568,7 @@ export function BridgeTab({ session }: { session: Session }) {
         setBridges(loadBridges());
         setHistPage(0);
         setGwBalance(null);
+        setGwOnSource(null);
         toast.push(
           res.mintTxHash ? t('bridge.done') : t('bridge.forwardPending'),
           res.mintTxHash ? 'success' : 'info',
@@ -733,11 +741,18 @@ export function BridgeTab({ session }: { session: Session }) {
             left for the user to discover through a refusal. */}
         {engine === 'gateway' && (
           <p className="hint" data-testid="gateway-balance">
-            {gwBalance == null
+            {gwBalance == null || gwOnSource == null
               ? t('bridge.gwBalanceLoading')
-              : t('bridge.gwBalance')
-                  .replace('{balance}', String(Number(gwBalance) / 1e6))
-                  .replace('{fee}', gwFee == null ? '?' : String(Number(gwFee) / 1e6))}
+              : t('bridge.gwBalanceHere')
+                  .replace('{chain}', fromLabel)
+                  .replace('{here}', String(Number(gwOnSource) / 1e6))
+                  .replace('{total}', String(Number(gwBalance) / 1e6)) +
+                (gwBalance > gwOnSource ? ' ' + t('bridge.gwBalanceElsewhere') : '') +
+                ' ' +
+                t('bridge.gwBalance').replace(
+                  '{fee}',
+                  gwFee == null ? '?' : String(Number(gwFee) / 1e6),
+                )}
             {gwSource && gwShort
               ? ' ' +
                 t('bridge.gwDepositWait')
