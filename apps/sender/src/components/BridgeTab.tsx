@@ -37,12 +37,9 @@ import {
   Field,
   InfoPopover,
   Input,
-  PagedList,
-  Pagination,
-  paginate,
-  SearchField,
   SegmentedTabs,
   Select,
+  HistoryList,
   RiskCard,
   Skeleton,
   Stepper,
@@ -195,9 +192,7 @@ export function BridgeTab({ session }: { session: Session }) {
   );
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
   const [bridges, setBridges] = useState<StoredBridge[]>(() => loadBridges());
-  const [histQuery, setHistQuery] = useState('');
   const [histEngine, setHistEngine] = useState<'all' | BridgeEngine>('all');
-  const [histPage, setHistPage] = useState(0);
 
   const risk = useRecipientRisk(session, recipient);
   const recipientBad = recipient.trim() !== '' && !isAddress(recipient.trim());
@@ -359,18 +354,11 @@ export function BridgeTab({ session }: { session: Session }) {
     }) as Step[];
   }, [job, selfBridge, activeSteps, t, engine]);
 
-  const filteredHistory = useMemo(() => {
-    const q = histQuery.trim().toLowerCase();
-    return bridges.filter(
-      (b) =>
-        (histEngine === 'all' || (b.engine ?? 'cctp') === histEngine) &&
-        (!q || bridgeHaystack(b).includes(q)),
-    );
-  }, [bridges, histQuery, histEngine]);
-
-  const pageCount = Math.max(1, Math.ceil(filteredHistory.length / HISTORY_PAGE_SIZE));
-  const page = Math.min(histPage, pageCount - 1);
-  const pageRows = paginate(filteredHistory, page, HISTORY_PAGE_SIZE);
+  /** Only the engine filter stays here; search, date and paging are the list's. */
+  const filteredByEngine = useMemo(
+    () => bridges.filter((b) => histEngine === 'all' || (b.engine ?? 'cctp') === histEngine),
+    [bridges, histEngine],
+  );
 
   /**
    * Follow the running transfer, including one this browser did not start in this
@@ -417,7 +405,6 @@ export function BridgeTab({ session }: { session: Session }) {
             createdAt: next.startedAt,
           });
           setBridges(loadBridges());
-          setHistPage(0);
         }
         toast.push(
           next.state === 'success' ? t('bridge.done') : next.error || t('bridge.failed'),
@@ -647,7 +634,6 @@ export function BridgeTab({ session }: { session: Session }) {
                 createdAt: Date.now(),
               });
               setBridges(loadBridges());
-              setHistPage(0);
             },
           },
         );
@@ -672,7 +658,6 @@ export function BridgeTab({ session }: { session: Session }) {
           createdAt: Date.now(),
         });
         setBridges(loadBridges());
-        setHistPage(0);
         setGwBalance(null);
         setGwOnSource(null);
         toast.push(
@@ -729,7 +714,6 @@ export function BridgeTab({ session }: { session: Session }) {
                 createdAt: Date.now(),
               });
               setBridges(loadBridges());
-              setHistPage(0);
             }
           },
         },
@@ -759,7 +743,6 @@ export function BridgeTab({ session }: { session: Session }) {
         createdAt: Date.now(),
       });
       setBridges(loadBridges());
-      setHistPage(0);
       toast.push(
         res.forwardTxHash ? t('bridge.done') : t('bridge.forwardPending'),
         res.forwardTxHash ? 'success' : 'info',
@@ -1051,96 +1034,72 @@ export function BridgeTab({ session }: { session: Session }) {
 
       <div style={{ marginTop: 16 }}>
         <Card title={t('bridge.historyTitle')} data-testid="bridge-history">
-          {bridges.length === 0 ? (
-            <p className="muted">{t('bridge.historyEmpty')}</p>
-          ) : (
-            <>
-              <div className="hist-controls">
-                <SearchField
-                  value={histQuery}
-                  onChange={(v) => {
-                    setHistQuery(v);
-                    setHistPage(0);
-                  }}
-                  placeholder={t('bridge.historySearch')}
-                  ariaLabel={t('bridge.historySearch')}
-                  data-testid="bridge-history-search"
-                />
-                <Select
-                  value={histEngine}
-                  options={[
-                    { value: 'all', label: t('bridge.filterAll') },
-                    { value: 'cctp', label: t('bridge.engine.cctp') },
-                    { value: 'gateway', label: t('bridge.engine.gateway') },
-                  ]}
-                  onChange={(v) => {
-                    setHistEngine(v as 'all' | BridgeEngine);
-                    setHistPage(0);
-                  }}
-                  ariaLabel={t('bridge.filterEngine')}
-                />
+          <HistoryList
+            items={filteredByEngine}
+            data-testid="bridge-history-list"
+            searchText={bridgeHaystack}
+            timestamp={(b) => b.createdAt}
+            rowKey={(b) => b.id}
+            searchPlaceholder={t('bridge.historySearch')}
+            emptyText={t('bridge.historyEmpty')}
+            noMatchText={t('bridge.historyNoMatch')}
+            pageSize={HISTORY_PAGE_SIZE}
+            filter={{
+              value: histEngine,
+              ariaLabel: t('bridge.filterEngine'),
+              onChange: (v) => setHistEngine(v as 'all' | BridgeEngine),
+              options: [
+                { value: 'all', label: t('bridge.filterAll') },
+                { value: 'cctp', label: t('bridge.engine.cctp') },
+                { value: 'gateway', label: t('bridge.engine.gateway') },
+              ],
+            }}
+            renderRow={(b) => (
+              <div key={b.id} className="trow" data-testid="bridge-history-row">
+                <div className="bridge-hist__head">
+                  <span className="bridge-hist__route">
+                    <ChainLogo id={b.from} size={18} />
+                    {b.fromLabel}
+                    <span className="bridge-hist__arrow">&rarr;</span>
+                    <ChainLogo id={b.to} size={18} />
+                    {b.toLabel}
+                  </span>
+                  <span className="bridge-hist__meta">
+                    <span className="bridge-hist__amount mono">{b.amount} USDC</span>
+                    <span
+                      className={`hstatus${
+                        b.state === 'success'
+                          ? ' hstatus--ok'
+                          : b.state === 'error'
+                            ? ' hstatus--err'
+                            : ''
+                      }`}
+                    >
+                      {t(`bridge.state.${b.state}` as 'bridge.state.success')}
+                    </span>
+                    <span className="bridge-hist__time">{relativeTime(b.createdAt)}</span>
+                  </span>
+                </div>
+                {b.steps.some((s) => s.txHash && safeHttpUrl(s.explorerUrl)) && (
+                  <>
+                    <hr className="rule trow__rule" />
+                    <div className="bridge-hist__links">
+                      {b.steps
+                        .filter((s) => s.txHash && safeHttpUrl(s.explorerUrl))
+                        .map((s) => (
+                          <TxLink
+                            key={s.name}
+                            href={safeHttpUrl(s.explorerUrl)}
+                            label={s.name}
+                            copyValue={s.txHash ?? ''}
+                          />
+                        ))}
+                    </div>
+                  </>
+                )}
               </div>
-
-              {filteredHistory.length === 0 ? (
-                <p className="muted" style={{ marginTop: 14 }}>
-                  {t('bridge.historyNoMatch')}
-                </p>
-              ) : (
-                <PagedList resetKey={histQuery} reserve={page < pageCount - 1}>
-                  <div className="bridge-hist" style={{ marginTop: 14 }}>
-                    {pageRows.map((b) => (
-                      <div key={b.id} className="trow" data-testid="bridge-history-row">
-                        <div className="bridge-hist__head">
-                          <span className="bridge-hist__route">
-                            <ChainLogo id={b.from} size={18} />
-                            {b.fromLabel}
-                            <span className="bridge-hist__arrow">&rarr;</span>
-                            <ChainLogo id={b.to} size={18} />
-                            {b.toLabel}
-                          </span>
-                          <span className="bridge-hist__meta">
-                            <span className="bridge-hist__amount mono">{b.amount} USDC</span>
-                            <span
-                              className={`hstatus${
-                                b.state === 'success'
-                                  ? ' hstatus--ok'
-                                  : b.state === 'error'
-                                    ? ' hstatus--err'
-                                    : ''
-                              }`}
-                            >
-                              {t(`bridge.state.${b.state}` as 'bridge.state.success')}
-                            </span>
-                            <span className="bridge-hist__time">{relativeTime(b.createdAt)}</span>
-                          </span>
-                        </div>
-                        {b.steps.some((s) => s.txHash && safeHttpUrl(s.explorerUrl)) && (
-                          <>
-                            <hr className="rule trow__rule" />
-                            <div className="bridge-hist__links">
-                              {b.steps
-                                .filter((s) => s.txHash && safeHttpUrl(s.explorerUrl))
-                                .map((s) => (
-                                  <TxLink
-                                    key={s.name}
-                                    href={safeHttpUrl(s.explorerUrl)}
-                                    label={s.name}
-                                    copyValue={s.txHash ?? ''}
-                                  />
-                                ))}
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </PagedList>
-              )}
-              {filteredHistory.length > 0 && (
-                <Pagination page={page} pageCount={pageCount} onChange={setHistPage} />
-              )}
-            </>
-          )}
+            )}
+          />
         </Card>
       </div>
     </>

@@ -22,3 +22,4 @@ export {
   type Translate,
 } from '../i18n/context.js';
 export { type TranslationKey } from '../i18n/en.js';
+export { HistoryList, type DateWindow, type HistoryListProps } from './HistoryList.js';

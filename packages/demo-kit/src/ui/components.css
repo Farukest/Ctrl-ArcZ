@@ -1893,3 +1893,16 @@
   min-height: 0;
   width: auto;
 }
+
+/* History day grouping. The heading is quiet on purpose: it orients, it is not
+   content, and a loud one competes with the rows it is introducing. */
+.hist-group + .hist-group {
+  margin-top: 14px;
+}
+.hist-group__day {
+  font-size: var(--fs-xs);
+  color: var(--text-lo);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 6px;
+}

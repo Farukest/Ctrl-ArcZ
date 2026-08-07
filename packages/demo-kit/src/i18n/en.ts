@@ -238,6 +238,12 @@ export const en = {
   'bridge.gwUseFunded': 'Use {chain} instead ({amount} USDC there)',
   'bridge.gwChainMissing': 'Pick two chains Gateway supports.',
   'bridge.gwPending': '{amount} more deposited, waiting for Circle to count it.',
+  'history.today': 'Today',
+  'history.yesterday': 'Yesterday',
+  'history.week': 'Last 7 days',
+  'history.month': 'Last 30 days',
+  'history.anyTime': 'Any time',
+  'history.dateFilter': 'Filter by date',
   'bridge.done': 'Bridged. USDC arrived on the destination chain.',
   'bridge.recovered':
     'An interrupted transfer finished: {amount} USDC arrived on the destination chain.',
