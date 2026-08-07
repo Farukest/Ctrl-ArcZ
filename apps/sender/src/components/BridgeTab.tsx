@@ -497,6 +497,33 @@ export function BridgeTab({ session }: { session: Session }) {
    * inside a "send" button would make one transfer mysteriously take a quarter of an
    * hour, and it is also a thing you do once and then stop thinking about.
    */
+  /**
+   * A submit guard that releases at dispatch, not at completion.
+   *
+   * Wrapping the whole transfer meant the button stayed locked for as long as the
+   * wait lasted, which for CCTP is up to three minutes, and a second click in that
+   * window was swallowed with no message and no disabled state. That is the same
+   * "I pressed it and nothing happened" failure as the silent return, and it also
+   * broke something that used to work: two transfers running at once. The guard
+   * still stops a double-click, because it is only released once the first one has
+   * a receipt, and by then the second is a deliberate second transfer.
+   */
+  function untilDispatched() {
+    let release: () => void = () => {};
+    const signal = new Promise<void>((r) => {
+      release = r;
+    });
+    // Never hold the button forever if a transfer dies before its receipt.
+    const bail = setTimeout(release, 60_000);
+    return {
+      signal,
+      release: () => {
+        clearTimeout(bail);
+        release();
+      },
+    };
+  }
+
   async function deposit() {
     if (!gwSource) return;
     setDepositing(true);
@@ -537,7 +564,21 @@ export function BridgeTab({ session }: { session: Session }) {
     }
   }
 
+  /**
+   * Start a transfer and return as soon as it has a receipt.
+   *
+   * The waiting continues in the background: the row is already written, the
+   * recovery pass will finish it if this page goes away, and the form is usable
+   * again immediately. Holding the caller until the mint lands was what locked the
+   * button for minutes at a time.
+   */
   async function run() {
+    const dispatch = untilDispatched();
+    void runToCompletion(dispatch).catch(() => dispatch.release());
+    await dispatch.signal;
+  }
+
+  async function runToCompletion(dispatch: ReturnType<typeof untilDispatched>) {
     setResult(null);
     if (engine === 'gateway') {
       // Should be unreachable: the button is disabled without both chains. Kept as
@@ -546,6 +587,7 @@ export function BridgeTab({ session }: { session: Session }) {
       // that is exactly how this read when it happened.
       if (!gwSource || !isGatewayChain(to)) {
         toast.push(t('bridge.gwChainMissing'), 'error');
+        dispatch.release();
         return;
       }
       setSelfBridge({ steps: [], state: 'running' });
@@ -574,6 +616,7 @@ export function BridgeTab({ session }: { session: Session }) {
             // the mint lands. The wait in between is where a tab gets closed, and
             // without this the transferId would be gone with it.
             onTransferId: (transferId) => {
+              dispatch.release();
               saveBridge({
                 id: transferId,
                 engine: 'gateway',
@@ -622,6 +665,8 @@ export function BridgeTab({ session }: { session: Session }) {
       } catch (e) {
         setSelfBridge(null);
         toast.push(e instanceof Error ? e.message : String(e), 'error');
+      } finally {
+        dispatch.release();
       }
       return;
     }
@@ -653,6 +698,7 @@ export function BridgeTab({ session }: { session: Session }) {
             // during it would otherwise lose the one hash the money can be traced
             // and recovered from. `pending` is honest: burned, not yet minted.
             if (step === 'burn' && txHash) {
+              dispatch.release();
               saveBridge({
                 id: txHash,
                 engine: 'cctp',
@@ -704,6 +750,8 @@ export function BridgeTab({ session }: { session: Session }) {
     } catch (e) {
       setSelfBridge(null);
       toast.push(e instanceof Error ? e.message : String(e), 'error');
+    } finally {
+      dispatch.release();
     }
   }
 
