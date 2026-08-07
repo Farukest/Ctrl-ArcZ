@@ -54,6 +54,7 @@ import {
 } from '@ctrl-arcz/demo-kit/ui';
 import { loadBridges, saveBridge, type StoredBridge } from '../store.js';
 import { useRecipientRisk } from '../lib/useRecipientRisk.js';
+import { pendingOn, reconcile, rememberDeposit } from '../lib/pendingDeposits.js';
 
 // The bridge signs server-side (/api/bridge), so the client never needs the key;
 // gate on a non-secret flag instead of inlining a private key just to read a bool.
@@ -157,6 +158,8 @@ export function BridgeTab({ session }: { session: Session }) {
   const [gwOnSource, setGwOnSource] = useState<bigint | null>(null);
   /** Every chain that holds something, so the UI can offer the funded one. */
   const [gwByChain, setGwByChain] = useState<Partial<Record<GatewayChain, bigint>>>({});
+  /** Deposited, on chain, but not yet counted by Circle. */
+  const [gwPending, setGwPending] = useState<bigint>(0n);
   const [gwFee, setGwFee] = useState<bigint | null>(null);
   const [depositing, setDepositing] = useState(false);
   /**
@@ -298,8 +301,12 @@ export function BridgeTab({ session }: { session: Session }) {
         ]);
         if (!live) return;
         setGwBalance(bal.total);
-        setGwOnSource(bal.byChain[gwSource] ?? 0n);
+        const here = bal.byChain[gwSource] ?? 0n;
+        // Clear anything Circle has caught up on before reading what is still out.
+        reconcile(gwSource, here, gwOnSource ?? here);
+        setGwOnSource(here);
         setGwByChain(bal.byChain);
+        setGwPending(pendingOn(gwSource));
         setGwFee(quote.maxFee);
       } catch {
         // Leave the last known figures rather than blanking the screen on one
@@ -548,6 +555,8 @@ export function BridgeTab({ session }: { session: Session }) {
         },
       );
       setSelfBridge(null);
+      rememberDeposit(gwSource, parseUnits(amount, 6));
+      setGwPending(pendingOn(gwSource));
       const wait = DEPOSIT_CONFIRMATION_SECONDS[gwSource];
       toast.push(
         t('bridge.deposited')
@@ -853,6 +862,11 @@ export function BridgeTab({ session }: { session: Session }) {
                     .replace('{chain}', fromLabel)
                     .replace('{fee}', gwFee == null ? '?' : String(Number(gwFee) / 1e6))}
             </span>
+            {gwPending > 0n && (
+              <span className="hint gwbal__pending" data-testid="gateway-pending">
+                {t('bridge.gwPending').replace('{amount}', String(Number(gwPending) / 1e6))}
+              </span>
+            )}
             {/* The money is somewhere else. Offer the chain, do not describe it. */}
             {gwElsewhere && (
               <Button

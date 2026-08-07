@@ -231,6 +231,7 @@ export const tr: Record<TranslationKey, string> = {
   'bridge.gwBalanceShort': '{chain} üzerinde {here} USDC. Ücret {fee}.',
   'bridge.gwUseFunded': '{chain} kullan ({amount} USDC orada)',
   'bridge.gwChainMissing': 'Gateway’in desteklediği iki zincir seçin.',
+  'bridge.gwPending': '{amount} daha yatırıldı, Circle sayana kadar bekliyor.',
   'bridge.done': 'Köprülendi. USDC hedef zincire ulaştı.',
   'bridge.recovered': 'Yarım kalan transfer tamamlandı: {amount} USDC hedef zincire ulaştı.',
   'bridge.failed': 'Köprüleme başarısız.',

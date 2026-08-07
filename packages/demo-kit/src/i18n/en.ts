@@ -237,6 +237,7 @@ export const en = {
   'bridge.gwBalanceShort': '{here} USDC on {chain}. Fee {fee}.',
   'bridge.gwUseFunded': 'Use {chain} instead ({amount} USDC there)',
   'bridge.gwChainMissing': 'Pick two chains Gateway supports.',
+  'bridge.gwPending': '{amount} more deposited, waiting for Circle to count it.',
   'bridge.done': 'Bridged. USDC arrived on the destination chain.',
   'bridge.recovered':
     'An interrupted transfer finished: {amount} USDC arrived on the destination chain.',
