@@ -23,6 +23,15 @@ import { config } from './riskConfig.js';
  * stricter, never softer. `effectiveLevel` is the max of the two, so a block
  * cannot be talked down and a caution cannot become a green light.
  */
+/**
+ * How far back to scan for RecipientVerified when the index is unavailable.
+ *
+ * Arc produces roughly nineteen blocks a second, so this is about three hours.
+ * Not as good as the server's backfill from the deploy block, and far better than
+ * the nothing that a suppressed scan leaves behind.
+ */
+const VERIFIED_FALLBACK_BLOCKS = 200_000;
+
 export interface RecipientRisk {
   /** The rule verdict for the address currently in the box, or null. */
   report: RiskReport | null;
@@ -63,11 +72,25 @@ export function useRecipientRisk(session: Session, to: string): RecipientRisk {
       // The verified set comes from the server's index, which has no block
       // window. Passing it in means `check` does no log scanning at all.
       verifiedRecipients(session.address as Address)
-        .then(({ recipients }) =>
+        .then(({ recipients, complete }) =>
           check(session.address as Address, target as Address, {
             client: getPublicClient(),
             provider: riskProvider(),
-            verifiedRecipients: recipients,
+            /**
+             * Only hand over the index when it is actually complete.
+             *
+             * `check` skips its own RecipientVerified scan entirely whenever this
+             * option is present, so passing the empty array a failed request
+             * returns tells it there are no verified recipients rather than that
+             * it could not find out. Protected transfers pay the contract, not the
+             * recipient, so that list is the only place those addresses appear:
+             * suppressing the fallback silently disarms the lookalike rule for
+             * everyone the user has paid through this app. Leaving it undefined
+             * costs a bounded log scan and keeps the protection.
+             */
+            ...(complete
+              ? { verifiedRecipients: recipients }
+              : { verifiedRecipientsLookbackBlocks: VERIFIED_FALLBACK_BLOCKS }),
           }),
         )
         .then((r) => {
