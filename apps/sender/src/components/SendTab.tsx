@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { isAddress, parseUnits, type Address } from 'viem';
+import type { RiskReport } from '@ctrl-arcz/sdk';
 import {
   approvePermit2,
   approveUsdc,
-  check,
   defineConfig,
   explorerTxUrl,
   generateClaimCode,
@@ -12,10 +12,8 @@ import {
   RiskBlockedError,
   sendProtected,
   sendProtectedWithPermit,
-  shouldBlockSend,
-  type RiskReport,
 } from '@ctrl-arcz/sdk';
-import { getPublicClient, type Session } from '@ctrl-arcz/demo-kit';
+import type { Session } from '@ctrl-arcz/demo-kit';
 import {
   Button,
   Card,
@@ -34,8 +32,9 @@ import {
 } from '@ctrl-arcz/demo-kit/ui';
 import { IconButton, IconChevron, IconExternal, IconLock, short } from '@ctrl-arcz/demo-kit/ui';
 import { saveTransfer } from '../store.js';
+import { config } from '../lib/riskConfig.js';
+import { useRecipientRisk } from '../lib/useRecipientRisk.js';
 import { craftLookalikeOfKnownRecipient } from '../lib/poisoning.js';
-import { investigate, effectiveLevel, type Advisory } from '../lib/investigate.js';
 import { riskProvider, clearRiskCache } from '../lib/riskProvider.js';
 import { verifiedRecipients, clearVerifiedRecipients } from '../lib/verifiedRecipients.js';
 
@@ -50,11 +49,6 @@ import { verifiedRecipients, clearVerifiedRecipients } from '../lib/verifiedReci
  * 0.05 USDC is roughly thirty times the measured protection cost, so below it the
  * hint is true and above it the app stays quiet.
  */
-const config = defineConfig({
-  recallWindow: 3600,
-  onWarning: 'warn',
-  minProtectedAmount: 50_000n,
-});
 interface SentInfo {
   transferId: string;
   /** The one string the recipient needs. Nothing else is handed over. */
@@ -71,90 +65,38 @@ export function SendTab({ session, onSent }: { session: Session; onSent: () => v
   const [amount, setAmount] = useState('');
   const [windowSec, setWindowSec] = useState('3600');
   const [usePermit, setUsePermit] = useState(false);
-  const [report, setReport] = useState<RiskReport | null>(null);
-  const [checking, setChecking] = useState(false);
   const [busy, setBusy] = useState(false);
   const [step, setStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
   // The poisoning scenario: which real address the lookalike in the field imitates.
   const [crafting, setCrafting] = useState(false);
   const [poisonOf, setPoisonOf] = useState<string | null>(null);
-  // The server's reasoned second opinion. Null whenever it is off or unreachable.
-  const [advisory, setAdvisory] = useState<Advisory | null>(null);
-  const [investigating, setInvestigating] = useState(false);
   // Both verdicts fold independently. They stack, they are wordy by design, and on
   // a phone the amount field can end up below the fold because of them.
   const [ruleOpen, setRuleOpen] = useState(true);
   const [advisoryOpen, setAdvisoryOpen] = useState(true);
   const [sent, setSent] = useState<SentInfo | null>(null);
-  const debounce = useRef<ReturnType<typeof setTimeout>>();
-  // Bumped on every check dispatch so a slow, stale response can never overwrite
-  // the verdict for the address currently in the box (a poisoning-firewall race).
-  const reqId = useRef(0);
 
   const isSelf = isAddress(to) && to.toLowerCase() === session.address.toLowerCase();
   const addrValid = to === '' || (isAddress(to) && !isSelf);
   const addrError =
     to !== '' && !isAddress(to) ? t('send.invalidAddress') : isSelf ? t('send.selfSend') : null;
 
-  const runCheck = useCallback(
-    (target: string) => {
-      const id = ++reqId.current;
-      if (!isAddress(target)) {
-        setReport(null);
-        setChecking(false);
-        return;
-      }
-      setChecking(true);
-      // Bound the RecipientVerified scan. Unbounded it walks from the deploy block in
-      // 10k chunks, which is hundreds of eth_getLogs per keystroke-debounced check and
-      // gets the RPC to rate limit us (429) until the whole scan throws. The server
-      // co-signer already uses the same bound as its cold-start fallback.
-      setAdvisory(null);
-      setInvestigating(false);
-      setRuleOpen(true);
-      setAdvisoryOpen(true);
-      // The verified set comes from the server's index, which has no block
-      // window. Passing it in means `check` does no log scanning at all.
-      verifiedRecipients(session.address as Address)
-        .then(({ recipients }) =>
-          check(session.address as Address, target as Address, {
-            client: getPublicClient(),
-            provider: riskProvider(),
-            verifiedRecipients: recipients,
-          }),
-        )
-        .then((r) => {
-          if (id !== reqId.current) return;
-          setReport(r);
-          // Advisory is strictly additive: it arrives later, never gates the
-          // rule verdict, and can only make the outcome stricter.
-          //
-          // It is asked on `safe` too, and that case is the reason it exists.
-          // The clamp is `max(rule, advisory)`, so `safe` is the only verdict
-          // with anywhere to go — skipping it as "nothing to escalate" read the
-          // clamp backwards. It also skipped exactly the failure this feature
-          // was built for: a contract you have genuinely paid before rates
-          // `safe / KNOWN_COUNTERPARTY`, while a plain USDC transfer to it is
-          // gone. No rule can see that; the dossier can.
-          setInvestigating(true);
-          void investigate(session, target as Address)
-            .then((a) => {
-              if (id === reqId.current) setAdvisory(a);
-            })
-            .finally(() => {
-              if (id === reqId.current) setInvestigating(false);
-            });
-        })
-        .catch(() => {
-          if (id === reqId.current) setReport(null);
-        })
-        .finally(() => {
-          if (id === reqId.current) setChecking(false);
-        });
-    },
-    [session.address],
-  );
+  /**
+   * The firewall, from the shared hook. This screen used to own the whole thing,
+   * and the bridge grew a recipient field next to it; two copies of a risk check
+   * is how a strict front door ends up beside a lenient side door.
+   */
+  const risk = useRecipientRisk(session, to);
+  const { advisory, checking, investigating, blocked } = risk;
+  /**
+   * A verdict the SDK threw at us, rather than one the hook fetched. `sendProtected`
+   * runs the firewall again server-side and refuses with the full report; showing it
+   * in the same card is the whole point, so it needs somewhere to live that the
+   * hook does not own.
+   */
+  const [thrownReport, setThrownReport] = useState<RiskReport | null>(null);
+  const activeReport = thrownReport ?? risk.report;
 
   useEffect(() => {
     clearRiskCache();
@@ -166,24 +108,12 @@ export function SendTab({ session, onSent }: { session: Session; onSent: () => v
     // types sits under a spinner for half a minute. Starting it here spends that
     // time while they are still reading the form.
     const sender = session.address as Address;
-    void riskProvider().getOutgoingCounterparties(sender).catch(() => {});
+    void riskProvider()
+      .getOutgoingCounterparties(sender)
+      .catch(() => {});
     void verifiedRecipients(sender);
   }, [session.address]);
 
-  useEffect(() => {
-    clearTimeout(debounce.current);
-    debounce.current = setTimeout(() => runCheck(to), 400);
-    return () => clearTimeout(debounce.current);
-  }, [to, runCheck]);
-
-  // Only trust the report when it belongs to the address currently in the box, so
-  // a verdict for a previously-typed address is never shown for a new one.
-  const activeReport =
-    report && isAddress(to) && report.target.toLowerCase() === to.toLowerCase() ? report : null;
-  // The advisory may only tighten. `effectiveLevel` is the max of the two, so a
-  // block can never be talked down and a caution can never become a green light.
-  const level = activeReport ? effectiveLevel(activeReport.level, advisory) : null;
-  const blocked = level ? shouldBlockSend(config, level) : false;
   const amountValue = (() => {
     try {
       return amount ? parseUnits(amount, 6) : 0n;
@@ -296,13 +226,13 @@ export function SendTab({ session, onSent }: { session: Session; onSent: () => v
       toast.push(t('send.sentToast'), 'success');
       setTo('');
       setAmount('');
-      setReport(null);
+      setThrownReport(null);
       onSent();
     } catch (e) {
       if (e instanceof RiskBlockedError) {
         // The SDK's own firewall stopped the send. It carries the full report, so
         // show the same card the pre-send scan would have, not a raw message.
-        setReport(e.report);
+        setThrownReport(e.report);
         setError(null);
         toast.push(t('send.blockedToast'), 'error');
       } else {
@@ -429,7 +359,8 @@ export function SendTab({ session, onSent }: { session: Session; onSent: () => v
         </div>
       )}
       {!checking && activeReport && advisory && (
-        <div className={`risk risk--${advisory.level === 'safe' ? 'safe' : advisory.level === 'block' ? 'block' : 'warn'}`}
+        <div
+          className={`risk risk--${advisory.level === 'safe' ? 'safe' : advisory.level === 'block' ? 'block' : 'warn'}`}
           style={{ marginTop: 10 }}
           data-testid="advisory"
         >
