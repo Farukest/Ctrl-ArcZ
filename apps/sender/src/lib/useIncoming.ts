@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { Address } from 'viem';
+import type { Address, PublicClient } from 'viem';
 import { getPublicClient, type Session } from '@ctrl-arcz/demo-kit';
 import {
   ctrlArcZAbi,
@@ -20,6 +20,16 @@ export interface IncomingTransfer {
   /** Block the transfer was created in, so the list can be ordered without a
    *  per-transfer timestamp read. */
   block: bigint;
+  /**
+   * When that block was mined, in epoch ms.
+   *
+   * Ordering only needs the block number, but a history needs a date: without one
+   * the list cannot be filtered by day or grouped under one, and deriving a time
+   * from a block height would put transfers on the wrong side of midnight. Blocks
+   * are read once each and cached, so a page of transfers from the same block
+   * costs a single call.
+   */
+  at: number;
 }
 
 /**
@@ -30,6 +40,29 @@ export interface IncomingTransfer {
  * the chain rather than from anything this browser remembers, so it is the same on a
  * fresh device.
  */
+/**
+ * Block timestamps, read once per block and remembered for the session.
+ *
+ * Falls back to now when the read fails, which keeps a row visible and sorted at
+ * the top rather than dropping it or dating it to 1970. A wrong-but-recent date on
+ * an unreadable block is a smaller lie than either alternative.
+ */
+const blockTimes = new Map<string, number>();
+
+async function blockTime(client: PublicClient, block: bigint): Promise<number> {
+  const key = block.toString();
+  const known = blockTimes.get(key);
+  if (known != null) return known;
+  try {
+    const b = await client.getBlock({ blockNumber: block });
+    const ms = Number(b.timestamp) * 1000;
+    blockTimes.set(key, ms);
+    return ms;
+  } catch {
+    return Date.now();
+  }
+}
+
 export function useIncoming(session: Session | null): {
   rows: IncomingTransfer[] | null;
   reload: () => Promise<void>;
@@ -65,8 +98,11 @@ export function useIncoming(session: Session | null): {
       }
       const resolved = await Promise.all(
         [...seen].map(async ([id, block]) => {
-          const transfer = await getTransfer({ publicClient: client }, BigInt(id)).catch(() => null);
-          return transfer ? { transferId: BigInt(id), transfer, block } : null;
+          const [transfer, at] = await Promise.all([
+            getTransfer({ publicClient: client }, BigInt(id)).catch(() => null),
+            blockTime(client, block),
+          ]);
+          return transfer ? { transferId: BigInt(id), transfer, block, at } : null;
         }),
       );
       setRows(

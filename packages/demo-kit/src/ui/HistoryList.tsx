@@ -17,13 +17,25 @@ import { useT } from '../i18n/context.js';
  * date is a worse answer to "did this go out today" than the word today.
  */
 
-export type DateWindow = 'all' | 'today' | 'week' | 'month';
+export type DateWindow = 'all' | 'today' | 'days3' | 'week' | 'month' | 'custom';
 
-const WINDOW_MS: Record<Exclude<DateWindow, 'all'>, number> = {
-  today: 24 * 60 * 60 * 1000,
-  week: 7 * 24 * 60 * 60 * 1000,
-  month: 30 * 24 * 60 * 60 * 1000,
+const DAY = 24 * 60 * 60 * 1000;
+const WINDOW_MS: Record<'today' | 'days3' | 'week' | 'month', number> = {
+  today: DAY,
+  days3: 3 * DAY,
+  week: 7 * DAY,
+  month: 30 * DAY,
 };
+
+/** `2026-08-07` from a date input, as the start and the end of that day. */
+function dayStart(v: string): number | null {
+  const t = Date.parse(`${v}T00:00:00`);
+  return Number.isNaN(t) ? null : t;
+}
+function dayEnd(v: string): number | null {
+  const t = dayStart(v);
+  return t == null ? null : t + DAY - 1;
+}
 
 /** Midnight-based day index, so "yesterday" means the calendar day, not 24 hours. */
 function dayIndex(ts: number): number {
@@ -70,15 +82,28 @@ export function HistoryList<T>({
   const t = useT();
   const [query, setQuery] = useState('');
   const [window, setWindow] = useState<DateWindow>('all');
+  /** Only meaningful while `window` is `custom`; kept so switching back restores it. */
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
   const [page, setPage] = useState(0);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const cutoff = window === 'all' ? 0 : Date.now() - WINDOW_MS[window];
-    return items.filter(
-      (item) => (!q || searchText(item).toLowerCase().includes(q)) && timestamp(item) >= cutoff,
-    );
-  }, [items, query, window, searchText, timestamp]);
+    // An open-ended custom range is legitimate: "since the third" and "up to the
+    // third" are both things people mean, so each end is applied only if given.
+    const after =
+      window === 'all'
+        ? 0
+        : window === 'custom'
+          ? (dayStart(fromDate) ?? 0)
+          : Date.now() - WINDOW_MS[window];
+    const before =
+      window === 'custom' ? (dayEnd(toDate) ?? Number.MAX_SAFE_INTEGER) : Number.MAX_SAFE_INTEGER;
+    return items.filter((item) => {
+      const at = timestamp(item);
+      return (!q || searchText(item).toLowerCase().includes(q)) && at >= after && at <= before;
+    });
+  }, [items, query, window, fromDate, toDate, searchText, timestamp]);
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
   const safePage = Math.min(page, pageCount - 1);
@@ -128,8 +153,10 @@ export function HistoryList<T>({
           options={[
             { value: 'all', label: t('history.anyTime') },
             { value: 'today', label: t('history.today') },
+            { value: 'days3', label: t('history.days3') },
             { value: 'week', label: t('history.week') },
             { value: 'month', label: t('history.month') },
+            { value: 'custom', label: t('history.custom') },
           ]}
           onChange={(v) => {
             setWindow(v as DateWindow);
@@ -137,6 +164,35 @@ export function HistoryList<T>({
           }}
           ariaLabel={t('history.dateFilter')}
         />
+        {window === 'custom' && (
+          <span className="hist-range">
+            <input
+              type="date"
+              className="input input--date"
+              value={fromDate}
+              max={toDate || undefined}
+              onChange={(e) => {
+                setFromDate(e.target.value);
+                reset();
+              }}
+              aria-label={t('history.from')}
+              data-testid="history-from"
+            />
+            <span className="hist-range__sep">{'→'}</span>
+            <input
+              type="date"
+              className="input input--date"
+              value={toDate}
+              min={fromDate || undefined}
+              onChange={(e) => {
+                setToDate(e.target.value);
+                reset();
+              }}
+              aria-label={t('history.to')}
+              data-testid="history-to"
+            />
+          </span>
+        )}
         {filter && (
           <Select
             value={filter.value}
@@ -156,7 +212,10 @@ export function HistoryList<T>({
         </p>
       ) : (
         <>
-          <PagedList resetKey={`${query}:${window}`} reserve={safePage < pageCount - 1}>
+          <PagedList
+            resetKey={`${query}:${window}:${fromDate}:${toDate}`}
+            reserve={safePage < pageCount - 1}
+          >
             <div style={{ marginTop: 14 }}>
               {groups.map((group) => (
                 <div key={group.label} className="hist-group">

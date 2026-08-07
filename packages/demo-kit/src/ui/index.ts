@@ -23,3 +23,4 @@ export {
 } from '../i18n/context.js';
 export { type TranslationKey } from '../i18n/en.js';
 export { HistoryList, type DateWindow, type HistoryListProps } from './HistoryList.js';
+export { HistoryRow, Copyable, Address, type RowStep, type RowTone } from './HistoryRow.js';

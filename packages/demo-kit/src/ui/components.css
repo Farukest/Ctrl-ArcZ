@@ -900,6 +900,13 @@
   display: flex;
   align-items: center;
   gap: 10px;
+  /* Three controls plus an optional date range do not fit one narrow line, and a
+     search box squeezed to "Search by netw" is worse than a second row. */
+  flex-wrap: wrap;
+}
+.hist-controls > :first-child {
+  flex: 1 1 220px;
+  min-width: 180px;
 }
 .hist-controls .searchfield {
   flex: 1;
@@ -1905,4 +1912,138 @@
   text-transform: uppercase;
   letter-spacing: 0.04em;
   margin-bottom: 6px;
+}
+
+/* History row -------------------------------------------------------------
+   One layout for every history. The head is a single optical line: identity on
+   the left, the numbers that let you scan the list on the right. Facts and steps
+   sit below a rule, so a dense row stays readable instead of running together. */
+.hrow__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.hrow__lead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: var(--fs-sm);
+  color: var(--text-hi);
+}
+.hrow__meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+.hrow__amount {
+  font-size: var(--fs-sm);
+  color: var(--text-hi);
+}
+.hrow__time {
+  font-size: var(--fs-xs);
+  color: var(--text-lo);
+}
+
+.hrow__facts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 14px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-subtle);
+}
+.hrow__fact {
+  display: contents;
+}
+.hrow__factk {
+  font-size: var(--fs-xs);
+  color: var(--text-lo);
+  white-space: nowrap;
+}
+.hrow__factv {
+  font-size: var(--fs-xs);
+  color: var(--text-mid);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.hrow__steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-subtle);
+}
+.hstep {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-sm);
+  font-size: var(--fs-xs);
+  color: var(--text-mid);
+  background: var(--surface-2);
+}
+.hstep--bare {
+  opacity: 0.65;
+}
+.hstep--err {
+  border-color: var(--block);
+  color: var(--block);
+}
+.hstep__name {
+  color: var(--text-lo);
+}
+.hstep__go {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-mid);
+  text-decoration: none;
+  font-family: var(--font-mono, monospace);
+}
+a.hstep__go:hover {
+  color: var(--text-hi);
+}
+
+.hrow__actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+
+.copyable {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.copyable__text {
+  overflow-wrap: anywhere;
+}
+
+.hist-range {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.input--date {
+  width: auto;
+  padding: 6px 10px;
+  font-size: var(--fs-xs);
+}
+.hist-range__sep {
+  color: var(--text-lo);
+}
+
+.hrow__arrow {
+  color: var(--text-lo);
+  margin: 0 2px;
 }

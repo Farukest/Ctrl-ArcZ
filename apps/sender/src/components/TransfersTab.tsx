@@ -12,15 +12,15 @@ import {
   Button,
   Card,
   HistoryList,
-  CopyButton,
+  HistoryRow,
+  Address as AddressChip,
+  Copyable,
+  type RowTone,
   Skeleton,
-  StatusPill,
   useSubmitGuard,
   useT,
   useToast,
-  short,
 } from '@ctrl-arcz/demo-kit/ui';
-import { IconExternal } from '@ctrl-arcz/demo-kit/ui';
 import { loadTransfers, type StoredTransfer } from '../store.js';
 
 interface Row {
@@ -42,6 +42,25 @@ function transferHaystack(r: Row): string {
   ]
     .join(' ')
     .toLowerCase();
+}
+
+/** Chain status to the row's four tones, so every history reads the same way. */
+function statusTone(status: string): RowTone {
+  if (status === 'CLAIMED') return 'ok';
+  if (status === 'CANCELLED' || status === 'EXPIRED') return 'err';
+  if (status === 'LOCKED') return 'warn';
+  return 'idle';
+}
+
+/** Rows are history, so time is relative: "3m" reads faster than a timestamp. */
+function relativeTime(ts: number): string {
+  const s = Math.max(1, Math.round((Date.now() - ts) / 1000));
+  if (s < 60) return `${s}s`;
+  const m = Math.round(s / 60);
+  if (m < 60) return `${m}m`;
+  const h = Math.round(m / 60);
+  if (h < 24) return `${h}h`;
+  return `${Math.round(h / 24)}d`;
 }
 
 export function TransfersTab({ session, onChange }: { session: Session; onChange: () => void }) {
@@ -122,54 +141,57 @@ export function TransfersTab({ session, onChange }: { session: Session; onChange
           const status = chain?.status ?? 'NONE';
           const canCancel = status === 'PENDING' || status === 'LOCKED';
           return (
-            <div
-              className="trow"
-              key={stored.transferId}
-              data-testid={`transfer-${stored.transferId}`}
-            >
-              <div className="trow__top">
-                <div className="trow__idline">
-                  <span className="trow__id">#{stored.transferId}</span>
-                  <span className="trow__sep">·</span>
-                  <span className="trow__amount">{stored.amount}</span>
-                  <span className="trow__unit">USDC</span>
-                </div>
-                <StatusPill status={status} />
-              </div>
-              <div className="trow__to">→ {short(stored.to)}</div>
-
-              <hr className="rule trow__rule" />
-
-              <div className="trow__bottom">
-                <div className="trow__code">
-                  <span className="trow__code-label">{t('active.code')}</span>
-                  <span className="trow__code-value">{stored.secret}</span>
-                  <CopyButton value={stored.secret} />
-                </div>
-                <div className="trow__actions">
-                  <a
-                    className="linkbtn"
-                    href={explorerTxUrl(stored.txHash)}
-                    target="_blank"
-                    rel="noreferrer"
+            <HistoryRow data-testid={`transfer-${stored.transferId}`}>
+              <HistoryRow.Head
+                lead={
+                  <>
+                    <Copyable value={stored.transferId} display={`#${stored.transferId}`} />
+                    <span className="hrow__arrow" aria-hidden>
+                      &rarr;
+                    </span>
+                    <AddressChip address={stored.to} />
+                  </>
+                }
+                amount={`${stored.amount} USDC`}
+                status={{ tone: statusTone(status), label: status }}
+                time={relativeTime(stored.createdAt)}
+              />
+              {/* The claim code is the one thing the recipient cannot do without,
+                  and the one thing a sender has to get out of this screen and into a
+                  message, so it is copyable in full rather than shortened. It is
+                  held in memory only, so after a reload there is nothing to show and
+                  an empty row would be worse than none. */}
+              {stored.secret && (
+                <HistoryRow.Facts>
+                  <HistoryRow.Fact label={t('active.code')}>
+                    <Copyable value={stored.secret} />
+                  </HistoryRow.Fact>
+                </HistoryRow.Facts>
+              )}
+              <HistoryRow.Steps
+                steps={[
+                  {
+                    label: t('active.stepSent'),
+                    txHash: stored.txHash,
+                    explorerUrl: explorerTxUrl(stored.txHash),
+                  },
+                ]}
+              />
+              {canCancel && (
+                <HistoryRow.Actions>
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    loading={busy === stored.transferId}
+                    disabled={Boolean(busy)}
+                    onClick={() => void guard(() => handleCancel(stored.transferId))}
+                    data-testid={`cancel-${stored.transferId}`}
                   >
-                    tx <IconExternal width={13} height={13} />
-                  </a>
-                  {canCancel && (
-                    <Button
-                      variant="danger"
-                      size="sm"
-                      loading={busy === stored.transferId}
-                      disabled={Boolean(busy)}
-                      onClick={() => void guard(() => handleCancel(stored.transferId))}
-                      data-testid={`cancel-${stored.transferId}`}
-                    >
-                      {busy === stored.transferId ? t('active.cancelling') : t('active.cancel')}
-                    </Button>
-                  )}
-                </div>
-              </div>
-            </div>
+                    {busy === stored.transferId ? t('active.cancelling') : t('active.cancel')}
+                  </Button>
+                </HistoryRow.Actions>
+              )}
+            </HistoryRow>
           );
         }}
       />

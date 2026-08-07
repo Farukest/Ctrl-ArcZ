@@ -40,6 +40,10 @@ import {
   SegmentedTabs,
   Select,
   HistoryList,
+  HistoryRow,
+  Address as AddressChip,
+  Copyable,
+  short,
   RiskCard,
   Skeleton,
   Stepper,
@@ -48,8 +52,9 @@ import {
   useT,
   useToast,
   type Step,
+  type RowStep,
 } from '@ctrl-arcz/demo-kit/ui';
-import { loadBridges, saveBridge, type StoredBridge } from '../store.js';
+import { loadBridges, saveBridge, type StoredBridge, type StoredBridgeStep } from '../store.js';
 import { useRecipientRisk } from '../lib/useRecipientRisk.js';
 import { pendingOn, reconcile, rememberDeposit } from '../lib/pendingDeposits.js';
 
@@ -89,6 +94,24 @@ const GW_STEP_TO_UI: Record<GatewayStep, string | undefined> = {
 function stepRow(name: string, txHash?: string, chain?: CctpChainName) {
   const url = txHash && chain ? chainExplorerTxUrl(chain, txHash) : undefined;
   return { name, ...(txHash ? { txHash } : {}), ...(url ? { explorerUrl: url } : {}) };
+}
+
+/**
+ * A stored step as the shared row wants it.
+ *
+ * Every step is shown, including the ones with no transaction of their own. The
+ * previous row rendered a step only when it had both a hash and an https explorer,
+ * so the attestation never appeared at all, and on the two chains with no explorer
+ * in the registry a completed transfer looked like it had done nothing.
+ */
+function rowStep(s: StoredBridgeStep, t: (k: 'bridge.rowstep.mint') => string): RowStep {
+  // A row is a record, not a progress bar. The live stepper says "Minting on the
+  // destination chain"; a finished row only needs the noun.
+  return {
+    label: t(`bridge.rowstep.${s.name}` as 'bridge.rowstep.mint'),
+    ...(s.txHash ? { txHash: s.txHash } : {}),
+    ...(s.explorerUrl ? { explorerUrl: s.explorerUrl } : {}),
+  };
 }
 
 /** Map a server step name to its index in the active engine's step list. */
@@ -629,6 +652,7 @@ export function BridgeTab({ session }: { session: Session }) {
                 fromLabel,
                 toLabel,
                 amount,
+                ...(isAddress(recipient.trim()) ? { recipient: recipient.trim() } : {}),
                 state: 'pending',
                 steps: [{ name: 'deposit' }, { name: 'sign' }, { name: 'attestation' }],
                 createdAt: Date.now(),
@@ -653,6 +677,7 @@ export function BridgeTab({ session }: { session: Session }) {
           fromLabel,
           toLabel,
           amount,
+          ...(isAddress(recipient.trim()) ? { recipient: recipient.trim() } : {}),
           state: res.mintTxHash ? 'success' : 'pending',
           steps,
           createdAt: Date.now(),
@@ -709,6 +734,7 @@ export function BridgeTab({ session }: { session: Session }) {
                 fromLabel,
                 toLabel,
                 amount,
+                ...(isAddress(recipient.trim()) ? { recipient: recipient.trim() } : {}),
                 state: 'pending',
                 steps: [stepRow('burn', txHash, from)],
                 createdAt: Date.now(),
@@ -736,6 +762,7 @@ export function BridgeTab({ session }: { session: Session }) {
         fromLabel,
         toLabel,
         amount,
+        ...(isAddress(recipient.trim()) ? { recipient: recipient.trim() } : {}),
         // No forward hash yet is not a failure: the burn is permanent and Circle
         // will still mint. Recording it as pending keeps the receipt either way.
         state: res.forwardTxHash ? 'success' : 'pending',
@@ -1055,49 +1082,42 @@ export function BridgeTab({ session }: { session: Session }) {
               ],
             }}
             renderRow={(b) => (
-              <div key={b.id} className="trow" data-testid="bridge-history-row">
-                <div className="bridge-hist__head">
-                  <span className="bridge-hist__route">
-                    <ChainLogo id={b.from} size={18} />
-                    {b.fromLabel}
-                    <span className="bridge-hist__arrow">&rarr;</span>
-                    <ChainLogo id={b.to} size={18} />
-                    {b.toLabel}
-                  </span>
-                  <span className="bridge-hist__meta">
-                    <span className="bridge-hist__amount mono">{b.amount} USDC</span>
-                    <span
-                      className={`hstatus${
-                        b.state === 'success'
-                          ? ' hstatus--ok'
-                          : b.state === 'error'
-                            ? ' hstatus--err'
-                            : ''
-                      }`}
-                    >
-                      {t(`bridge.state.${b.state}` as 'bridge.state.success')}
-                    </span>
-                    <span className="bridge-hist__time">{relativeTime(b.createdAt)}</span>
-                  </span>
-                </div>
-                {b.steps.some((s) => s.txHash && safeHttpUrl(s.explorerUrl)) && (
-                  <>
-                    <hr className="rule trow__rule" />
-                    <div className="bridge-hist__links">
-                      {b.steps
-                        .filter((s) => s.txHash && safeHttpUrl(s.explorerUrl))
-                        .map((s) => (
-                          <TxLink
-                            key={s.name}
-                            href={safeHttpUrl(s.explorerUrl)}
-                            label={s.name}
-                            copyValue={s.txHash ?? ''}
-                          />
-                        ))}
-                    </div>
-                  </>
+              <HistoryRow data-testid="bridge-history-row">
+                <HistoryRow.Head
+                  lead={
+                    <>
+                      <ChainLogo id={b.from} size={18} />
+                      {b.fromLabel}
+                      <span className="hrow__arrow" aria-hidden>
+                        &rarr;
+                      </span>
+                      <ChainLogo id={b.to} size={18} />
+                      {b.toLabel}
+                    </>
+                  }
+                  amount={`${b.amount} USDC`}
+                  status={{
+                    tone: b.state === 'success' ? 'ok' : b.state === 'error' ? 'err' : 'idle',
+                    label: t(`bridge.state.${b.state}` as 'bridge.state.success'),
+                  }}
+                  time={relativeTime(b.createdAt)}
+                />
+                {/* A recipient is only shown when the money went to someone else.
+                    Printing the sender's own address as a "to" is noise. */}
+                {(b.recipient || b.id) && (
+                  <HistoryRow.Facts>
+                    {b.recipient && (
+                      <HistoryRow.Fact label={t('bridge.rowTo')}>
+                        <AddressChip address={b.recipient} />
+                      </HistoryRow.Fact>
+                    )}
+                    <HistoryRow.Fact label={t('bridge.rowReceipt')}>
+                      <Copyable value={b.id} display={short(b.id)} />
+                    </HistoryRow.Fact>
+                  </HistoryRow.Facts>
                 )}
-              </div>
+                <HistoryRow.Steps steps={b.steps.map((s) => rowStep(s, t))} />
+              </HistoryRow>
             )}
           />
         </Card>

@@ -65,6 +65,12 @@ export interface StoredBridge {
   to: string;
   fromLabel: string;
   toLabel: string;
+  /**
+   * Only set when the transfer was sent to someone else. Absent means it went to
+   * the sender's own address, which is what a bridge normally is, and a row should
+   * not show a "to" that is just you.
+   */
+  recipient?: string;
   amount: string;
   state: string;
   steps: StoredBridgeStep[];

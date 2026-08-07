@@ -1,18 +1,16 @@
 import { useMemo, useState } from 'react';
 import { formatUnits } from 'viem';
-import { explorerAddressUrl, reclaimExpired, type TransferStatus } from '@ctrl-arcz/sdk';
 import type { Session } from '@ctrl-arcz/demo-kit';
+import { reclaimExpired, type TransferStatus } from '@ctrl-arcz/sdk';
 import {
   Button,
   Card,
-  IconExternal,
-  PagedList,
-  Pagination,
-  SearchField,
+  HistoryList,
+  HistoryRow,
+  Address as AddressChip,
+  Copyable,
+  type RowTone,
   Skeleton,
-  StatusPill,
-  paginate,
-  short,
   useT,
   useToast,
 } from '@ctrl-arcz/demo-kit/ui';
@@ -61,13 +59,29 @@ function isReturnable(transfer: IncomingTransfer['transfer']): boolean {
   return open && Date.now() > transfer.deadline.getTime();
 }
 
+/** Same four tones every history uses, so the lists read alike. */
+function statusTone(status: string): RowTone {
+  if (status === 'CLAIMED') return 'ok';
+  if (status === 'CANCELLED' || status === 'EXPIRED') return 'err';
+  if (status === 'LOCKED') return 'warn';
+  return 'idle';
+}
+
+function relativeTime(ts: number): string {
+  const s = Math.max(1, Math.round((Date.now() - ts) / 1000));
+  if (s < 60) return `${s}s`;
+  const m = Math.round(s / 60);
+  if (m < 60) return `${m}m`;
+  const h = Math.round(m / 60);
+  if (h < 24) return `${h}h`;
+  return `${Math.round(h / 24)}d`;
+}
+
 export function ReceivedTab({ session }: { session: Session }) {
   const t = useT();
   const toast = useToast();
   const { rows } = useIncoming(session);
-  const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
-  const [page, setPage] = useState(0);
   const [returning, setReturning] = useState<string | null>(null);
 
   /**
@@ -102,16 +116,10 @@ export function ReceivedTab({ session }: { session: Session }) {
     return c;
   }, [rows]);
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return (rows ?? [])
-      .filter((r) => filter === 'all' || bucket(r.transfer.status) === filter)
-      .filter((r) => !q || haystack(r).includes(q));
-  }, [rows, filter, query]);
-
-  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const safePage = Math.min(page, pageCount - 1);
-  const pageRows = useMemo(() => paginate(filtered, safePage, PAGE_SIZE), [filtered, safePage]);
+  const filtered = useMemo(
+    () => (rows ?? []).filter((r) => filter === 'all' || bucket(r.transfer.status) === filter),
+    [rows, filter],
+  );
 
   if (rows === null) {
     return (
@@ -123,27 +131,16 @@ export function ReceivedTab({ session }: { session: Session }) {
 
   return (
     <Card title={t('received.title')} data-testid="received-list">
-      <SearchField
-        value={query}
-        onChange={(v) => {
-          setQuery(v);
-          setPage(0);
-        }}
-        placeholder={t('received.search')}
-        ariaLabel={t('received.search')}
-        data-testid="received-search"
-      />
-
+      {/* The status chips stay: they carry counts, which a dropdown cannot, and on
+          this screen "what can I still claim" is the first question. Search, date
+          and paging are the shared list's. */}
       <div className="sub-chips" data-testid="received-filters">
         {(['all', 'pending', 'claimed', 'cancelled', 'expired'] as const).map((f) => (
           <button
             key={f}
             type="button"
             className={`sub-chip ${filter === f ? 'sub-chip--on' : ''}`}
-            onClick={() => {
-              setFilter(f);
-              setPage(0);
-            }}
+            onClick={() => setFilter(f)}
             data-testid={`received-chip-${f}`}
           >
             {t(`received.filter.${f}` as never)} <span className="sub-chip__n">{counts[f]}</span>
@@ -151,60 +148,56 @@ export function ReceivedTab({ session }: { session: Session }) {
         ))}
       </div>
 
-      {filtered.length === 0 ? (
-        <p className="muted" style={{ marginTop: 14 }}>
-          {rows.length === 0 ? t('received.empty') : t('received.noMatch')}
-        </p>
-      ) : (
-        <PagedList resetKey={`${query}:${filter}`} reserve={safePage < pageCount - 1}>
-          <div style={{ marginTop: 14 }}>
-            {pageRows.map(({ transferId, transfer }) => (
-              <div
-                className="trow trow--compact"
-                key={transferId.toString()}
-                data-testid={`received-${transferId.toString()}`}
-              >
-                <div className="trow__top">
-                  <div className="trow__idline">
-                    <span className="trow__id">#{transferId.toString()}</span>
-                    <span className="trow__sep">·</span>
-                    <span className="trow__amount">{formatUnits(transfer.amount, 6)}</span>
-                    <span className="trow__unit">USDC</span>
-                  </div>
-                  <StatusPill status={transfer.status} />
-                </div>
-                <div className="trow__to">
-                  ←{' '}
-                  <a href={explorerAddressUrl(transfer.sender)} target="_blank" rel="noreferrer">
-                    {short(transfer.sender)} <IconExternal width={12} height={12} />
-                  </a>
-                </div>
-                {isReturnable(transfer) && (
-                  <div style={{ marginTop: 8 }}>
-                    <p className="muted" style={{ marginBottom: 6 }}>
-                      {t('received.expiredHint')}
-                    </p>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      loading={returning === transferId.toString()}
-                      disabled={returning !== null}
-                      onClick={() => void returnToSender(transferId)}
-                      data-testid={`return-${transferId.toString()}`}
-                    >
-                      {t('received.returnToSender')}
-                    </Button>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </PagedList>
-      )}
-
-      {filtered.length > 0 && (
-        <Pagination page={safePage} pageCount={pageCount} onChange={setPage} />
-      )}
+      <HistoryList
+        items={filtered}
+        data-testid="received-history"
+        searchText={haystack}
+        timestamp={(r) => r.at}
+        rowKey={(r) => r.transferId.toString()}
+        searchPlaceholder={t('received.search')}
+        emptyText={t('received.empty')}
+        noMatchText={t('received.noMatch')}
+        pageSize={PAGE_SIZE}
+        renderRow={({ transferId, transfer, at }) => (
+          <HistoryRow data-testid={`received-${transferId.toString()}`}>
+            <HistoryRow.Head
+              lead={
+                <>
+                  <Copyable value={transferId.toString()} display={`#${transferId.toString()}`} />
+                  <span className="hrow__arrow" aria-hidden>
+                    &larr;
+                  </span>
+                  <AddressChip address={transfer.sender} />
+                </>
+              }
+              amount={`${formatUnits(transfer.amount, 6)} USDC`}
+              status={{ tone: statusTone(transfer.status), label: transfer.status }}
+              time={relativeTime(at)}
+            />
+            {isReturnable(transfer) && (
+              <>
+                <HistoryRow.Facts>
+                  <HistoryRow.Fact label={t('received.expiredLabel')}>
+                    {t('received.expiredHint')}
+                  </HistoryRow.Fact>
+                </HistoryRow.Facts>
+                <HistoryRow.Actions>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    loading={returning === transferId.toString()}
+                    disabled={returning !== null}
+                    onClick={() => void returnToSender(transferId)}
+                    data-testid={`return-${transferId.toString()}`}
+                  >
+                    {t('received.returnToSender')}
+                  </Button>
+                </HistoryRow.Actions>
+              </>
+            )}
+          </HistoryRow>
+        )}
+      />
     </Card>
   );
 }
