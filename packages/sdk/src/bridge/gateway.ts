@@ -140,6 +140,24 @@ function jsonBigints(value: unknown): string {
   return JSON.stringify(value, (_k, v) => (typeof v === 'bigint' ? v.toString() : v));
 }
 
+/**
+ * The sentence Circle actually wrote, not the envelope around it.
+ *
+ * Errors come back as `{"success":false,"message":"..."}` and that message is a
+ * real sentence meant for a person. Printing the whole body puts JSON punctuation
+ * and a status code in front of it, which reads like a crash rather than an answer.
+ */
+async function circleMessage(res: Response, fallback: string): Promise<string> {
+  const text = await res.text().catch(() => '');
+  try {
+    const body = JSON.parse(text) as { message?: string };
+    if (body.message) return body.message;
+  } catch {
+    // Not JSON. Fall through to the raw text, which is better than nothing.
+  }
+  return text ? `${fallback}: ${text.slice(0, 200)}` : `${fallback} (${res.status}).`;
+}
+
 /** USDC subunits as a readable figure, for the messages a person has to act on. */
 function usdc(v: bigint): string {
   return String(Number(v) / 1e6);
@@ -314,9 +332,34 @@ function buildSpec(params: {
   };
 }
 
+/**
+ * Headroom added to Circle's quoted fee before it is signed.
+ *
+ * `maxFee` is a ceiling, not a price: Circle charges what the transfer actually
+ * costs and ignores the rest, so widening it is free. It has to be widened, because
+ * the fee drifts between quoting and settling and the signature locks in whatever
+ * number was signed. With a local key that gap is a second and never shows; with a
+ * wallet the user has to switch app, unlock and approve, and two minutes later
+ * Circle refuses with "Insufficient total maxFee across intents. Required
+ * additional: 0.000034". No money moves, but the transfer is dead and the whole
+ * flow starts over, which is a miserable way to lose three cents of headroom.
+ */
+const FEE_MARGIN_BPS = 200n; // 2%
+const FEE_MARGIN_MIN = 500n; // 0.0005 USDC
+
+function withMargin(fee: bigint): bigint {
+  const pad = (fee * FEE_MARGIN_BPS) / 10_000n;
+  return fee + (pad > FEE_MARGIN_MIN ? pad : FEE_MARGIN_MIN);
+}
+
 export interface GatewayQuote {
-  /** What Circle will take, in USDC subunits. Flat: it does not scale with amount. */
+  /**
+   * What gets signed: Circle's quote plus headroom. A ceiling, not a price, so the
+   * balance has to cover it even though less will be taken.
+   */
   maxFee: bigint;
+  /** Circle's unpadded figure, for showing a fee that matches what is charged. */
+  quotedFee: bigint;
   maxBlockHeight: bigint;
   /** amount + maxFee, which is what the Gateway balance has to cover. */
   total: bigint;
@@ -356,14 +399,20 @@ export async function quoteGatewaySpend(params: {
       body: jsonBigints([{ spec }]),
     },
   );
-  if (!res.ok) throw new Error(`Could not price this transfer (${res.status}).`);
+  if (!res.ok) throw new Error(await circleMessage(res, 'Could not price this transfer'));
   const body = (await res.json()) as {
     body?: { burnIntent?: { maxFee: string; maxBlockHeight: string } }[];
   };
   const estimate = body.body?.[0]?.burnIntent;
   if (!estimate) throw new Error('Circle did not quote this Gateway route.');
-  const maxFee = BigInt(estimate.maxFee);
-  return { maxFee, maxBlockHeight: BigInt(estimate.maxBlockHeight), total: params.amount + maxFee };
+  const quotedFee = BigInt(estimate.maxFee);
+  const maxFee = withMargin(quotedFee);
+  return {
+    maxFee,
+    quotedFee,
+    maxBlockHeight: BigInt(estimate.maxBlockHeight),
+    total: params.amount + maxFee,
+  };
 }
 
 export interface GatewaySpendResult {
@@ -488,9 +537,7 @@ export async function spendFromGateway(
     headers: { 'Content-Type': 'application/json' },
     body: jsonBigints([{ burnIntent: message, signature }]),
   });
-  if (!res.ok) {
-    throw new Error(`Gateway refused the transfer (${res.status}): ${await res.text()}`);
-  }
+  if (!res.ok) throw new Error(await circleMessage(res, 'Gateway refused the transfer'));
   const { transferId } = (await res.json()) as { transferId?: string };
   if (!transferId) throw new Error('Gateway accepted the transfer but returned no id.');
   params.onTransferId?.(transferId);

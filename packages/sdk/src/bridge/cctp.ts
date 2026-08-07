@@ -402,39 +402,43 @@ export async function bridgeFromWallet(
 
   let approveTxHash: Hex | undefined;
   if (needsApproval) {
-    approveTxHash = await clients.walletClient.writeContract({
-      address: src.usdc,
-      abi: erc20Abi,
-      functionName: 'approve',
-      args: [CCTP_TOKEN_MESSENGER, quote.total],
-      account,
-      chain: clients.walletClient.chain ?? null,
-    });
+    approveTxHash = await queued(account.address, src.chainId, () =>
+      clients.walletClient.writeContract({
+        address: src.usdc,
+        abi: erc20Abi,
+        functionName: 'approve',
+        args: [CCTP_TOKEN_MESSENGER, quote.total],
+        account,
+        chain: clients.walletClient.chain ?? null,
+      }),
+    );
     await clients.publicClient.waitForTransactionReceipt({ hash: approveTxHash });
     params.onStep?.('approve', approveTxHash);
   } else {
     params.onStep?.('approve');
   }
 
-  const burnTxHash = await clients.walletClient.sendTransaction({
-    to: CCTP_TOKEN_MESSENGER,
-    data: encodeFunctionData({
-      abi: tokenMessengerAbi,
-      functionName: 'depositForBurnWithHook',
-      args: [
-        quote.total,
-        dst.domain,
-        pad(recipient, { size: 32 }),
-        src.usdc,
-        ANY_CALLER,
-        quote.maxFee,
-        FAST_FINALITY,
-        FORWARDING_HOOK,
-      ],
+  const burnTxHash = await queued(account.address, src.chainId, () =>
+    clients.walletClient.sendTransaction({
+      to: CCTP_TOKEN_MESSENGER,
+      data: encodeFunctionData({
+        abi: tokenMessengerAbi,
+        functionName: 'depositForBurnWithHook',
+        args: [
+          quote.total,
+          dst.domain,
+          pad(recipient, { size: 32 }),
+          src.usdc,
+          ANY_CALLER,
+          quote.maxFee,
+          FAST_FINALITY,
+          FORWARDING_HOOK,
+        ],
+      }),
+      account,
+      chain: clients.walletClient.chain ?? null,
     }),
-    account,
-    chain: clients.walletClient.chain ?? null,
-  });
+  );
   await clients.publicClient.waitForTransactionReceipt({ hash: burnTxHash });
   params.onStep?.('burn', burnTxHash);
 
@@ -461,6 +465,31 @@ export async function bridgeFromWallet(
  * same wallet both ways and confirming `native / 1e12 === balanceOf`.
  */
 const NATIVE_PER_USDC = 10n ** 12n;
+
+/**
+ * One on-chain transaction at a time per signer, per chain.
+ *
+ * Two transfers started close together each ask the node for a nonce, get the same
+ * one, and the second is rejected. It used to be impossible to hit because the UI
+ * locked while a transfer ran; allowing a second transfer to start made it
+ * reachable. Queuing is enough: these are two quick sends, not a throughput
+ * problem, and serialising them is cheaper than tracking nonces ourselves.
+ *
+ * Keyed by signer and chain, so transfers on different chains still overlap.
+ */
+const sendQueues = new Map<string, Promise<unknown>>();
+
+function queued<T>(signer: Address, chainId: number, work: () => Promise<T>): Promise<T> {
+  const key = `${signer.toLowerCase()}:${chainId}`;
+  const prev = sendQueues.get(key) ?? Promise.resolve();
+  // Never let a failed transfer poison the queue for the next one.
+  const next = prev.then(work, work);
+  sendQueues.set(
+    key,
+    next.catch(() => undefined),
+  );
+  return next;
+}
 
 /** USDC subunits as a readable figure. Six decimals, trailing zeros dropped. */
 function usdc(v: bigint): string {

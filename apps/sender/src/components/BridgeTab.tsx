@@ -160,7 +160,14 @@ export function BridgeTab({ session }: { session: Session }) {
   const [gwByChain, setGwByChain] = useState<Partial<Record<GatewayChain, bigint>>>({});
   /** Deposited, on chain, but not yet counted by Circle. */
   const [gwPending, setGwPending] = useState<bigint>(0n);
+  /**
+   * Two figures, deliberately. `gwFee` is what Circle actually charges and is what
+   * the user is shown; `gwCeiling` is the padded number that gets signed and is
+   * what the balance has to cover. Showing the ceiling would quote a fee nobody
+   * pays, and checking against the quote would pass a balance that cannot sign.
+   */
   const [gwFee, setGwFee] = useState<bigint | null>(null);
+  const [gwCeiling, setGwCeiling] = useState<bigint | null>(null);
   const [depositing, setDepositing] = useState(false);
   /**
    * Empty means "send it to myself", which is what a bridge normally is. Typing an
@@ -214,7 +221,7 @@ export function BridgeTab({ session }: { session: Session }) {
    */
   const gwSource =
     engine === 'gateway' && isGatewayChain(from) ? (from as GatewayChain) : undefined;
-  const gwNeeded = gwFee != null ? BigInt(Math.round(amountValue * 1e6)) + gwFee : null;
+  const gwNeeded = gwCeiling != null ? BigInt(Math.round(amountValue * 1e6)) + gwCeiling : null;
   // Short against the SOURCE chain, not the total: the check that matters.
   const gwShort = gwOnSource != null && gwNeeded != null && gwOnSource < gwNeeded;
   /**
@@ -307,7 +314,8 @@ export function BridgeTab({ session }: { session: Session }) {
         setGwOnSource(here);
         setGwByChain(bal.byChain);
         setGwPending(pendingOn(gwSource));
-        setGwFee(quote.maxFee);
+        setGwFee(quote.quotedFee);
+        setGwCeiling(quote.maxFee);
       } catch {
         // Leave the last known figures rather than blanking the screen on one
         // failed poll. The button stays honest because it checks again before it acts.

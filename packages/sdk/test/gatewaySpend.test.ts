@@ -247,7 +247,8 @@ describe('the spend is authorised by the sender signature, not by a server', () 
 
   it('surfaces a refusal from Circle rather than inventing a transfer', async () => {
     const a = api({ transferOk: false });
-    await expect(run(a, wallet())).rejects.toThrow(/Gateway refused the transfer \(400\)/);
+    // Circle's sentence, not the JSON envelope it arrives in.
+    await expect(run(a, wallet())).rejects.toThrow(/Gateway refused the transfer: refused/);
   });
 
   it('does not pretend to have a transfer when the API returns no id', async () => {
@@ -266,8 +267,48 @@ describe('the quote is flat, and it is asked for every time', () => {
       fetchImpl: api().impl as never,
     });
     // Measured against Circle: the same fee for 1, 5 and 200 USDC.
-    expect(q.maxFee).toBe(55_457n);
-    expect(q.total).toBe(200_055_457n);
+    expect(q.quotedFee).toBe(55_457n);
+    // Signed with 2% headroom, because the fee drifts while a wallet is being
+    // unlocked and the signature locks in whatever was signed.
+    expect(q.maxFee).toBe(56_566n);
+    expect(q.total).toBe(200_056_566n);
+  });
+
+  it('signs a ceiling above the quote, since Circle charges the real fee anyway', async () => {
+    // Measured: signing 0.065625 against a 0.055625 quote had 0.055 deducted, not
+    // the ceiling. Headroom is free, and without it a two minute wallet prompt
+    // ends in "Insufficient total maxFee across intents".
+    const w = wallet();
+    await spendFromGateway(w.clients as never, {
+      from: 'Arc_Testnet',
+      to: 'Base_Sepolia',
+      amount: 1_000_000n,
+      fetchImpl: api().impl as never,
+    });
+    const signed = w.signTypedData.mock.calls[0]![0] as { message: { maxFee: bigint } };
+    expect(signed.message.maxFee).toBeGreaterThan(55_457n);
+  });
+
+  it('never lets the headroom fall below a floor on a tiny fee', async () => {
+    // 2% of a very small fee is nothing; the drift is absolute, not proportional.
+    const tiny = api();
+    tiny.impl = (async (url: string, init?: RequestInit) => {
+      if (String(url).includes('/v1/estimate')) {
+        return {
+          ok: true,
+          json: async () => ({ body: [{ burnIntent: { maxFee: '100', maxBlockHeight: '99' } }] }),
+        } as never;
+      }
+      return api().impl(url, init);
+    }) as never;
+    const q = await quoteGatewaySpend({
+      from: 'Arc_Testnet',
+      to: 'Base_Sepolia',
+      amount: 1_000_000n,
+      depositor: WALLET,
+      fetchImpl: tiny.impl as never,
+    });
+    expect(q.maxFee).toBe(600n); // 100 + the 500 floor, not 100 + 2
   });
 
   it('refuses a route Circle will not price, rather than guessing', async () => {
