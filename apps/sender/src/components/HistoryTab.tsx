@@ -1,17 +1,36 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { formatUnits, type Address } from 'viem';
-import { getCleanHistory, type CleanHistory } from '@ctrl-arcz/sdk';
+import {
+  explorerTxUrl,
+  getCleanHistory,
+  type CleanHistory,
+  type HistoryEntry,
+} from '@ctrl-arcz/sdk';
 import { type Session } from '@ctrl-arcz/demo-kit';
 import {
-  Badge,
   Button,
   Card,
-  Pagination,
+  HistoryList,
+  HistoryRow,
+  Address as AddressChip,
   Skeleton,
-  paginate,
   useT,
-  short,
 } from '@ctrl-arcz/demo-kit/ui';
+
+/** Everything a row can be matched on: who, how much, which token, which tx. */
+function entryHaystack(e: HistoryEntry): string {
+  return `${e.counterparty} ${formatUnits(e.amount, e.decimals)} ${e.tokenSymbol} ${e.txHash} ${e.direction}`;
+}
+
+function relativeTime(ts: number): string {
+  const s = Math.max(1, Math.round((Date.now() - ts) / 1000));
+  if (s < 60) return `${s}s`;
+  const m = Math.round(s / 60);
+  if (m < 60) return `${m}m`;
+  const h = Math.round(m / 60);
+  if (h < 24) return `${h}h`;
+  return `${Math.round(h / 24)}d`;
+}
 
 const PAGE_SIZE = 6;
 
@@ -20,7 +39,6 @@ export function HistoryTab({ session }: { session: Session }) {
   const [history, setHistory] = useState<CleanHistory | null>(null);
   const [showSpam, setShowSpam] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [page, setPage] = useState(0);
 
   useEffect(() => {
     getCleanHistory(session.address as Address)
@@ -29,11 +47,6 @@ export function HistoryTab({ session }: { session: Session }) {
   }, [session.address]);
 
   const entries = history?.entries ?? [];
-  const pageCount = Math.max(1, Math.ceil(entries.length / PAGE_SIZE));
-  // Clamp so switching to an account with fewer entries can never strand the view
-  // on an out-of-range page (blank list, no pagination control to get back).
-  const safePage = Math.min(page, pageCount - 1);
-  const pageEntries = useMemo(() => paginate(entries, safePage, PAGE_SIZE), [entries, safePage]);
 
   if (error)
     return (
@@ -54,29 +67,44 @@ export function HistoryTab({ session }: { session: Session }) {
     <Card data-testid="history">
       <p className="muted">{t('history.note')}</p>
 
-      {entries.length === 0 ? (
-        <p className="muted">{t('history.empty')}</p>
-      ) : (
-        <>
-          {pageEntries.map((e) => (
-            <div className="trow trow--compact" key={e.txHash}>
-              <div className="row-between">
-                <div className="hrow__party">
+      <HistoryList
+        items={entries}
+        data-testid="history-list"
+        searchText={entryHaystack}
+        timestamp={(e) => e.timestamp.getTime()}
+        rowKey={(e) => e.txHash}
+        searchPlaceholder={t('history.search')}
+        emptyText={t('history.empty')}
+        noMatchText={t('history.noMatch')}
+        pageSize={PAGE_SIZE}
+        renderRow={(e) => (
+          <HistoryRow data-testid="history-row">
+            <HistoryRow.Head
+              lead={
+                <>
                   <span className={`hrow__dir hrow__dir--${e.direction}`}>
                     {e.direction === 'in' ? '↓' : '↑'}
                   </span>
-                  <span className="mono">{short(e.counterparty)}</span>
-                </div>
-                <div className="trow__idline">
-                  <span className="trow__amount">{formatUnits(e.amount, e.decimals)}</span>
-                  <span className="trow__unit">{e.tokenSymbol}</span>
-                </div>
-              </div>
-            </div>
-          ))}
-          <Pagination page={safePage} pageCount={pageCount} onChange={setPage} />
-        </>
-      )}
+                  <AddressChip address={e.counterparty} />
+                </>
+              }
+              amount={`${formatUnits(e.amount, e.decimals)} ${e.tokenSymbol}`}
+              time={relativeTime(e.timestamp.getTime())}
+            />
+            {/* The transaction was not shown at all, so a row you wanted to look up
+                or forward gave you nothing to look up or forward. */}
+            <HistoryRow.Steps
+              steps={[
+                {
+                  label: e.direction === 'in' ? t('history.received') : t('history.sent'),
+                  txHash: e.txHash,
+                  explorerUrl: explorerTxUrl(e.txHash),
+                },
+              ]}
+            />
+          </HistoryRow>
+        )}
+      />
 
       {history.filtered.length > 0 && (
         <>
@@ -93,17 +121,29 @@ export function HistoryTab({ session }: { session: Session }) {
           </Button>
           {showSpam &&
             history.filtered.map((e) => (
-              <div
-                className="trow trow--compact"
-                key={e.txHash}
-                style={{ opacity: 0.6, marginTop: 8 }}
-              >
-                <div className="row-between">
-                  <span className="mono">{short(e.counterparty)}</span>
-                  <Badge>
-                    {e.reason === 'ZERO_VALUE' ? t('history.zeroValue') : t('history.unknownToken')}
-                  </Badge>
-                </div>
+              <div key={e.txHash} style={{ opacity: 0.6, marginTop: 8 }}>
+                <HistoryRow data-testid="history-spam-row">
+                  <HistoryRow.Head
+                    lead={<AddressChip address={e.counterparty} />}
+                    status={{
+                      tone: 'warn',
+                      label:
+                        e.reason === 'ZERO_VALUE'
+                          ? t('history.zeroValue')
+                          : t('history.unknownToken'),
+                    }}
+                    time={relativeTime(e.timestamp.getTime())}
+                  />
+                  <HistoryRow.Steps
+                    steps={[
+                      {
+                        label: t('history.filteredOut'),
+                        txHash: e.txHash,
+                        explorerUrl: explorerTxUrl(e.txHash),
+                      },
+                    ]}
+                  />
+                </HistoryRow>
               </div>
             ))}
         </>

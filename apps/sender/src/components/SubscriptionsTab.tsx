@@ -31,6 +31,7 @@ import { relayCreateBox, relayStealthGas } from '../lib/relay.js';
 import {
   Button,
   Card,
+  HistoryList,
   HistoryRow,
   Address as AddressChip,
   Field,
@@ -80,6 +81,11 @@ const STATUS_COLOR: Record<SubStatus, string> = {
   expired: 'var(--warn)',
 };
 
+/** Name, merchant and box address: the three things someone searches a box by. */
+function subHaystack(s: Subscription): string {
+  return `${getLabel(s.account)} ${s.target} ${s.account}`;
+}
+
 export function SubscriptionsTab({ session }: { session: Session }) {
   const t = useT();
   const toast = useToast();
@@ -97,13 +103,11 @@ export function SubscriptionsTab({ session }: { session: Session }) {
   const [veto, setVeto] = useState<string | null>(null);
 
   // List controls
-  const [query, setQuery] = useState('');
   // Active by default. Cancelled and completed boxes accumulate forever and are
   // never what someone opening this tab came to see; the counts on the chips keep
   // the rest one click away.
   const [statusFilter, setStatusFilter] = useState<SubStatus | 'all'>('active');
   const [sort, setSort] = useState<SortKey>('newest');
-  const [page, setPage] = useState(0);
   // Which box, and which action on it. One flag put the spinner on whichever
   // button happened to read it first, so pressing Cancel span "Pull now" -- the
   // opposite operation, on money.
@@ -233,7 +237,6 @@ export function SubscriptionsTab({ session }: { session: Session }) {
       // every cancelled box the wallet has ever had.
       setStatusFilter('active');
       setSort('newest');
-      setPage(0);
       setPhase('listing');
       await track(account, stealth.ephemeralPubKey);
 
@@ -337,19 +340,10 @@ export function SubscriptionsTab({ session }: { session: Session }) {
     }
   }
 
-  // Filter + search + sort + paginate (client-side).
+  // Status and sort are this screen's; search, date and paging belong to the list.
   const filtered = useMemo(() => {
     let list = subs ?? [];
     if (statusFilter !== 'all') list = list.filter((s) => s.status === statusFilter);
-    const q = query.trim().toLowerCase();
-    if (q) {
-      list = list.filter(
-        (s) =>
-          s.target.toLowerCase().includes(q) ||
-          s.account.toLowerCase().includes(q) ||
-          getLabel(s.account).toLowerCase().includes(q),
-      );
-    }
     const sorted = [...list];
     sorted.sort((a, b) => {
       switch (sort) {
@@ -370,11 +364,7 @@ export function SubscriptionsTab({ session }: { session: Session }) {
       }
     });
     return sorted;
-  }, [subs, statusFilter, query, sort]);
-
-  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const clampedPage = Math.min(page, pageCount - 1);
-  const pageItems = filtered.slice(clampedPage * PAGE_SIZE, clampedPage * PAGE_SIZE + PAGE_SIZE);
+  }, [subs, statusFilter, sort]);
 
   const counts = useMemo(() => {
     const c = { all: subs?.length ?? 0, active: 0, completed: 0, cancelled: 0, expired: 0 };
@@ -515,17 +505,10 @@ export function SubscriptionsTab({ session }: { session: Session }) {
             {t('sub.stealthNote')}
           </p>
         )}
+        {/* Sort is this screen's own: a subscription is a live thing, so "ends
+            soonest" and "biggest budget" are questions a past-events list never has.
+            Search, date and paging come from the shared list. */}
         <div className="sub-toolbar">
-          <Input
-            className="grow"
-            value={query}
-            onChange={(e) => {
-              setQuery(e.target.value);
-              setPage(0);
-            }}
-            placeholder={t('sub.searchPh')}
-            data-testid="sub-search"
-          />
           <select
             className="sub-select"
             value={sort}
@@ -547,7 +530,6 @@ export function SubscriptionsTab({ session }: { session: Session }) {
               className={`sub-chip ${statusFilter === s ? 'sub-chip--on' : ''}`}
               onClick={() => {
                 setStatusFilter(s);
-                setPage(0);
               }}
               data-testid={`sub-chip-${s}`}
             >
@@ -558,13 +540,18 @@ export function SubscriptionsTab({ session }: { session: Session }) {
 
         {subs === null || (loading && subs.length === 0) ? (
           <p className="muted">{t('common.loading')}</p>
-        ) : filtered.length === 0 ? (
-          <p className="muted" data-testid="sub-empty">
-            {t('sub.empty')}
-          </p>
         ) : (
-          <>
-            {pageItems.map((s) => {
+          <HistoryList
+            items={filtered}
+            data-testid="sub-history"
+            searchText={subHaystack}
+            timestamp={(s) => s.expiry * 1000}
+            rowKey={(s) => s.account}
+            searchPlaceholder={t('sub.searchPh')}
+            emptyText={t('sub.empty')}
+            noMatchText={t('sub.empty')}
+            pageSize={PAGE_SIZE}
+            renderRow={(s) => {
               const name = getLabel(s.account);
               const pct = s.cap > 0n ? Number((s.spent * 100n) / s.cap) : 0;
               const open = openDetail === s.account;
@@ -674,34 +661,8 @@ export function SubscriptionsTab({ session }: { session: Session }) {
                   )}
                 </HistoryRow>
               );
-            })}
-
-            {pageCount > 1 && (
-              <div className="sub-pager" data-testid="sub-pager">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  disabled={clampedPage === 0}
-                  onClick={() => setPage(clampedPage - 1)}
-                  data-testid="sub-prev"
-                >
-                  {t('common.prev')}
-                </Button>
-                <span className="muted">
-                  {clampedPage + 1} / {pageCount}
-                </span>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  disabled={clampedPage >= pageCount - 1}
-                  onClick={() => setPage(clampedPage + 1)}
-                  data-testid="sub-next"
-                >
-                  {t('common.next')}
-                </Button>
-              </div>
-            )}
-          </>
+            }}
+          />
         )}
       </Card>
     </>
