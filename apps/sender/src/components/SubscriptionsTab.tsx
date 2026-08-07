@@ -31,6 +31,8 @@ import { relayCreateBox, relayStealthGas } from '../lib/relay.js';
 import {
   Button,
   Card,
+  HistoryRow,
+  Address as AddressChip,
   Field,
   Input,
   Stepper,
@@ -133,12 +135,25 @@ export function SubscriptionsTab({ session }: { session: Session }) {
 
   const createSteps: Step[] = useMemo(() => {
     const order: CreatePhase[] = ['machine', 'creating', 'funding', 'listing'];
-    const labels = [t('sub.step.machine'), t('sub.step.create'), t('sub.step.fund'), t('sub.step.listing')];
+    const labels = [
+      t('sub.step.machine'),
+      t('sub.step.create'),
+      t('sub.step.fund'),
+      t('sub.step.listing'),
+    ];
     const active = order.indexOf(phase);
     return labels.map((l, i) => ({
       label: l,
       status:
-        phase === 'done' ? 'done' : active < 0 ? 'pending' : i < active ? 'done' : i === active ? 'active' : 'pending',
+        phase === 'done'
+          ? 'done'
+          : active < 0
+            ? 'pending'
+            : i < active
+              ? 'done'
+              : i === active
+                ? 'active'
+                : 'pending',
     }));
   }, [phase, t]);
 
@@ -304,7 +319,11 @@ export function SubscriptionsTab({ session }: { session: Session }) {
           chain: arcTestnet,
           transport: fallback(RPC_URLS.map((u) => http(u))),
         });
-        await sweepToVault({ publicClient, walletClient: stealthWallet }, sub.account, stealthAccount.address);
+        await sweepToVault(
+          { publicClient, walletClient: stealthWallet },
+          sub.account,
+          stealthAccount.address,
+        );
       } else {
         // Legacy box: the vault is your own wallet, which sweeps directly.
         await sweepToVault(session.clients, sub.account, session.address as Address);
@@ -335,7 +354,7 @@ export function SubscriptionsTab({ session }: { session: Session }) {
     sorted.sort((a, b) => {
       switch (sort) {
         case 'oldest':
-          return a.account < b.account ? -1 : 1;
+          return a.discoveredAt - b.discoveredAt;
         case 'amountHigh':
           return a.cap > b.cap ? -1 : a.cap < b.cap ? 1 : 0;
         case 'amountLow':
@@ -344,7 +363,10 @@ export function SubscriptionsTab({ session }: { session: Session }) {
           return a.expiry - b.expiry;
         case 'newest':
         default:
-          return a.account > b.account ? -1 : 1;
+          // Discovery order, which follows the announcement logs and so follows
+          // time. This compared addresses, which are derived from a salt: the list
+          // was ordered by a hash while telling the user it was ordered by age.
+          return b.discoveredAt - a.discoveredAt;
       }
     });
     return sorted;
@@ -370,23 +392,59 @@ export function SubscriptionsTab({ session }: { session: Session }) {
         <div className="formstack">
           <div className="sub-grid">
             <Field label={t('sub.label')}>
-              <Input value={label} onChange={(e) => setLbl(e.target.value)} placeholder={t('sub.labelPh')} data-testid="sub-label" />
+              <Input
+                value={label}
+                onChange={(e) => setLbl(e.target.value)}
+                placeholder={t('sub.labelPh')}
+                data-testid="sub-label"
+              />
             </Field>
-            <Field label={t('sub.merchant')} error={target.length > 0 && !validTarget ? t('send.invalidAddress') : null}>
-              <Input mono value={target} onChange={(e) => setTarget(e.target.value.trim())} placeholder="0x…" data-testid="sub-target" invalid={target.length > 0 && !validTarget} spellCheck={false} autoComplete="off" />
+            <Field
+              label={t('sub.merchant')}
+              error={target.length > 0 && !validTarget ? t('send.invalidAddress') : null}
+            >
+              <Input
+                mono
+                value={target}
+                onChange={(e) => setTarget(e.target.value.trim())}
+                placeholder="0x…"
+                data-testid="sub-target"
+                invalid={target.length > 0 && !validTarget}
+                spellCheck={false}
+                autoComplete="off"
+              />
             </Field>
           </div>
           <div className="sub-grid">
             <Field label={t('sub.perPull')}>
-              <Input value={perPull} onChange={(e) => setPerPull(e.target.value)} inputMode="decimal" data-testid="sub-perpull" />
+              <Input
+                value={perPull}
+                onChange={(e) => setPerPull(e.target.value)}
+                inputMode="decimal"
+                data-testid="sub-perpull"
+              />
             </Field>
-            <Field label={t('sub.cap')} error={capNum > 0 && capNum < perPullNum ? t('sub.capTooLow') : null}>
-              <Input value={cap} onChange={(e) => setCap(e.target.value)} inputMode="decimal" data-testid="sub-cap" invalid={capNum > 0 && capNum < perPullNum} />
+            <Field
+              label={t('sub.cap')}
+              error={capNum > 0 && capNum < perPullNum ? t('sub.capTooLow') : null}
+            >
+              <Input
+                value={cap}
+                onChange={(e) => setCap(e.target.value)}
+                inputMode="decimal"
+                data-testid="sub-cap"
+                invalid={capNum > 0 && capNum < perPullNum}
+              />
             </Field>
           </div>
           <div className="sub-grid">
             <Field label={t('sub.interval')}>
-              <select className="sub-select" value={intervalSecs} onChange={(e) => setIntervalSecs(Number(e.target.value))} data-testid="sub-interval">
+              <select
+                className="sub-select"
+                value={intervalSecs}
+                onChange={(e) => setIntervalSecs(Number(e.target.value))}
+                data-testid="sub-interval"
+              >
                 {INTERVALS.map((iv) => (
                   <option key={iv.key} value={iv.secs}>
                     {t(`sub.iv.${iv.key}` as never)}
@@ -395,7 +453,12 @@ export function SubscriptionsTab({ session }: { session: Session }) {
               </select>
             </Field>
             <Field label={t('sub.duration')}>
-              <select className="sub-select" value={durationSecs} onChange={(e) => setDurationSecs(Number(e.target.value))} data-testid="sub-duration">
+              <select
+                className="sub-select"
+                value={durationSecs}
+                onChange={(e) => setDurationSecs(Number(e.target.value))}
+                data-testid="sub-duration"
+              >
                 {DURATIONS.map((d) => (
                   <option key={d.key} value={d.secs}>
                     {t(`sub.iv.${d.key}` as never)}
@@ -404,7 +467,12 @@ export function SubscriptionsTab({ session }: { session: Session }) {
               </select>
             </Field>
           </div>
-          <Button onClick={() => void guard(create)} disabled={!canCreate || busy !== null} loading={creating} data-testid="sub-submit">
+          <Button
+            onClick={() => void guard(create)}
+            disabled={!canCreate || busy !== null}
+            loading={creating}
+            data-testid="sub-submit"
+          >
             {t('sub.createButton')}
           </Button>
           {phase !== 'idle' && phase !== 'vetoed' && <Stepper steps={createSteps} />}
@@ -429,19 +497,41 @@ export function SubscriptionsTab({ session }: { session: Session }) {
           <div className="veto" data-testid="sub-stealth-locked">
             <div className="veto__reason">{t('sub.stealthLocked')}</div>
             <div style={{ marginTop: 8 }}>
-              <Button size="sm" onClick={() => void unlockStealth()} data-testid="sub-stealth-unlock">
+              <Button
+                size="sm"
+                onClick={() => void unlockStealth()}
+                data-testid="sub-stealth-unlock"
+              >
                 {t('sub.stealthUnlock')}
               </Button>
             </div>
           </div>
         ) : (
-          <p className="muted" style={{ marginTop: 0, marginBottom: 10 }} data-testid="sub-stealth-note">
+          <p
+            className="muted"
+            style={{ marginTop: 0, marginBottom: 10 }}
+            data-testid="sub-stealth-note"
+          >
             {t('sub.stealthNote')}
           </p>
         )}
         <div className="sub-toolbar">
-          <Input className="grow" value={query} onChange={(e) => { setQuery(e.target.value); setPage(0); }} placeholder={t('sub.searchPh')} data-testid="sub-search" />
-          <select className="sub-select" value={sort} onChange={(e) => setSort(e.target.value as SortKey)} data-testid="sub-sort">
+          <Input
+            className="grow"
+            value={query}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setPage(0);
+            }}
+            placeholder={t('sub.searchPh')}
+            data-testid="sub-search"
+          />
+          <select
+            className="sub-select"
+            value={sort}
+            onChange={(e) => setSort(e.target.value as SortKey)}
+            data-testid="sub-sort"
+          >
             <option value="newest">{t('sub.sort.newest')}</option>
             <option value="oldest">{t('sub.sort.oldest')}</option>
             <option value="amountHigh">{t('sub.sort.amountHigh')}</option>
@@ -451,7 +541,16 @@ export function SubscriptionsTab({ session }: { session: Session }) {
         </div>
         <div className="sub-chips" data-testid="sub-filters">
           {(['all', 'active', 'completed', 'cancelled', 'expired'] as const).map((s) => (
-            <button key={s} type="button" className={`sub-chip ${statusFilter === s ? 'sub-chip--on' : ''}`} onClick={() => { setStatusFilter(s); setPage(0); }} data-testid={`sub-chip-${s}`}>
+            <button
+              key={s}
+              type="button"
+              className={`sub-chip ${statusFilter === s ? 'sub-chip--on' : ''}`}
+              onClick={() => {
+                setStatusFilter(s);
+                setPage(0);
+              }}
+              data-testid={`sub-chip-${s}`}
+            >
               {t(`sub.filter.${s}` as never)} <span className="sub-chip__n">{counts[s]}</span>
             </button>
           ))}
@@ -460,7 +559,9 @@ export function SubscriptionsTab({ session }: { session: Session }) {
         {subs === null || (loading && subs.length === 0) ? (
           <p className="muted">{t('common.loading')}</p>
         ) : filtered.length === 0 ? (
-          <p className="muted" data-testid="sub-empty">{t('sub.empty')}</p>
+          <p className="muted" data-testid="sub-empty">
+            {t('sub.empty')}
+          </p>
         ) : (
           <>
             {pageItems.map((s) => {
@@ -475,64 +576,127 @@ export function SubscriptionsTab({ session }: { session: Session }) {
                   : s.status !== 'active'
                     ? t(`sub.filter.${s.status}` as never)
                     : nowSec < s.nextPullAt
-                      ? t('sub.nextPullAt', { when: new Date(s.nextPullAt * 1000).toLocaleTimeString() })
+                      ? t('sub.nextPullAt', {
+                          when: new Date(s.nextPullAt * 1000).toLocaleTimeString(),
+                        })
                       : s.balance === 0n
                         ? t('sub.notFundedYet')
                         : t('sub.budgetSpent');
               return (
-                <div className="sub-row" key={s.account} data-testid="sub-item">
-                  <div className="row-between">
-                    <div style={{ minWidth: 0 }}>
-                      <div className="sub-row__head">
+                <HistoryRow key={s.account} data-testid="sub-item">
+                  <HistoryRow.Head
+                    lead={
+                      <>
                         <span className="sub-row__name">{name || short(s.target)}</span>
-                        <span className="sub-badge" style={{ color: STATUS_COLOR[s.status], borderColor: STATUS_COLOR[s.status] }}>
+                        <span
+                          className="sub-badge"
+                          style={{
+                            color: STATUS_COLOR[s.status],
+                            borderColor: STATUS_COLOR[s.status],
+                          }}
+                        >
                           {t(`sub.filter.${s.status}` as never)}
                         </span>
-                      </div>
-                      <div className="sub-row__meta">
-                        {formatUnits(s.perPull, 6)} USDC / {t(`sub.iv.${intervalKeyOf(s.interval)}` as never)}
-                        <span className="sub-row__sep">·</span>
-                        {t('sub.remaining')}: {formatUnits(s.remaining, 6)}/{formatUnits(s.cap, 6)}
-                      </div>
-                      <div className="sub-bar"><span style={{ width: `${pct}%` }} /></div>
-                    </div>
-                    <div className="sub-row__actions">
-                      <Button variant="ghost" size="sm" onClick={() => setOpenDetail(open ? null : s.account)} data-testid="sub-detail-toggle">
-                        {t('sub.details')}
-                      </Button>
-                      {s.status === 'active' && (
-                        <>
-                          <Button size="sm" title={pullHint} disabled={locked || s.pullableNow === 0n} loading={mine && busy?.action === 'pull'} onClick={() => void guard(() => pullNow(s))} data-testid="sub-pull">
-                            {/* While the charge is in flight the label stays on the
-                                action. `pullableNow` drops to zero the instant the
-                                pull lands, so reading it here put a spinner on a
-                                button that already said "Not yet" -- the state
-                                after the thing that had not finished happening. */}
-                            {mine && busy?.action === 'pull'
-                              ? t('sub.pulling')
-                              : s.pullableNow > 0n
-                                ? t('sub.pullNow')
-                                : t('sub.tooSoon')}
-                          </Button>
-                          <Button variant="ghost" size="sm" disabled={locked} loading={mine && busy?.action === 'cancel'} onClick={() => void guard(() => cancel(s))} data-testid="sub-cancel">
-                            {t('sub.cancel')}
-                          </Button>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                  {open && <SubDetail sub={s} name={name} onLabel={(v) => { setLabel(s.account, v); void reload(); }} />}
-                </div>
+                      </>
+                    }
+                    amount={`${formatUnits(s.perPull, 6)} / ${t(`sub.iv.${intervalKeyOf(s.interval)}` as never)}`}
+                  />
+                  {/* The two addresses were only ever shown shortened inside the
+                      detail panel, so paying the same merchant again meant opening a
+                      drawer to read something you could not copy. */}
+                  <HistoryRow.Facts>
+                    <HistoryRow.Fact label={t('sub.d.merchant')}>
+                      <AddressChip address={s.target} />
+                    </HistoryRow.Fact>
+                    <HistoryRow.Fact label={t('sub.d.account')}>
+                      <AddressChip address={s.account} />
+                    </HistoryRow.Fact>
+                    <HistoryRow.Fact label={t('sub.remaining')}>
+                      <span className="mono">
+                        {formatUnits(s.remaining, 6)}/{formatUnits(s.cap, 6)} USDC
+                      </span>
+                      <span className="sub-bar">
+                        <span style={{ width: `${pct}%` }} />
+                      </span>
+                    </HistoryRow.Fact>
+                  </HistoryRow.Facts>
+                  <HistoryRow.Actions>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setOpenDetail(open ? null : s.account)}
+                      data-testid="sub-detail-toggle"
+                    >
+                      {t('sub.details')}
+                    </Button>
+                    {s.status === 'active' && (
+                      <>
+                        <Button
+                          size="sm"
+                          title={pullHint}
+                          disabled={locked || s.pullableNow === 0n}
+                          loading={mine && busy?.action === 'pull'}
+                          onClick={() => void guard(() => pullNow(s))}
+                          data-testid="sub-pull"
+                        >
+                          {/* While the charge is in flight the label stays on the
+                              action. `pullableNow` drops to zero the instant the pull
+                              lands, so reading it here put a spinner on a button that
+                              already said "Not yet". */}
+                          {mine && busy?.action === 'pull'
+                            ? t('sub.pulling')
+                            : s.pullableNow > 0n
+                              ? t('sub.pullNow')
+                              : t('sub.tooSoon')}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          disabled={locked}
+                          loading={mine && busy?.action === 'cancel'}
+                          onClick={() => void guard(() => cancel(s))}
+                          data-testid="sub-cancel"
+                        >
+                          {t('sub.cancel')}
+                        </Button>
+                      </>
+                    )}
+                  </HistoryRow.Actions>
+                  {open && (
+                    <SubDetail
+                      sub={s}
+                      name={name}
+                      onLabel={(v) => {
+                        setLabel(s.account, v);
+                        void reload();
+                      }}
+                    />
+                  )}
+                </HistoryRow>
               );
             })}
 
             {pageCount > 1 && (
               <div className="sub-pager" data-testid="sub-pager">
-                <Button variant="ghost" size="sm" disabled={clampedPage === 0} onClick={() => setPage(clampedPage - 1)} data-testid="sub-prev">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={clampedPage === 0}
+                  onClick={() => setPage(clampedPage - 1)}
+                  data-testid="sub-prev"
+                >
                   {t('common.prev')}
                 </Button>
-                <span className="muted">{clampedPage + 1} / {pageCount}</span>
-                <Button variant="ghost" size="sm" disabled={clampedPage >= pageCount - 1} onClick={() => setPage(clampedPage + 1)} data-testid="sub-next">
+                <span className="muted">
+                  {clampedPage + 1} / {pageCount}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={clampedPage >= pageCount - 1}
+                  onClick={() => setPage(clampedPage + 1)}
+                  data-testid="sub-next"
+                >
                   {t('common.next')}
                 </Button>
               </div>
@@ -573,20 +737,69 @@ function SubDetail({
   return (
     <div className="sub-detail" data-testid="sub-detail">
       <dl className="sub-dl">
-        <div><dt>{t('sub.d.account')}</dt><dd className="mono">{sub.account}</dd></div>
-        <div><dt>{t('sub.d.merchant')}</dt><dd className="mono">{sub.target}</dd></div>
-        <div><dt>{t('sub.d.perPull')}</dt><dd>{formatUnits(sub.perPull, 6)} USDC</dd></div>
-        <div><dt>{t('sub.d.cap')}</dt><dd>{formatUnits(sub.cap, 6)} USDC</dd></div>
-        <div><dt>{t('sub.d.spent')}</dt><dd>{formatUnits(sub.spent, 6)} USDC</dd></div>
-        <div><dt>{t('sub.d.remaining')}</dt><dd>{formatUnits(sub.remaining, 6)} USDC</dd></div>
-        <div><dt>{t('sub.d.balance')}</dt><dd>{formatUnits(sub.balance, 6)} USDC</dd></div>
-        <div><dt>{t('sub.d.lastPull')}</dt><dd>{sub.lastPull === 0 ? t('sub.d.never') : fmtTime(sub.lastPull)}</dd></div>
-        <div><dt>{t('sub.d.nextPull')}</dt><dd>{sub.status !== 'active' ? '—' : nextIn === 0 ? t('sub.d.now') : fmtTime(sub.nextPullAt)}</dd></div>
-        <div><dt>{t('sub.d.expiry')}</dt><dd>{fmtTime(sub.expiry)}</dd></div>
+        <div>
+          <dt>{t('sub.d.account')}</dt>
+          <dd className="mono">{sub.account}</dd>
+        </div>
+        <div>
+          <dt>{t('sub.d.merchant')}</dt>
+          <dd className="mono">{sub.target}</dd>
+        </div>
+        <div>
+          <dt>{t('sub.d.perPull')}</dt>
+          <dd>{formatUnits(sub.perPull, 6)} USDC</dd>
+        </div>
+        <div>
+          <dt>{t('sub.d.cap')}</dt>
+          <dd>{formatUnits(sub.cap, 6)} USDC</dd>
+        </div>
+        <div>
+          <dt>{t('sub.d.spent')}</dt>
+          <dd>{formatUnits(sub.spent, 6)} USDC</dd>
+        </div>
+        <div>
+          <dt>{t('sub.d.remaining')}</dt>
+          <dd>{formatUnits(sub.remaining, 6)} USDC</dd>
+        </div>
+        <div>
+          <dt>{t('sub.d.balance')}</dt>
+          <dd>{formatUnits(sub.balance, 6)} USDC</dd>
+        </div>
+        <div>
+          <dt>{t('sub.d.lastPull')}</dt>
+          <dd>{sub.lastPull === 0 ? t('sub.d.never') : fmtTime(sub.lastPull)}</dd>
+        </div>
+        <div>
+          <dt>{t('sub.d.nextPull')}</dt>
+          <dd>
+            {sub.status !== 'active'
+              ? '—'
+              : nextIn === 0
+                ? t('sub.d.now')
+                : fmtTime(sub.nextPullAt)}
+          </dd>
+        </div>
+        <div>
+          <dt>{t('sub.d.expiry')}</dt>
+          <dd>{fmtTime(sub.expiry)}</dd>
+        </div>
       </dl>
       <div className="row" style={{ marginTop: 10, gap: 8 }}>
-        <Input className="grow" value={edit} onChange={(e) => setEdit(e.target.value)} placeholder={t('sub.labelPh')} data-testid="sub-label-edit" />
-        <Button variant="ghost" size="sm" onClick={() => onLabel(edit)} data-testid="sub-label-save">{t('common.save')}</Button>
+        <Input
+          className="grow"
+          value={edit}
+          onChange={(e) => setEdit(e.target.value)}
+          placeholder={t('sub.labelPh')}
+          data-testid="sub-label-edit"
+        />
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => onLabel(edit)}
+          data-testid="sub-label-save"
+        >
+          {t('common.save')}
+        </Button>
         <a className="row" href={explorerAddressUrl(sub.account)} target="_blank" rel="noreferrer">
           {t('common.viewOnArcScan')} <IconExternal width={13} height={13} />
         </a>

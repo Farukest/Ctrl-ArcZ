@@ -40,9 +40,25 @@ export interface Subscription {
   status: SubStatus;
   nextPullAt: number;
   pullableNow: bigint;
+  /**
+   * Discovery order, which is chronological.
+   *
+   * A box has no creation timestamp anywhere: the account address is derived from a
+   * salt, so comparing addresses orders by a hash. "Newest" did exactly that and
+   * returned an arbitrary order that looked deliberate. Announcements arrive in log
+   * order, so the position they were found in is the one honest ordering available
+   * without reading a block per box.
+   */
+  discoveredAt: number;
 }
 
-function statusOf(s: { balance: bigint; spent: bigint; cap: bigint; expiry: number; now: number }): SubStatus {
+function statusOf(s: {
+  balance: bigint;
+  spent: bigint;
+  cap: bigint;
+  expiry: number;
+  now: number;
+}): SubStatus {
   if (s.balance === 0n) return s.spent >= s.cap ? 'completed' : 'cancelled';
   if (s.now > s.expiry) return 'expired';
   return 'active';
@@ -71,7 +87,9 @@ export function useSubscriptions(session: Session | null): {
   const [loading, setLoading] = useState(false);
   // Discovered box addresses -> their creation salt + (for stealth boxes) the
   // ephemeral pubkey that lets us later derive the key controlling the box's vault.
-  const accounts = useRef<Map<string, { salt: Hex; ephemeralPubKey?: Hex }>>(new Map());
+  const accounts = useRef<Map<string, { salt: Hex; ephemeralPubKey?: Hex; order?: number }>>(
+    new Map(),
+  );
 
   const refresh = useCallback(async () => {
     if (!session) {
@@ -83,11 +101,16 @@ export function useSubscriptions(session: Session | null): {
     const built = await Promise.all(
       [...accounts.current.entries()].map(async ([addrLc, meta]) => {
         const account = addrLc as Address;
-        const { salt, ephemeralPubKey } = meta;
+        const { salt, ephemeralPubKey, order } = meta;
         try {
           const [state, balance] = await Promise.all([
             readAccount(client, account),
-            client.readContract({ address: USDC, abi: erc20Abi, functionName: 'balanceOf', args: [account] }) as Promise<bigint>,
+            client.readContract({
+              address: USDC,
+              abi: erc20Abi,
+              functionName: 'balanceOf',
+              args: [account],
+            }) as Promise<bigint>,
           ]);
           if (state.mode !== MODE_PULL) return null;
           const cap = state.remaining + state.spent;
@@ -96,7 +119,8 @@ export function useSubscriptions(session: Session | null): {
           const headroom = state.remaining < balance ? state.remaining : balance;
           const perPull = state.perPullMax;
           const pullTarget = perPull < headroom ? perPull : headroom;
-          const pullableNow = status === 'active' && now >= nextPullAt && pullTarget > 0n ? pullTarget : 0n;
+          const pullableNow =
+            status === 'active' && now >= nextPullAt && pullTarget > 0n ? pullTarget : 0n;
           return {
             account,
             target: state.target,
@@ -113,6 +137,7 @@ export function useSubscriptions(session: Session | null): {
             status,
             nextPullAt,
             pullableNow,
+            discoveredAt: order ?? 0,
           } satisfies Subscription;
         } catch {
           return null;
@@ -136,7 +161,12 @@ export function useSubscriptions(session: Session | null): {
       });
       for (const b of found) {
         const a = b.box.toLowerCase();
-        if (!accounts.current.has(a)) accounts.current.set(a, { salt: '0x' as Hex, ephemeralPubKey: b.ephemeralPubKey });
+        if (!accounts.current.has(a))
+          accounts.current.set(a, {
+            salt: '0x' as Hex,
+            ephemeralPubKey: b.ephemeralPubKey,
+            order: accounts.current.size,
+          });
       }
     } catch {
       /* no signature / scan failure: legacy-only view */
@@ -164,7 +194,11 @@ export function useSubscriptions(session: Session | null): {
       });
       for (const l of logs) {
         const a = l.args.account?.toLowerCase();
-        if (a && !accounts.current.has(a)) accounts.current.set(a, { salt: (l.args.salt ?? ('0x' as Hex)) as Hex });
+        if (a && !accounts.current.has(a))
+          accounts.current.set(a, {
+            salt: (l.args.salt ?? ('0x' as Hex)) as Hex,
+            order: accounts.current.size,
+          });
       }
     } catch {
       /* keep whatever we have */
@@ -222,6 +256,7 @@ export function useSubscriptions(session: Session | null): {
         accounts.current.set(a, {
           salt: '0x' as Hex,
           ...(ephemeralPubKey ? { ephemeralPubKey } : {}),
+          order: accounts.current.size,
         });
       }
       // Read this one box and render it now. Registering it without refreshing
