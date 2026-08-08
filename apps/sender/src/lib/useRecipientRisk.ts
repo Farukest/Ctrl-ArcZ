@@ -27,9 +27,9 @@ import { config } from './riskConfig.js';
 /**
  * How far back to scan for RecipientVerified when the index is unavailable.
  *
- * Arc produces roughly nineteen blocks a second, so this is about three hours.
- * Not as good as the server's backfill from the deploy block, and far better than
- * the nothing that a suppressed scan leaves behind.
+ * Arc produces roughly two blocks a second, so this is a bit over a day. Not as
+ * good as the server's backfill from the deploy block, and far better than the
+ * nothing that a suppressed scan leaves behind.
  */
 const VERIFIED_FALLBACK_BLOCKS = 200_000;
 

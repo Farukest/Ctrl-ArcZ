@@ -24,10 +24,11 @@ export interface DecodedLog<TArgs> {
  *
  * The walk used to be strictly sequential, one `await` per window, which is the
  * right shape for correctness and the wrong one for a span of any size. Measured
- * on Arc: the stealth announcer's history is 2.16 million blocks, which is 217
+ * on Arc: the stealth announcer's history is 2.19 million blocks, which is 219
  * windows at roughly 208ms each, so opening the subscriptions tab spent about 45
- * seconds fetching before it could say "you have none" -- and Arc produces
- * nineteen blocks a second, so that wait grew by half a minute every day.
+ * seconds fetching before it could say "you have none" -- and Arc produces about
+ * two blocks a second, roughly 168,000 a day, so that wait grew by a few seconds
+ * every day and never shrank.
  *
  * Eight is deliberately modest. The reason this file exists at all is Arc's
  * 10,000-block limit, and the reason the risk engine caches is that overlapping

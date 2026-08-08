@@ -10,6 +10,7 @@ import {
   ownerHash as toOwnerHash,
   readAccount,
   getLogsChunked,
+  explorerAccountsCreated,
   discoverStealthBoxes,
   recognizeAnnouncements,
   MODE_PULL,
@@ -275,9 +276,32 @@ export function useSubscriptions(session: Session | null): {
   const discoverLegacy = useCallback(async () => {
     if (!session) return;
     const client = getPublicClient();
+    const mine = toOwnerHash(session.address as Address).toLowerCase();
+    const remember = (account?: Address, salt?: Hex) => {
+      const a = account?.toLowerCase();
+      if (a && !accounts.current.has(a))
+        accounts.current.set(a, { salt: (salt ?? ('0x' as Hex)) as Hex, order: accounts.current.size });
+    };
     try {
-      const latest = await client.getBlockNumber().catch(() => 0n);
-      const fromBlock = latest > DISCOVER_LOOKBACK ? latest - DISCOVER_LOOKBACK : 0n;
+      const latest = await client.getBlockNumber().catch(() => null);
+
+      /**
+       * The explorer first, and not only because it is one request against 12.
+       * The chain path below has to send `ownerHash` as a topic, which is the
+       * plain keccak of this wallet's address: anyone who guesses the address can
+       * confirm it, and the node is handed the link for free. Here the whole list
+       * comes back undirected and the match happens in this loop, so nothing about
+       * who is asking goes out.
+       */
+      const viaExplorer = await explorerAccountsCreated(SPEND_POLICY_FACTORY_ADDRESS, latest);
+      if (viaExplorer.complete) {
+        for (const a of viaExplorer.accounts) {
+          if (a.ownerHash.toLowerCase() === mine) remember(a.account, a.salt);
+        }
+        return;
+      }
+
+      const fromBlock = latest !== null && latest > DISCOVER_LOOKBACK ? latest - DISCOVER_LOOKBACK : 0n;
       const logs = await getLogsChunked<{ account?: Address; salt?: Hex }>(client, {
         address: SPEND_POLICY_FACTORY_ADDRESS,
         abi: spendPolicyFactoryAbi,
@@ -285,14 +309,7 @@ export function useSubscriptions(session: Session | null): {
         args: { ownerHash: toOwnerHash(session.address as Address) },
         fromBlock,
       });
-      for (const l of logs) {
-        const a = l.args.account?.toLowerCase();
-        if (a && !accounts.current.has(a))
-          accounts.current.set(a, {
-            salt: (l.args.salt ?? ('0x' as Hex)) as Hex,
-            order: accounts.current.size,
-          });
-      }
+      for (const l of logs) remember(l.args.account, l.args.salt);
     } catch {
       /* keep whatever we have */
     }

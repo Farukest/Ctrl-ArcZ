@@ -14,9 +14,9 @@ import type { RawAnnouncement } from './stealthBox.js';
  * announcement belongs to whom. That is the property the whole feature exists for,
  * and it has a cost: finding your boxes means reading every announcement ever made
  * and testing each one against your viewing key. Measured on Arc, that span was
- * 2.16 million blocks -- 217 chunked `eth_getLogs` calls -- and it grows by about
- * 1.6 million blocks a day, so the wait grew by half a minute every day that
- * passed.
+ * 2.19 million blocks -- 219 chunked `eth_getLogs` calls -- and it grows by about
+ * 168,000 blocks a day (Arc produces roughly two a second), so the wait only ever
+ * got longer.
  *
  * This moves the reading to a server that does it once and then follows the chain,
  * exactly like {@link VerifiedRecipientIndex} does for the firewall.

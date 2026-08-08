@@ -6,7 +6,7 @@ import type { Address } from 'viem';
  *
  * The browser used to answer this by scanning `RecipientVerified` over a fixed
  * 200,000-block window. That looked generous and was not: Arc produces roughly
- * nineteen blocks a second, so the window covered about three hours. Anyone paid
+ * two blocks a second, so the window covered a bit over a day. Anyone paid
  * before that fell out of the set, and with them went the lookalike rule's
  * protection — the firewall would happily wave through an imitation of a
  * counterparty from yesterday. The server keeps an index backfilled from the

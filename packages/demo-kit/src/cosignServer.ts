@@ -199,8 +199,8 @@ export function verifiedRecipients(sender: Address): { recipients: Address[]; co
 
 // The same treatment for stealth announcements. The announcer is one global
 // registry with no on-chain owner tag, so a browser looking for its own boxes had
-// to read all 2.16 million blocks of it -- 217 chunked requests -- on every visit,
-// and that span grows by 1.6 million blocks a day.
+// to read all 2.19 million blocks of it -- 219 chunked requests -- on every visit,
+// and that span grows by about 168,000 blocks a day.
 const announcementIndex = new AnnouncementIndex(publicClient);
 void announcementIndex.start();
 

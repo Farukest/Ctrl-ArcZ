@@ -1,15 +1,32 @@
 import type { Hex } from 'viem';
-import type { RawAnnouncement } from '@ctrl-arcz/sdk';
+import {
+  explorerAnnouncements,
+  STEALTH_ANNOUNCER_ADDRESS,
+  type RawAnnouncement,
+} from '@ctrl-arcz/sdk';
+import { getPublicClient } from '@ctrl-arcz/demo-kit';
 
 /**
- * Every stealth announcement, from the server's index instead of the chain.
+ * Every stealth announcement, without reading the chain window by window.
  *
- * The browser used to read this itself: the announcer has no owner tag by design,
- * so finding your own boxes means testing every announcement ever made, and that
- * was 2.16 million blocks, 217 chunked `eth_getLogs` calls, on every visit to the
- * tab. Worse, it grew: Arc produces about nineteen blocks a second, so the wait
- * got roughly half a minute longer every day. The server keeps an index that
- * backfilled once and follows the chain, so this is one request.
+ * The browser used to do that itself: the announcer has no owner tag by design, so
+ * finding your own boxes means testing every announcement ever made, and that was
+ * 2.19 million blocks, 219 chunked `eth_getLogs` calls, on every visit to the tab.
+ * The cost is the query shape, not the data -- 219 requests to find nineteen
+ * records -- and it only grows, by about 168,000 blocks a day.
+ *
+ * Two sources answer it in one request instead, tried in order:
+ *
+ * 1. Our own index, which backfilled once and follows the chain. It reports the
+ *    head it is complete to, so "complete" is something it knows rather than
+ *    something we infer.
+ * 2. The chain's explorer, which indexed all of this before we existed. Second
+ *    rather than first because its API is not a contract anyone owes us: if the
+ *    schema moves, it fails, and the failure it produces is a short list. It earns
+ *    its place by being up when our server is not.
+ *
+ * Neither is trusted without proof of completeness, and when both decline the
+ * caller reads the chain. Slow is an acceptable answer here; short is not.
  *
  * **The viewing key stays here.** This fetches the same public list for everybody
  * and `recognizeAnnouncements` matches it locally. That is the whole reason the
@@ -47,6 +64,34 @@ interface Wire {
 let cache: { entries: RawAnnouncement[]; head: bigint } | null = null;
 
 export async function fetchAnnouncements(): Promise<AnnouncementFeed> {
+  const own = await fetchFromIndex();
+  if (own.complete) return own;
+  return fetchFromExplorer();
+}
+
+/**
+ * The explorer's copy, whole or not at all.
+ *
+ * Not cached against `cache`: that cursor belongs to our index's head, and mixing
+ * a second source into it would make an incremental request ask for a range the
+ * other source never covered. The explorer returns everything anyway, so there is
+ * nothing to save.
+ */
+async function fetchFromExplorer(): Promise<AnnouncementFeed> {
+  try {
+    const head = await getPublicClient().getBlockNumber();
+    const { announcements, complete } = await explorerAnnouncements(
+      STEALTH_ANNOUNCER_ADDRESS,
+      head,
+    );
+    if (!complete) return { announcements: cache?.entries ?? [], complete: false };
+    return { announcements, complete: true };
+  } catch {
+    return { announcements: cache?.entries ?? [], complete: false };
+  }
+}
+
+async function fetchFromIndex(): Promise<AnnouncementFeed> {
   try {
     // Ask only for what is new. On a revisit that is almost always nothing.
     const from = cache ? cache.head + 1n : 0n;

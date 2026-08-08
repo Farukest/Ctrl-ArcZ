@@ -206,6 +206,17 @@ export {
   type IndexedAnnouncement,
 } from './shield/announcementIndex.js';
 export {
+  explorerAnnouncements,
+  explorerAccountsCreated,
+  explorerLogs,
+  explorerUsable,
+  clearExplorerState,
+  EXPLORER_MAX_LAG_BLOCKS,
+  type CreatedAccount,
+  type ExplorerHealth,
+  type ExplorerOptions,
+} from './shield/explorer.js';
+export {
   newStealthOwner,
   announceArgsFor,
   recognizeAnnouncements,
