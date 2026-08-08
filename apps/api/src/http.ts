@@ -222,7 +222,6 @@ export function serve(routes: Routes): void {
       // Log the original either way: the caller gets a curated line, whoever is
       // debugging gets all of it.
       if (status >= 500) {
-        // eslint-disable-next-line no-console
         console.error(`${req.method} ${req.url} failed:`, e instanceof Error ? e.message : e);
       }
       json(res, status, { error: message });
@@ -231,7 +230,6 @@ export function serve(routes: Routes): void {
   // Bind to loopback only: the API is reached exclusively through the nginx
   // reverse proxy (TLS), never directly, so port 8787 is not exposed on the host.
   server.listen(env.port, '127.0.0.1', () => {
-    // eslint-disable-next-line no-console
     console.log(`ctrl-arcz api listening on 127.0.0.1:${env.port}`);
   });
 }

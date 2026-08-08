@@ -2,7 +2,7 @@
 
 **Yanlış gönderimi reddet. Doğrusunu kilitle. Kimse almazsa parayı geri ver.**
 
-[![Demoyu izle](https://img.shields.io/badge/Demoyu_izle-FF0000?style=flat-square&logo=youtube&logoColor=white)](https://www.youtube.com/watch?v=fcgyqBUbkcg) [![Canlı uygulama](https://img.shields.io/badge/Canl%C4%B1-ctrlarcz.xyz-4b9fff?style=flat-square)](https://ctrlarcz.xyz) [![Dokümanlar](https://img.shields.io/badge/Dok%C3%BCmanlar-docs.ctrlarcz.xyz-8b93a1?style=flat-square)](https://docs.ctrlarcz.xyz) [![Arc Testnet](https://img.shields.io/badge/Arc_Testnet-5042002-2fbf71?style=flat-square)](https://testnet.arcscan.app/address/0x8dAb7148cdc31DAcad6d7e12161AA3DEDb572Dca) [![Testler](https://img.shields.io/badge/test-285_ge%C3%A7iyor-2fbf71?style=flat-square)](#teknoloji) [![Emanet](https://img.shields.io/badge/emanet-yok-8b93a1?style=flat-square)](#g%C3%BCvenlik)
+[![Demoyu izle](https://img.shields.io/badge/Demoyu_izle-FF0000?style=flat-square&logo=youtube&logoColor=white)](https://www.youtube.com/watch?v=fcgyqBUbkcg) [![Canlı uygulama](https://img.shields.io/badge/Canl%C4%B1-ctrlarcz.xyz-4b9fff?style=flat-square)](https://ctrlarcz.xyz) [![Dokümanlar](https://img.shields.io/badge/Dok%C3%BCmanlar-docs.ctrlarcz.xyz-8b93a1?style=flat-square)](https://docs.ctrlarcz.xyz) [![Arc Testnet](https://img.shields.io/badge/Arc_Testnet-5042002-2fbf71?style=flat-square)](https://testnet.arcscan.app/address/0x8dAb7148cdc31DAcad6d7e12161AA3DEDb572Dca) [![Testler](https://img.shields.io/badge/test-428_ge%C3%A7iyor-2fbf71?style=flat-square)](#teknoloji) [![Emanet](https://img.shields.io/badge/emanet-yok-8b93a1?style=flat-square)](#g%C3%BCvenlik)
 
 Arc üzerinde korumalı USDC transferi: bir ödemeyi imzalanmadan önce tarayan, alıcı kendisine ait olduğunu kanıtlayana kadar kontratta tutan ve hiç talep edilmezse gönderene iade eden bir SDK ve tek bir kontrat.
 
@@ -23,6 +23,9 @@ Arc üzerinde korumalı USDC transferi: bir ödemeyi imzalanmadan önce tarayan,
 - [Teknoloji](#teknoloji)
 - [Depo yapısı](#depo-yapısı)
 - [Başlangıç](#başlangıç)
+- [Abonelikler ve ajan cüzdanları](#abonelikler-ve-ajan-cüzdanları)
+- [Keeper: zincirle sınırlanmış, cüzdanı olan bir ajan](#keeper-zincirle-sınırlanmış-cüzdanı-olan-bir-ajan)
+- [Investigator: bir kuralın veremeyeceği karar](#investigator-bir-kuralın-veremeyeceği-karar)
 - [Bilinen sınırlar](#bilinen-sınırlar)
 
 ## Tek bakışta
@@ -34,7 +37,7 @@ Arc üzerinde korumalı USDC transferi: bir ödemeyi imzalanmadan önce tarayan,
 | **Koruma**  | Gönderim öncesi risk firewall'u, kodla claim, gönderen iptali, süre dolunca otomatik iade       |
 | **Custody** | Yok. Para ya kullanıcıda ya kontratta. Owner yok, pause yok, upgrade yolu yok                   |
 | **Ürün**    | Herhangi bir cüzdanın, borsanın veya ödeme uygulamasının gömdüğü bir SDK. Yeni bir cüzdan değil |
-| **Testler** | Toplam 285: 99 Foundry, 141 SDK, 33 keeper, 12 investigator, artı canlı testnet koşuları |
+| **Testler** | Toplam 428: 99 Foundry, 265 SDK, 33 keeper, 31 demo-kit, artı canlı testnet koşuları |
 
 ## Problem
 
@@ -56,11 +59,13 @@ Bir yerde birinin gönderimi reddetmesi gerekiyor.
 | Poisoning tespit servisi     | Sadece uyarır      | Hayır                         | Hayır           | Hayır        | Evet               |
 | Ticari escrow                | Hayır              | Evet, anlaşmazlık yoluyla     | Evet            | Evet         | Hayır              |
 | Circle Refund Protocol       | Hayır              | Evet, aracı yoluyla           | Evet            | Evet         | Hayır              |
-| **Ctrl+ArcZ**                | **Evet**           | **Evet, gönderen tarafından** | **Hayır**       | **Hayır**    | **Evet**           |
+| **Ctrl+ArcZ**                | **Evet**\*         | **Evet, gönderen tarafından** | **Hayır**       | **Hayır**    | **Evet**           |
+
+\* Varsayılan olarak bloklar ve gönderimi yalnız arayüzde değil SDK'da da durdurur. Israr eden kullanıcı geçebilir, ama önce iki adrese yan yana bakmak zorundadır ve yanılmışsa para yine geri alınabilir. Bkz. [kaçış kapısı](#katman-1-firewall-hiçbir-şey-imzalanmadan-önce).
 
 Circle'ın Refund Protocol'ü bilinçli olarak farklı bir problemi çözüyor. Bir **arbiter** etrafında kurulu ticari escrow: aracı, lockup penceresini belirliyor ve alıcı satıcı anlaşmazlıklarında iadeyi yetkilendiriyor. Ctrl+ArcZ ise P2P yanlış adres güvenliği: iptal hakkı gönderende, süre dolumu iadesi otomatik ve parayı üçüncü bir taraf hareket ettiremiyor. Araya bir arbiter koymak, korumalı transfer kontratını güvenilir kılan tek özelliği bozardı.
 
-Arc'ta incelediğimiz, fon kilitleyen projelerin tamamı ticaret bağlamında: fatura linki, freelance teslimi, marketplace mutabakatı. Transfer güvenliği farklı bir şekil ve bu SDK'nın şekli o.
+Stablecoin kilitleyen kontratların çoğu ticaret için kurulu: fatura linki, freelance teslimi, marketplace mutabakatı. Hepsi tarafların birbirini tanıdığını ve teslimat üzerine tartıştığını varsayıyor. Yanlış adres güvenliği tam tersini varsayar ve farklı bir şekil ister.
 
 ## Sistem mimarisi
 
@@ -131,6 +136,18 @@ Kural listesinden daha önemli iki özellik var.
 <td>Kararlar derecelidir; eksik tarama güvenliye yuvarlanmaz, açıkça söylenir.</td>
 </tr>
 </table>
+
+**Reddedilmek bir çıkmaz sokak değil.** Kural motoru gerçek bir ödeme hakkında yanılabilir: benzer adres kuralı sekiz eşleşen hex karakterden tetikleniyor ve iki alakasız adres bunu tesadüfen paylaşabiliyor, sıfır değer kuralı da size kimin gönderdiğine bakmıyor. Aşılamayan bir blok, uygulamanın bazen iş arkadaşınıza ödeme yapamaması demektir. O yüzden bir geçiş yolu var ve asıl mesele o yolun biçimi. Reddin yanına konmuş bir buton değil, çünkü onu durdurması gereken kişi okumadan basar: kaçış kapısının kendisi **karşılaştırmadır**. İki adres tam hâlleriyle alt alta gösterilir; her iki uçtaki dörder karakter soluklaştırılır, farklı olan orta kısım parlak bırakılır. Çünkü o uçlardaki dörder karakter, her cüzdanın kısaltıp gösterdiği ve saldırganın eşlediği şeyin ta kendisi. Kurbansan görürsün. Yanlış alarmsa bir bakışta geçersin.
+
+Ancak ondan sonra bir onay kutusu, ancak ondan sonra bir buton geliyor. Ve karar SDK'dan da geçmek zorunda: SDK kendi kontrolünü çalıştırıp yeniden tarıyor ve bir bayrak değil, kullanıcının gerçekten baktığı kararı istiyor. Böylece izin başka bir alıcıya taşınamıyor, oturumu aşamıyor ve kullanıcı düşünürken kötüleşen ya da yeni bir gerekçe kazanan bir karara uygulanamıyor. Arayüz, SDK'nın kabul etmediği bir izni veremez.
+
+Yanılmanın bedeli burada, tarayıcının "yine de devam et"indeki gibi sınırsız değil: para claim koduyla korunan kontrata giriyor, gönderen istediği an iptal edebiliyor ve süre dolunca kendiliğinden geri geliyor. Arc testnet'te uçtan uca doğrulandı: benzer adres bloklandı, karşılaştırma üzerinden aşıldı, gönderildi ve gönderene iptal edilerek geri alındı. Geri çağırmanın olmadığı köprüde ise aynı panel bunu açıkça söylüyor.
+
+**Parayı hareket ettiren her yol bunu çalıştırır.** Gönderim, başkasına köprüleme, gizli ödeme ve abonelik yetkilendirmesi; dördü de birinin elle yazdığı bir adresi alır, dolayısıyla dördü de tek bir modülden, tek bir politikaya karşı aynı kontrolü çalıştırır ve cevap gelmeden hiçbiri butonunu kurmaz. Son cümle göründüğünden daha katı: henüz oluşmakta olan bir karar, karar değildir; tarama sürerken butonunu kuran bir ekran, o cevabın durduracağı ödemeyi gönderebilir. Kararı hepsi için aynı kural verdiği için, yeni bir gönderme yolu sessizce daha zayıf bir kapıyla gelemez.
+
+<p><img src="docs/screens/15-firewall-everywhere.png" alt="Abonelik formunda satıcı adresini reddeden firewall" width="420"></p>
+
+Bir abonelik, bir adrese yapılan tek bir ödeme değil; fonlanmış bir kutudan belirli aralıklarla çekim yapma iznidir. Yani adres burada her yerden daha çok önemli. Karar siz yazarken alanın altına düşer ve oluştur butonu hiç kurulmaz.
 
 ### Katman 2: korumalı transfer
 
@@ -204,7 +221,18 @@ sequenceDiagram
 </tr>
 </table>
 
-<p><img src="docs/screens/09-claim-received.png" alt="Alındı" width="330"></p>
+<table>
+<tr>
+<td width="50%"><img src="docs/screens/09-claim-received.png" alt="Alındı"></td>
+<td width="50%"><img src="docs/screens/14-received-history.png" alt="Gelen transferler listesi"></td>
+</tr>
+<tr>
+<td>Alıcının gas tutması hiç gerekmedi: bunu sıfır bakiyeli bir cüzdan relayer üzerinden claim etti.</td>
+<td>Bu cüzdana şimdiye kadar gönderilen her şey; bu tarayıcıdan değil zincirden okunuyor. Arama, tarih aralığı, günleri gün gibi gruplayan başlıklar ve kopyalanabilir her numara, adres, işlem.</td>
+</tr>
+</table>
+
+Alıcının ekrana bakıyor olması gerekmiyor. Gelen bir transfer, kullanıcı hangi ekranda olursa olsun birkaç saniye içinde kendini duyurur; Al tarafındaki rozet de gerçekten claim edilebilecek olanı sayar: süresi dolmuş bir transfer sayılmaz, çünkü ona claim demek yalnızca gas harcayıp revert almak olurdu.
 
 Mutabakat anında olur, çünkü Arc'ta saniye altı deterministik kesinlik var. Alıcının beklemede oturduğu bir arafta yok.
 
@@ -226,11 +254,13 @@ Demodaki poisoning sekmesi saldırının tamamını tek tıkla yapar: bu cüzdan
 
 Recall penceresi dolduğunda `reclaimExpired` parayı gönderene iade eder. **Herkes** çağırabilir ve para yalnızca gönderene gidebilir. İadeyi otomatik yapan da budur: ortadan kaybolan bir alıcı fonları mahsur bırakamaz ve gönderenin doğru anda çevrimiçi olması gerekmez.
 
+Bu buton alıcıda da var. Tanımadığınız birinden gelen, hiç istemediğiniz bir ödeme, alıcı tarafının elinden beklemekten başka bir şey gelmeyen tek durumdu ve çözüm zaten kontratın içindeydi: `reclaimExpired` parayı yalnızca gönderene ödediği için bu butonu herkese vermenin bir maliyeti yok. Satır, sürenin dolduğunu söyler ve geri yollamayı önerir. Kimsenin bakmadığı transferler için aynı butona keeper (`apps/keeper`) belirli aralıklarla basar.
+
 ### Senaryo E: alıcının hiç USDC'si yok
 
 Arc'ta gas USDC olduğu için, cüzdanı bomboş yepyeni bir alıcı normalde claim için ödeme yapamaz. `claim` izin gerektirmediği ve parayı her zaman kayıtlı alıcıya ödediği için, bir relayer onu gönderip gas'ı üstlenebilir. Alıcı hiç işlem göndermeden tutarın tamamını alır. Bu zincirde doğrulandı: taze, sıfır bakiyeli, nonce'u 0 olan bir adres transferin tamamını aldı ve nonce'u 0 kaldı.
 
-Demoda claim sunucu tarafında imzalanır, böylece relayer anahtarı tarayıcıya hiç ulaşmaz. Alıcı sadece **Gasless**'a basar.
+Alıcı sadece **Gasless**'a basar. Claim sunucu tarafında imzalanır, yani ne relayer ne de Circle anahtarı tarayıcıya ulaşır; Circle Gas Station yapılandırılmışsa gas'ı bu projeden kimse ödemez, sponsor edilir. Arc testnet'te ölçüldü: claim EntryPoint v0.7 üzerinden, hiç USDC'si olmayan bir Circle Smart Account'tan geçti, paymaster 0.0062 USDC gas ödedi ve relayer'ın bakiyesi sıfır değişti. Gas Station bilgileri yoksa aynı yol relayer'ın kendi bakiyesinden imzalayıp ödemesine düşer; alıcının deneyimi iki durumda da aynıdır.
 
 ## USDC'yi Arc'a getirmek: CCTP veya Gateway
 
@@ -250,10 +280,10 @@ Korumalı transfer için Arc'ta USDC gerekir. Circle'ın iki zincirler arası yo
 |                      | CCTP                              | Gateway                                             |
 | -------------------- | --------------------------------- | --------------------------------------------------- |
 | Model                | Kaynakta yak, hedefte bas         | Bir kez birleşik bakiyeye yatır, sonra oradan harca |
-| İlk transfer         | Yaklaşık bir dakika               | Yatırma, ardından anında harcama                    |
-| Tekrarlı transferler | Her seferinde yaklaşık bir dakika | Yaklaşık yarım saniye, yatırma yok                  |
+| İlk transfer         | Yaklaşık bir dakika               | Önce yatırma, sonra harcama                         |
+| Tekrarlı transferler | Her seferinde yaklaşık bir dakika | Saniyeler, yatırma yok                              |
 | En uygun             | Tek seferlik taşıma               | Sık gönderim                                        |
-| Testnet zinciri      | 11                                | 5                                                   |
+| Testnet zinciri      | 20                                | 11                                                  |
 | Hedefte gas          | Gerekmez, mint'i Circle iletir    | Gerekmez, mint'i Circle iletir                      |
 
 ```mermaid
@@ -266,6 +296,8 @@ flowchart LR
         B2 -. tekrarlı transferler yatırmayı atlar .-> B4
     end
 ```
+
+Gateway'in tüm maliyeti yatırmada ve bu maliyet zincirden zincire uçurum kadar farklı: Arc'ta yatırma yaklaşık bir saniyede sayılıyor, Base'ten yapılan yatırma Circle'ın kendi onay sayılarına göre on dokuz dakikaya kadar çıkabiliyor. Uygulama, siz taahhüt etmeden önce hangisi olduğunu söylüyor ve bakiyeniz zaten uygun bir zincirdeyse ucuz olanı öneriyor. Ondan sonrası her zincirden aynı: birkaç saniye, cüzdanınızın hiç işlem yapmadığı bir zincirden bile.
 
 Gateway, CCTP'den daha az zincir destekler; bu yüzden ona geçtiğinizde seçiciler kendini daraltır ve çalışamayacak bir rota önermez.
 
@@ -280,7 +312,9 @@ Gateway, CCTP'den daha az zincir destekler; bu yüzden ona geçtiğinizde seçic
 </tr>
 </table>
 
-Her iki rota da demoda **sunucu tarafında** imzalanır (`/api/bridge` ve `/api/gateway`), çünkü Circle'ın Bridge Kit ve Unified Balance Kit'i Node öncelikli ve bir tarayıcı asla imzalama anahtarı tutmamalı. Üretimde entegratör aynı fonksiyonları kendi arka ucundan çalıştırır.
+Her iki rota da **kullanıcının kendi cüzdanı** tarafından imzalanır. Bu projede hiçbir bileşen, birinin USDC'sini hareket ettirebilecek bir anahtar tutmaz: burn, Gateway yatırması ve Gateway harcaması cüzdanın ürettiği işlemler ya da EIP-712 imzalarıdır, gerisini Circle'ın attestation servisi yapar. Fonlanacak bir operatör bakiyesi ve custody'sine güvenilecek bir taraf yoktur; yanlış adrese para kaptırmamak üzerine kurulu bir üründe köprünün gönderilmeye değer tek hâli budur.
+
+Bunun bedeli, Circle'ın Node öncelikli kitlerini bir sunucudan çağırmaktan biraz daha fazla iş ve o işi SDK üstleniyor: `packages/sdk/src/bridge` doğrudan CCTP ve Gateway kontratlarıyla ve REST API'leriyle konuşuyor, aynı cüzdandaki iki akış nonce yarışına girmesin diye işlemleri imzalayan başına sıraya alıyor, kaynak zincirin kendi burn'ünü ödeyebildiğini kontrol ediyor ve sayfa yenilense bile takılı kalmış bir transferi burn hash'inden devralabiliyor.
 
 ## Neden Arc
 
@@ -317,8 +351,9 @@ Kontrat **sahipsizdir**: owner yok, pause yok, proxy yok, upgrade yolu yok, kili
 Denetimin tamamı [`SECURITY.md`](./SECURITY.md) içinde. Kısa hali:
 
 - **Hiçbir anahtar kod içine gömülü değil.** Her imzalama anahtarı ortam değişkeninden okunur ve iki Vite config'i de, operatör açıkça onaylamadıkça, anahtarı bundle'a gömecek bir production build'i **reddeder**.
-- **Köprü ve gasless claim sunucu tarafında imzalanır.** Tarayıcı yalnızca transfer id'sini, kodu ve salt'ı gönderir; relayer veya Circle anahtarını hiç görmez.
+- **Kullanıcı adına kullanıcıdan başkası imzalamaz.** Korumalı transfer, CCTP burn ve Gateway'in iki ayağı da cüzdanın kendi imzalarıdır. Sunucu tarafında imzalanan tek yol gasless claim'dir ve o da yalnızca zincirde kayıtlı alıcıya ödeyebilen bir transferi sonuçlandırır; tarayıcı yalnızca transfer id'sini, kodu ve salt'ı gönderir.
 - **Firewall kapalı düşer**, veri kaynağı çöktüğünde "iyi görünüyor"a gerilemez.
+- **Parayı hareket ettiren her yol firewall'u çalıştırır**, tek bir modülden, ve hiçbiri karar gelmeden butonunu kurmaz. Dört ekranın bunu kendi başına karara bağlaması, birinin diğerlerinden zayıf bir kapıyla kalmasının yoludur.
 - **Claim makbuzları kontrat adresine ve tam transfer id'sine bağlanır**, böylece toplu bir makbuzdaki ilgisiz veya kasten yerleştirilmiş bir event, bir kurbanın transferinin sonucunu belirleyemez.
 - **Kabul edilen ödünleşim:** bir transferin beş yanlış deneme hakkını herkes yakıp onu dondurabilir. Para kaybolmaz (gönderen iptal edip yeniden gönderir) ve alternatif, yani denemeleri yalnız alıcı için saymak, saldırganın tek kullanımlık adreslerden kodu bedavaya kırmasına izin verirdi.
 
@@ -329,10 +364,20 @@ Denetimin tamamı [`SECURITY.md`](./SECURITY.md) içinde. Kısa hali:
 | Kontrat         | Solidity 0.8.24, Foundry, OpenZeppelin (SafeERC20, ReentrancyGuard)  |
 | SDK             | TypeScript, viem, tsup (ESM, CJS ve tipler), vitest                  |
 | Risk verisi     | ArcScan (Blockscout REST), `IDataProvider` arayüzü arkasında         |
-| Zincirler arası | Bridge Kit ile Circle CCTP, Unified Balance Kit ile Circle Gateway   |
-| Gasless         | İzin gerektirmeyen `claim` ve bir relayer. Demoda Circle Gas Station |
+| Zincirler arası | Circle CCTP ve Circle Gateway; ikisi de kullanıcının cüzdanıyla imzalı |
+| Gasless         | İzin gerektirmeyen `claim`, Circle Gas Station sponsorluğu, relayer yedeği |
 | Onaylar         | Permit2, tek imzalı gönderim için                                    |
-| Demolar         | React, Vite, `@ctrl-arcz/demo-kit` içinde ortak tasarım sistemi      |
+| Uygulamalar     | React, Vite, Expo, `@ctrl-arcz/demo-kit` içinde ortak tasarım sistemi |
+
+Uygulamadaki her geçmiş listesi tek bir bileşen. Gönderilen transferler, düz geçmiş,
+gelen transferler, köprüler ve abonelikler; her biri kendi arama kutusunu, kendi
+sayfalayıcısını ve satırın nasıl göründüğüne dair kendi fikrini üretmişti ve
+kopyaların yaptığı gibi birbirinden ayrılmışlardı: değerlerin yalnızca bazıları
+kopyalanabiliyordu, satırların yalnızca bazıları işlemi taşıyordu ve hiçbiri tarihe
+göre daraltılamıyordu. `@ctrl-arcz/demo-kit/ui` içindeki `HistoryList` ve
+`HistoryRow`, artık beşinin de konuştuğu tek dil; tarih filtresi eklemek beş yerde
+değil tek yerde bir değişiklik oldu. Satırı şekillendiren kural: metin değil veri
+olan her şey kendi kopyala butonunu taşır.
 
 ## Depo yapısı
 
@@ -340,8 +385,11 @@ Denetimin tamamı [`SECURITY.md`](./SECURITY.md) içinde. Kısa hali:
 | -------------------- | ------------------------------------------------------------------------- |
 | `packages/contracts` | `CtrlArcZ.sol`, `CodeClaimVerifier`, `IClaimVerifier`, Foundry testleri   |
 | `packages/sdk`       | `@ctrl-arcz/sdk`, entegratörün gerçekten kurduğu şey                      |
-| `packages/demo-kit`  | Ortak cüzdan oturumu, tasarım sistemi ve sunucu tarafı köprü yardımcıları |
-| `apps/sender`        | Gönderen demosu, port 5173                                                |
+| `packages/demo-kit`  | Ortak cüzdan oturumu, tasarım sistemi ve sunucu tarafı yardımcılar        |
+| `apps/sender`        | Web uygulaması, port 5173. Gönderme ve alma onun iki modu                 |
+| `apps/api`           | Arka uç: ortak imzacı, relayer, gasless claim, push, investigator         |
+| `apps/keeper`        | Keeper ajanı: süresi dolan transferleri iade eder, sınırlı bir kutudan    |
+| `apps/mobile`        | Expo uygulaması: telefonda gönderim, claim ve aynı korumalı transferler   |
 | `examples`           | Bağımsız bir Node quickstart'ı, çerçevesiz                                |
 
 Her adres, RPC ve chain sabiti tek bir dosyada durur: `packages/sdk/src/chains/arcTestnet.ts`. Foundry deploy script'i ondan üretilen bir JSON dosyasını okur, böylece hiçbir adres iki kez yazılmaz.
@@ -358,13 +406,22 @@ cp .env.example .env      # tek kullanımlık testnet cüzdanlarını doldur
 
 Arc'ta USDC hem gas hem varlık, o yüzden cüzdanları [faucet.circle.com](https://faucet.circle.com) üzerinden Arc Testnet USDC ile fonlayın. Kontrat için Foundry gerekli: <https://getfoundry.sh>
 
-| Komut                 | Ne yapar                                |
-| --------------------- | --------------------------------------- |
-| `pnpm build`          | Tüm paketleri derler                    |
-| `pnpm test`           | Foundry ve vitest                       |
-| `pnpm contracts:test` | Yalnız kontrat testleri                 |
-| `pnpm deploy:testnet` | `CtrlArcZ`'yi Arc Testnet'e deploy eder |
-| `pnpm dev:sender`     | Gönderen demosu, http://localhost:5173  |
+| Komut                 | Ne yapar                                    |
+| --------------------- | ------------------------------------------- |
+| `pnpm build`          | Tüm paketleri derler                        |
+| `pnpm test`           | Foundry ve vitest                           |
+| `pnpm contracts:test` | Yalnız kontrat testleri                     |
+| `pnpm lint`           | Tüm workspace'te ESLint                     |
+| `pnpm typecheck`      | Her pakette `tsc --noEmit`                  |
+| `pnpm deploy:testnet` | `CtrlArcZ`'yi Arc Testnet'e deploy eder     |
+| `pnpm dev:api`        | Arka uç, http://localhost:8787              |
+| `pnpm dev:sender`     | Web uygulaması, http://localhost:5173       |
+
+İkisini birden çalıştırın: web uygulaması gasless claim, ortak imzacı, stealth relay
+ve investigator için arka uca gidiyor; arka uç ayakta değilse bunlar, gayet sağlıklı
+görünen bir sayfadan 404 döner. Arka uç, `CORS_ORIGINS` listesinde olmayan hiçbir
+tarayıcı origin'ini kabul etmez; yerel çalıştırma için oraya `http://localhost:5173`
+eklemek gerekir, bkz. [`apps/api/.env.example`](./apps/api/.env.example).
 
 SDK'yı kullanmak üç çağrı ve firewall istesen de istemesen de onlardan biri:
 
@@ -402,9 +459,66 @@ Alıcı `claim(clients, transferId, code, salt)` ile alır; ikisi de `fromSecret
 
 Demolar MetaMask olmadan da çalışır: her app'in klasörüne bir `.env.local` bırakın, cüzdan yerel bir test imzalayıcısı olur ve yine Arc Testnet'e gerçek işlem yayınlar. Bakınız [`.env.example`](./.env.example).
 
+## Abonelikler ve ajan cüzdanları
+
+Bir kez göndermek kolay. Zor olan, bir şeyin cüzdanınızı ona teslim etmeden *tekrar tekrar* harcayabilmesi. Bir abonelik, bir limit, faturasını kendi ödeyen bir yapay zekâ ajanı: her biri açık çek değil, yenilenen bir bütçe istiyor.
+
+Ctrl+ArcZ bunu **tek kullanımlık harcama kutusu** ile çözüyor. Satıcıya doğrudan ödemiyorsunuz. Zincirde küçük bir hesap açıyor, ona bir bütçe yüklüyor ve içine bir politika kilitliyorsunuz: *yalnız bu satıcı, çekim başına bu kadar, bu sıklıkta, bu tarihe kadar.* Zincir dışındaki ortak imzacı ("The Machine") her çekimi firewall'dan geçiriyor ve politikanın dışındaki hiçbir şeyi imzalamıyor. Kutunun kendi kodu da aynı sınırları uyguluyor; yani ortak imzacının anahtarı sızsa ya da satıcı kötüye kullansa bile bütçeden fazlasını alamıyor, başka bir yere gönderemiyor.
+
+Görünmez kalıyorsunuz (satıcı kutuyu görüyor, cüzdanınızı değil), sınırlı kalıyorsunuz (en kötü ihtimal yüklediğiniz bütçe) ve istediğiniz an iptal edebiliyorsunuz (kutuyu süpürün, para eve döner, çekimler durur).
+
+Ortak imzacı bir kapı bekçisi, kasadar değil. Parayı eve getirmek (`sweepToVault` ya da tarih geçtiyse `sweepExpired`) yalnızca sizin anahtarınızı ister, ortak imzacınınkini asla; yani The Machine çökerse ya da düşman olursa bir çekimi geciktirebilir ama paranızı tutamaz. Rolü canlılık, custody değil: en kötü ihtimalle süpürürsünüz ve abonelik biter. Saat ya da zaman dilimi oyunu da yok, çünkü zincirdeki tavanlar (çekim başına ve toplam) zarardan bağımsız olarak zamanı sınırlıyor ve kontrat düz bir UTC blok zaman damgası okuyor.
+
+**Abonelik oluşturun.** İsim verin, bir satıcıya yöneltin, sonra insanın kafasındaki iki şeyi söyleyin: her çekim ne kadar ve kaç tane. Bütçe ve bitiş tarihi sorulmuyor, gösteriliyor; çünkü onlar cevap.
+
+![Abonelik oluştur](./docs/screenshots/subscriptions-create.png)
+
+Form eskiden çekim tavanı, aralık, toplam bütçe ve bitiş tarihini dört bağımsız alan olarak soruyor ve aralarındaki aritmetiği dolduran kişiye bırakıyordu. Kimse "0.1 bütçeye karşı dakikada 0.02" diye düşünmez; "ayda bir, on iki kez" diye düşünür. Bütçeyi hesaplamak yanında sessiz bir hata sınıfını da götürdü: 0.1 bütçeye 0.03'lük çekim üç kez çekiliyor, 0.01 kutuda kalıyor ve bunu ekranda kimse söylemiyordu. "Bütçe en az bir çekim kadar olmalı" hatası da artık düşük ihtimal değil, imkânsız. Kontrat iki durumda da aynı sayıları görüyor.
+
+**Hepsini tek yerden yönetin.** Oluşturduğunuz her kutu, doğrudan zincirden okunur; canlı durum, arama, durum filtreleri, sıralama ve sayfalama ile. Uygulamadaki her geçmiş listesiyle aynı bileşen; tek farkı önemli: bir aboneliğin tarihi *bittiği* tarihtir, bu yüzden tarih filtresi geriye değil ileriye daraltır ("7 gün içinde bitiyor"):
+
+![Abonelikleriniz](./docs/screenshots/subscriptions-list.png)
+
+**Kutu başına tam detay.** Ne kadar çekildi, ne kaldı, bir sonraki çekim ne zaman mümkün ve kutunun ArcScan adresi; hepsi canlı:
+
+![Abonelik detayı](./docs/screenshots/subscriptions-detail.png)
+
+**İsim tarayıcıyla değil, kutuyla seyahat ediyor.** Kutunun stealth duyurusunun içine paketleniyor; uygulama o duyuruları zaten toplu çektiği için ekstra bir istek maliyeti yok ve her cihazda aynı okunuyor. Eskiden `localStorage`'daydı, yani bir makinede "Netflix" olan abonelik diğer her makinede isimsiz bir adresti ve bir abonelikte zincirden canlı okunmayan tek şey oydu. Tarayıcı yine de anında ve bedava yeniden adlandırabiliyor; o override'ı silmek ismi boşaltmıyor, duyurudaki isme geri dönüyor.
+
+Yukarıdaki her ekran görüntüsü Arc Testnet'te gerçek bir abonelik. Kutular zincirde deploy edilip fonlandı ve iptal gerçekten kutuyu eve süpürüyor. Aynı kutu `MODE_PULL` içinde **ajan cüzdanı** senaryosunu da çalıştırıyor: otonom bir ajana dar kapsamlı tek bir kutu verin, kendi başına işlem yapsın ama politikanın ötesine asla geçemesin.
+
+**Keşif sunulur, teslim edilmez.** Announcer tek ve global bir kayıt defteri ve üzerinde sahip etiketi yok, çünkü olmaması asıl mesele. Yani kendi kutularınızı bulmak, şimdiye kadarki her duyuruyu viewing key'inizle denemek demek; bunu tarayıcıdan yapmak her ziyarette 2.16 milyon bloğu 217 parçalı istekle okumak anlamına geliyordu ve bu aralık günde ~1.6 milyon blok büyüyor. `GET /api/announcements` aynı listeyi bir kez geri dolduran ve sonra zinciri takip eden bir indeksten veriyor: 45 saniye 1.4 saniyeye indi.
+
+Uç nokta hiçbir adres almıyor ve her çağırana aynı baytları dönüyor; iki yanıtın özetini alıp doğruladım. Alması da gerekmiyor: hangi duyurunun size ait olduğunu anlamak viewing key istiyor, o anahtar bir cüzdan imzasından türüyor ve tarayıcıdan çıkmıyor, eşleştirme orada yapılıyor. Viewing key kabul eden bir uç nokta yazması daha kısa olurdu ve stealth adreslerin var olma sebebini karşı tarafa devrederdi. İndeks erişilemezse ya da hâlâ dolduruyorsa bunu söylüyor ve tarayıcı yarım bir listeye güvenmek yerine zinciri kendisi okuyor; çünkü eksik bir duyuru eksik bir abonelik demek ve o ekranda bu, hiç aboneliğin olmamasıyla birebir aynı görünür.
+
+**Kutunun sahibi tek kullanımlık bir adres ve ödeyen, kutunun işlemlerinin dışında kalıyor.** Her kutunun sahibi ve kasası taze bir ERC-5564 stealth adresi; öyle duyuruluyor ki yalnızca ödeyenin görüntüleme anahtarı onu yeniden bulabiliyor. Yukarıdaki liste böyle kuruluyor: zincirde ne kimlik var ne de cüzdandan türetilmiş bir etiket. Ödeyeni ele verecek iki işlem relayer üzerinden gidiyor: deploy ve duyuru (`StealthAnnouncer` `msg.sender`'ı indexliyor, yani kendi cüzdanınızdan duyurmak "bu cüzdan bir stealth kutu yaptı" diye yayınlamak olurdu). Bir stealth adresin kendini süpürebilmesi için gereken küçük gas takviyesi de öyle, çünkü onu kendi cüzdanınızdan ödemek tam da stealth adresin var olma sebebi olan bağı yazmak olurdu. Relay edilen çağrıların hiçbiri kullanıcının parasını hareket ettiremiyor.
+
+Bunun gizlemediği şey fonlama: bütçe hâlâ ödeyenin cüzdanından kutuya açıkta gidiyor ve relay bunu değiştirmiyor, çünkü para halka açık bir bakiyeden başlıyor. Bu ancak transferin kendisi gizli olduğunda kapanır ki Arc'ta bunun adı APS. [`docs/privacy.md`](./docs/privacy.md) gerçek bir kutunun etrafındaki her USDC hareketini izliyor ve neyin gizlendiğini, neyin gizlenmediğini tek tek söylüyor.
+
+## Keeper: zincirle sınırlanmış, cüzdanı olan bir ajan
+
+`reclaimExpired` izin gerektirmiyor ve her zaman asıl gönderene ödüyor, yani iade için güvenilen bir tarafa gerek yok; ama "izin gerektirmemek" otomatik olmak demek değil. Biri onu çağırana kadar, claim edilmemiş bir transfer kontratta öylece durur. Keeper (`apps/keeper`) o "biri" ve ajan cüzdanı iddiasının diyagram olmaktan çıktığı yer.
+
+Ona fonlanmış bir cüzdan verilip iyi davranacağına güvenilmiyor. Bu ürünün tekrarlayan her alacaklıya ödediği gibi ödeniyor: politikası zincirde olan, PULL modunda bir `SpendPolicyAccount` üzerinden. Hedef keeper'a kilitli, çekim başına tavan var, asgari aralık var, toplam bütçe var, bitiş tarihi var. Tüm etki alanı, operatörün seçtiği ve zincirden geri okuyabildiği bir sayı; Arc'ta bu sayı harcadığı varlığın kendisiyle ölçülüyor, çünkü gas USDC.
+
+Arc Testnet'te keeper'ın gerçek anahtarıyla doğrulandı: #50 numaralı transferi iade etti ve `TransferReclaimed` olayı `caller` olarak keeper'ı, `sender` olarak asıl göndereni kaydetti; kayıtlı alıcı hiçbir şey almadı. Ardından kendi bütçesine karşı dört saldırı (ortak imzacıdan çekim tavanının on katını istemek, ortak imzacı imzasını taklit etmek, kutuyu kendine süpürmek ve doğru kasaya süpürmek) tek tek reddedildi ve operatör kalanı tek bir `sweepToVault` ile geri aldı. Detaylar ve tam iz: [`apps/keeper/README.md`](./apps/keeper/README.md).
+
+## Investigator: bir kuralın veremeyeceği karar
+
+Firewall her seferinde tek bir soruyu, her seferinde aynı şekilde yanıtlıyor. Güvenilir olmasının sebebi de bu, tavanı da bu: bir iş arkadaşınızın yeni cüzdanı için de, ödemeyi yutacak bir kontrat için de *"bu adresin zincir geçmişi yok"* diyor, çünkü tek bir kuraldan bakınca ikisi aynı. Arc Testnet'ten gerçek bir dosya bu boşluğu açıkça gösteriyor: kurallar CtrlArcZ kontratının kendisini `safe / KNOWN_COUNTERPARTY` olarak derecelendiriyor, çünkü gönderen onunla etkileşime girmiş; oysa `isContract: true` demek, oraya yapılacak düz bir USDC transferinin kaybolması demek.
+
+`POST /api/investigate` bir kuralın birleştiremeyeceği sinyalleri toplayıp bunların neye işaret ettiğini raporluyor. **Yalnızca sıkılaştırabilir.** Her yanıt sunucudan çıkmadan önce kural motorunun kararına kırpılıyor; yani yanlış ya da prompt-injection almış bir cevap iyi bir ödemeyi reddedebilir ama kötü bir ödemeyi onaylayamaz, bir ikizin bloğunu kaldıramaz: elindeki tek işlem `max`. Üstelik opsiyonel: API anahtarı yoksa, zaman aşımında ya da bozuk yanıtta rota değişmemiş kural kararını döner ve uygulama, özellik hiç yokmuş gibi davranır.
+
 ## Bilinen sınırlar
 
 - Kontrat denetlenmedi. Yalnız testnet.
 - Firewall tek bir indexer'a (ArcScan) bağlı. Erişilemezse rapor uyarıya, benzer adres elenemiyorsa bloğa düşer. Asla güvenliye düşmez.
 - Poisoning senaryosundaki benzer adres, bir keypair grind'i yerine doğrudan üretilir. Firewall kararı yalnız adresten verdiği için, gerçek bir ikizi bloklandığını kanıtlamak adına private key gerekmez.
+- Stealth kutu, sahibinin kim olduğunu gizler, fonlandığını değil. Bütçe hâlâ ödeyenin cüzdanından kutuya açıkta gider. Bkz. [`docs/privacy.md`](./docs/privacy.md).
+- Buradaki gizlilik, bir kalabalığın içinde bağlanamazlıktır ve kalabalık, relayer'ı kaç kişi kullanıyorsa o kadardır. Relayer ayrıca kimin gönderim istediğini öğrenir, çünkü istekler her çağıranı kotalayabilmek için imzalanır.
 - Bekleyen bir transferin beş deneme hakkını yakarak herkes onu dondurabilir. Para güvende kalır; gönderen iptal edip yeniden gönderir.
+- Keeper, başkasının parasını iade etmek için kendi gas'ını harcar; yani hiç kâr etmez. Teşvikli bir keeper ağı değil, operatörün işlettiği bir hizmettir.
+- Investigator uçtan uca kendi hata yollarında (kapalı, erişilemez, bozuk, reddeden, prompt-injection) ve sahte bir modele karşı doğrulandı; canlı bir anahtarla ürettiği metin testlerle kapsanmıyor.
+- Gelen transfer geçmişi 200.000 blok geriye bakar, sonra zinciri ileriye doğru takip eder. Daha eski bir cüzdan, stealth keşfinin zaten yaptığı gibi `eth_getLogs` yerine bir indeks ister.
+- Duyuru indeksi tek bir sunucu sürecinin belleğinde duruyor. Yeniden başlatmada bir kez geri dolduruyor ve o bitene kadar tarayıcı zinciri kendisi okuyor. Birden fazla instance ile çalışan bir kurulum bunu ortak bir depoya taşımak ister.
+- Hiçbir şeyle eşleşmeyen bir claim kodu, uygulamanın bunu söyleyebilmesi için o pencerenin tamamının taranmasına mal olur, çünkü taahhüt topic'te değil olay verisinde durur. Ekran, ararken bunu söyler.

@@ -44,8 +44,6 @@ import {
   Address as AddressChip,
   Copyable,
   short,
-  RiskCard,
-  Skeleton,
   Stepper,
   TxLink,
   useSubmitGuard,
@@ -55,7 +53,8 @@ import {
   type RowStep,
 } from '@ctrl-arcz/demo-kit/ui';
 import { loadBridges, saveBridge, type StoredBridge, type StoredBridgeStep } from '../store.js';
-import { useRecipientRisk } from '../lib/useRecipientRisk.js';
+import { useRecipientGate } from '../lib/useRecipientGate.js';
+import { RiskGate } from './RiskGate.js';
 import { pendingOn, reconcile, rememberDeposit } from '../lib/pendingDeposits.js';
 
 // The bridge signs server-side (/api/bridge), so the client never needs the key;
@@ -196,7 +195,6 @@ export function BridgeTab({ session }: { session: Session }) {
    * firewall the send screen uses, not a second, laxer copy of it.
    */
   const [recipient, setRecipient] = useState('');
-  const [riskOpen, setRiskOpen] = useState(true);
   const [amount, setAmount] = useState('0.1');
   const [result, setResult] = useState<BridgeOutcome | null>(null);
   /** Every transfer this browser is following, live from the server. */
@@ -217,7 +215,7 @@ export function BridgeTab({ session }: { session: Session }) {
   const [bridges, setBridges] = useState<StoredBridge[]>(() => loadBridges());
   const [histEngine, setHistEngine] = useState<'all' | BridgeEngine>('all');
 
-  const risk = useRecipientRisk(session, recipient);
+  const risk = useRecipientGate(session, recipient);
   const recipientBad = recipient.trim() !== '' && !isAddress(recipient.trim());
   const amountValue = Number(amount);
   const sameChain = from === to;
@@ -269,7 +267,11 @@ export function BridgeTab({ session }: { session: Session }) {
     amountValue > 0 &&
     (!sameChain || engine === 'gateway') &&
     !recipientBad &&
-    !risk.blocked &&
+    // The whole firewall opinion, including the wait for a verdict that is still
+    // forming. This used to be `!risk.blocked` alone, so the button armed while
+    // the scan was running and again before the investigator landed: the rules
+    // said safe, the transfer left, and the escalation arrived after it.
+    risk.armed &&
     // Gateway needs both ends to be chains it serves. Without this the button was
     // clickable in a state where `run` could only return without doing anything.
     (engine !== 'gateway' || (!!gwSource && isGatewayChain(to)));
@@ -784,16 +786,25 @@ export function BridgeTab({ session }: { session: Session }) {
 
   return (
     <>
-      <Card title={t(`bridge.${engine}.title`)} data-testid="bridge-tab">
-        <p className="muted">{t(`bridge.${engine}.body`)}</p>
-        <ul className="hintlist">
-          <li>{t(`bridge.${engine}.point1`)}</li>
-          <li>{t(`bridge.${engine}.point2`)}</li>
-          <li>{t(`bridge.${engine}.point3`)}</li>
-        </ul>
-
-        <hr className="rule" />
-
+      {/* What the selected route does, behind the title. It is three bullets of
+          mechanism -- burn here, attest, mint there -- which is worth having and is
+          not what anyone opened this tab to read. The dot beside the tabs is a
+          different question (which route should I pick) and stays with the tabs. */}
+      <Card
+        title={t(`bridge.${engine}.title`)}
+        infoLabel={t(`bridge.${engine}.title`)}
+        info={
+          <>
+            <p>{t(`bridge.${engine}.body`)}</p>
+            <ul className="hintlist">
+              <li>{t(`bridge.${engine}.point1`)}</li>
+              <li>{t(`bridge.${engine}.point2`)}</li>
+              <li>{t(`bridge.${engine}.point3`)}</li>
+            </ul>
+          </>
+        }
+        data-testid="bridge-tab"
+      >
         <div className="bridge-engine">
           <SegmentedTabs
             tabs={[
@@ -929,22 +940,10 @@ export function BridgeTab({ session }: { session: Session }) {
           </Field>
         </div>
 
-        {/* Same firewall as the send screen, same verdict, same block. A payment
-            that skipped it would be the one an attacker aims at. */}
-        {risk.checking && (
-          <div style={{ marginTop: 12 }}>
-            <Skeleton height={56} />
-          </div>
-        )}
-        {!risk.checking && risk.report && (
-          <div style={{ marginTop: 12 }} data-testid="bridge-risk">
-            <RiskCard
-              report={risk.report}
-              collapsed={!riskOpen}
-              onToggle={() => setRiskOpen((v) => !v)}
-            />
-          </div>
-        )}
+        {/* Same firewall as the send screen, same verdict, same block, and now
+            the same reasons: this used to render the rule card only, so a bridge
+            could refuse on an advisory the user was never shown. */}
+        <RiskGate gate={risk} recoverable={false} data-testid="bridge-risk" />
 
         {(result || job || selfBridge) && <Stepper steps={steps} highlightIndex={hoverIdx} />}
 
@@ -1071,7 +1070,7 @@ export function BridgeTab({ session }: { session: Session }) {
             emptyText={t('bridge.historyEmpty')}
             noMatchText={t('bridge.historyNoMatch')}
             pageSize={HISTORY_PAGE_SIZE}
-            filter={{
+            control={{
               value: histEngine,
               ariaLabel: t('bridge.filterEngine'),
               onChange: (v) => setHistEngine(v as 'all' | BridgeEngine),

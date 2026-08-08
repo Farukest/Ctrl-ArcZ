@@ -140,14 +140,6 @@
 }
 .sub-select:focus { outline: none; border-color: var(--accent, #f5a524); }
 
-.sub-toolbar {
-  display: flex;
-  gap: var(--sp-3, 10px);
-  align-items: center;
-  margin-bottom: 10px;
-}
-.sub-toolbar .sub-select { width: auto; min-width: 150px; }
-
 /* margin-top matters: both users of this put a search control directly above it,
    and with only a bottom margin the chips sat flush against the input. */
 .sub-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; margin-bottom: 14px; }
@@ -176,7 +168,11 @@
 }
 .sub-row__meta { color: var(--text-mid, #9ba6b4); font-size: 13px; margin-top: 5px; }
 .sub-row__sep { margin: 0 7px; opacity: 0.5; }
+/* `display: block` is load-bearing: this lives inside a fact value now, which is
+   an inline context, and an inline span ignores height. It rendered as a stray
+   orange block beside the buttons instead of a bar under the number. */
 .sub-bar {
+  display: block;
   height: 5px; border-radius: 999px; background: var(--bg-sunken, #070809);
   margin-top: 9px; overflow: hidden;
 }
@@ -242,3 +238,111 @@
    left one shrank the moment it went into its loading state and pushed the
    gasless button sideways -- out from under a cursor already on its way there. */
 .claim-actions .btn { flex: 1 1 0; }
+
+/* The escape hatch under a refusal ----------------------------------------- */
+
+/* Deliberately a text link, not a button. A button beside "Send blocked" reads
+   as an equal choice; this reads as a way out you have to reach for. */
+.risk-override__open {
+  display: inline-block;
+  margin-top: 10px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: var(--fs-xs, 13px);
+  color: var(--text-lo, #5d6675);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.risk-override__open:hover {
+  color: var(--text-mid, #9aa4b2);
+}
+
+.risk-override {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--block, #e5484d);
+}
+.risk-override__title {
+  margin: 0 0 10px;
+  font-weight: 600;
+  color: var(--block, #e5484d);
+}
+.risk-override__note {
+  margin: 10px 0 0;
+  font-size: var(--fs-xs, 13px);
+  color: var(--text-mid, #9aa4b2);
+}
+
+.risk-override__addr {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 8px;
+}
+.risk-override__addrk {
+  font-size: var(--fs-xs, 12px);
+  color: var(--text-lo, #5d6675);
+}
+.risk-override__addrv {
+  overflow-wrap: anywhere;
+  line-height: 1.5;
+}
+/* The four characters at each end are exactly what every wallet shows and
+   exactly what the attacker matched, so they are dimmed and the middle, which is
+   the only thing that differs, is left bright. */
+.risk-override__same {
+  color: var(--text-lo, #5d6675);
+}
+.risk-override__diff {
+  color: var(--block, #e5484d);
+  font-weight: 700;
+  background: color-mix(in srgb, var(--block, #e5484d) 14%, transparent);
+  border-radius: 3px;
+  padding: 1px 2px;
+}
+
+/* Subscription detail: renaming, and the explorer link that is not renaming ---- */
+
+.sub-rename {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--border-subtle, #262d38);
+}
+/* A quiet way back to the announced name, offered only when an override exists. */
+.sub-rename__clear {
+  margin-top: 8px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: var(--fs-xs, 12px);
+  color: var(--text-lo, #5d6675);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.sub-rename__clear:hover {
+  color: var(--text-mid, #9aa4b2);
+}
+.sub-detail__link {
+  margin-top: 12px;
+}
+
+/* The budget and the end date are shown, not asked ------------------------- */
+.sub-total {
+  display: flex;
+  align-items: center;
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px dashed var(--border-subtle, #262d38);
+  border-radius: 10px;
+  color: var(--text-hi, #e9edf2);
+  font-variant-numeric: tabular-nums;
+}
+.sub-summary {
+  margin: 0;
+  font-size: var(--fs-xs, 13px);
+}

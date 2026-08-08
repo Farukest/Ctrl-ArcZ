@@ -17,6 +17,11 @@ export { getLogsChunked, type ChunkedEventsParams } from './events.js';
 
 // Layer 1
 export { check, type CheckOptions } from './risk/check.js';
+export {
+  acknowledgementCovers,
+  MAX_ACKNOWLEDGEMENT_AGE_MS,
+  type RiskAcknowledgement,
+} from './risk/acknowledge.js';
 export { VerifiedRecipientIndex } from './risk/recipientIndex.js';
 export { CachingDataProvider, type CachingProviderOptions } from './risk/cachingProvider.js';
 export {
@@ -72,6 +77,15 @@ export {
   type TransferStatus,
   type WatchTransferOptions,
 } from './transfer/transfer.js';
+export {
+  TERMINAL_STATUSES,
+  isClaimable,
+  isOpen,
+  isReturnable,
+  isTerminal,
+  statusBucket,
+  type StatusBucket,
+} from './transfer/status.js';
 export {
   generateClaimCode,
   fromSecret,
@@ -188,6 +202,10 @@ export {
 } from './shield/stealth.js';
 export { stealthAnnouncerAbi } from './shield/abi.js';
 export {
+  AnnouncementIndex,
+  type IndexedAnnouncement,
+} from './shield/announcementIndex.js';
+export {
   newStealthOwner,
   announceArgsFor,
   recognizeAnnouncements,
@@ -195,6 +213,7 @@ export {
   discoverStealthBoxes,
   encodeStealthMetadata,
   decodeStealthMetadata,
+  type StealthMetadata,
   type StealthBox,
   type RawAnnouncement,
 } from './shield/stealthBox.js';

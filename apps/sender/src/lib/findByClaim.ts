@@ -10,6 +10,14 @@ export interface FoundTransfer {
   to: Address;
   sender: Address;
   amount: bigint;
+  /**
+   * When the claim window closes, in epoch ms.
+   *
+   * Carried by the same event, so it costs nothing to return, and it is the
+   * difference between offering a button that works and one that reverts: the
+   * contract refuses a claim past this point.
+   */
+  deadline: number;
 }
 
 /**
@@ -36,6 +44,7 @@ export async function findByClaimHash(
     to?: Address;
     sender?: Address;
     amount?: bigint;
+    deadline?: bigint;
     claimHash?: Hex;
   }>(client, {
     address: CTRL_ARCZ_ADDRESS,
@@ -52,5 +61,6 @@ export async function findByClaimHash(
     to: hit.args.to,
     sender: hit.args.sender,
     amount: hit.args.amount ?? 0n,
+    deadline: Number(hit.args.deadline ?? 0n) * 1000,
   };
 }

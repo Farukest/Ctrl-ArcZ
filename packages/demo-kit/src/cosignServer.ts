@@ -14,6 +14,7 @@ import {
   readAccount,
   check,
   VerifiedRecipientIndex,
+  AnnouncementIndex,
   cosignAuthMessage,
   arcTestnet,
   RPC_URLS,
@@ -194,6 +195,27 @@ void recipientIndex.start();
  */
 export function verifiedRecipients(sender: Address): { recipients: Address[]; complete: boolean } {
   return { recipients: recipientIndex.recipientsOf(sender), complete: recipientIndex.isReady() };
+}
+
+// The same treatment for stealth announcements. The announcer is one global
+// registry with no on-chain owner tag, so a browser looking for its own boxes had
+// to read all 2.16 million blocks of it -- 217 chunked requests -- on every visit,
+// and that span grows by 1.6 million blocks a day.
+const announcementIndex = new AnnouncementIndex(publicClient);
+void announcementIndex.start();
+
+/**
+ * Every stealth announcement at or after `fromBlock`, with the head they are
+ * complete to.
+ *
+ * Public data, served identically to everyone, and that is the point. Recognising
+ * which announcements belong to a wallet needs its viewing key; the key is derived
+ * from a wallet signature and never leaves the browser, so the client does the
+ * matching itself against this list. Accepting a viewing key here would be simpler
+ * and would give away the exact thing stealth addresses exist to protect.
+ */
+export function announcements(fromBlock = 0n): ReturnType<AnnouncementIndex['since']> {
+  return announcementIndex.since(fromBlock);
 }
 
 /**

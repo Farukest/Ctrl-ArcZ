@@ -31,15 +31,56 @@ export interface StealthBox {
   box: Address;
   /** The ephemeral public key that produced the stealth address. */
   ephemeralPubKey: Hex;
+  /** The name announced with it, or empty. Same on every device, unlike a name
+   *  a browser keeps to itself. */
+  label: string;
 }
 
-/** Pack the box address into announcement metadata (ABI address; room to extend). */
-export function encodeStealthMetadata(box: Address): Hex {
-  return encodeAbiParameters([{ type: 'address' }], [box]);
+/**
+ * Pack the box address, and optionally a name for it, into announcement metadata.
+ *
+ * The name rides here rather than in the payer's browser because the browser was
+ * the wrong place for it: it made a subscription called "Netflix" on one machine
+ * an unnamed address on every other one, and it was the only thing about a
+ * subscription that was not read live from the chain. Everything else -- merchant,
+ * caps, interval, expiry, spent, balance -- is fetched fresh, and the announcement
+ * list is already fetched in bulk, so the name costs no extra request.
+ *
+ * What it costs instead is publicity. The name sits in a public log next to a box
+ * whose merchant address is public already, so it says little that the merchant
+ * did not, and it is not tied to the payer's wallet. It is also optional, and a
+ * reader can override it locally without touching the chain.
+ */
+export function encodeStealthMetadata(box: Address, label = ''): Hex {
+  return label
+    ? encodeAbiParameters([{ type: 'address' }, { type: 'string' }], [box, label])
+    : encodeAbiParameters([{ type: 'address' }], [box]);
 }
 
-export function decodeStealthMetadata(metadata: Hex): Address {
-  return decodeAbiParameters([{ type: 'address' }], metadata)[0];
+export interface StealthMetadata {
+  box: Address;
+  /** Empty when the announcement carries no name. */
+  label: string;
+}
+
+/**
+ * Read an announcement's payload.
+ *
+ * Announcements made before names existed carry a bare address, so the two-field
+ * decode is tried first and the one-field form is the fallback. Getting this
+ * backwards would make every existing box undiscoverable.
+ */
+export function decodeStealthMetadata(metadata: Hex): StealthMetadata {
+  try {
+    const [box, label] = decodeAbiParameters(
+      [{ type: 'address' }, { type: 'string' }],
+      metadata,
+    );
+    return { box, label };
+  } catch {
+    const [box] = decodeAbiParameters([{ type: 'address' }], metadata);
+    return { box, label: '' };
+  }
 }
 
 /**
@@ -60,12 +101,13 @@ export function newStealthOwner(
 export function announceArgsFor(
   stealth: { stealthAddress: Address; ephemeralPubKey: Hex },
   box: Address,
+  label = '',
 ): readonly [bigint, Address, Hex, Hex] {
   return [
     BigInt(STEALTH_SCHEME_ID),
     stealth.stealthAddress,
     stealth.ephemeralPubKey,
-    encodeStealthMetadata(box),
+    encodeStealthMetadata(box, label),
   ] as const;
 }
 
@@ -100,7 +142,8 @@ export function recognizeAnnouncements(
     }
     if (recovered && recovered.toLowerCase() === a.stealthAddress.toLowerCase()) {
       try {
-        mine.push({ stealthAddress: a.stealthAddress, box: decodeStealthMetadata(a.metadata), ephemeralPubKey: a.ephemeralPubKey });
+        const { box, label } = decodeStealthMetadata(a.metadata);
+        mine.push({ stealthAddress: a.stealthAddress, box, ephemeralPubKey: a.ephemeralPubKey, label });
       } catch {
         /* announcement without a decodable box: skip */
       }

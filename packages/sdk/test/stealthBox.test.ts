@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { encodeAbiParameters } from 'viem';
 import { getAddress, type Hex } from 'viem';
 import { deriveStealthKeys, generateStealthAddress } from '../src/shield/stealth.js';
 import {
@@ -18,7 +19,30 @@ const BOX = getAddress('0x00000000000000000000000000000000cafebabe');
 
 describe('stealth box announcements', () => {
   it('round-trips the box address through metadata', () => {
-    expect(decodeStealthMetadata(encodeStealthMetadata(BOX))).toBe(BOX);
+    expect(decodeStealthMetadata(encodeStealthMetadata(BOX))).toEqual({ box: BOX, label: '' });
+  });
+
+  it('round-trips a name alongside the box', () => {
+    // The name lives here so it is the same on every device, instead of in one
+    // browser's storage where the same subscription showed up unnamed everywhere
+    // else.
+    expect(decodeStealthMetadata(encodeStealthMetadata(BOX, 'Netflix'))).toEqual({
+      box: BOX,
+      label: 'Netflix',
+    });
+  });
+
+  it('still reads announcements made before names existed', () => {
+    // Older boxes carry a bare address. Decoding those as (address, string) throws,
+    // so the fallback is what keeps every existing subscription discoverable.
+    const legacy = encodeAbiParameters([{ type: 'address' }], [BOX]);
+    expect(decodeStealthMetadata(legacy)).toEqual({ box: BOX, label: '' });
+  });
+
+  it('keeps a name with characters that are not plain ASCII', () => {
+    expect(decodeStealthMetadata(encodeStealthMetadata(BOX, 'Kira ödemesi 🏠')).label).toBe(
+      'Kira ödemesi 🏠',
+    );
   });
 
   it('newStealthOwner + announceArgsFor produce args the owner can recognise', () => {

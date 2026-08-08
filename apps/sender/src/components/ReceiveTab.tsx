@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import QRCode from 'qrcode';
 import { formatUnits, type Hex } from 'viem';
 import { getPublicClient, type Session } from '@ctrl-arcz/demo-kit';
@@ -112,6 +112,20 @@ export function ReceiveTab({
     found: null,
     searching: false,
   });
+  /**
+   * What the inbox holds, as a value rather than an array.
+   *
+   * The scan below is unindexed -- `claimHash` sits in the event data, not a topic
+   * -- so a miss walks 200k blocks and takes the better part of a minute. Keying
+   * the effect on the `pending` array itself restarted that walk every time the
+   * 8-second poll returned a fresh array, which for a mistyped code left in the box
+   * meant a permanent rescan. Keying it on the contents keeps the one behaviour
+   * that identity was accidentally providing -- a code pasted before its transfer
+   * lands gets matched when it does -- without the storm.
+   */
+  const inbox = (pending ?? []).map((p) => p.transfer.claimHash).join(',');
+  const pendingRef = useRef(pending);
+  pendingRef.current = pending;
   useEffect(() => {
     if (!parsed) {
       setLookup({ found: null, searching: false });
@@ -120,7 +134,9 @@ export function ReceiveTab({
     let live = true;
     setLookup({ found: null, searching: true });
     const want = hashClaim(saltFromSecret(parsed), parsed);
-    const local = pending?.find((p) => p.transfer.claimHash.toLowerCase() === want.toLowerCase());
+    const local = pendingRef.current?.find(
+      (p) => p.transfer.claimHash.toLowerCase() === want.toLowerCase(),
+    );
     if (local) {
       setLookup({
         found: {
@@ -128,6 +144,7 @@ export function ReceiveTab({
           to: local.transfer.to,
           sender: local.transfer.sender,
           amount: local.transfer.amount,
+          deadline: local.transfer.deadline.getTime(),
         },
         searching: false,
       });
@@ -139,9 +156,12 @@ export function ReceiveTab({
     return () => {
       live = false;
     };
-  }, [parsed, pending]);
+  }, [parsed, inbox]);
   const matched = lookup.found;
   const noMatch = Boolean(parsed) && !lookup.searching && matched === null;
+  // The contract refuses a claim once the window closes, so the app should say so
+  // rather than offer a button that spends gas to revert.
+  const expired = matched !== null && matched.deadline > 0 && matched.deadline <= Date.now();
 
   useEffect(() => {
     QRCode.toDataURL(session.address, { margin: 1, width: 176 })
@@ -250,12 +270,21 @@ export function ReceiveTab({
       {/* Claim a protected transfer sent to you */}
       <Card title={t('claim.title')}>
         <div>
+          {/* The scan behind a code can take the better part of a minute, and a
+              screen that says nothing for that long reads as a screen that did
+              nothing. The hint carries the wait; the error carries the verdict. */}
           <Field
             label={t('claim.code')}
             error={
               secret && !parsed ? t('claim.codeInvalid') : noMatch ? t('claim.noMatch') : null
             }
-            hint={!secret ? t('claim.codeHint') : undefined}
+            hint={
+              !secret
+                ? t('claim.codeHint')
+                : lookup.searching
+                  ? t('claim.searching')
+                  : undefined
+            }
           >
             <Input
               mono
@@ -272,11 +301,13 @@ export function ReceiveTab({
         {matched && (
           <div className="row-between claim__picked" style={{ marginTop: 12 }}>
             <span>
-              {t('claim.matched', {
-                id: matched.transferId.toString(),
-                amount: formatUnits(matched.amount, 6),
-                from: short(matched.sender),
-              })}
+              {expired
+                ? t('claim.matchedExpired', { id: matched.transferId.toString() })
+                : t('claim.matched', {
+                    id: matched.transferId.toString(),
+                    amount: formatUnits(matched.amount, 6),
+                    from: short(matched.sender),
+                  })}
             </span>
           </div>
         )}
@@ -287,7 +318,7 @@ export function ReceiveTab({
           <Button
             onClick={() => void guard(() => handleClaim(false))}
             loading={claiming === 'own'}
-            disabled={busy || !session.onArc || !matched}
+            disabled={busy || !session.onArc || !matched || expired}
             data-testid="claim-button"
           >
             {t('claim.claimOwnGas')}
@@ -297,7 +328,7 @@ export function ReceiveTab({
               variant="ghost"
               onClick={() => void guard(() => handleClaim(true))}
               loading={claiming === 'gasless'}
-              disabled={busy || !session.onArc || !matched}
+              disabled={busy || !session.onArc || !matched || expired}
               data-testid="gasless-claim-button"
             >
               {t('claim.claimGasless')}

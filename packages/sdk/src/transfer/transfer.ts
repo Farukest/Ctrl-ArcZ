@@ -24,6 +24,10 @@ import {
   decodeRevert,
 } from './errors.js';
 import { check, type CheckOptions } from '../risk/check.js';
+import {
+  acknowledgementCovers,
+  type RiskAcknowledgement,
+} from '../risk/acknowledge.js';
 import type { RiskReport } from '../risk/types.js';
 // Runtime import, but not a cycle: config.ts imports only *types* from this file.
 import { defineConfig, shouldBlockSend, type IntegratorConfig } from '../config/config.js';
@@ -138,6 +142,23 @@ export interface SendProtectedOptions {
    * `MAX_REPORT_AGE_MS`; otherwise the guard silently re-scans.
    */
   report?: RiskReport;
+  /**
+   * A verdict the user was shown and chose to proceed past.
+   *
+   * The firewall refuses by default, and this is the only way past a refusal.
+   * It takes the report rather than a boolean on purpose: an integrator cannot
+   * set it once and have every later send inherit it, and it only covers a
+   * verdict no worse than the one acknowledged, for the same pair, while it is
+   * still fresh. See `acknowledgementCovers`.
+   *
+   * A rule engine can be wrong -- eight matching hex characters happen by
+   * accident, and anyone can send you a zero-value transfer -- and a refusal
+   * with no way past it is a wallet that sometimes cannot pay a colleague. What
+   * this does not do is make the refusal cheap: showing the user what they are
+   * overriding, clearly enough that a poisoning victim would notice, is the
+   * caller's job and the whole reason the escape hatch is safe to have.
+   */
+  acknowledged?: RiskAcknowledgement;
   /** Forwarded to `check`. `client` and `contractAddress` default from `clients`. */
   checkOptions?: CheckOptions;
   /** Invoked with the report when the scan does NOT block, so callers can surface warnings. */
@@ -213,7 +234,12 @@ async function runRiskGuard(
         });
 
   const config = options?.config ?? defineConfig();
-  if (shouldBlockSend(config, report.level)) throw new RiskBlockedError(report);
+  if (shouldBlockSend(config, report.level)) {
+    const ack = options?.acknowledged;
+    if (!ack || !acknowledgementCovers(ack, report, Date.now())) {
+      throw new RiskBlockedError(report);
+    }
+  }
   options?.onReport?.(report);
 }
 

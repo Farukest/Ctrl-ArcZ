@@ -1,6 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSession } from '@ctrl-arcz/demo-kit';
-import { ConnectBar, SegmentedTabs, TopBar, useT, useToast } from '@ctrl-arcz/demo-kit/ui';
+import {
+  ConnectBar,
+  NO_ARRIVALS,
+  SegmentedTabs,
+  TopBar,
+  nextArrival,
+  useT,
+  useToast,
+} from '@ctrl-arcz/demo-kit/ui';
 import { PayTab } from './components/PayTab.js';
 import { ActivityTab } from './components/ActivityTab.js';
 import { BridgeTab } from './components/BridgeTab.js';
@@ -27,8 +35,8 @@ export function App() {
   const [mode, setMode] = useState<Mode>(linkTid ? 'receive' : 'send');
   const [tab, setTab] = useState<Tab>('pay');
 
-  const { pending, reload } = usePendingClaims(state.session);
-  const pendingCount = pending?.length ?? 0;
+  const { pending, claimable, reload } = usePendingClaims(state.session);
+  const pendingCount = claimable?.length ?? 0;
 
   // Announce an arriving payment wherever the user is standing.
   //
@@ -36,28 +44,28 @@ export function App() {
   // side shows it anyway. It does not, in the way that matters: the list is
   // searched, filtered and paged, so a new row can land off-screen, and the
   // person most likely to be sitting on the Receive tab is exactly the one
-  // waiting to be told.
+  // waiting to be told. What it says differs by side, though: telling someone
+  // already looking at the Receive screen to go to the Receive screen reads as a
+  // message written for somebody else.
   //
-  // `seeded` keeps the first successful poll quiet. Without it, opening the app
-  // with transfers already waiting announces them as if they had just arrived.
-  const seeded = useRef(false);
-  const prevCount = useRef(0);
+  // When it fires and when it stays quiet is `nextArrival`, tested on its own.
+  const arrival = useRef(NO_ARRIVALS);
+  const modeRef = useRef(mode);
+  modeRef.current = mode;
   useEffect(() => {
-    if (pending === null) return; // still loading; nothing to compare against
-    const count = pending.length;
-    if (!seeded.current) {
-      seeded.current = true;
-      prevCount.current = count;
-      return;
+    const step = nextArrival(arrival.current, claimable);
+    arrival.current = step.state;
+    if (step.announce) {
+      toast.push(
+        modeRef.current === 'receive' ? t('receive.newIncomingHere') : t('receive.newIncoming'),
+        'success',
+      );
     }
-    if (count > prevCount.current) toast.push(t('receive.newIncoming'), 'success');
-    prevCount.current = count;
-  }, [pending, toast, t]);
+  }, [claimable, toast, t]);
 
   // A different wallet has a different inbox, so the next poll is a first poll.
   useEffect(() => {
-    seeded.current = false;
-    prevCount.current = 0;
+    arrival.current = NO_ARRIVALS;
   }, [state.session?.address]);
 
   // Three primary destinations; SegmentedTabs shows none highlighted while the

@@ -36,6 +36,7 @@ import {
   Address as AddressChip,
   Field,
   Input,
+  Select,
   Stepper,
   IconExternal,
   useSubmitGuard,
@@ -45,25 +46,35 @@ import {
   type Step,
 } from '@ctrl-arcz/demo-kit/ui';
 import { useSubscriptions, type Subscription, type SubStatus } from '../lib/useSubscriptions.js';
-import { getLabel, setLabel } from '../lib/subscriptionLabels.js';
+import { useRecipientGate } from '../lib/useRecipientGate.js';
+import { RiskGate } from './RiskGate.js';
+import { displayLabel, localLabel, setLabel } from '../lib/subscriptionLabels.js';
 
 const USDC = ADDRESSES.USDC as Address;
 const PAGE_SIZE = 5;
 
 // Short intervals included so a pull can actually be re-triggered during a testnet demo.
-const INTERVALS = [
-  { secs: 60, key: 'min1' },
-  { secs: 3600, key: 'hour1' },
-  { secs: 86400, key: 'day1' },
-  { secs: 604800, key: 'day7' },
-  { secs: 2592000, key: 'day30' },
+/**
+ * How often a merchant may charge, in the words people use for subscriptions.
+ *
+ * The form used to ask for a per-pull cap, an interval, a total budget and an
+ * expiry as four independent fields, and left the arithmetic between them to the
+ * user. Nobody thinks "0.02 every minute with a 0.1 budget"; they think "1 a week,
+ * twelve times". Frequency and a count say the same thing to the contract and are
+ * the two numbers a person actually has in mind.
+ */
+const FREQUENCIES = [
+  { key: 'minute', secs: 60 },
+  { key: 'daily', secs: 86_400 },
+  { key: 'weekly', secs: 604_800 },
+  { key: 'monthly', secs: 2_592_000 },
+  { key: 'yearly', secs: 31_536_000 },
 ] as const;
-const DURATIONS = [
-  { secs: 86400, key: 'day1' },
-  { secs: 604800, key: 'day7' },
-  { secs: 2592000, key: 'day30' },
-  { secs: 7776000, key: 'day90' },
-] as const;
+
+type FrequencyKey = (typeof FREQUENCIES)[number]['key'];
+
+/** Keeps a typo from funding a box with a thousand charges' worth of USDC. */
+const MAX_CHARGES = 260;
 
 type SortKey = 'newest' | 'oldest' | 'amountHigh' | 'amountLow' | 'endsSoon';
 type CreatePhase = 'idle' | 'machine' | 'creating' | 'funding' | 'listing' | 'done' | 'vetoed';
@@ -83,7 +94,9 @@ const STATUS_COLOR: Record<SubStatus, string> = {
 
 /** Name, merchant and box address: the three things someone searches a box by. */
 function subHaystack(s: Subscription): string {
-  return `${getLabel(s.account)} ${s.target} ${s.account}`;
+  // Search matches whichever name is on screen, plus the announced one, so typing
+  // a name that a different device set still finds the row.
+  return `${displayLabel(s.account, s.announcedLabel)} ${s.announcedLabel} ${s.target} ${s.account}`;
 }
 
 export function SubscriptionsTab({ session }: { session: Session }) {
@@ -96,9 +109,8 @@ export function SubscriptionsTab({ session }: { session: Session }) {
   const [label, setLbl] = useState('');
   const [target, setTarget] = useState('');
   const [perPull, setPerPull] = useState('0.02');
-  const [cap, setCap] = useState('0.1');
-  const [intervalSecs, setIntervalSecs] = useState<number>(60);
-  const [durationSecs, setDurationSecs] = useState<number>(2592000);
+  const [frequency, setFrequency] = useState<FrequencyKey>('minute');
+  const [charges, setCharges] = useState('5');
   const [phase, setPhase] = useState<CreatePhase>('idle');
   const [veto, setVeto] = useState<string | null>(null);
 
@@ -130,11 +142,45 @@ export function SubscriptionsTab({ session }: { session: Session }) {
 
   const validTarget = isAddress(target);
   const perPullNum = Number(perPull);
-  const capNum = Number(cap);
+  const chargeCount = Math.floor(Number(charges));
+  const intervalSecs = FREQUENCIES.find((f) => f.key === frequency)?.secs ?? 60;
+  /**
+   * The budget is the whole point of the box, but it is not a question: it is the
+   * charge times how many of them are allowed. Asking for it separately let
+   * someone fund 0.1 against 0.03 charges, get three pulls, and leave 0.01 stranded
+   * with nothing on screen saying so.
+   */
+  const capNum = perPullNum > 0 && chargeCount > 0 ? perPullNum * chargeCount : 0;
+  /**
+   * Expiry covers every charge with one interval to spare. The first is allowed
+   * immediately and the last falls at `(count - 1) x interval`, so a full interval
+   * of slack means a late final pull does not fall off the end.
+   */
+  const durationSecs = chargeCount > 0 ? chargeCount * intervalSecs : intervalSecs;
+  const countError =
+    charges.trim() === '' || chargeCount < 1
+      ? t('sub.countTooLow')
+      : chargeCount > MAX_CHARGES
+        ? t('sub.countTooHigh', { max: MAX_CHARGES })
+        : null;
+
+  /**
+   * The same firewall, on the merchant, before a box exists.
+   *
+   * This screen has more riding on the address than any other: a subscription is
+   * not one payment to it, it is standing permission to pull from a funded box on
+   * a schedule. The co-signer vetoes a bad merchant at create time, but that
+   * verdict used to arrive only after the user had set a budget, an interval and
+   * an expiry and pressed the button. Showing it while they type costs a scan
+   * they were going to pay for anyway.
+   */
+  const gate = useRecipientGate(session, target);
+
   const canCreate =
     validTarget &&
     perPullNum > 0 &&
-    capNum >= perPullNum &&
+    countError === null &&
+    gate.armed &&
     (phase === 'idle' || phase === 'done' || phase === 'vetoed');
 
   const createSteps: Step[] = useMemo(() => {
@@ -167,7 +213,10 @@ export function SubscriptionsTab({ session }: { session: Session }) {
     const owner = session.address as Address;
     const to = target as Address;
     const perPullAmt = parseUnits(perPull, 6);
-    const capAmt = parseUnits(cap, 6);
+    // Derived, not typed: charge times count, to the same 6 decimals the contract
+    // uses. Computing it in floats and formatting back would round a budget the
+    // user never chose.
+    const capAmt = perPullAmt * BigInt(chargeCount);
     try {
       const cosignerAddress = (await fetch('/api/cosign').then((r) => r.json())).address as Address;
       const cosigner = new RemoteCoSigner('/api/cosign', cosignerAddress, undefined, {
@@ -216,7 +265,12 @@ export function SubscriptionsTab({ session }: { session: Session }) {
       // Deployed and announced in one relayed call, on one signature. Announcing
       // separately afterwards cost a second wallet dialog for the other half of an
       // action the user had already approved.
-      const { account } = await relayCreateBox(session, salt, policy, stealth);
+      const { account } = await relayCreateBox(session, salt, policy, {
+        ...stealth,
+        // Announced with the box, so this name follows it to every device instead
+        // of living in the browser that happened to create it.
+        label: label.trim(),
+      });
 
       // 4. Fund the box with the total budget. The only transaction this wallet
       //    signs in the whole flow, and the only step that moves the user's money.
@@ -231,14 +285,14 @@ export function SubscriptionsTab({ session }: { session: Session }) {
 
       // We made this box; there is nothing to discover about it. Registering and
       // rendering it here is what stops the list waiting on an RPC log index.
-      if (label.trim()) setLabel(account, label);
+      // No local label is written: the name went out with the announcement.
       // Land on Active, where the thing just created actually is. This used to
       // switch to All, which drops a brand-new subscription into a list led by
       // every cancelled box the wallet has ever had.
       setStatusFilter('active');
       setSort('newest');
       setPhase('listing');
-      await track(account, stealth.ephemeralPubKey);
+      await track(account, stealth.ephemeralPubKey, label.trim());
 
       // Only now is the row on screen, so only now is the step list finished.
       // Marking it done before this left the user watching a completed progress
@@ -375,10 +429,12 @@ export function SubscriptionsTab({ session }: { session: Session }) {
   return (
     <>
       {/* CREATE */}
-      <Card title={t('sub.createTitle')} data-testid="sub-create">
-        <p className="muted" style={{ marginTop: 0 }}>
-          {t('sub.createSummary')}
-        </p>
+      <Card
+        title={t('sub.createTitle')}
+        infoLabel={t('sub.createTitle')}
+        info={<p>{t('sub.createSummary')}</p>}
+        data-testid="sub-create"
+      >
         <div className="formstack">
           <div className="sub-grid">
             <Field label={t('sub.label')}>
@@ -405,6 +461,10 @@ export function SubscriptionsTab({ session }: { session: Session }) {
               />
             </Field>
           </div>
+          {/* Outside the two-column grid on purpose: a verdict is prose and needs
+              the full width, and as a grid child it was squeezed into one column
+              beside an empty cell. */}
+          <RiskGate gate={gate} overridable={false} recoverable={false} data-testid="sub-risk" />
           <div className="sub-grid">
             <Field label={t('sub.perPull')}>
               <Input
@@ -414,49 +474,51 @@ export function SubscriptionsTab({ session }: { session: Session }) {
                 data-testid="sub-perpull"
               />
             </Field>
-            <Field
-              label={t('sub.cap')}
-              error={capNum > 0 && capNum < perPullNum ? t('sub.capTooLow') : null}
-            >
-              <Input
-                value={cap}
-                onChange={(e) => setCap(e.target.value)}
-                inputMode="decimal"
-                data-testid="sub-cap"
-                invalid={capNum > 0 && capNum < perPullNum}
+            <Field label={t('sub.frequency')}>
+              <Select
+                value={frequency}
+                options={FREQUENCIES.map((f) => ({
+                  value: f.key,
+                  label: t(`sub.freq.${f.key}` as never),
+                }))}
+                onChange={(v: string) => setFrequency(v as FrequencyKey)}
+                ariaLabel={t('sub.frequency')}
+                full
               />
             </Field>
           </div>
           <div className="sub-grid">
-            <Field label={t('sub.interval')}>
-              <select
-                className="sub-select"
-                value={intervalSecs}
-                onChange={(e) => setIntervalSecs(Number(e.target.value))}
-                data-testid="sub-interval"
-              >
-                {INTERVALS.map((iv) => (
-                  <option key={iv.key} value={iv.secs}>
-                    {t(`sub.iv.${iv.key}` as never)}
-                  </option>
-                ))}
-              </select>
+            <Field label={t('sub.count')} error={countError}>
+              <Input
+                value={charges}
+                onChange={(e) => setCharges(e.target.value)}
+                inputMode="numeric"
+                invalid={countError !== null}
+                data-testid="sub-count"
+              />
             </Field>
-            <Field label={t('sub.duration')}>
-              <select
-                className="sub-select"
-                value={durationSecs}
-                onChange={(e) => setDurationSecs(Number(e.target.value))}
-                data-testid="sub-duration"
-              >
-                {DURATIONS.map((d) => (
-                  <option key={d.key} value={d.secs}>
-                    {t(`sub.iv.${d.key}` as never)}
-                  </option>
-                ))}
-              </select>
+            {/* The budget and the end date used to be things to fill in. They are
+                answers, not questions, so they are shown rather than asked. */}
+            <Field label={t('sub.total')}>
+              <output className="sub-total" data-testid="sub-total">
+                {capNum > 0 ? `${trimAmount(capNum)} USDC` : '—'}
+              </output>
             </Field>
           </div>
+          {canCreate && (
+            <p className="muted sub-summary" data-testid="sub-summary">
+              {t('sub.summary', {
+                total: trimAmount(capNum),
+                count: chargeCount,
+                perPull: trimAmount(perPullNum),
+                freq: t(`sub.freq.${frequency}` as never),
+                date: fmtTime(Math.floor(Date.now() / 1000) + durationSecs),
+              })}
+            </p>
+          )}
+          {frequency === 'minute' && (
+            <p className="muted sub-summary">{t('sub.freq.minuteNote')}</p>
+          )}
           <Button
             onClick={() => void guard(create)}
             disabled={!canCreate || busy !== null}
@@ -477,12 +539,18 @@ export function SubscriptionsTab({ session }: { session: Session }) {
       </Card>
 
       {/* LIST */}
-      <Card title={t('sub.listTitle')} data-testid="sub-list">
-        {/* Said before the wallet asks, not after. These boxes are owned by fresh
-            stealth addresses with nothing on chain tying them to this wallet, so
-            the only way to find your own is to scan for them with a key derived
-            from one signature. Without this line the user meets a bare signature
-            request in the middle of a payments app and has no idea what it buys. */}
+      {/* The stealth explanation sits behind the title's `i`. It answers a real
+          question -- why a payments app is asking for a signature to show a list --
+          but it answers it for the people who ask, and it was four lines above the
+          list for everybody. The locked state below is not an explanation, it is
+          the one thing standing between the user and their subscriptions, so that
+          stays where it cannot be missed. */}
+      <Card
+        title={t('sub.listTitle')}
+        infoLabel={t('sub.listTitle')}
+        info={<p>{t('sub.stealthNote')}</p>}
+        data-testid="sub-list"
+      >
         {stealthLocked ? (
           <div className="veto" data-testid="sub-stealth-locked">
             <div className="veto__reason">{t('sub.stealthLocked')}</div>
@@ -496,47 +564,7 @@ export function SubscriptionsTab({ session }: { session: Session }) {
               </Button>
             </div>
           </div>
-        ) : (
-          <p
-            className="muted"
-            style={{ marginTop: 0, marginBottom: 10 }}
-            data-testid="sub-stealth-note"
-          >
-            {t('sub.stealthNote')}
-          </p>
-        )}
-        {/* Sort is this screen's own: a subscription is a live thing, so "ends
-            soonest" and "biggest budget" are questions a past-events list never has.
-            Search, date and paging come from the shared list. */}
-        <div className="sub-toolbar">
-          <select
-            className="sub-select"
-            value={sort}
-            onChange={(e) => setSort(e.target.value as SortKey)}
-            data-testid="sub-sort"
-          >
-            <option value="newest">{t('sub.sort.newest')}</option>
-            <option value="oldest">{t('sub.sort.oldest')}</option>
-            <option value="amountHigh">{t('sub.sort.amountHigh')}</option>
-            <option value="amountLow">{t('sub.sort.amountLow')}</option>
-            <option value="endsSoon">{t('sub.sort.endsSoon')}</option>
-          </select>
-        </div>
-        <div className="sub-chips" data-testid="sub-filters">
-          {(['all', 'active', 'completed', 'cancelled', 'expired'] as const).map((s) => (
-            <button
-              key={s}
-              type="button"
-              className={`sub-chip ${statusFilter === s ? 'sub-chip--on' : ''}`}
-              onClick={() => {
-                setStatusFilter(s);
-              }}
-              data-testid={`sub-chip-${s}`}
-            >
-              {t(`sub.filter.${s}` as never)} <span className="sub-chip__n">{counts[s]}</span>
-            </button>
-          ))}
-        </div>
+        ) : null}
 
         {subs === null || (loading && subs.length === 0) ? (
           <p className="muted">{t('common.loading')}</p>
@@ -544,15 +572,57 @@ export function SubscriptionsTab({ session }: { session: Session }) {
           <HistoryList
             items={filtered}
             data-testid="sub-history"
+            // The chips narrow outside this component, so it has to be told, or a
+            // filter change leaves the reader on page four of a two-page list.
+            resetKey={statusFilter}
+            // Search first, then narrow: the chips sit under the search line, in
+            // the same place every list that has them puts theirs.
+            filters={
+              <div className="sub-chips" data-testid="sub-filters">
+                {(['all', 'active', 'completed', 'cancelled', 'expired'] as const).map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    className={`sub-chip ${statusFilter === s ? 'sub-chip--on' : ''}`}
+                    onClick={() => {
+                      setStatusFilter(s);
+                    }}
+                    data-testid={`sub-chip-${s}`}
+                  >
+                    {t(`sub.filter.${s}` as never)} <span className="sub-chip__n">{counts[s]}</span>
+                  </button>
+                ))}
+              </div>
+            }
             searchText={subHaystack}
+            // Sort is this screen's own: a subscription is a live thing, so "ends
+            // soonest" and "biggest budget" are questions a list of past events
+            // never has. It belongs in the same row as search and date, not in a
+            // bare `select` beside them, which is what it used to be.
+            control={{
+              value: sort,
+              ariaLabel: t('sub.sortAria'),
+              onChange: (v) => setSort(v as SortKey),
+              options: [
+                { value: 'newest', label: t('sub.sort.newest') },
+                { value: 'oldest', label: t('sub.sort.oldest') },
+                { value: 'amountHigh', label: t('sub.sort.amountHigh') },
+                { value: 'amountLow', label: t('sub.sort.amountLow') },
+                { value: 'endsSoon', label: t('sub.sort.endsSoon') },
+              ],
+            }}
+            // A subscription's date is when it runs out, which is ahead of now, so
+            // the same control has to narrow forwards. Grouped under the day it
+            // ends, filtered by how soon that is.
             timestamp={(s) => s.expiry * 1000}
+            dateDirection="future"
             rowKey={(s) => s.account}
             searchPlaceholder={t('sub.searchPh')}
             emptyText={t('sub.empty')}
-            noMatchText={t('sub.empty')}
+            noMatchText={t('sub.noMatch')}
             pageSize={PAGE_SIZE}
             renderRow={(s) => {
-              const name = getLabel(s.account);
+              const name = displayLabel(s.account, s.announcedLabel);
               const pct = s.cap > 0n ? Number((s.spent * 100n) / s.cap) : 0;
               const open = openDetail === s.account;
               const mine = busy?.account === s.account;
@@ -586,7 +656,12 @@ export function SubscriptionsTab({ session }: { session: Session }) {
                         </span>
                       </>
                     }
-                    amount={`${formatUnits(s.perPull, 6)} / ${t(`sub.iv.${intervalKeyOf(s.interval)}` as never)}`}
+                    // Lowercased: the label is written for a dropdown, and "0.01
+                    // Every minute" mid-line reads as two sentences colliding.
+                    // Locale-aware because Turkish lowercases I to a dotless one.
+                    amount={`${formatUnits(s.perPull, 6)} ${t(
+                      `sub.freq.${frequencyKeyOf(s.interval)}` as never,
+                    ).toLocaleLowerCase()}`}
                   />
                   {/* The two addresses were only ever shown shortened inside the
                       detail panel, so paying the same merchant again meant opening a
@@ -652,7 +727,10 @@ export function SubscriptionsTab({ session }: { session: Session }) {
                   {open && (
                     <SubDetail
                       sub={s}
-                      name={name}
+                      // Seed the box with the override if there is one, so an empty
+                      // field means "no override" rather than "erase the announced
+                      // name". Clearing it falls back to what the chain says.
+                      name={localLabel(s.account)}
                       onLabel={(v) => {
                         setLabel(s.account, v);
                         void reload();
@@ -669,9 +747,29 @@ export function SubscriptionsTab({ session }: { session: Session }) {
   );
 }
 
-function intervalKeyOf(secs: number): string {
-  const m = INTERVALS.find((iv) => iv.secs === secs);
-  return m ? m.key : 'day30';
+/**
+ * The row's cadence, in the same words the form offers.
+ *
+ * A box created before this screen spoke in frequencies can carry any interval, so
+ * an exact match is not guaranteed; the nearest named one reads far better than a
+ * raw seconds count and is never off by more than the gap between two of them.
+ */
+function frequencyKeyOf(secs: number): FrequencyKey {
+  let best: FrequencyKey = FREQUENCIES[0].key;
+  let bestGap = Number.POSITIVE_INFINITY;
+  for (const f of FREQUENCIES) {
+    const gap = Math.abs(f.secs - secs);
+    if (gap < bestGap) {
+      bestGap = gap;
+      best = f.key;
+    }
+  }
+  return best;
+}
+
+/** `0.02` not `0.0200000`, and `12` not `12.0`. The summary is read, not parsed. */
+function trimAmount(n: number): string {
+  return Number(n.toFixed(6)).toString();
 }
 
 function fmtTime(unix: number): string {
@@ -698,13 +796,21 @@ function SubDetail({
   return (
     <div className="sub-detail" data-testid="sub-detail">
       <dl className="sub-dl">
+        {/* The same short-and-copyable address the rows use. These two were the
+            only addresses in the app printed in full with no way to copy them,
+            which is backwards: a 42-character string is unreadable and the one
+            thing you actually want from it is the clipboard. */}
         <div>
           <dt>{t('sub.d.account')}</dt>
-          <dd className="mono">{sub.account}</dd>
+          <dd>
+            <AddressChip address={sub.account} />
+          </dd>
         </div>
         <div>
           <dt>{t('sub.d.merchant')}</dt>
-          <dd className="mono">{sub.target}</dd>
+          <dd>
+            <AddressChip address={sub.target} />
+          </dd>
         </div>
         <div>
           <dt>{t('sub.d.perPull')}</dt>
@@ -745,22 +851,50 @@ function SubDetail({
           <dd>{fmtTime(sub.expiry)}</dd>
         </div>
       </dl>
-      <div className="row" style={{ marginTop: 10, gap: 8 }}>
-        <Input
-          className="grow"
-          value={edit}
-          onChange={(e) => setEdit(e.target.value)}
-          placeholder={t('sub.labelPh')}
-          data-testid="sub-label-edit"
-        />
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => onLabel(edit)}
-          data-testid="sub-label-save"
-        >
-          {t('common.save')}
-        </Button>
+      {/* Renaming and "open this on a block explorer" were one row of three
+          controls, which read as three steps of the same action and was none of
+          them. Renaming is an edit and gets a labelled field that says what it
+          changes and what it does not; the link is not an edit and sits apart. */}
+      <div className="sub-rename">
+        <Field label={t('sub.rename')} hint={t('sub.renameHint')}>
+          <div className="row" style={{ gap: 8 }}>
+            <Input
+              className="grow"
+              value={edit}
+              onChange={(e) => setEdit(e.target.value)}
+              placeholder={name || t('sub.labelPh')}
+              data-testid="sub-label-edit"
+            />
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={edit.trim() === name.trim()}
+              onClick={() => onLabel(edit)}
+              data-testid="sub-label-save"
+            >
+              {t('sub.renameSave')}
+            </Button>
+          </div>
+        </Field>
+        {/* Only offered when there is an override to drop. Without it the way back
+            to the announced name is "clear the box and press a button labelled
+            Rename", which is not something anyone would guess. */}
+        {name.trim() !== '' && (
+          <button
+            type="button"
+            className="sub-rename__clear"
+            onClick={() => {
+              setEdit('');
+              onLabel('');
+            }}
+            data-testid="sub-label-clear"
+          >
+            {t('sub.renameClear')}
+          </button>
+        )}
+      </div>
+
+      <div className="sub-detail__link">
         <a className="row" href={explorerAddressUrl(sub.account)} target="_blank" rel="noreferrer">
           {t('common.viewOnArcScan')} <IconExternal width={13} height={13} />
         </a>

@@ -1,6 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { isAddress, parseUnits, type Address } from 'viem';
-import type { RiskReport } from '@ctrl-arcz/sdk';
 import {
   approvePermit2,
   approveUsdc,
@@ -21,9 +20,7 @@ import {
   CopyButton,
   Field,
   Input,
-  RiskCard,
   Select,
-  Skeleton,
   Stepper,
   useSubmitGuard,
   useT,
@@ -33,10 +30,10 @@ import {
 import { IconButton, IconChevron, IconExternal, IconLock, short } from '@ctrl-arcz/demo-kit/ui';
 import { saveTransfer } from '../store.js';
 import { config } from '../lib/riskConfig.js';
-import { useRecipientRisk } from '../lib/useRecipientRisk.js';
+import { useRecipientGate } from '../lib/useRecipientGate.js';
+import { RiskGate } from './RiskGate.js';
 import { craftLookalikeOfKnownRecipient } from '../lib/poisoning.js';
-import { riskProvider, clearRiskCache } from '../lib/riskProvider.js';
-import { verifiedRecipients, clearVerifiedRecipients } from '../lib/verifiedRecipients.js';
+import { clearVerifiedRecipients } from '../lib/verifiedRecipients.js';
 
 /**
  * The SDK's 10 USDC default for `minProtectedAmount` is priced for a chain where
@@ -71,10 +68,6 @@ export function SendTab({ session, onSent }: { session: Session; onSent: () => v
   // The poisoning scenario: which real address the lookalike in the field imitates.
   const [crafting, setCrafting] = useState(false);
   const [poisonOf, setPoisonOf] = useState<string | null>(null);
-  // Both verdicts fold independently. They stack, they are wordy by design, and on
-  // a phone the amount field can end up below the fold because of them.
-  const [ruleOpen, setRuleOpen] = useState(true);
-  const [advisoryOpen, setAdvisoryOpen] = useState(true);
   const [sent, setSent] = useState<SentInfo | null>(null);
 
   const isSelf = isAddress(to) && to.toLowerCase() === session.address.toLowerCase();
@@ -83,36 +76,11 @@ export function SendTab({ session, onSent }: { session: Session; onSent: () => v
     to !== '' && !isAddress(to) ? t('send.invalidAddress') : isSelf ? t('send.selfSend') : null;
 
   /**
-   * The firewall, from the shared hook. This screen used to own the whole thing,
-   * and the bridge grew a recipient field next to it; two copies of a risk check
-   * is how a strict front door ends up beside a lenient side door.
+   * The firewall, as one gate. This screen used to own the whole thing, and every
+   * other way of sending copied a different half of it.
    */
-  const risk = useRecipientRisk(session, to);
-  const { advisory, checking, investigating, blocked } = risk;
-  /**
-   * A verdict the SDK threw at us, rather than one the hook fetched. `sendProtected`
-   * runs the firewall again server-side and refuses with the full report; showing it
-   * in the same card is the whole point, so it needs somewhere to live that the
-   * hook does not own.
-   */
-  const [thrownReport, setThrownReport] = useState<RiskReport | null>(null);
-  const activeReport = thrownReport ?? risk.report;
-
-  useEffect(() => {
-    clearRiskCache();
-    clearVerifiedRecipients();
-
-    // Warm both caches the moment a wallet connects. The firewall's slow half is
-    // walking this sender's history through the indexer — ten pages, several
-    // seconds each — and doing it lazily means the very first address a user
-    // types sits under a spinner for half a minute. Starting it here spends that
-    // time while they are still reading the form.
-    const sender = session.address as Address;
-    void riskProvider()
-      .getOutgoingCounterparties(sender)
-      .catch(() => {});
-    void verifiedRecipients(sender);
-  }, [session.address]);
+  const gate = useRecipientGate(session, to);
+  const { investigating, activeReport } = gate;
 
   const amountValue = (() => {
     try {
@@ -123,22 +91,11 @@ export function SendTab({ session, onSent }: { session: Session; onSent: () => v
   })();
   const mode = amountValue > 0n ? recommendTransferMode(config, amountValue) : null;
 
-  // `!investigating` is part of arming the button, not a nicety. The advisory is
-  // only allowed to tighten, and a verdict that can only tighten protects nobody
-  // if the send can be signed before it lands: the rules say safe, the button
-  // arms, and the escalation arrives for a transfer that already left. Waiting
-  // the extra second is the difference between "it can only tighten" and "it can
-  // only tighten if you were slow enough". A failed or disabled investigator
-  // resolves immediately, so the feature being off costs nothing here.
+  // `gate.armed` carries the firewall's whole opinion, including the wait for a
+  // verdict that is still forming. What is left here is this screen's own: a
+  // valid recipient who is not you, an amount, and not already sending.
   const canSend =
-    session.onArc &&
-    isAddress(to) &&
-    !isSelf &&
-    amountValue > 0n &&
-    !blocked &&
-    !busy &&
-    !checking &&
-    !investigating;
+    session.onArc && isAddress(to) && !isSelf && amountValue > 0n && !busy && gate.armed;
 
   const steps: Step[] = [t('send.stepConfig'), t('send.stepApprove'), t('send.stepLock')].map(
     (label, i) => ({ label, status: step > i ? 'done' : step === i ? 'active' : 'pending' }),
@@ -169,7 +126,9 @@ export function SendTab({ session, onSent }: { session: Session; onSent: () => v
     setError(null);
     if (!isAddress(to) || isSelf) return setError(t('send.invalidAddress'));
     if (amountValue <= 0n) return setError(t('send.invalidAmount'));
-    if (blocked || investigating || !session.onArc) return;
+    // `gate.refused` is the block the user has not overridden. A block they have
+    // looked at and accepted is not a reason to stop here; the SDK still decides.
+    if (gate.refused || investigating || !session.onArc) return;
 
     setBusy(true);
     setStep(0);
@@ -194,7 +153,15 @@ export function SendTab({ session, onSent }: { session: Session; onSent: () => v
       // out. The report the UI already fetched is handed over, so the guard runs
       // on the same verdict instead of scanning the address a second time. It
       // re-scans by itself if that report is stale or about another address.
-      const guard = { config: sendConfig, ...(activeReport ? { report: activeReport } : {}) };
+      // The acknowledgement travels with the send or it does nothing: the SDK runs
+      // its own guard and refuses again unless it is handed the verdict the user
+      // actually looked at. That is the point of passing the report rather than a
+      // flag, and it is why the button cannot grant permission on its own.
+      const guard = {
+        config: sendConfig,
+        ...(activeReport ? { report: activeReport } : {}),
+        ...(gate.acknowledged ? { acknowledged: gate.acknowledged } : {}),
+      };
 
       let result;
       if (usePermit) {
@@ -226,13 +193,13 @@ export function SendTab({ session, onSent }: { session: Session; onSent: () => v
       toast.push(t('send.sentToast'), 'success');
       setTo('');
       setAmount('');
-      setThrownReport(null);
+      gate.setThrownReport(null);
       onSent();
     } catch (e) {
       if (e instanceof RiskBlockedError) {
         // The SDK's own firewall stopped the send. It carries the full report, so
         // show the same card the pre-send scan would have, not a raw message.
-        setThrownReport(e.report);
+        gate.setThrownReport(e.report);
         setError(null);
         toast.push(t('send.blockedToast'), 'error');
       } else {
@@ -311,16 +278,12 @@ export function SendTab({ session, onSent }: { session: Session; onSent: () => v
         >
           {t('demo.tryIt')}
         </Button>
-        {activeReport && (
+        {gate.hasVerdict && (
           <IconButton
-            label={t(ruleOpen && advisoryOpen ? 'risk.collapseAll' : 'risk.expandAll')}
-            className={`verdict-fold${ruleOpen && advisoryOpen ? ' is-open' : ''}`}
+            label={t(gate.allOpen ? 'risk.collapseAll' : 'risk.expandAll')}
+            className={`verdict-fold${gate.allOpen ? ' is-open' : ''}`}
             data-testid="verdicts-toggle-all"
-            onClick={() => {
-              const open = !(ruleOpen && advisoryOpen);
-              setRuleOpen(open);
-              setAdvisoryOpen(open);
-            }}
+            onClick={gate.toggleAll}
           >
             <IconChevron width={16} height={16} />
           </IconButton>
@@ -332,63 +295,7 @@ export function SendTab({ session, onSent }: { session: Session; onSent: () => v
         </p>
       )}
 
-      {checking && (
-        <div style={{ marginTop: 12 }}>
-          <Skeleton height={56} />
-        </div>
-      )}
-      {!checking && activeReport && (
-        <div style={{ marginTop: 12 }}>
-          <RiskCard
-            report={activeReport}
-            collapsed={!ruleOpen}
-            onToggle={() => setRuleOpen((v) => !v)}
-          />
-        </div>
-      )}
-      {/* The investigator answers seconds after the rules do. Without a line
-          saying so, its box simply materialised later and nothing had told the
-          user that a second opinion was even being sought — the feature looked
-          like a glitch, or like nothing at all. */}
-      {!checking && activeReport && investigating && !advisory && (
-        <div style={{ marginTop: 10 }} data-testid="advisory-pending">
-          <p className="muted" style={{ marginBottom: 6 }}>
-            {t('risk.investigating')}
-          </p>
-          <Skeleton height={48} />
-        </div>
-      )}
-      {!checking && activeReport && advisory && (
-        <div
-          className={`risk risk--${advisory.level === 'safe' ? 'safe' : advisory.level === 'block' ? 'block' : 'warn'}`}
-          style={{ marginTop: 10 }}
-          data-testid="advisory"
-        >
-          <div className="risk__head">
-            <strong>{advisory.headline}</strong>
-            {advisory.points.length > 0 && (
-              <button
-                type="button"
-                className={`risk__toggle${advisoryOpen ? ' is-open' : ''}`}
-                onClick={() => setAdvisoryOpen((v) => !v)}
-                aria-expanded={advisoryOpen}
-                aria-label={t(advisoryOpen ? 'risk.hide' : 'risk.show')}
-                title={t(advisoryOpen ? 'risk.hide' : 'risk.show')}
-                data-testid="advisory-toggle"
-              >
-                <IconChevron width={15} height={15} />
-              </button>
-            )}
-          </div>
-          {advisoryOpen && advisory.points.length > 0 && (
-            <ul>
-              {advisory.points.map((p) => (
-                <li key={p}>{p}</li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
+      <RiskGate gate={gate} />
 
       <div style={{ marginTop: 16 }}>
         <Field label={t('send.amount')} hint={mode === 'plain' ? t('send.plainHint') : undefined}>
@@ -435,7 +342,7 @@ export function SendTab({ session, onSent }: { session: Session; onSent: () => v
         >
           {busy
             ? t('send.sending')
-            : blocked
+            : gate.refused
               ? t('send.blocked')
               : !session.onArc
                 ? t('send.switchFirst')

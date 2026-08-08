@@ -12,6 +12,7 @@ import {
   bridgeJobGet,
   healthGet,
   verifiedRecipientsGet,
+  announcementsGet,
 } from './handlers.js';
 import { registerHandler } from './notifications.js';
 import { startWatcher } from './watcher.js';
@@ -27,6 +28,7 @@ serve({
   // The Machine
   'GET /api/cosign': cosignGet,
   'GET /api/verified-recipients': verifiedRecipientsGet,
+  'GET /api/announcements': announcementsGet,
   'POST /api/cosign': cosignPost,
 
   // Cross-chain (server-held relayer key)

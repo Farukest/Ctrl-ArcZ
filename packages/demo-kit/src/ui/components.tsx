@@ -136,18 +136,41 @@ export function IconButton({
 export function Card({
   title,
   subtitle,
+  info,
+  infoLabel,
   children,
   className,
   ...rest
 }: {
   title?: ReactNode;
   subtitle?: ReactNode;
+  /**
+   * What this card is, for the people who want to know, behind the `i` beside the
+   * title.
+   *
+   * Every one of these started life as a paragraph above the form. They are all
+   * true and none of them is what somebody came to the screen to do, so they push
+   * the fields down and get skipped anyway. Behind the title they are one click
+   * away and cost nothing to the person who already knows.
+   *
+   * It is a prop on `Card` rather than something each screen assembles so that the
+   * dot is the same size and sits in the same place every time. Three screens
+   * placing it themselves is how one of them ends up a few pixels low.
+   */
+  info?: ReactNode;
+  /** Accessible name for the info button. Falls back to a generic label. */
+  infoLabel?: string;
   children: ReactNode;
   className?: string;
 } & { [k: `data-${string}`]: string }) {
   return (
     <section className={['card', className].filter(Boolean).join(' ')} {...rest}>
-      {title && <h2 className="card__title">{title}</h2>}
+      {title && (
+        <h2 className="card__title">
+          <span className="card__title-text">{title}</span>
+          {info && <InfoPopover label={infoLabel}>{info}</InfoPopover>}
+        </h2>
+      )}
       {subtitle && <p className="card__subtitle">{subtitle}</p>}
       {children}
     </section>
@@ -335,12 +358,23 @@ function AnchoredLayer({
   open,
   onClose,
   label,
+  align = 'start',
   children,
 }: {
   anchorRef: React.RefObject<HTMLElement>;
   open: boolean;
   onClose: () => void;
   label?: string | undefined;
+  /**
+   * How the panel lines up with its trigger.
+   *
+   * `start` is right for a menu: the list belongs under the left edge of the
+   * control it replaces. `center` is right for a round info dot, which is 24px
+   * wide against a 280px panel -- hanging that panel off the dot's left edge puts
+   * it wherever the dot happens to sit, which on a right-hand dot means mostly off
+   * the screen.
+   */
+  align?: 'start' | 'center';
   children: ReactNode;
 }) {
   const isMobile = useIsMobile();
@@ -354,8 +388,13 @@ function AnchoredLayer({
       onClose();
       return;
     }
-    const width = Math.max(r.width, 200);
-    const left = Math.min(Math.max(8, r.left), window.innerWidth - width - 8);
+    // Measure the panel rather than assume it. The old guess of 200 was smaller
+    // than the info popover actually is (280), so the clamp that was supposed to
+    // keep it on screen let it hang 80px past the right edge and the text was cut
+    // off. `minWidth` below never exceeds the trigger, so this cannot oscillate.
+    const width = Math.max(panelRef.current?.offsetWidth ?? 0, r.width, 200);
+    const desired = align === 'center' ? r.left + r.width / 2 - width / 2 : r.left;
+    const left = Math.min(Math.max(8, desired), window.innerWidth - width - 8);
     const below = window.innerHeight - r.bottom;
     const above = r.top;
     const openUp = below < 300 && above > below;
@@ -368,7 +407,7 @@ function AnchoredLayer({
         ? { bottom: window.innerHeight - r.top + 6, left, minWidth: r.width, maxHeight }
         : { top: r.bottom + 6, left, minWidth: r.width, maxHeight },
     );
-  }, [isMobile, anchorRef, onClose]);
+  }, [isMobile, anchorRef, onClose, align]);
 
   useLayoutEffect(() => {
     if (open) reposition();
@@ -578,7 +617,13 @@ export function SegmentedTabs<T extends string>({
  * flickers or fires by accident). Reuses AnchoredLayer, so it is a popover on
  * desktop and a bottom sheet on mobile, with click-away and Escape to close.
  */
-export function InfoPopover({ label, children }: { label?: string; children: ReactNode }) {
+export function InfoPopover({
+  label,
+  children,
+}: {
+  label?: string | undefined;
+  children: ReactNode;
+}) {
   const [open, setOpen] = useState(false);
   const anchor = useRef<HTMLButtonElement>(null);
   return (
@@ -597,7 +642,13 @@ export function InfoPopover({ label, children }: { label?: string; children: Rea
           i
         </span>
       </button>
-      <AnchoredLayer anchorRef={anchor} open={open} onClose={() => setOpen(false)} label={label}>
+      <AnchoredLayer
+        anchorRef={anchor}
+        open={open}
+        onClose={() => setOpen(false)}
+        label={label}
+        align="center"
+      >
         <div className="infopop">{children}</div>
       </AnchoredLayer>
     </>

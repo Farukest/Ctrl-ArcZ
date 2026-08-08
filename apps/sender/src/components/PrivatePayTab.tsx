@@ -14,7 +14,6 @@ import {
   Card,
   CopyButton,
   Field,
-  InfoPopover,
   Input,
   Stepper,
   IconLock,
@@ -24,6 +23,8 @@ import {
   useToast,
   type Step,
 } from '@ctrl-arcz/demo-kit/ui';
+import { useRecipientGate } from '../lib/useRecipientGate.js';
+import { RiskGate } from './RiskGate.js';
 
 const USDC = ADDRESSES.USDC as Address;
 const EXPIRY_SECONDS = 900; // 15 minutes, like a disposable card
@@ -59,9 +60,25 @@ export function PrivatePayTab({ session }: { session: Session }) {
 
   const amountValue = Number(amount);
   const validMerchant = isAddress(merchant);
+
+  /**
+   * The same firewall the send screen runs, on the same address, before anything
+   * is signed.
+   *
+   * The co-signer already checks this merchant server-side and vetoes a bad one,
+   * so no payment could ever reach a lookalike. What was missing was everything
+   * before that: the user typed an address, got no signal at all, filled in an
+   * amount, pressed pay, and only then learned the address was a twin of someone
+   * they had paid. A verdict that arrives after the decision is not a firewall,
+   * it is a receipt. Now it arrives while they are still typing, and the button
+   * never arms for an address the co-signer is going to refuse anyway.
+   */
+  const gate = useRecipientGate(session, merchant);
+
   const canPay =
     validMerchant &&
     amountValue > 0 &&
+    gate.armed &&
     (phase === 'idle' || phase === 'done' || phase === 'vetoed');
 
   const steps: Step[] = useMemo(() => {
@@ -146,12 +163,15 @@ export function PrivatePayTab({ session }: { session: Session }) {
 
   return (
     <>
-      <Card title={t('ppay.title')} data-testid="privatepay-tab">
-        <div className="row-between" style={{ gap: 'var(--sp-3)' }}>
-          <p className="muted" style={{ margin: 0 }}>
-            {t('ppay.summary')}
-          </p>
-          <InfoPopover label={t('ppay.info.aria')}>
+      {/* Same treatment as the other cards: the summary and the three points are
+          one `i` beside the title rather than a paragraph and a dot in a row of
+          their own. */}
+      <Card
+        title={t('ppay.title')}
+        infoLabel={t('ppay.info.aria')}
+        info={
+          <>
+            <p>{t('ppay.summary')}</p>
             <div className="infopop__item">
               <span className="infopop__k">{t('ppay.info.k1')}</span>
               <p>{t('ppay.point1')}</p>
@@ -164,11 +184,10 @@ export function PrivatePayTab({ session }: { session: Session }) {
               <span className="infopop__k">{t('ppay.info.k3')}</span>
               <p>{t('ppay.point3')}</p>
             </div>
-          </InfoPopover>
-        </div>
-
-        <hr className="rule" />
-
+          </>
+        }
+        data-testid="privatepay-tab"
+      >
         <div className="formstack">
           <Field
             label={t('ppay.merchant')}
@@ -185,6 +204,8 @@ export function PrivatePayTab({ session }: { session: Session }) {
               invalid={merchant.length > 0 && !validMerchant}
             />
           </Field>
+
+          <RiskGate gate={gate} overridable={false} recoverable={false} data-testid="ppay-risk" />
 
           <Field label={t('ppay.amount')}>
             <Input

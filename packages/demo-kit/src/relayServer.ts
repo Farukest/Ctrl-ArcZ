@@ -37,11 +37,12 @@ export async function relayAnnounceBox(
   privateKey: Hex,
   stealth: { stealthAddress: Address; ephemeralPubKey: Hex },
   box: Address,
+  label = '',
 ): Promise<{ txHash: Hex }> {
   const txHash = await announceStealthBox(
     localSigner(privateKey),
     STEALTH_ANNOUNCER_ADDRESS,
-    announceArgsFor(stealth, box),
+    announceArgsFor(stealth, box, label),
   );
   return { txHash };
 }

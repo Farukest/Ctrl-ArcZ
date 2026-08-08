@@ -93,7 +93,6 @@ function persist(): void {
     writeFileSync(tmp, JSON.stringify(rows));
     renameSync(tmp, STORE); // atomic: a crash mid-write cannot truncate the store
   } catch (e) {
-    // eslint-disable-next-line no-console
     console.error('failed to persist bridge jobs:', e instanceof Error ? e.message : e);
   }
 }

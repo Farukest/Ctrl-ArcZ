@@ -168,12 +168,23 @@
 .card + .card {
   margin-top: var(--sp-4);
 }
+/* A flex row so the info dot centres on the title's optical middle. It used to be
+   an inline element in a text flow, which sits it on the baseline: against a
+   20px heading a 24px circle then hangs low and reads as misaligned. `center`
+   makes the dot's position independent of the title's length or font. */
 .card__title {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
   font-size: var(--fs-h3);
   font-weight: 650;
   margin: 0 0 var(--sp-2);
   letter-spacing: -0.01em;
   color: var(--text-hi);
+}
+/* Takes the slack so the dot stays beside the words, not pushed to the far edge. */
+.card__title-text {
+  min-width: 0;
 }
 .card__subtitle,
 .card__hint {
@@ -885,14 +896,22 @@
 }
 
 /* Bridge engine toggle row (CCTP / Gateway + info) ------------------------ */
+/* The spacing below belongs to this row, not to the tab bar inside it.
+   `.segtabs` carries its own `margin-bottom` for the places it stands alone, and
+   that margin makes this row 16px taller than its tallest child: `align-items:
+   center` then centres the info dot on the row, which is 8px below the centre of
+   the tabs it is meant to sit beside. Anything vertically centred against a
+   sibling breaks the moment that sibling brings its own outer spacing. */
 .bridge-engine {
   display: flex;
   align-items: center;
   gap: 10px;
+  margin-bottom: var(--sp-4);
 }
 .bridge-engine .segtabs {
   flex: 1;
   min-width: 0;
+  margin-bottom: 0;
 }
 
 /* Bridge history controls (search + engine filter) ------------------------ */
@@ -1905,6 +1924,11 @@
    content, and a loud one competes with the rows it is introducing. */
 .hist-group + .hist-group {
   margin-top: 14px;
+}
+.hist-group__rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
 }
 .hist-group__day {
   font-size: var(--fs-xs);

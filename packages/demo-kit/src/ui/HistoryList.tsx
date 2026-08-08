@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { PagedList, Pagination, SearchField, Select, paginate } from './components.js';
 import { useT } from '../i18n/context.js';
 
@@ -18,6 +18,16 @@ import { useT } from '../i18n/context.js';
  */
 
 export type DateWindow = 'all' | 'today' | 'days3' | 'week' | 'month' | 'custom';
+
+/**
+ * Which way the dates point.
+ *
+ * Everything that has happened is in the past, and "last 7 days" narrows it. A
+ * subscription's date is its expiry, which has not happened yet: every backward
+ * window contains every future date, so the same control silently stopped
+ * filtering anything. The windows are the same lengths, measured the other way.
+ */
+export type DateDirection = 'past' | 'future';
 
 const DAY = 24 * 60 * 60 * 1000;
 const WINDOW_MS: Record<'today' | 'days3' | 'week' | 'month', number> = {
@@ -53,8 +63,13 @@ export interface HistoryListProps<T> {
   /** A stable key per row. */
   rowKey: (item: T) => string;
   searchPlaceholder: string;
-  /** Optional extra filter, rendered beside the date one. */
-  filter?: {
+  /**
+   * One more dropdown in the same row, for whatever this screen needs that the
+   * others do not: the bridge narrows by engine, the subscriptions list reorders
+   * by how soon each one ends. Either way it changes what the first page holds,
+   * so it resets the page like the controls beside it.
+   */
+  control?: {
     value: string;
     options: { value: string; label: string }[];
     onChange: (v: string) => void;
@@ -63,6 +78,29 @@ export interface HistoryListProps<T> {
   emptyText: string;
   noMatchText: string;
   pageSize?: number;
+  /**
+   * Narrowing that happens outside this component, as one string.
+   *
+   * A screen that keeps its own filter (the received list keeps status chips,
+   * because chips can carry counts and a dropdown cannot) filters `items` before
+   * handing them over. Without being told, this component cannot know the set
+   * changed for a reason rather than because a poll returned, so it kept the page
+   * index: narrowing to a single row while on page two, then widening again, left
+   * the reader on the last page of a list they had just asked to see all of.
+   */
+  resetKey?: string;
+  /** Which way `timestamp` points. Defaults to `past`, which every history is. */
+  dateDirection?: DateDirection;
+  /**
+   * A screen's own filter row, drawn under the search line.
+   *
+   * Status chips stay outside this component because they carry counts, which a
+   * dropdown cannot. Where they were rendered still mattered though: a screen that
+   * put them above the card's search box made the reader narrow before they could
+   * look, and put the same two controls in a different order on every list that
+   * had them. Passing them here fixes the order in one place.
+   */
+  filters?: ReactNode;
   'data-testid'?: string;
 }
 
@@ -73,10 +111,13 @@ export function HistoryList<T>({
   renderRow,
   rowKey,
   searchPlaceholder,
-  filter,
+  control,
   emptyText,
   noMatchText,
   pageSize = 5,
+  resetKey,
+  dateDirection = 'past',
+  filters,
   ...rest
 }: HistoryListProps<T>) {
   const t = useT();
@@ -87,23 +128,30 @@ export function HistoryList<T>({
   const [toDate, setToDate] = useState('');
   const [page, setPage] = useState(0);
 
+  // Whoever narrowed the set outside this component wants its first page, the
+  // same as the controls inside it do.
+  useEffect(() => setPage(0), [resetKey]);
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
+    const now = Date.now();
     // An open-ended custom range is legitimate: "since the third" and "up to the
     // third" are both things people mean, so each end is applied only if given.
-    const after =
-      window === 'all'
-        ? 0
-        : window === 'custom'
-          ? (dayStart(fromDate) ?? 0)
-          : Date.now() - WINDOW_MS[window];
-    const before =
-      window === 'custom' ? (dayEnd(toDate) ?? Number.MAX_SAFE_INTEGER) : Number.MAX_SAFE_INTEGER;
+    // A preset is bounded on the side the dates are on and open on the other.
+    let after = 0;
+    let before = Number.MAX_SAFE_INTEGER;
+    if (window === 'custom') {
+      after = dayStart(fromDate) ?? 0;
+      before = dayEnd(toDate) ?? Number.MAX_SAFE_INTEGER;
+    } else if (window !== 'all') {
+      if (dateDirection === 'future') before = now + WINDOW_MS[window];
+      else after = now - WINDOW_MS[window];
+    }
     return items.filter((item) => {
       const at = timestamp(item);
       return (!q || searchText(item).toLowerCase().includes(q)) && at >= after && at <= before;
     });
-  }, [items, query, window, fromDate, toDate, searchText, timestamp]);
+  }, [items, query, window, fromDate, toDate, searchText, timestamp, dateDirection]);
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
   const safePage = Math.min(page, pageCount - 1);
@@ -115,21 +163,24 @@ export function HistoryList<T>({
    */
   const groups = useMemo(() => {
     const today = dayIndex(Date.now());
+    // The neighbouring day worth naming is the one the dates are heading towards.
+    const near = dateDirection === 'future' ? today + 1 : today - 1;
+    const nearLabel = dateDirection === 'future' ? 'history.tomorrow' : 'history.yesterday';
     const out: { label: string; items: T[] }[] = [];
     for (const item of rows) {
       const day = dayIndex(timestamp(item));
       const label =
         day === today
           ? t('history.today')
-          : day === today - 1
-            ? t('history.yesterday')
+          : day === near
+            ? t(nearLabel as 'history.yesterday')
             : new Date(timestamp(item)).toLocaleDateString();
       const last = out[out.length - 1];
       if (last && last.label === label) last.items.push(item);
       else out.push({ label, items: [item] });
     }
     return out;
-  }, [rows, timestamp, t]);
+  }, [rows, timestamp, t, dateDirection]);
 
   const reset = () => setPage(0);
 
@@ -150,14 +201,25 @@ export function HistoryList<T>({
         />
         <Select
           value={window}
-          options={[
-            { value: 'all', label: t('history.anyTime') },
-            { value: 'today', label: t('history.today') },
-            { value: 'days3', label: t('history.days3') },
-            { value: 'week', label: t('history.week') },
-            { value: 'month', label: t('history.month') },
-            { value: 'custom', label: t('history.custom') },
-          ]}
+          options={
+            dateDirection === 'future'
+              ? [
+                  { value: 'all', label: t('history.anyTime') },
+                  { value: 'today', label: t('history.endsToday') },
+                  { value: 'days3', label: t('history.endsDays3') },
+                  { value: 'week', label: t('history.endsWeek') },
+                  { value: 'month', label: t('history.endsMonth') },
+                  { value: 'custom', label: t('history.custom') },
+                ]
+              : [
+                  { value: 'all', label: t('history.anyTime') },
+                  { value: 'today', label: t('history.today') },
+                  { value: 'days3', label: t('history.days3') },
+                  { value: 'week', label: t('history.week') },
+                  { value: 'month', label: t('history.month') },
+                  { value: 'custom', label: t('history.custom') },
+                ]
+          }
           onChange={(v) => {
             setWindow(v as DateWindow);
             reset();
@@ -193,18 +255,20 @@ export function HistoryList<T>({
             />
           </span>
         )}
-        {filter && (
+        {control && (
           <Select
-            value={filter.value}
-            options={filter.options}
+            value={control.value}
+            options={control.options}
             onChange={(v) => {
-              filter.onChange(v);
+              control.onChange(v);
               reset();
             }}
-            ariaLabel={filter.ariaLabel}
+            ariaLabel={control.ariaLabel}
           />
         )}
       </div>
+
+      {filters}
 
       {filtered.length === 0 ? (
         <p className="muted" style={{ marginTop: 14 }}>
@@ -213,16 +277,24 @@ export function HistoryList<T>({
       ) : (
         <>
           <PagedList
-            resetKey={`${query}:${window}:${fromDate}:${toDate}`}
+            resetKey={`${query}:${window}:${fromDate}:${toDate}:${resetKey ?? ''}`}
             reserve={safePage < pageCount - 1}
           >
             <div style={{ marginTop: 14 }}>
               {groups.map((group) => (
                 <div key={group.label} className="hist-group">
                   <div className="hist-group__day">{group.label}</div>
-                  {group.items.map((item) => (
-                    <div key={rowKey(item)}>{renderRow(item)}</div>
-                  ))}
+                  {/* The gap lives on this container, not between the rows.
+                      Row spacing used to come from a `.trow + .trow` rule, and
+                      every row here is wrapped in its own element for its key, so
+                      the rows are never siblings and the rule never matched: the
+                      cards sat flush against each other. A column gap does not
+                      care what the row is made of. */}
+                  <div className="hist-group__rows">
+                    {group.items.map((item) => (
+                      <div key={rowKey(item)}>{renderRow(item)}</div>
+                    ))}
+                  </div>
                 </div>
               ))}
             </div>

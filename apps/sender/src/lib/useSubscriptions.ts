@@ -11,14 +11,62 @@ import {
   readAccount,
   getLogsChunked,
   discoverStealthBoxes,
+  recognizeAnnouncements,
   MODE_PULL,
 } from '@ctrl-arcz/sdk';
 import { getStealthKeys, stealthKeysDeclined, allowStealthPrompt } from './stealthKeys.js';
+import { fetchAnnouncements } from './announcements.js';
 
 const USDC = ADDRESSES.USDC as Address;
 // Bound the one-time discovery scan (the factory is recent; this keeps the initial
 // eth_getLogs cheap instead of scanning from an ancient deploy block).
 const DISCOVER_LOOKBACK = 120_000n;
+
+/**
+ * What the announcer scan already found, for this wallet, in this tab.
+ *
+ * The announcer is global: every stealth box anyone creates is announced to it,
+ * and there is no on-chain tag to filter by, because not having one is the whole
+ * point. So finding yours means reading every announcement since the contract was
+ * deployed and testing each against your viewing key. That span is 2.16 million
+ * blocks and grows by 1.6 million a day.
+ *
+ * The component remounts every time the tab is opened, so without this the walk
+ * started from the deploy block on every visit and the screen said "Loading" for
+ * the whole thing, including for a wallet with no subscriptions at all. Keeping
+ * the cursor means the second visit reads only the blocks since the first.
+ *
+ * Memory rather than browser storage, and the reason is specific to a browser
+ * rather than a rule about disks. Here the wallet is a separate security domain:
+ * it keeps its keys in extension storage, which a page cannot read. `localStorage`
+ * belongs to this origin, so anything that gets script execution on it -- an
+ * injection, an extension with host permissions -- reads whatever is there without
+ * ever touching the wallet. Caching box addresses would hand that attacker the one
+ * fact the stealth addresses exist to withhold, "this wallet owns these boxes",
+ * while the wallet itself stayed sealed.
+ *
+ * A native app is not in that position: its private storage and its wallet sit
+ * behind the same sandbox, so an attacker who can read one has usually already
+ * crossed the boundary protecting the other, and persisting the same list costs
+ * far less. Ctrl+ArcZ's Android client does persist it for that reason. What
+ * should not be persisted anywhere is the viewing key, which is not a record of
+ * boxes that exist but the capability to recognise every box you will ever
+ * create.
+ */
+/** The index returns the whole list every time it is asked from zero, so merging
+ *  it with what a previous pass found would otherwise double every entry. */
+function dedupeBoxes(
+  boxes: Array<{ box: Address; ephemeralPubKey: Hex; label: string }>,
+): Array<{ box: Address; ephemeralPubKey: Hex; label: string }> {
+  const byBox = new Map<string, { box: Address; ephemeralPubKey: Hex; label: string }>();
+  for (const b of boxes) if (!byBox.has(b.box.toLowerCase())) byBox.set(b.box.toLowerCase(), b);
+  return [...byBox.values()];
+}
+
+const scanned = new Map<
+  string,
+  { cursor: bigint; boxes: Array<{ box: Address; ephemeralPubKey: Hex; label: string }> }
+>();
 
 export type SubStatus = 'active' | 'completed' | 'cancelled' | 'expired';
 
@@ -50,6 +98,9 @@ export interface Subscription {
    * without reading a block per box.
    */
   discoveredAt: number;
+  /** The name announced with the box, or empty. A browser may override it; see
+   *  `displayLabel`. */
+  announcedLabel: string;
 }
 
 function statusOf(s: {
@@ -75,7 +126,7 @@ export function useSubscriptions(session: Session | null): {
   loading: boolean;
   reload: (expect?: Address) => Promise<void>;
   /** Record a box this browser just created, so it appears immediately. */
-  track: (account: Address, ephemeralPubKey?: Hex) => Promise<void>;
+  track: (account: Address, ephemeralPubKey?: Hex, label?: string) => Promise<void>;
   /** True when the wallet refused to derive the viewing key, so the stealth boxes
    *  cannot be found. An empty list would otherwise read as "you have none". */
   stealthLocked: boolean;
@@ -87,7 +138,7 @@ export function useSubscriptions(session: Session | null): {
   const [loading, setLoading] = useState(false);
   // Discovered box addresses -> their creation salt + (for stealth boxes) the
   // ephemeral pubkey that lets us later derive the key controlling the box's vault.
-  const accounts = useRef<Map<string, { salt: Hex; ephemeralPubKey?: Hex; order?: number }>>(
+  const accounts = useRef<Map<string, { salt: Hex; ephemeralPubKey?: Hex; order?: number; label?: string }>>(
     new Map(),
   );
 
@@ -101,7 +152,7 @@ export function useSubscriptions(session: Session | null): {
     const built = await Promise.all(
       [...accounts.current.entries()].map(async ([addrLc, meta]) => {
         const account = addrLc as Address;
-        const { salt, ephemeralPubKey, order } = meta;
+        const { salt, ephemeralPubKey, order, label } = meta;
         try {
           const [state, balance] = await Promise.all([
             readAccount(client, account),
@@ -138,6 +189,7 @@ export function useSubscriptions(session: Session | null): {
             nextPullAt,
             pullableNow,
             discoveredAt: order ?? 0,
+            announcedLabel: label ?? '',
           } satisfies Subscription;
         } catch {
           return null;
@@ -153,12 +205,52 @@ export function useSubscriptions(session: Session | null): {
   // and only legacy boxes show. This is the fast path — the demo's boxes are stealth.
   const discoverStealth = useCallback(async () => {
     if (!session) return;
-    const client = getPublicClient();
+    const cacheKey = session.address.toLowerCase();
     try {
       const keys = await getStealthKeys(session);
-      const found = await discoverStealthBoxes(client, STEALTH_ANNOUNCER_ADDRESS, keys, {
-        fromBlock: STEALTH_ANNOUNCER_DEPLOY_BLOCK,
+      const seen = scanned.get(cacheKey);
+
+      // Everything already recognised goes in first, so a revisit renders its
+      // boxes before anything is fetched at all.
+      for (const b of seen?.boxes ?? []) {
+        const a = b.box.toLowerCase();
+        if (!accounts.current.has(a))
+          accounts.current.set(a, {
+            salt: '0x' as Hex,
+            ephemeralPubKey: b.ephemeralPubKey,
+            order: accounts.current.size,
+            label: b.label,
+          });
+      }
+
+      // The server's index, then recognition here. The list is the same for
+      // everyone; only this browser holds the viewing key that says which of it is
+      // ours, which is why the endpoint takes no address and learns nothing.
+      const feed = await fetchAnnouncements();
+      const found = feed.complete
+        ? recognizeAnnouncements(keys, feed.announcements)
+        : // Index unavailable or still backfilling. Read the chain rather than
+          // trust a partial list: a missing announcement is a missing subscription,
+          // and on this screen that is indistinguishable from having none.
+          await discoverStealthBoxes(getPublicClient(), STEALTH_ANNOUNCER_ADDRESS, keys, {
+            fromBlock: seen ? seen.cursor : STEALTH_ANNOUNCER_DEPLOY_BLOCK,
+          });
+
+      scanned.set(cacheKey, {
+        // The index is authoritative to its own head, so the fallback scan is the
+        // only thing that needs a cursor of its own; when the index answers, the
+        // list it returns is already complete and the cursor is not consulted.
+        cursor: seen?.cursor ?? STEALTH_ANNOUNCER_DEPLOY_BLOCK,
+        boxes: dedupeBoxes([
+          ...(seen?.boxes ?? []),
+          ...found.map((b) => ({
+            box: b.box,
+            ephemeralPubKey: b.ephemeralPubKey,
+            label: b.label,
+          })),
+        ]),
       });
+
       for (const b of found) {
         const a = b.box.toLowerCase();
         if (!accounts.current.has(a))
@@ -166,10 +258,11 @@ export function useSubscriptions(session: Session | null): {
             salt: '0x' as Hex,
             ephemeralPubKey: b.ephemeralPubKey,
             order: accounts.current.size,
+            label: b.label,
           });
       }
     } catch {
-      /* no signature / scan failure: legacy-only view */
+      /* no signature / fetch failure: legacy-only view */
     }
     // Surface a refusal, so the tab can say the private boxes are hidden rather
     // than quietly showing an empty list that looks like "you have none".
@@ -250,13 +343,18 @@ export function useSubscriptions(session: Session | null): {
    * discover. The scan still runs and is still what finds boxes made elsewhere.
    */
   const track = useCallback(
-    async (account: Address, ephemeralPubKey?: Hex) => {
+    async (account: Address, ephemeralPubKey?: Hex, label?: string) => {
       const a = account.toLowerCase();
       if (!accounts.current.has(a)) {
         accounts.current.set(a, {
           salt: '0x' as Hex,
           ...(ephemeralPubKey ? { ephemeralPubKey } : {}),
           order: accounts.current.size,
+          // The name went out with the announcement, but reading it back means
+          // waiting for the log index this shortcut exists to skip. We typed it, so
+          // we know it: without this the box a user just called "Spotify" appears
+          // under a merchant address until discovery catches up.
+          ...(label ? { label } : {}),
         });
       }
       // Read this one box and render it now. Registering it without refreshing

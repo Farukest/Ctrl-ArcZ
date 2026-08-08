@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Address } from 'viem';
 import { getPublicClient, type Session } from '@ctrl-arcz/demo-kit';
 import {
@@ -6,6 +6,7 @@ import {
   CTRL_ARCZ_ADDRESS,
   getLogsChunked,
   getTransfer,
+  isClaimable,
   type ProtectedTransfer,
 } from '@ctrl-arcz/sdk';
 
@@ -28,12 +29,20 @@ const POLL_MS = 8_000;
 
 /**
  * Incoming protected transfers addressed to the connected wallet that are still
- * PENDING (claimable). Runs app-wide (independent of which mode is showing) so the
+ * open on the chain. Runs app-wide (independent of which mode is showing) so the
  * "Receive" side of the mode switch can badge a waiting claim even while the user is
  * on the Send side. Polls every 8s.
+ *
+ * `pending` is everything still PENDING, which is what a claim code has to be
+ * looked up against. `claimable` is the subset a person can actually do something
+ * with: the contract stops accepting a claim once the window closes, so a lapsed
+ * transfer counted as "waiting" is an invitation to press a button that reverts.
+ * It stays in `pending` -- the money is still there, and the recipient can send it
+ * back -- but nothing counts it as waiting for them.
  */
 export function usePendingClaims(session: Session | null): {
   pending: PendingClaim[] | null;
+  claimable: PendingClaim[] | null;
   reload: () => Promise<void>;
 } {
   const [pending, setPending] = useState<PendingClaim[] | null>(null);
@@ -92,7 +101,14 @@ export function usePendingClaims(session: Session | null): {
           .sort((a, b) => Number(b.transferId - a.transferId)),
       );
     } catch {
-      setPending([]);
+      // A poll that could not reach the chain knows nothing, so it says nothing.
+      //
+      // This used to write an empty list, which is a claim -- "you have nothing
+      // waiting" -- made on no evidence. It cost more than a blank badge: the
+      // count it feeds is what decides whether a payment has just arrived, so one
+      // failed poll dropped it to zero and the poll that recovered announced every
+      // transfer already sitting there as if it had landed that second. Keeping
+      // the last known list is both truer and quieter; the next poll corrects it.
     } finally {
       inFlight.current = false;
     }
@@ -121,5 +137,12 @@ export function usePendingClaims(session: Session | null): {
     };
   }, [reload]);
 
-  return { pending, reload };
+  // Recomputed on every poll rather than on a timer of its own: a window closes
+  // silently, and the next tick is close enough to notice it.
+  const claimable = useMemo(
+    () => (pending === null ? null : pending.filter((p) => isClaimable(p.transfer))),
+    [pending],
+  );
+
+  return { pending, claimable, reload };
 }

@@ -15,7 +15,12 @@ import {
   type EphemeralPolicy,
 } from '@ctrl-arcz/sdk';
 import { investigate, investigatorEnabled } from '@ctrl-arcz/demo-kit/investigator';
-import { cosign, cosignerAddress, verifiedRecipients } from '@ctrl-arcz/demo-kit/cosign';
+import {
+  announcements,
+  cosign,
+  cosignerAddress,
+  verifiedRecipients,
+} from '@ctrl-arcz/demo-kit/cosign';
 import { bridgeUsdc } from '@ctrl-arcz/demo-kit/cctp';
 import { gatewayTransfer } from '@ctrl-arcz/demo-kit/gateway';
 import { gaslessClaimToResult } from '@ctrl-arcz/demo-kit/gasless';
@@ -101,6 +106,32 @@ export async function verifiedRecipientsGet(req: IncomingMessage, res: ServerRes
   const sender = url.searchParams.get('sender');
   if (!sender || !isAddress(sender)) throw new HttpError(400, 'invalid sender');
   json(res, 200, verifiedRecipients(sender as Address));
+}
+
+/**
+ * Every stealth announcement, so a browser can find its own boxes without reading
+ * the chain.
+ *
+ * The announcer is one global registry and carries no owner tag by design, so
+ * discovery means testing every announcement against a viewing key. Doing that
+ * from the browser cost 217 chunked `eth_getLogs` calls over 2.16 million blocks,
+ * on every visit, growing daily. This serves the same list from an index that
+ * backfilled once.
+ *
+ * Public and unauthenticated, exactly like the verified-recipients route: these
+ * are public events and anyone can read the same logs. Crucially it is also
+ * **undirected** -- it takes no address and returns the same bytes to every
+ * caller. Recognising which announcements are yours needs the viewing key, which
+ * stays in the browser, so the server cannot build a map of boxes to owners even
+ * if it were asked to.
+ */
+export async function announcementsGet(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  const url = new URL(req.url ?? '', 'http://localhost');
+  const raw = url.searchParams.get('fromBlock');
+  // A bad cursor must not be read as "give me everything from zero" silently, and
+  // must not throw either: reject it so a client bug is visible.
+  if (raw !== null && !/^\d{1,20}$/.test(raw)) throw new HttpError(400, 'invalid fromBlock');
+  json(res, 200, announcements(raw ? BigInt(raw) : 0n));
 }
 
 /**
@@ -394,8 +425,11 @@ export async function relayCreatePost(req: IncomingMessage, res: ServerResponse)
   // already authorised. Doing it here also removes the ordering hazard the split
   // had: the announcement now cannot be published before the box it names exists,
   // because the deploy above is awaited.
-  const announce = (body as { announce?: { stealthAddress?: unknown; ephemeralPubKey?: unknown } })
-    .announce;
+  const announce = (
+    body as {
+      announce?: { stealthAddress?: unknown; ephemeralPubKey?: unknown; label?: unknown };
+    }
+  ).announce;
   let announceTx: { txHash: Hex } | null = null;
   if (announce) {
     if (
@@ -404,6 +438,10 @@ export async function relayCreatePost(req: IncomingMessage, res: ServerResponse)
     ) {
       throw new HttpError(400, 'invalid ephemeralPubKey');
     }
+    // The box's name, published with it so every device shows the same one. Bounded
+    // because it goes into calldata this relayer pays for, and a caller should not
+    // be able to make that bill arbitrarily large.
+    const label = typeof announce.label === 'string' ? announce.label.trim().slice(0, 40) : '';
     announceTx = await relayAnnounceBox(
       env.relayerPk,
       {
@@ -411,6 +449,7 @@ export async function relayCreatePost(req: IncomingMessage, res: ServerResponse)
         ephemeralPubKey: announce.ephemeralPubKey as Hex,
       },
       result.account,
+      label,
     );
   }
   json(res, 200, { ...result, announceTx });

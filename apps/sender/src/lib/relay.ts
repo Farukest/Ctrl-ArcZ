@@ -48,7 +48,7 @@ export async function relayCreateBox(
   session: Session,
   salt: Hex,
   policy: EphemeralPolicy,
-  announce?: { stealthAddress: Address; ephemeralPubKey: Hex },
+  announce?: { stealthAddress: Address; ephemeralPubKey: Hex; label?: string },
 ): Promise<{ account: Address; txHash: Hex }> {
   const result = await signedPost<{ account: Address; txHash: Hex }>(session, '/api/relay/create', {
     salt,
@@ -58,6 +58,9 @@ export async function relayCreateBox(
           announce: {
             stealthAddress: announce.stealthAddress,
             ephemeralPubKey: announce.ephemeralPubKey,
+            // Travels with the box so the name is the same on every device. The
+            // relayer publishes it; it never sees who the payer is.
+            ...(announce.label ? { label: announce.label } : {}),
           },
         }
       : {}),
