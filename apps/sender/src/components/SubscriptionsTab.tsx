@@ -157,11 +157,18 @@ export function SubscriptionsTab({ session }: { session: Session }) {
    * of slack means a late final pull does not fall off the end.
    */
   const durationSecs = chargeCount > 0 ? chargeCount * intervalSecs : intervalSecs;
+  /**
+   * The count field names the unit it is counting. One charge per interval means
+   * the number is both, so "How many months" says what "How many charges" made
+   * the reader work out: how long this runs for.
+   */
+  const unit = t(`sub.unit.${frequency}` as never);
+  const unitOne = t(`sub.unitOne.${frequency}` as never);
   const countError =
     charges.trim() === '' || chargeCount < 1
-      ? t('sub.countTooLow')
+      ? t('sub.countTooLow', { unit: unitOne })
       : chargeCount > MAX_CHARGES
-        ? t('sub.countTooHigh', { max: MAX_CHARGES })
+        ? t('sub.countTooHigh', { max: MAX_CHARGES, unit })
         : null;
 
   /**
@@ -488,7 +495,7 @@ export function SubscriptionsTab({ session }: { session: Session }) {
             </Field>
           </div>
           <div className="sub-grid">
-            <Field label={t('sub.count')} error={countError}>
+            <Field label={t('sub.count', { unit })} error={countError}>
               <Input
                 value={charges}
                 onChange={(e) => setCharges(e.target.value)}

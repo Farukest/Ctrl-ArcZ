@@ -74,7 +74,21 @@ export const en = {
   'sub.merchant': 'Merchant address',
   'sub.perPull': 'Per pull (USDC)',
   'sub.frequency': 'How often',
-  'sub.count': 'How many charges',
+  // Follows the frequency, because "How many charges" made the reader do the
+  // conversion themselves: monthly x 12 is a year, and only the label can say so.
+  'sub.count': 'How many {unit}',
+  'sub.unit.minute': 'minutes',
+  'sub.unit.daily': 'days',
+  'sub.unit.weekly': 'weeks',
+  'sub.unit.monthly': 'months',
+  'sub.unit.yearly': 'years',
+  // The singular is a separate string rather than a stripped "s", which only
+  // works in English and not even reliably there.
+  'sub.unitOne.minute': 'minute',
+  'sub.unitOne.daily': 'day',
+  'sub.unitOne.weekly': 'week',
+  'sub.unitOne.monthly': 'month',
+  'sub.unitOne.yearly': 'year',
   'sub.freq.minute': 'Every minute',
   'sub.freq.daily': 'Daily',
   'sub.freq.weekly': 'Weekly',
@@ -83,8 +97,8 @@ export const en = {
   'sub.freq.minuteNote': 'Every minute is for trying this out, not for a real subscription.',
   'sub.total': 'Total',
   'sub.summary': '{total} USDC in all: {count} x {perPull} USDC, {freq}. Ends {date}.',
-  'sub.countTooLow': 'At least one charge',
-  'sub.countTooHigh': 'At most {max} charges',
+  'sub.countTooLow': 'At least one {unit}',
+  'sub.countTooHigh': 'At most {max} {unit}',
   'sub.createButton': 'Create subscription',
   'sub.step.machine': 'Checking merchant',
   'sub.step.create': 'Creating box',
