@@ -711,23 +711,72 @@ export function BridgeTab({ session }: { session: Session }) {
   useEffect(() => {
     let live = true;
     const resume = async () => {
-      for (const b of loadBridges().filter((x) => x.state === 'pending')) {
+      for (const b of loadBridges().filter(
+        (x) => x.state === 'pending' || x.state === 'returning',
+      )) {
         if ((b.engine ?? 'cctp') === 'gateway') {
+          /**
+           * A row already known to have failed is not asked about again.
+           *
+           * Circle's status for it is `failed` and stays `failed`, so polling it
+           * a second time can only ever say the same thing. What is still open is
+           * whether the hold has been let go of, and that question is answered by
+           * the balance rather than by the transfer.
+           */
+          if (b.state === 'returning') {
+            if (b.returnBaseline == null) continue;
+            const bal = await gatewayBalance({ depositor: session.address }).catch(() => null);
+            const back = bal?.byChain[b.from as GatewayChain];
+            if (!live || back == null) continue;
+            /**
+             * Back to what it was before the spend, not up by the amount.
+             *
+             * The baseline is the pre-spend figure, so the release restores it
+             * exactly; asking for baseline plus the amount would be asking for the
+             * money twice. A later deposit can also carry the balance past this
+             * and read as the release, which is the same ambiguity `reconcile`
+             * lives with for deposits: Circle reports a total, not a ledger.
+             */
+            if (back >= BigInt(b.returnBaseline)) {
+              saveBridge({ ...b, state: 'returned' });
+              setBridges(loadBridges());
+              toast.push(t('bridge.returnedToast').replace('{amount}', b.amount), 'success');
+            }
+            continue;
+          }
+
           // Gateway's receipt is the transferId, and Circle answers on it forever.
           const status = await findGatewayMint({ transferId: b.id });
           if (!live || status.state === 'pending') continue;
-          saveBridge({
-            ...b,
-            state: status.state === 'done' ? 'success' : 'error',
-            steps:
-              status.state === 'done' && status.mintTxHash
+
+          if (status.state === 'done') {
+            saveBridge({
+              ...b,
+              state: 'success',
+              steps: status.mintTxHash
                 ? [...b.steps, stepRow('mint', status.mintTxHash, b.to as CctpChainName)]
                 : b.steps,
+            });
+            setBridges(loadBridges());
+            toast.push(t('bridge.recovered').replace('{amount}', b.amount), 'success');
+            continue;
+          }
+
+          /**
+           * The mint failed, so the source burn never ran.
+           *
+           * Nothing was spent on chain: Circle debits its own ledger when it
+           * accepts the intent and burns at settlement, which this transfer never
+           * reached. What left the balance is a hold, and it comes back. Marking
+           * this `error` would say the opposite of what is true, so the balance
+           * now is written down as the figure to watch for.
+           */
+          saveBridge({
+            ...b,
+            state: 'returning',
+            ...(status.reason ? { failureReason: status.reason } : {}),
           });
           setBridges(loadBridges());
-          if (status.state === 'done') {
-            toast.push(t('bridge.recovered').replace('{amount}', b.amount), 'success');
-          }
           continue;
         }
         const burnTxHash = b.steps.find((s) => s.name === 'burn')?.txHash;
@@ -757,7 +806,7 @@ export function BridgeTab({ session }: { session: Session }) {
       live = false;
       clearInterval(timer);
     };
-  }, [t, toast]);
+  }, [t, toast, session.address]);
 
   /**
    * CCTP goes through the connected wallet; Gateway still goes through the server.
@@ -910,6 +959,19 @@ export function BridgeTab({ session }: { session: Session }) {
                 state: 'pending',
                 steps: [{ name: 'deposit' }, { name: 'sign' }, { name: 'attestation' }],
                 createdAt: Date.now(),
+                /**
+                 * What the balance was before this spend, written now because now
+                 * is the only time it is knowable.
+                 *
+                 * If the mint fails, the debit is a hold that Circle releases and
+                 * the balance returns to exactly this figure. Reading a baseline
+                 * at failure time instead does not work, and not subtly: measured
+                 * on this route the release landed inside sixteen minutes, sooner
+                 * than the failure was noticed, so the "baseline" was already the
+                 * released figure and the row could never reach it. It sat on
+                 * `returning` for good.
+                 */
+                ...(gwOnSource != null ? { returnBaseline: gwOnSource.toString() } : {}),
               });
               setBridges(loadBridges());
             },
@@ -1439,11 +1501,29 @@ export function BridgeTab({ session }: { session: Session }) {
                   }
                   amount={`${b.amount} USDC`}
                   status={{
-                    tone: b.state === 'success' ? 'ok' : b.state === 'error' ? 'err' : 'idle',
+                    /* `returning` reads as in-flight rather than as a failure,
+                       because that is what it is: the mint did not happen and the
+                       money is on its way back. A red cross next to an amount that
+                       is coming back is the one thing this row must not say. */
+                    tone:
+                      b.state === 'success' || b.state === 'returned'
+                        ? 'ok'
+                        : b.state === 'error'
+                          ? 'err'
+                          : 'idle',
                     label: t(`bridge.state.${b.state}` as 'bridge.state.success'),
                   }}
                   time={relativeTime(b.createdAt)}
                 />
+                {/* One line, and only what is known. Why the mint failed is true
+                    for this transfer and not for every ON_CHAIN_FAILURE, so the
+                    row says what happened and Circle's own words go in the facts
+                    below rather than being turned into an explanation. */}
+                {(b.state === 'returning' || b.state === 'returned') && (
+                  <p className="hrow__note" data-testid="bridge-return-note">
+                    {t(b.state === 'returning' ? 'bridge.returnNote' : 'bridge.returnedNote')}
+                  </p>
+                )}
                 {/* A recipient is only shown when the money went to someone else.
                     Printing the sender's own address as a "to" is noise. */}
                 {(b.recipient || b.id) && (
@@ -1456,6 +1536,11 @@ export function BridgeTab({ session }: { session: Session }) {
                     <HistoryRow.Fact label={t('bridge.rowReceipt')}>
                       <Copyable value={b.id} display={short(b.id)} />
                     </HistoryRow.Fact>
+                    {b.failureReason && (
+                      <HistoryRow.Fact label={t('bridge.rowReason')}>
+                        <span className="mono">{b.failureReason}</span>
+                      </HistoryRow.Fact>
+                    )}
                   </HistoryRow.Facts>
                 )}
                 <HistoryRow.Steps steps={b.steps.map((s) => rowStep(s, t))} />

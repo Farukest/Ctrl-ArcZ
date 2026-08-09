@@ -12,7 +12,7 @@ import {
 import { privateKeyToAccount } from 'viem/accounts';
 import {
   ADDRESSES,
-  RPC_URLS,
+  SIGNING_RPC_URLS,
   arcTestnet,
   readAccount,
   submitPull,
@@ -49,6 +49,7 @@ import {
   GatewayFundBox,
   HistoryList,
   HistoryRow,
+  type RowTone,
   Address as AddressChip,
   Field,
   Input,
@@ -103,11 +104,25 @@ function randomSalt(): Hex {
   return ('0x' + Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('')) as Hex;
 }
 
-const STATUS_COLOR: Record<SubStatus, string> = {
-  active: 'var(--safe)',
-  completed: 'var(--info)',
-  cancelled: 'var(--text-lo)',
-  expired: 'var(--warn)',
+/**
+ * Which tone the shared row status wears.
+ *
+ * This used to be a bordered uppercase pill of its own, drawn from a colour map
+ * and living in the app's stylesheet. It came out louder than the subscription's
+ * own name beside it, which is the wrong way round: the name is what the row is,
+ * the status is a detail of it. Every other list in this app says the same thing
+ * with a small dot and quiet text, so this one does too.
+ *
+ * Only a live subscription is green. The three ways of being finished read as
+ * inert rather than as three different colours, and only an expired box gets a
+ * warning, because that is the one where money can still be sitting in it.
+ */
+const STATUS_TONE: Record<SubStatus, RowTone> = {
+  active: 'ok',
+  expired: 'warn',
+  completed: 'idle',
+  cancelled: 'idle',
+  empty: 'idle',
 };
 
 /** Name, merchant and box address: the three things someone searches a box by. */
@@ -574,10 +589,21 @@ export function SubscriptionsTab({
 
         await relayStealthGas(session, stealthAccount.address);
 
+        /**
+         * The signing order, not the reading one.
+         *
+         * This client prepares a transaction, so viem asks `eth_fillTransaction`
+         * to find out what the fee is paid in, and two of the four public
+         * endpoints refuse that method: drpc answers -32601 and blockdaemon
+         * returns 403 "Request method filtered". `RPC_URLS` is ranked for reads
+         * and leads with exactly those two, so every sweep paid two doomed round
+         * trips and printed a 400 and a 403 that read like a broken app.
+         * `SIGNING_RPC_URLS` is the same list ordered for a client that signs.
+         */
         const stealthWallet = createWalletClient({
           account: stealthAccount,
           chain: arcTestnet,
-          transport: fallback(RPC_URLS.map((u) => http(u))),
+          transport: fallback(SIGNING_RPC_URLS.map((u) => http(u))),
         });
         await sweepToVault(
           { publicClient, walletClient: stealthWallet },
@@ -624,7 +650,7 @@ export function SubscriptionsTab({
   }, [subs, statusFilter, sort]);
 
   const counts = useMemo(() => {
-    const c = { all: subs?.length ?? 0, active: 0, completed: 0, cancelled: 0, expired: 0 };
+    const c = { all: subs?.length ?? 0, active: 0, completed: 0, cancelled: 0, expired: 0, empty: 0 };
     for (const s of subs ?? []) c[s.status]++;
     return c;
   }, [subs]);
@@ -729,6 +755,9 @@ export function SubscriptionsTab({
             one is not a pair of equals, and the amount is the number this form is
             actually about.
           */}
+          {/* Boxed, because the Gateway funding module sits directly above it and
+              a bordered block followed by a bare one reads as unfinished rather
+              than as two separate things. */}
           <AmountField
             value={perPull}
             onChange={setPerPull}
@@ -736,14 +765,16 @@ export function SubscriptionsTab({
             balance={balance}
             onMax={(f) => balance != null && setPerPull(percentOf(balance, f))}
             label={t('sub.perPull')}
+            boxed
             data-testid="sub-perpull"
           />
           {/* The two questions that are actually a pair: how often, and how many. */}
           <div className="sub-grid">
-            <Field
-              label={t('sub.frequency')}
-              {...(frequency === 'minute' ? { hint: t('sub.freq.minuteNote') } : {})}
-            >
+            {/* No note under the minute option. It told the reader that a
+                one-minute subscription is for trying the app out, which is a
+                sentence about our demo rather than about their money, and it
+                pushed the two fields beside it out of line. */}
+            <Field label={t('sub.frequency')}>
               <Select
                 value={frequency}
                 options={FREQUENCIES.map((f) => ({
@@ -859,7 +890,7 @@ export function SubscriptionsTab({
             // the same place every list that has them puts theirs.
             filters={
               <div className="sub-chips" data-testid="sub-filters">
-                {(['all', 'active', 'completed', 'cancelled', 'expired'] as const).map((s) => (
+                {(['all', 'active', 'empty', 'completed', 'cancelled', 'expired'] as const).map((s) => (
                   <button
                     key={s}
                     type="button"
@@ -922,20 +953,11 @@ export function SubscriptionsTab({
               return (
                 <HistoryRow key={s.account} data-testid="sub-item">
                   <HistoryRow.Head
-                    lead={
-                      <>
-                        <span className="sub-row__name">{name || short(s.target)}</span>
-                        <span
-                          className="sub-badge"
-                          style={{
-                            color: STATUS_COLOR[s.status],
-                            borderColor: STATUS_COLOR[s.status],
-                          }}
-                        >
-                          {t(`sub.filter.${s.status}` as never)}
-                        </span>
-                      </>
-                    }
+                    lead={<span className="sub-row__name">{name || short(s.target)}</span>}
+                    status={{
+                      tone: STATUS_TONE[s.status],
+                      label: t(`sub.filter.${s.status}` as never),
+                    }}
                     // Lowercased: the label is written for a dropdown, and "0.01
                     // Every minute" mid-line reads as two sentences colliding.
                     // Locale-aware because Turkish lowercases I to a dotless one.

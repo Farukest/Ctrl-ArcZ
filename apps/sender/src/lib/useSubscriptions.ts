@@ -99,7 +99,7 @@ export function knownBoxes(address: string | undefined): {
   return { boxes, names };
 }
 
-export type SubStatus = 'active' | 'completed' | 'cancelled' | 'expired';
+export type SubStatus = 'active' | 'completed' | 'cancelled' | 'expired' | 'empty';
 
 export interface Subscription {
   account: Address;
@@ -134,6 +134,26 @@ export interface Subscription {
   announcedLabel: string;
 }
 
+/**
+ * What the box's own state says, and nothing more.
+ *
+ * The awkward one is an empty box that has never paid anything. Two different
+ * histories land there and the chain state cannot tell them apart: a box that
+ * was funded and swept home before the first pull, and a box that was created
+ * but never funded at all. Both read `balance 0, spent 0`.
+ *
+ * This used to call both of them `cancelled`, which is a claim about an action.
+ * It is wrong for the second, and the second is not hypothetical: a funding that
+ * fails after the box is deployed leaves exactly it, and one such box is sitting
+ * in this wallet's list right now with no transfers against it at all. Telling
+ * someone they cancelled something they never funded sends them looking for a
+ * refund that was never taken.
+ *
+ * `empty` is what both have in common and all that can be proven: nothing in it,
+ * nothing spent. Distinguishing further would cost a log query per box, and the
+ * answer would not change what the user can do about it, which is fund it or
+ * forget it.
+ */
 function statusOf(s: {
   balance: bigint;
   spent: bigint;
@@ -141,7 +161,12 @@ function statusOf(s: {
   expiry: number;
   now: number;
 }): SubStatus {
-  if (s.balance === 0n) return s.spent >= s.cap ? 'completed' : 'cancelled';
+  if (s.balance === 0n) {
+    if (s.spent >= s.cap) return 'completed';
+    // Something was pulled and the rest came home: cancelling is the only way to
+    // reach that, so the word is earned here.
+    return s.spent > 0n ? 'cancelled' : 'empty';
+  }
   if (s.now > s.expiry) return 'expired';
   return 'active';
 }

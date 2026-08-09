@@ -71,8 +71,11 @@ export const en = {
   'common.save': 'Save',
   'common.loading': 'Loading…',
   'sub.createTitle': 'New subscription',
+  // One line. The form below already says what the numbers are; this only has to
+  // say what they buy, and the old version spent three clauses restating the
+  // fields the reader is looking at.
   'sub.createSummary':
-    'Authorize a merchant to pull up to a set amount, on an interval, capped by a total budget. The Machine vetoes anything over the rules, and you can cancel any time.',
+    'The merchant can pull this much, this often, and no more. Cancel any time.',
   'sub.label': 'Name (optional)',
   'sub.labelPh': 'e.g. Netflix',
   'sub.merchant': 'Merchant address',
@@ -98,7 +101,6 @@ export const en = {
   'sub.freq.weekly': 'Weekly',
   'sub.freq.monthly': 'Monthly',
   'sub.freq.yearly': 'Yearly',
-  'sub.freq.minuteNote': 'Every minute is for trying this out, not for a real subscription.',
   'sub.total': 'Total',
   'sub.runsFor': 'over {duration}',
   'sub.dur.minute': '{n} min',
@@ -139,6 +141,10 @@ export const en = {
   'sub.sort.endsSoon': 'Ends soonest',
   'sub.filter.all': 'All',
   'sub.filter.active': 'Active',
+  // Nothing in the box and nothing ever charged. Covers a box swept home before
+  // its first pull and one whose funding never landed, which the chain cannot
+  // tell apart; "Cancelled" would claim an action neither is proof of.
+  'sub.filter.empty': 'Empty',
   'sub.filter.completed': 'Completed',
   'sub.filter.cancelled': 'Cancelled',
   'sub.filter.expired': 'Expired',
@@ -325,6 +331,7 @@ export const en = {
   'history.endsMonth': 'Ends within 30 days',
   'bridge.rowTo': 'To',
   'bridge.rowReceipt': 'Receipt',
+  'bridge.rowReason': 'Reason',
   'active.stepSent': 'Sent',
   'bridge.rowstep.approve': 'Approve',
   'bridge.rowstep.burn': 'Burn',
@@ -350,6 +357,14 @@ export const en = {
   'bridge.state.success': 'arrived',
   'bridge.state.pending': 'pending',
   'bridge.state.error': 'failed',
+  // A Gateway spend does not burn on the source chain until settlement, so a
+  // mint that fails leaves a hold rather than a payment, and Circle lets it go.
+  // "failed" would tell someone their money is gone while it is on its way back.
+  'bridge.state.returning': 'returning',
+  'bridge.state.returned': 'returned',
+  'bridge.returnNote': 'Did not arrive. Returning to your Gateway balance.',
+  'bridge.returnedNote': 'Returned to your Gateway balance.',
+  'bridge.returnedToast': '{amount} USDC is back in your Gateway balance.',
 
   'send.recipient': 'Recipient address',
   'send.invalidAddress': 'Invalid address',
@@ -463,6 +478,11 @@ export const en = {
   'claim.pendingEmpty': 'No protected transfer waiting.',
   'claim.successTitle': 'Received',
   'claim.successBody': 'It reached your wallet. New balance: {balance} USDC.',
+  // A claim is permissionless and always pays the recipient recorded at send
+  // time, so the person who settles it is not always the person who gets it.
+  'claim.settledTitle': 'Settled',
+  'claim.settledBody':
+    'The transfer was released to the address it was sent to. Your own balance is unchanged, apart from the gas.',
   'claim.needTid': 'Transfer number is required.',
   'claim.wrongCode': 'Wrong code. Attempts remaining: {n}.',
   'claim.wrongCodeLast':

@@ -8,7 +8,6 @@ import {
   HistoryList,
   HistoryRow,
   Address as AddressChip,
-  Copyable,
   Skeleton,
   receivedHaystack,
   relativeTime,
@@ -124,7 +123,8 @@ export function ReceivedTab({ session }: { session: Session }) {
             <HistoryRow.Head
               lead={
                 <>
-                  <Copyable value={transferId.toString()} display={`#${transferId.toString()}`} />
+                  {/* See TransfersTab: a two-character id is read, not copied. */}
+                  <span className="hrow__id mono">#{transferId.toString()}</span>
                   <span className="hrow__arrow" aria-hidden>
                     &larr;
                   </span>

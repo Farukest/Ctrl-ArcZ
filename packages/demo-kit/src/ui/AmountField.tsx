@@ -43,6 +43,19 @@ export interface AmountFieldProps {
   invalid?: boolean;
   error?: string | null;
   hint?: ReactNode;
+  /**
+   * Draw it as a panel of its own.
+   *
+   * The amount is the one field on any of these forms that is about money rather
+   * than about addressing it, and the panel is what says so. Every screen that
+   * asks for an amount on its own passes this: Send, Private Pay and the
+   * subscription form, so the control looks the same wherever it is met.
+   *
+   * The bridge is the exception and not an inconsistency: its amount already
+   * lives inside a `swapcard` with the chain picker, so boxing it again would be
+   * a box in a box.
+   */
+  boxed?: boolean;
   'data-testid'?: string;
 }
 
@@ -59,13 +72,19 @@ export function AmountField({
   invalid = false,
   error,
   hint,
+  boxed = false,
   'data-testid': testId,
 }: AmountFieldProps) {
   const t = useT();
   const canFill = onMax != null && balance != null && balance > 0n;
 
   return (
-    <div className={`amountf ${invalid ? 'amountf--invalid' : ''}`} data-testid={testId}>
+    <div
+      className={['amountf', boxed && 'amountf--boxed', invalid && 'amountf--invalid']
+        .filter(Boolean)
+        .join(' ')}
+      data-testid={testId}
+    >
       <div className="amountf__head">
         <span className="amountf__label">{label ?? t('amount.label')}</span>
         {balance !== undefined && (

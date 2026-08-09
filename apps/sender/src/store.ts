@@ -72,9 +72,31 @@ export interface StoredBridge {
    */
   recipient?: string;
   amount: string;
+  /**
+   * `pending` | `success` | `error`, and for a Gateway spend whose mint failed,
+   * `returning` then `returned`.
+   *
+   * Those last two are not decoration. A Gateway spend does not burn on the
+   * source chain when the intent is accepted; Circle debits its own ledger and
+   * the real burn happens later, at settlement. So a mint that fails means the
+   * burn never ran and what left the balance was a hold, which Circle lets go
+   * of. Calling that `error` tells the user their money is gone, next to an
+   * amount that is on its way back.
+   */
   state: string;
   steps: StoredBridgeStep[];
   createdAt: number;
+  /**
+   * The source-chain Gateway balance at the moment the failure was seen.
+   *
+   * The transfer's own status stays `failed` for good, so it can never report
+   * the release. The balance is the only place it shows, and a figure to
+   * compare against is the only way to know it has. Subunits, as a string,
+   * because JSON has no bigint.
+   */
+  returnBaseline?: string;
+  /** Circle's own words for why the mint failed, e.g. `ON_CHAIN_FAILURE`. */
+  failureReason?: string;
 }
 
 const BRIDGES_KEY = 'ctrl-arcz:bridges';

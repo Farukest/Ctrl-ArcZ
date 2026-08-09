@@ -310,6 +310,7 @@ export function SendTab({
           balance={balance}
           onMax={(f) => balance != null && setAmount(percentOf(balance, f))}
           {...(mode === 'plain' ? { hint: t('send.plainHint') } : {})}
+          boxed
           data-testid="amount"
         />
       </div>

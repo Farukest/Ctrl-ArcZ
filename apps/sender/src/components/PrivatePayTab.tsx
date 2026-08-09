@@ -221,6 +221,7 @@ export function PrivatePayTab({
             chain="Arc_Testnet"
             balance={balance}
             onMax={(f) => balance != null && setAmount(percentOf(balance, f))}
+            boxed
             data-testid="ppay-amount"
           />
 

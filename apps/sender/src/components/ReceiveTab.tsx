@@ -95,7 +95,16 @@ export function ReceiveTab({
   // other claim -- the one that spends the user's own gas.
   const [claiming, setClaiming] = useState<'own' | 'gasless' | null>(null);
   const busy = claiming !== null;
-  const [claimedTx, setClaimedTx] = useState<Hex | null>(null);
+  /**
+   * The settled claim, and who it actually paid.
+   *
+   * Not always the person pressing the button. A claim is permissionless and
+   * always pays the recipient recorded at send time, which is the whole reason a
+   * relayer can settle for someone with no gas, so the success screen cannot
+   * assume the money landed here. It used to, and said "it reached your wallet"
+   * next to the claimer's own balance while the funds went somewhere else.
+   */
+  const [claimed, setClaimed] = useState<{ tx: Hex; toSelf: boolean } | null>(null);
   const [qr, setQr] = useState('');
 
   // One string carries the whole proof, so the recipient types it and nothing else.
@@ -179,7 +188,7 @@ export function ReceiveTab({
       const tx = gasless
         ? await gaslessClaimViaServer(session, id, parsed, salt)
         : await claim(session.clients, id, parsed, salt);
-      setClaimedTx(tx);
+      setClaimed({ tx, toSelf: matched.to.toLowerCase() === session.address.toLowerCase() });
       await onClaimed();
       await reload();
     } catch (e) {
@@ -211,24 +220,31 @@ export function ReceiveTab({
     }
   };
 
-  if (claimedTx) {
+  if (claimed) {
     return (
       <>
-        <Confetti />
+        {/* Confetti for money that arrived here. Settling someone else's transfer
+            is a favour, not a windfall, and celebrating it would be celebrating a
+            balance that did not change. */}
+        {claimed.toSelf && <Confetti />}
         <Card data-testid="claim-success">
           <h2 className="card__title" style={{ color: 'var(--safe)' }}>
-            {t('claim.successTitle')}
+            {t(claimed.toSelf ? 'claim.successTitle' : 'claim.settledTitle')}
           </h2>
           <p className="muted">
-            {t('claim.successBody', {
-              balance: Number(balance).toLocaleString(undefined, { maximumFractionDigits: 4 }),
-            })}
+            {claimed.toSelf
+              ? t('claim.successBody', {
+                  balance: Number(balance).toLocaleString(undefined, {
+                    maximumFractionDigits: 4,
+                  }),
+                })
+              : t('claim.settledBody')}
           </p>
-          <a className="row" href={explorerTxUrl(claimedTx)} target="_blank" rel="noreferrer">
+          <a className="row" href={explorerTxUrl(claimed.tx)} target="_blank" rel="noreferrer">
             {t('common.viewOnArcScan')} <IconExternal width={14} height={14} />
           </a>
           <div style={{ marginTop: 12 }}>
-            <Button variant="ghost" onClick={() => setClaimedTx(null)}>
+            <Button variant="ghost" onClick={() => setClaimed(null)}>
               {t('common.back')}
             </Button>
           </div>

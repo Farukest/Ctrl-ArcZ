@@ -2031,6 +2031,14 @@ a.hstep__go:hover {
   overflow-wrap: anywhere;
 }
 
+/* A row's own number. Short enough to read at a glance, so it gets no copy
+   affordance and no shrinking; it just needs to stay put while the rest of the
+   lead wraps. */
+.hrow__id {
+  flex-shrink: 0;
+  color: var(--text-mid);
+}
+
 .hist-range {
   display: inline-flex;
   align-items: center;
@@ -2060,6 +2068,16 @@ a.hstep__go:hover {
   flex-direction: column;
   gap: 6px;
   min-width: 0;
+}
+/* The panel variant. Same tokens as `.gwfund`, because on the one screen that
+   uses both they sit one above the other and any difference in radius or surface
+   reads as a mistake rather than as a distinction. */
+.amountf--boxed {
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 14px;
+  background: var(--surface-2);
 }
 /* Wraps rather than clips. At 360px "Amount" plus "Gateway balance 3.285952 USDC"
    does not fit on one line, and the balance is information: an ellipsis through
@@ -2455,26 +2473,35 @@ a.hstep__go:hover {
 /* The budget, as one line rather than a field and a sentence saying the same
    number. The figure leads because it is the thing being agreed to; the rest of
    the sentence follows it at the weight of a caption. */
+/* The budget, laid out like the Gateway balance directly above it: the label on
+   the left, the figure on the right. Three different type sizes jammed together
+   on one left-aligned line read as a fragment of a sentence rather than as a
+   total, and the duration is a qualifier of the figure, so it sits with it. */
 .sub-total-line {
   display: flex;
   align-items: baseline;
+  justify-content: space-between;
   flex-wrap: wrap;
-  gap: 4px 8px;
+  gap: 2px 10px;
   margin: 0;
+  padding-top: 2px;
+  min-width: 0;
 }
 .sub-total-line__k {
   font-size: 13px;
   color: var(--text-mid);
 }
 .sub-total-line__v {
-  font-size: 17px;
-  font-weight: 700;
+  font-size: 15px;
+  font-weight: 600;
   color: var(--text-hi);
   white-space: nowrap;
+  margin-left: auto;
 }
 .sub-total-line__rest {
   font-size: 12px;
   color: var(--text-mid);
+  white-space: nowrap;
 }
 
 /* What a funding row paid for. On these rows both chains are always the same, so
@@ -2487,4 +2514,13 @@ a.hstep__go:hover {
   font-size: 12px;
   font-weight: 600;
   color: var(--text-hi);
+}
+
+/* One sentence under the head, for a row whose state needs a word rather than a
+   colour: money that did not arrive and is coming back. Deliberately not the
+   block/error red, which would say the opposite of what the sentence says. */
+.hrow__note {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--text-mid);
 }

@@ -145,7 +145,14 @@ export function TransfersTab({ session, onChange }: { session: Session; onChange
               <HistoryRow.Head
                 lead={
                   <>
-                    <Copyable value={stored.transferId} display={`#${stored.transferId}`} />
+                    {/* Plain text, not a `Copyable`. That component shortens a long
+                        value and puts the whole of it on the clipboard, which is
+                        the right trade for an address or a hash and the wrong one
+                        for a two-character id: nothing is hidden, and clicking
+                        takes longer than reading it. The row already carries the
+                        transaction hash, which is the thing anyone actually pastes
+                        into an explorer. */}
+                    <span className="hrow__id mono">#{stored.transferId}</span>
                     <span className="hrow__arrow" aria-hidden>
                       &rarr;
                     </span>
