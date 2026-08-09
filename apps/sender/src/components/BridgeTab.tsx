@@ -20,6 +20,7 @@ import {
   maxGatewaySpendable,
   maxDepositable,
   gatewayShortfall,
+  isBoxFunding,
   type CctpChainName,
   type CctpStep,
   type GatewayChain,
@@ -27,6 +28,7 @@ import {
 } from '@ctrl-arcz/sdk';
 import { bridgeClients, getPublicClient, switchWalletChain } from '@ctrl-arcz/demo-kit';
 import { activeJobIds, forgetJob, readBridgeJob, type BridgeJob } from '../lib/bridgeJob.js';
+import { knownBoxes } from '../lib/useSubscriptions.js';
 import {
   BRIDGE_STEPS,
   GATEWAY_STEPS,
@@ -41,6 +43,7 @@ import {
   Card,
   ChainLogo,
   Field,
+  GatewayFundBox,
   InfoPopover,
   Input,
   SegmentedTabs,
@@ -52,7 +55,6 @@ import {
   short,
   Stepper,
   TxLink,
-  sanitizeAmount,
   useSubmitGuard,
   useT,
   useToast,
@@ -224,6 +226,8 @@ export function BridgeTab({ session }: { session: Session }) {
   const [to, setTo] = useState<CctpChainName>('Base_Sepolia');
   /** Set while the wallet is being asked to move to the source chain. */
   const [switching, setSwitching] = useState(false);
+  /** Which half of the bridge records the history is showing. */
+  const [histKind, setHistKind] = useState<'bridge' | 'subs'>('bridge');
   /**
    * Per chain, because that is what a transfer actually spends. Showing only the
    * total would tell someone with money on Arc that they can send from Base.
@@ -335,8 +339,6 @@ export function BridgeTab({ session }: { session: Session }) {
             ? DEPOSIT_GAS_RESERVE
             : 0n,
         );
-  /** More than the wallet holds is not a deposit, it is a revert after a signature. */
-  const depositTooBig = maxDeposit != null && depositValue > maxDeposit;
 
   /**
    * The balance a spend actually draws on, which differs by engine.
@@ -606,10 +608,33 @@ export function BridgeTab({ session }: { session: Session }) {
     }) as Step[];
   }, [job, selfBridge, activeSteps, t, engine]);
 
+  /**
+   * Which of these records paid for a subscription box.
+   *
+   * Told from the recipient rather than from a flag written when the record was
+   * made: the box address is already on the record and the set of boxes is already
+   * known, so there is nothing to store, nothing to migrate, and no way for a flag
+   * to disagree with the transfer it describes. It also classifies records made
+   * before subscriptions were funded this way at all.
+   *
+   * Read off the session cache rather than by scanning. An empty set means nothing
+   * has been recognised yet, and every record lands in the ordinary half, which is
+   * the honest answer when we do not know.
+   */
+  const { boxes: myBoxes, names: boxNames } = knownBoxes(session.address);
+
   /** Only the engine filter stays here; search, date and paging are the list's. */
   const filteredByEngine = useMemo(
-    () => bridges.filter((b) => histEngine === 'all' || (b.engine ?? 'cctp') === histEngine),
-    [bridges, histEngine],
+    () =>
+      bridges.filter(
+        (b) =>
+          (histEngine === 'all' || (b.engine ?? 'cctp') === histEngine) &&
+          // The two halves are one list filtered twice, and complementary on
+          // purpose: a record belongs to exactly one, so nothing shows up twice and
+          // nothing falls out of both.
+          isBoxFunding(b.recipient, myBoxes) === (histKind === 'subs'),
+      ),
+    [bridges, histEngine, histKind, myBoxes],
   );
 
   /**
@@ -1062,104 +1087,39 @@ export function BridgeTab({ session }: { session: Session }) {
           to scroll past a form they are not filling in.
         */}
         {engine === 'gateway' && (
-          <div className="gwfund" data-testid="gateway-deposit-box">
-            <div className="gwfund__head">
-              <span className="gwfund__title">{t('bridge.gwFundTitle')}</span>
-              <output className="gwfund__figure" data-testid="gateway-balance">
-                {gwOnSource == null ? '—' : `${usdc(gwOnSource)} USDC`}
-              </output>
-            </div>
-            {/*
-              The chain is chosen here, and it is the same choice the From card
-              makes. A deposit is only spendable on the chain it was made on, so two
-              independent pickers is exactly how a screen ends up showing a zero
-              balance on one chain beside a deposit box pointing at another.
-            */}
-            <div className="gwfund__pickrow">
-              <Select
-                value={from}
-                options={chainOptions}
-                onChange={(v) => selectSource(v as CctpChainName)}
-                ariaLabel={t('bridge.from')}
-                searchable
-                searchPlaceholder={t('bridge.searchChain')}
-                noResultsText={t('common.noResults')}
-              />
-              <button
-                type="button"
-                className="gwfund__wallet"
-                onClick={() => maxDeposit != null && setDepositAmount(usdc(maxDeposit))}
-                disabled={maxDeposit == null || maxDeposit <= 0n}
-                data-testid="gateway-wallet-balance"
-              >
-                <span className="gwfund__walletk">{t('bridge.gwWalletLabel')}</span>
-                <output className="gwfund__walletv">
-                  {!walletOnDepositChain
-                    ? '—'
-                    : walletOnChain == null
-                      ? '…'
-                      : `${usdc(walletOnChain)} USDC`}
-                </output>
-              </button>
-            </div>
-            <div className="gwfund__row">
-              <Input
-                value={depositAmount}
-                onChange={(e) => setDepositAmount(sanitizeAmount(e.target.value))}
-                inputMode="decimal"
-                placeholder="0.00"
-                invalid={depositTooBig}
-                aria-label={t('bridge.gwDepositCta')}
-                data-testid="gateway-deposit-amount"
-              />
-              <Button
-                disabled={depositValue <= 0n || depositTooBig || depositing || switching || !gwSource}
-                loading={depositing || switching}
-                data-testid="gateway-deposit"
-                onClick={() =>
-                  void (async () => {
-                    // Being on the wrong network is a step, not a refusal: move the
-                    // wallet, then deposit, rather than sending the user to find the
-                    // network switcher and come back.
-                    if (!walletOnDepositChain && gwSource) {
-                      setSwitching(true);
-                      try {
-                        await switchWalletChain(CCTP_CHAINS[gwSource].chainId, fromLabel);
-                      } catch (e) {
-                        toast.push(e instanceof Error ? e.message : String(e), 'error');
-                        return;
-                      } finally {
-                        setSwitching(false);
-                      }
-                    }
-                    await guard(deposit);
-                  })()
+          <GatewayFundBox
+            chain={from}
+            chainOptions={chainOptions}
+            onChainChange={(v) => selectSource(v as CctpChainName)}
+            balance={gwOnSource}
+            maxDeposit={maxDeposit}
+            amount={depositAmount}
+            onAmountChange={setDepositAmount}
+            walletOnChain={walletOnDepositChain}
+            pending={gwPending}
+            wait={t('bridge.gwDepositWait', { chain: fromLabel, wait: waitLabel(gwSource) })}
+            format={usdc}
+            busy={depositing || switching}
+            onDeposit={() =>
+              void (async () => {
+                // Being on the wrong network is a step, not a refusal: move the
+                // wallet, then deposit, rather than sending the user to find the
+                // network switcher and come back.
+                if (!walletOnDepositChain && gwSource) {
+                  setSwitching(true);
+                  try {
+                    await switchWalletChain(CCTP_CHAINS[gwSource].chainId, fromLabel);
+                  } catch (e) {
+                    toast.push(e instanceof Error ? e.message : String(e), 'error');
+                    return;
+                  } finally {
+                    setSwitching(false);
+                  }
                 }
-              >
-                {t('bridge.gwDepositCta')}
-              </Button>
-            </div>
-            {depositTooBig && (
-              <span className="gwfund__err" data-testid="gateway-deposit-error">
-                {t('bridge.gwDepositTooBig')}
-              </span>
-            )}
-            {!walletOnDepositChain && (
-              <span className="gwfund__note">
-                {t('bridge.gwWalletOtherChain').replace('{chain}', fromLabel)}
-              </span>
-            )}
-            {gwPending > 0n && (
-              <span className="gwfund__note" data-testid="gateway-pending">
-                {t('bridge.gwPending').replace('{amount}', usdc(gwPending))}
-              </span>
-            )}
-            <span className="gwfund__note">
-              {t('bridge.gwDepositWait')
-                .replace('{chain}', fromLabel)
-                .replace('{wait}', waitLabel(gwSource))}
-            </span>
-          </div>
+                await guard(deposit);
+              })()
+            }
+          />
         )}
 
         {/*
@@ -1418,7 +1378,23 @@ export function BridgeTab({ session }: { session: Session }) {
       </Card>
 
       <div style={{ marginTop: 16 }}>
-        <Card title={t('bridge.historyTitle')} data-testid="bridge-history">
+        <Card
+          title={t(histKind === 'subs' ? 'bridge.historySubsTitle' : 'bridge.historyTitle')}
+          data-testid="bridge-history"
+        >
+          {/* Two halves of one list. Written as a second component they would be two
+              copies of the filtering, paging and day grouping below, and the first
+              change to either is where they would start disagreeing. */}
+          <div className="bridge-engine" style={{ marginBottom: 12 }}>
+            <SegmentedTabs
+              tabs={[
+                { id: 'bridge', label: t('bridge.historyKindBridge') },
+                { id: 'subs', label: t('bridge.historyKindSubs') },
+              ]}
+              value={histKind}
+              onChange={(v) => setHistKind(v as 'bridge' | 'subs')}
+            />
+          </div>
           <HistoryList
             items={filteredByEngine}
             data-testid="bridge-history-list"
@@ -1451,6 +1427,14 @@ export function BridgeTab({ session }: { session: Session }) {
                       </span>
                       <ChainLogo id={b.to} size={18} />
                       {b.toLabel}
+                      {/* On a funding row the destination chain is always Arc and
+                          always the same, so what the row is actually about is
+                          which subscription it paid for. */}
+                      {histKind === 'subs' && b.recipient && (
+                        <span className="hrow__for">
+                          {boxNames.get(b.recipient.toLowerCase()) ?? short(b.recipient)}
+                        </span>
+                      )}
                     </>
                   }
                   amount={`${b.amount} USDC`}

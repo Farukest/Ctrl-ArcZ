@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
-  parseUnits,
+  erc20Abi,
   formatUnits,
   isAddress,
   createWalletClient,
@@ -16,7 +16,6 @@ import {
   arcTestnet,
   readAccount,
   submitPull,
-  fundEphemeral,
   sweepToVault,
   RemoteCoSigner,
   MODE_PULL,
@@ -25,14 +24,29 @@ import {
   newStealthOwner,
   computeStealthPrivateKey,
   percentOf,
+  usdc as fmtUsdc,
+  chainLabel,
+  assertBoxFundable,
+  fundBoxFromGateway,
+  awaitBoxFunded,
+  gatewayBalance,
+  quoteGatewaySpend,
+  maxDepositable,
+  depositToGateway,
+  GATEWAY_CHAIN_NAMES,
+  DEPOSIT_CONFIRMATION_SECONDS,
+  CCTP_CHAINS,
+  type GatewayChain,
 } from '@ctrl-arcz/sdk';
-import { getPublicClient, type Session } from '@ctrl-arcz/demo-kit';
+import { bridgeClients, getPublicClient, switchWalletChain, type Session } from '@ctrl-arcz/demo-kit';
 import { getStealthKeys } from '../lib/stealthKeys.js';
 import { relayCreateBox, relayStealthGas } from '../lib/relay.js';
 import {
   AmountField,
   Button,
   Card,
+  ChainLogo,
+  GatewayFundBox,
   HistoryList,
   HistoryRow,
   Address as AddressChip,
@@ -46,6 +60,7 @@ import {
   useToast,
   short,
   humanDuration,
+  parseAmount,
   type Step,
 } from '@ctrl-arcz/demo-kit/ui';
 import { useSubscriptions, type Subscription, type SubStatus } from '../lib/useSubscriptions.js';
@@ -121,6 +136,22 @@ export function SubscriptionsTab({
   const [frequency, setFrequency] = useState<FrequencyKey>('minute');
   const [charges, setCharges] = useState('5');
   const [phase, setPhase] = useState<CreatePhase>('idle');
+  /**
+   * Which chain's Gateway balance pays for the box.
+   *
+   * Not "the balance": Circle reads one figure across chains but spends it per
+   * chain, and an intent carries a single source domain. Deciding on the total is
+   * how a form lets someone create a subscription against money the intent cannot
+   * reach, which Circle then refuses after it has been signed.
+   */
+  const [gwSource, setGwSource] = useState<GatewayChain>('Arc_Testnet');
+  const [gwOnSource, setGwOnSource] = useState<bigint | null>(null);
+  const [gwCeiling, setGwCeiling] = useState<bigint | null>(null);
+  const [gwPending] = useState<bigint>(0n);
+  const [walletOnGwChain, setWalletOnGwChain] = useState<bigint | null>(null);
+  const [depositAmount, setDepositAmount] = useState('');
+  const [depositing, setDepositing] = useState(false);
+  const [switching, setSwitching] = useState(false);
   const [veto, setVeto] = useState<string | null>(null);
 
   // List controls
@@ -161,6 +192,16 @@ export function SubscriptionsTab({
    */
   const capNum = perPullNum > 0 && chargeCount > 0 ? perPullNum * chargeCount : 0;
   /**
+   * The budget in subunits, derived once.
+   *
+   * Charge times count, at the contract's six decimals. It used to be computed
+   * inside create, where the form could not see it -- and the form now has to know
+   * it to answer whether the Gateway balance covers it. Computing it in floats and
+   * formatting back would round a budget the user never chose.
+   */
+  const perPullAmt = parseAmount(perPull) ?? 0n;
+  const capAmt = chargeCount > 0 ? perPullAmt * BigInt(chargeCount) : 0n;
+  /**
    * Expiry covers every charge with one interval to spare. The first is allowed
    * immediately and the last falls at `(count - 1) x interval`, so a full interval
    * of slack means a late final pull does not fall off the end.
@@ -192,20 +233,145 @@ export function SubscriptionsTab({
    */
   const gate = useRecipientGate(session, target);
 
+  /**
+   * The Gateway balance on the chosen source chain, and what a spend of this size
+   * would cost, re-read whenever that chain changes.
+   *
+   * The wallet balance is read only when the wallet is actually on that chain:
+   * every chain but Arc is reachable only through the wallet's own provider, so
+   * asking Base Sepolia's USDC while the wallet sits on Arc answers about Arc.
+   */
+  useEffect(() => {
+    let live = true;
+    const read = async () => {
+      try {
+        const [bal, quote] = await Promise.all([
+          gatewayBalance({ depositor: session.address as Address }),
+          quoteGatewaySpend({
+            from: gwSource,
+            to: 'Arc_Testnet',
+            amount: 1_000_000n,
+            depositor: session.address as Address,
+          }),
+        ]);
+        if (!live) return;
+        setGwOnSource(bal.byChain[gwSource] ?? 0n);
+        setGwCeiling(quote.maxFee);
+      } catch {
+        // Keep the last figures rather than blanking the form on one failed poll.
+      }
+      const chain = CCTP_CHAINS[gwSource];
+      if (session.chainId !== chain.chainId) {
+        if (live) setWalletOnGwChain(null);
+      } else {
+        try {
+          const held = await getPublicClient().readContract({
+            address: chain.usdc as Address,
+            abi: erc20Abi,
+            functionName: 'balanceOf',
+            args: [session.address as Address],
+          });
+          if (live) setWalletOnGwChain(held as bigint);
+        } catch {
+          if (live) setWalletOnGwChain(null);
+        }
+      }
+    };
+    void read();
+    const timer = setInterval(() => void read(), 15000);
+    return () => {
+      live = false;
+      clearInterval(timer);
+    };
+  }, [session.address, session.chainId, gwSource]);
+
+  /**
+   * Whether this subscription can be paid for out of the chosen chain's balance.
+   *
+   * The whole budget goes in at once, plus Circle's fee ceiling, and the answer is
+   * about that one chain. There is no lowering the amount, no offering another
+   * chain and no falling back to a wallet transfer: the wallet transfer is the
+   * thing this change removed, and a second route would be a second way to leave
+   * that line on chain.
+   */
+  const gwNeeded = gwCeiling == null ? null : capAmt + gwCeiling;
+  const gwShort =
+    gwOnSource != null && gwNeeded != null && capAmt > 0n && gwOnSource < gwNeeded;
+  const gwMissing = gwShort && gwOnSource != null && gwNeeded != null ? gwNeeded - gwOnSource : 0n;
+  const gwChainOptions = GATEWAY_CHAIN_NAMES.map((id) => ({
+    value: id,
+    label: chainLabel(id),
+    text: chainLabel(id),
+    icon: <ChainLogo id={id} size={20} />,
+  }));
+  const gwWaitSecs = DEPOSIT_CONFIRMATION_SECONDS[gwSource];
+  const gwWaitLabel = gwWaitSecs < 60 ? `${gwWaitSecs}s` : `${Math.round(gwWaitSecs / 60)}m`;
+
+  /**
+   * Move wallet USDC into the Gateway balance, switching the wallet's network first
+   * if it is elsewhere. Being on the wrong chain is a step, not a refusal.
+   */
+  async function depositToGw() {
+    const n = Number(depositAmount);
+    const amount = Number.isFinite(n) && n > 0 ? BigInt(Math.round(n * 1e6)) : 0n;
+    if (amount <= 0n) return;
+    const chain = CCTP_CHAINS[gwSource];
+    if (session.chainId !== chain.chainId) {
+      setSwitching(true);
+      try {
+        await switchWalletChain(chain.chainId, chainLabel(gwSource));
+      } catch (e) {
+        toast.push(e instanceof Error ? e.message : String(e), 'error');
+        return;
+      } finally {
+        setSwitching(false);
+      }
+    }
+    setDepositing(true);
+    try {
+      await depositToGateway(bridgeClients(chain.chainId, session.address as Address), {
+        chain: gwSource,
+        amount,
+      });
+      setDepositAmount('');
+      toast.push(t('bridge.deposited', { amount: fmtUsdc(amount), wait: gwWaitLabel }), 'success');
+    } catch (e) {
+      toast.push(e instanceof Error ? e.message : String(e), 'error');
+    } finally {
+      setDepositing(false);
+    }
+  }
+
+  /** A deposit pays its own gas where gas is USDC, so the whole balance is never it. */
+  const maxDeposit =
+    walletOnGwChain == null
+      ? null
+      : maxDepositable(
+          walletOnGwChain,
+          (CCTP_CHAINS[gwSource] as { gasToken?: string }).gasToken === 'usdc' ? 10_000n : 0n,
+        );
+
   const canCreate =
     validTarget &&
     perPullNum > 0 &&
     countError === null &&
     gate.armed &&
+    // The chosen chain's Gateway balance covers the whole budget and the fee, or
+    // this cannot be created. Not a warning next to a live button.
+    !gwShort &&
+    gwOnSource != null &&
     (phase === 'idle' || phase === 'done' || phase === 'vetoed');
 
   const createSteps: Step[] = useMemo(() => {
-    const order: CreatePhase[] = ['machine', 'creating', 'funding', 'listing'];
+    const order: CreatePhase[] = ['machine', 'creating', 'listing', 'funding'];
     const labels = [
       t('sub.step.machine'),
       t('sub.step.create'),
-      t('sub.step.fund'),
       t('sub.step.listing'),
+      // Named for what is actually happening. "Funding budget" described a
+      // transaction that finished when it was mined; this one is Circle minting,
+      // and it is answered by the box's balance rather than by a receipt.
+      t('sub.step.fundGw'),
     ];
     const active = order.indexOf(phase);
     return labels.map((l, i) => ({
@@ -228,11 +394,6 @@ export function SubscriptionsTab({
     const clients = session.clients;
     const owner = session.address as Address;
     const to = target as Address;
-    const perPullAmt = parseUnits(perPull, 6);
-    // Derived, not typed: charge times count, to the same 6 decimals the contract
-    // uses. Computing it in floats and formatting back would round a budget the
-    // user never chose.
-    const capAmt = perPullAmt * BigInt(chargeCount);
     try {
       const cosignerAddress = (await fetch('/api/cosign').then((r) => r.json())).address as Address;
       const cosigner = new RemoteCoSigner('/api/cosign', cosignerAddress, undefined, {
@@ -288,33 +449,59 @@ export function SubscriptionsTab({
         label: label.trim(),
       });
 
-      // 4. Fund the box with the total budget. The only transaction this wallet
-      //    signs in the whole flow, and the only step that moves the user's money.
+      // 4. Written down before the money moves.
       //
-      //    Through the SDK rather than a raw transfer, because `fundEphemeral` reads
-      //    the deployed policy back off chain and refuses to pay a box whose target,
-      //    co-signer, vault, caps, interval, expiry or mode is not the one we asked
-      //    for. The relayer deploys this box, so that check is the difference between
-      //    trusting it and verifying it.
-      setPhase('funding');
-      await fundEphemeral(clients, account, capAmt, policy);
-
-      // We made this box; there is nothing to discover about it. Registering and
-      // rendering it here is what stops the list waiting on an RPC log index.
-      // No local label is written: the name went out with the announcement.
-      // Land on Active, where the thing just created actually is. This used to
-      // switch to All, which drops a brand-new subscription into a list led by
-      // every cancelled box the wallet has ever had.
+      //    The box address came back from the factory and the ephemeral key is in
+      //    hand, so there is nothing here to rediscover. It used to be recorded
+      //    after funding, which was harmless while funding was one mined
+      //    transaction and is not now: Circle mints minutes later, and a tab closed
+      //    during that wait would leave the browser with no note of a box it had
+      //    just paid for -- and on this route there is no transfer from the wallet
+      //    to find it by either.
       setStatusFilter('active');
       setSort('newest');
       setPhase('listing');
       await track(account, stealth.ephemeralPubKey, label.trim());
 
-      // Only now is the row on screen, so only now is the step list finished.
-      // Marking it done before this left the user watching a completed progress
-      // indicator above a list that did not yet contain what it had just made.
+      // 5. Check the box before signing, not while paying.
+      //
+      //    `fundEphemeral` used to read the deployed policy back and refuse to pay a
+      //    box whose target, co-signer, vault, caps, interval, expiry or mode was not
+      //    the one we asked for, which is the difference between trusting the relayer
+      //    and verifying it. That check has to happen earlier now: a wallet transfer
+      //    that fails it is simply never sent, but a Gateway intent cannot be
+      //    recalled once Circle has accepted it, so by the time a payment could fail
+      //    the money is already committed.
+      setPhase('funding');
+      await assertBoxFundable(getPublicClient(), account, policy);
+
+      // 6. Circle mints into the box out of the payer's Gateway balance.
+      //
+      //    The wallet used to pay the box directly, and that transfer was the one
+      //    thing on chain that undid the stealth address the box had been given:
+      //    both ends of an ERC-20 transfer are indexed, so anyone could intersect a
+      //    wallet's outgoing transfers with the announcer's metadata and recover its
+      //    boxes with no viewing key. Measured on a real wallet, eight out of eight.
+      //    What Arc sees now is a mint from Circle's minter to the box.
+      //
+      //    There is no fallback to the wallet transfer. A second route would be a
+      //    second way to leave that line on chain, and it is the one that gets taken
+      //    when something else has already gone wrong.
+      await fundBoxFromGateway(clients, {
+        account,
+        amount: capAmt,
+        from: gwSource,
+      });
+
+      // 7. Funded is when the money is in the box, not when the intent was signed.
+      //
+      //    Those are seconds to minutes apart on this route. A wait that runs out is
+      //    "on its way", never "failed": the transfer is Circle's to finish and the
+      //    box will hold the money without this tab being open.
+      const landed = await awaitBoxFunded(getPublicClient(), account, capAmt, USDC);
+
       setPhase('done');
-      toast.push(t('sub.createdToast'), 'success');
+      toast.push(t(landed ? 'sub.createdToast' : 'sub.fundingOnWay'), landed ? 'success' : 'info');
       setLbl('');
       setTarget('');
       // The slow scans, after the user already has what they asked for.
@@ -481,6 +668,58 @@ export function SubscriptionsTab({
               the full width, and as a grid child it was squeezed into one column
               beside an empty cell. */}
           <RiskGate gate={gate} overridable={false} recoverable={false} data-testid="sub-risk" />
+
+          {/*
+            The Gateway balance this subscription is paid out of, and the way to top
+            it up without leaving the form.
+
+            The same component the bridge screen uses. A box is funded by Circle
+            minting into it now, so the balance that matters here is not the
+            wallet's, and someone who is short should be able to fix that here
+            rather than be sent to another screen and back.
+          */}
+          <GatewayFundBox
+            chain={gwSource}
+            chainOptions={gwChainOptions}
+            onChainChange={(v) => {
+              setGwSource(v as GatewayChain);
+              // Everything read for the old chain describes the old chain.
+              setGwOnSource(null);
+              setGwCeiling(null);
+              setWalletOnGwChain(null);
+              setDepositAmount('');
+            }}
+            balance={gwOnSource}
+            maxDeposit={maxDeposit}
+            amount={depositAmount}
+            onAmountChange={setDepositAmount}
+            walletOnChain={session.chainId === CCTP_CHAINS[gwSource].chainId}
+            pending={gwPending}
+            wait={t('bridge.gwDepositWait', {
+              chain: chainLabel(gwSource),
+              wait: gwWaitLabel,
+            })}
+            format={fmtUsdc}
+            busy={depositing || switching}
+            onDeposit={() => void guard(depositToGw)}
+          />
+
+          {/*
+            Short, and that is the end of it.
+
+            No lowered amount, no other chain, no falling back to paying the box
+            from the wallet. That transfer is the line on chain this whole change
+            exists to remove, and a fallback is the route that gets taken exactly
+            when something has already gone wrong.
+          */}
+          {gwShort && (
+            <p className="gwfund__err" data-testid="sub-gw-short">
+              {t('sub.gwShort', {
+                amount: fmtUsdc(gwMissing),
+                chain: chainLabel(gwSource),
+              })}
+            </p>
+          )}
           {/*
             The amount gets the whole row.
 

@@ -2476,3 +2476,15 @@ a.hstep__go:hover {
   font-size: 12px;
   color: var(--text-mid);
 }
+
+/* What a funding row paid for. On these rows both chains are always the same, so
+   the name is the only part of the lead that says anything. */
+.hrow__for {
+  margin-left: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-hi);
+}

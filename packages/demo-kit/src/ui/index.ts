@@ -6,6 +6,7 @@ export * from './icons.js';
 export { RiskCard } from './RiskCard.js';
 export { ChainLogo } from './ChainLogo.js';
 export { AmountField, type AmountFieldProps } from './AmountField.js';
+export { GatewayFundBox, type GatewayFundBoxProps } from './GatewayFundBox.js';
 export {
   sanitizeAmount,
   parseAmount,

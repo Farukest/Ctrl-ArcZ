@@ -166,10 +166,19 @@ export async function createEphemeral(
   return { account, txHash };
 }
 
-/** Confirm the deployed account carries exactly the intended policy. Throws if the
- *  account is missing or any identity-bearing field differs — the guard the caller
- *  relies on before funding. */
-async function assertDeployedPolicy(
+/**
+ * Confirm the deployed account carries exactly the intended policy. Throws if the
+ * account is missing or any identity-bearing field differs -- the guard the caller
+ * relies on before funding.
+ *
+ * Exported because the Gateway funding route needs the same guard and must run it
+ * at a different moment. A wallet transfer that fails this check simply never
+ * leaves; a Gateway intent cannot be recalled once Circle has accepted it, so that
+ * caller has to ask before it signs rather than inside the payment. One rule, two
+ * call sites, because two copies of it would be two chances to disagree about what
+ * counts as the right box.
+ */
+export async function assertDeployedPolicy(
   publicClient: PublicClient,
   account: Address,
   policy: EphemeralPolicy,

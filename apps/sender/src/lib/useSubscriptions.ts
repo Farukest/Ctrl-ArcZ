@@ -69,6 +69,36 @@ const scanned = new Map<
   { cursor: bigint; boxes: Array<{ box: Address; ephemeralPubKey: Hex; label: string }> }
 >();
 
+/**
+ * The boxes this wallet is known to own, lowercased, and the names they carry.
+ *
+ * Read straight off the session cache rather than triggering a scan. The bridge
+ * screen needs this to tell subscription funding apart from an ordinary transfer,
+ * and it must not pay for a discovery pass to answer a display question: an empty
+ * set simply means nothing has been recognised yet this session, and the rows land
+ * in the ordinary half, which is the honest answer when we do not know.
+ *
+ * A box created in this session is in here immediately, because `track` writes it
+ * before the money moves.
+ */
+export function knownBoxes(address: string | undefined): {
+  boxes: Set<string>;
+  names: Map<string, string>;
+} {
+  const empty = { boxes: new Set<string>(), names: new Map<string, string>() };
+  if (!address) return empty;
+  const seen = scanned.get(address.toLowerCase());
+  if (!seen) return empty;
+  const boxes = new Set<string>();
+  const names = new Map<string, string>();
+  for (const b of seen.boxes) {
+    const key = b.box.toLowerCase();
+    boxes.add(key);
+    if (b.label) names.set(key, b.label);
+  }
+  return { boxes, names };
+}
+
 export type SubStatus = 'active' | 'completed' | 'cancelled' | 'expired';
 
 export interface Subscription {

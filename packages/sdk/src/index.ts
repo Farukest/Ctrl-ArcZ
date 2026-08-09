@@ -206,6 +206,13 @@ export {
   type IndexedAnnouncement,
 } from './shield/announcementIndex.js';
 export {
+  assertBoxFundable,
+  fundBoxFromGateway,
+  awaitBoxFunded,
+  isBoxFunding,
+  type FundBoxParams,
+} from './shield/boxFunding.js';
+export {
   explorerAnnouncements,
   explorerAccountsCreated,
   explorerLogs,
