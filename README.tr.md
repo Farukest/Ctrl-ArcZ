@@ -2,7 +2,7 @@
 
 **Yanlış gönderimi reddet. Doğrusunu kilitle. Kimse almazsa parayı geri ver.**
 
-[![Demoyu izle](https://img.shields.io/badge/Demoyu_izle-FF0000?style=flat-square&logo=youtube&logoColor=white)](https://www.youtube.com/watch?v=fcgyqBUbkcg) [![Canlı uygulama](https://img.shields.io/badge/Canl%C4%B1-ctrlarcz.xyz-4b9fff?style=flat-square)](https://ctrlarcz.xyz) [![Dokümanlar](https://img.shields.io/badge/Dok%C3%BCmanlar-docs.ctrlarcz.xyz-8b93a1?style=flat-square)](https://docs.ctrlarcz.xyz) [![Arc Testnet](https://img.shields.io/badge/Arc_Testnet-5042002-2fbf71?style=flat-square)](https://testnet.arcscan.app/address/0x8dAb7148cdc31DAcad6d7e12161AA3DEDb572Dca) [![Testler](https://img.shields.io/badge/test-428_ge%C3%A7iyor-2fbf71?style=flat-square)](#teknoloji) [![Emanet](https://img.shields.io/badge/emanet-yok-8b93a1?style=flat-square)](#g%C3%BCvenlik)
+[![Demoyu izle](https://img.shields.io/badge/Demoyu_izle-FF0000?style=flat-square&logo=youtube&logoColor=white)](https://www.youtube.com/watch?v=fcgyqBUbkcg) [![Canlı uygulama](https://img.shields.io/badge/Canl%C4%B1-ctrlarcz.xyz-4b9fff?style=flat-square)](https://ctrlarcz.xyz) [![Android beta](https://img.shields.io/badge/Android-beta-3ddc84?style=flat-square&logo=googleplay&logoColor=white)](https://play.google.com/apps/testing/com.xyz.ctrlarcz) [![Dokümanlar](https://img.shields.io/badge/Dok%C3%BCmanlar-docs.ctrlarcz.xyz-8b93a1?style=flat-square)](https://docs.ctrlarcz.xyz) [![Arc Testnet](https://img.shields.io/badge/Arc_Testnet-5042002-2fbf71?style=flat-square)](https://testnet.arcscan.app/address/0x8dAb7148cdc31DAcad6d7e12161AA3DEDb572Dca) [![Testler](https://img.shields.io/badge/test-528_ge%C3%A7iyor-2fbf71?style=flat-square)](#teknoloji) [![Emanet](https://img.shields.io/badge/emanet-yok-8b93a1?style=flat-square)](#g%C3%BCvenlik)
 
 Arc üzerinde korumalı USDC transferi: bir ödemeyi imzalanmadan önce tarayan, alıcı kendisine ait olduğunu kanıtlayana kadar kontratta tutan ve hiç talep edilmezse gönderene iade eden bir SDK ve tek bir kontrat.
 
@@ -37,7 +37,7 @@ Arc üzerinde korumalı USDC transferi: bir ödemeyi imzalanmadan önce tarayan,
 | **Koruma**  | Gönderim öncesi risk firewall'u, kodla claim, gönderen iptali, süre dolunca otomatik iade       |
 | **Custody** | Yok. Para ya kullanıcıda ya kontratta. Owner yok, pause yok, upgrade yolu yok                   |
 | **Ürün**    | Herhangi bir cüzdanın, borsanın veya ödeme uygulamasının gömdüğü bir SDK. Yeni bir cüzdan değil |
-| **Testler** | Toplam 515: 99 Foundry, 333 SDK, 50 demo-kit, 33 keeper, artı canlı testnet koşuları |
+| **Testler** | Toplam 528: 99 Foundry, 346 SDK, 50 demo-kit, 33 keeper, artı canlı testnet koşuları |
 
 ## Problem
 
@@ -145,7 +145,7 @@ Yanılmanın bedeli burada, tarayıcının "yine de devam et"indeki gibi sınır
 
 **Parayı hareket ettiren her yol bunu çalıştırır.** Gönderim, başkasına köprüleme, gizli ödeme ve abonelik yetkilendirmesi; dördü de birinin elle yazdığı bir adresi alır, dolayısıyla dördü de tek bir modülden, tek bir politikaya karşı aynı kontrolü çalıştırır ve cevap gelmeden hiçbiri butonunu kurmaz. Son cümle göründüğünden daha katı: henüz oluşmakta olan bir karar, karar değildir; tarama sürerken butonunu kuran bir ekran, o cevabın durduracağı ödemeyi gönderebilir. Kararı hepsi için aynı kural verdiği için, yeni bir gönderme yolu sessizce daha zayıf bir kapıyla gelemez.
 
-<p><img src="docs/screens/15-firewall-everywhere.png" alt="Abonelik formunda satıcı adresini reddeden firewall" width="420"></p>
+<p><img src="docs/screens/15-firewall-everywhere.png" alt="Abonelik formunda satıcı adresini reddeden firewall" width="520"></p>
 
 Bir abonelik, bir adrese yapılan tek bir ödeme değil; fonlanmış bir kutudan belirli aralıklarla çekim yapma iznidir. Yani adres burada her yerden daha çok önemli. Karar siz yazarken alanın altına düşer ve oluştur butonu hiç kurulmaz.
 
@@ -240,7 +240,7 @@ Mutabakat anında olur, çünkü Arc'ta saniye altı deterministik kesinlik var.
 
 Demodaki poisoning sekmesi saldırının tamamını tek tıkla yapar: bu cüzdanın güvendiği bir adresin **gerçek** bir ikizini üretir (ilk ve son dört hex karakter aynı, ortası rastgele), sonra firewall'u ona karşı çalıştırır.
 
-<p><img src="docs/screens/05-poisoning-scenario.png" alt="Üretilen benzer adres, firewall tarafından bloklandı" width="330"></p>
+<p><img src="docs/screens/05-poisoning-scenario.png" alt="Üretilen benzer adres, firewall tarafından bloklandı" width="560"></p>
 
 İki adres de herhangi bir cüzdanda `0x64Ea…Fe3F` görünür. Firewall ikincisini bloklar ve gönderim hiç gerçekleşmez.
 
@@ -248,7 +248,7 @@ Demodaki poisoning sekmesi saldırının tamamını tek tıkla yapar: bu cüzdan
 
 `cancel`, claim gerçekleşmeden önce her an gönderene açıktır: pencere içinde ya da dışında, hatta yanlış denemelerle donmuş bir transferde bile. Talep edilmemiş para gönderenindir, dolayısıyla geri almanın bir son tarihi yoktur.
 
-<p><img src="docs/screens/07-active-transfers.png" alt="Aktif transferler, claim kodu ve iptal butonu" width="330"></p>
+<p><img src="docs/screens/07-active-transfers.png" alt="Aktif transferler, claim kodu ve iptal butonu" width="480"></p>
 
 ### Senaryo D: alıcı hiç claim etmiyor
 
@@ -476,7 +476,7 @@ Görünmez kalıyorsunuz (satıcı kutuyu görüyor, cüzdanınızı değil), s�
 
 Ortak imzacı bir kapı bekçisi, kasadar değil. Parayı eve getirmek (`sweepToVault` ya da tarih geçtiyse `sweepExpired`) yalnızca sizin anahtarınızı ister, ortak imzacınınkini asla; yani The Machine çökerse ya da düşman olursa bir çekimi geciktirebilir ama paranızı tutamaz. Rolü canlılık, custody değil: en kötü ihtimalle süpürürsünüz ve abonelik biter. Saat ya da zaman dilimi oyunu da yok, çünkü zincirdeki tavanlar (çekim başına ve toplam) zarardan bağımsız olarak zamanı sınırlıyor ve kontrat düz bir UTC blok zaman damgası okuyor.
 
-**Abonelik oluşturun.** İsim verin, bir satıcıya yöneltin, sonra insanın kafasındaki iki şeyi söyleyin: her çekim ne kadar ve kaç tane. Bütçe ve bitiş tarihi sorulmuyor, gösteriliyor; çünkü onlar cevap.
+**Abonelik oluşturun.** İsim verin, bir satıcıya yöneltin, sonra insanın kafasındaki iki şeyi söyleyin: her çekim ne kadar ve kaç tane. Bütçe sorulmuyor, gösteriliyor; çünkü o bir cevap. Yanında Circle'ın kutuyu fonlamak için aldığı ücret ve ikisinin toplamı da duruyor. Abonelik yetkilendirmek bir ödemedir ve uygulamada cüzdandan ne çıkacağını söylemeyen son ödeme ekranı burasıydı.
 
 ![Abonelik oluştur](./docs/screenshots/subscriptions-create.png)
 

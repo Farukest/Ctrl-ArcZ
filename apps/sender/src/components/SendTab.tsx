@@ -10,6 +10,8 @@ import {
   registerConfig,
   RiskBlockedError,
   sendProtected,
+  spendableAfterGas,
+  usdc,
 } from '@ctrl-arcz/sdk';
 import type { Session } from '@ctrl-arcz/demo-kit';
 import {
@@ -17,6 +19,7 @@ import {
   Button,
   Card,
   CopyButton,
+  CostBlock,
   Field,
   Input,
   Select,
@@ -34,6 +37,7 @@ import { useRecipientGate } from '../lib/useRecipientGate.js';
 import { RiskGate } from './RiskGate.js';
 import { craftLookalikeOfKnownRecipient } from '../lib/poisoning.js';
 import { clearVerifiedRecipients } from '../lib/verifiedRecipients.js';
+import { useGasReserve } from '../lib/useGasReserve.js';
 
 /**
  * The SDK's 10 USDC default for `minProtectedAmount` is priced for a chain where
@@ -76,6 +80,15 @@ export function SendTab({
   const [crafting, setCrafting] = useState(false);
   const [poisonOf, setPoisonOf] = useState<string | null>(null);
   const [sent, setSent] = useState<SentInfo | null>(null);
+  /**
+   * Gas comes out of the same balance as the transfer, so what can be sent and what
+   * is held are two figures. `balance` stays the balance -- it is labelled as one --
+   * and the reserve is taken off the Max and named in the cost block, so the gap
+   * between the two is stated rather than left to be noticed.
+   */
+  const reserve = useGasReserve();
+  const spendable =
+    balance == null || reserve == null ? null : spendableAfterGas(balance, reserve);
 
   const isSelf = isAddress(to) && to.toLowerCase() === session.address.toLowerCase();
   const addrValid = to === '' || (isAddress(to) && !isSelf);
@@ -261,7 +274,14 @@ export function SendTab({
           invalid={!addrValid}
           placeholder="0x…"
           value={to}
-          onChange={(e) => setTo(e.target.value.trim())}
+          // The crafted-lookalike note belongs to the address the demo put in the
+          // field, not to the field. Typing over it left "Crafted to imitate ..."
+          // sitting under an address nobody crafted, which is a claim about the
+          // recipient and it was false.
+          onChange={(e) => {
+            setTo(e.target.value.trim());
+            setPoisonOf(null);
+          }}
           data-testid="recipient-input"
           spellCheck={false}
           autoComplete="off"
@@ -308,12 +328,32 @@ export function SendTab({
           onChange={setAmount}
           chain="Arc_Testnet"
           balance={balance}
-          onMax={(f) => balance != null && setAmount(percentOf(balance, f))}
+          onMax={(f) => spendable != null && setAmount(percentOf(spendable, f))}
           {...(mode === 'plain' ? { hint: t('send.plainHint') } : {})}
           boxed
           data-testid="amount"
         />
       </div>
+
+      {/* What leaves the wallet, which on Arc is never just the amount. The fee is
+          a ceiling: the chain charges what it charges and the rest is never spent. */}
+      {reserve != null && (
+        <CostBlock
+          testId="send-cost"
+          lines={[
+            { label: t('cost.amount'), value: `${usdc(amountValue)} USDC`, testId: 'send-cost-amount' },
+            { label: t('cost.networkMax'), value: `${usdc(reserve)} USDC` },
+          ]}
+          // Always, once the reserve is known. The amount is typed on this same
+          // screen, and a block whose bottom line comes and goes reads as one that
+          // failed to load.
+          total={{
+            label: t('cost.youPay'),
+            value: `${usdc(amountValue + reserve)} USDC`,
+            testId: 'send-youpay',
+          }}
+        />
+      )}
 
       <div style={{ marginTop: 16 }}>
         <Field label={t('send.window')}>

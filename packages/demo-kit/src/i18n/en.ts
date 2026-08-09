@@ -6,6 +6,14 @@
  * Interpolation uses `{name}` placeholders, filled via `t('key', { name })`.
  */
 export const en = {
+  // What a payment costs, in one vocabulary for every screen that moves money.
+  // "(max)" is not hedging: both figures are ceilings the transaction is allowed to
+  // reach, and the chain and Circle each charge what they charge out of it.
+  'cost.amount': 'Amount',
+  'cost.networkMax': 'Network fee (max)',
+  'cost.circleFee': 'Circle fee',
+  'cost.youPay': 'You pay',
+
   'common.appName': 'Ctrl+ArcZ',
   'common.connect': 'Connect wallet',
   'common.connecting': 'Connecting...',
@@ -101,14 +109,9 @@ export const en = {
   'sub.freq.weekly': 'Weekly',
   'sub.freq.monthly': 'Monthly',
   'sub.freq.yearly': 'Yearly',
-  'sub.total': 'Total',
-  'sub.runsFor': 'over {duration}',
-  'sub.dur.minute': '{n} min',
-  'sub.dur.hour': '{n} h',
-  'sub.dur.day': '{n} days',
-  'sub.dur.week': '{n} weeks',
-  'sub.dur.month': '{n} months',
-  'sub.dur.year': '{n} years',
+  // The budget, in the words of the schedule that produces it. The frequency is
+  // interpolated lowercased, so "Monthly" reads as "Your monthly payment total".
+  'sub.paymentTotal': 'Your {freq} payment total',
   'sub.countTooLow': 'At least one {unit}',
   'sub.countTooHigh': 'At most {max} {unit}',
   'sub.gwShort': 'Short {amount} USDC of Gateway balance on {chain}. Top it up above to create this subscription.',
@@ -271,8 +274,6 @@ export const en = {
   'bridge.youReceive': 'You receive',
   'bridge.balance': 'Balance',
   'bridge.gwBalanceLabel': 'Gateway balance',
-  'bridge.feeLabel': 'Fee',
-  'bridge.youPay': 'You pay',
   'bridge.feeOverAmount':
     'The fee is larger than the transfer. Another route, or one bigger transfer, costs less.',
   'bridge.refusal.gwNoBalanceHere':
@@ -470,7 +471,11 @@ export const en = {
   'claim.matchedExpired':
     'Transfer #{id} matches, but its claim window closed. The sender gets it back.',
   'claim.claimOwnGas': 'Claim (my own gas)',
-  'claim.claimGasless': 'Gasless (relayer pays)',
+  // Not "relayer pays": with Circle Gas Station configured the paymaster covers
+  // the gas and the relayer's own balance does not move, which is the deployed
+  // setup and what the line below already says. The button states the part that
+  // is true either way, which is the part the reader is choosing between.
+  'claim.claimGasless': 'Claim without gas',
   'claim.gasless1': 'Circle Gas Station sponsors the gas, so you pay nothing.',
   'claim.gasless2': 'You receive the USDC even with a completely empty wallet.',
   'claim.claiming': 'Claiming...',

@@ -1409,18 +1409,26 @@
 }
 
 /* Code reveal ------------------------------------------------------------- */
+/* The claim secret, on one line.
+   Nineteen characters at 1.75rem with a third of an em between them do not fit
+   the card, so the code broke across two lines with the dash left hanging. It is
+   the one string the whole design asks a person to read out or copy correctly,
+   and a code split mid-group invites reading it wrong. The size now comes from
+   the space available rather than from a fixed number, and wrapping is refused
+   outright so it can never split again. */
 .code-reveal {
   font-family: var(--font-mono);
-  font-size: 1.75rem;
+  font-size: clamp(1.05rem, 5.1vw, 1.6rem);
   font-weight: 600;
-  letter-spacing: 0.32em;
+  letter-spacing: 0.18em;
   text-align: center;
-  padding: var(--sp-5);
+  white-space: nowrap;
+  padding: var(--sp-5) var(--sp-3);
   background: var(--bg-sunken);
   border: 1px solid var(--border-strong);
   border-radius: var(--r-md);
   color: var(--text-hi);
-  text-indent: 0.32em;
+  text-indent: 0.18em;
 }
 
 /* Stepper ----------------------------------------------------------------- */
@@ -1808,11 +1816,9 @@
     transform: translateX(50%);
     width: calc(100vw - 2 * var(--sp-3));
   }
-  .code-reveal {
-    font-size: 1.375rem;
-    letter-spacing: 0.24em;
-    text-indent: 0.24em;
-  }
+  /* No `.code-reveal` override here any more: its size is a clamp against the
+     viewport, so the narrow case is already the one it was written for, and a
+     fixed size at this breakpoint only put the wrapping back. */
 }
 
 /* Private Pay — The Machine veto + private success */
@@ -2296,9 +2302,13 @@ a.hstep__go:hover {
 }
 
 /* What it costs, raised off the background: at the weight of the rest of the
-   screen, the number that decides whether a route is worth taking read as a
-   footnote under the button. */
-.feecard {
+   screen, the number that decides whether something is worth doing read as a
+   footnote under the button.
+
+   Named for the job rather than for the bridge, which had the only copy. Every
+   screen that moves money owes the same answer, and on Arc, where gas is USDC out
+   of the same balance as the payment, the amount alone was never that answer. */
+.cost {
   margin-top: 16px;
   display: flex;
   flex-direction: column;
@@ -2308,37 +2318,44 @@ a.hstep__go:hover {
   border-radius: 12px;
   background: var(--surface-2);
 }
-.feecard--warn {
+.cost--warn {
   border-color: var(--warn-border);
 }
-.feecard__row {
+.cost__row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
 }
-.feecard__k {
+.cost__k {
   font-size: 13px;
   color: var(--text-mid);
 }
-.feecard__v {
+.cost__v {
   font-size: 15px;
   font-weight: 600;
   color: var(--text-hi);
+  white-space: nowrap;
 }
-.feecard--warn .feecard__v {
+.cost--warn .cost__v {
   color: var(--warn);
 }
-.feecard__v--big {
+/* The bottom line keeps its colour even in a warning block: what is being paid is
+   a fact, and colouring it amber alongside the cost that caused the warning makes
+   the total look like the problem. */
+.cost__v--big {
   font-size: 17px;
   font-weight: 700;
   color: var(--text-hi);
 }
-.feecard__sep {
+.cost--warn .cost__v--big {
+  color: var(--text-hi);
+}
+.cost__sep {
   height: 1px;
   background: var(--border-subtle);
 }
-.feecard__warn {
+.cost__warn {
   margin: 0;
   font-size: 12px;
   line-height: 16px;
@@ -2468,40 +2485,6 @@ a.hstep__go:hover {
 .gwfund__err {
   font-size: 12px;
   color: var(--block);
-}
-
-/* The budget, as one line rather than a field and a sentence saying the same
-   number. The figure leads because it is the thing being agreed to; the rest of
-   the sentence follows it at the weight of a caption. */
-/* The budget, laid out like the Gateway balance directly above it: the label on
-   the left, the figure on the right. Three different type sizes jammed together
-   on one left-aligned line read as a fragment of a sentence rather than as a
-   total, and the duration is a qualifier of the figure, so it sits with it. */
-.sub-total-line {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 2px 10px;
-  margin: 0;
-  padding-top: 2px;
-  min-width: 0;
-}
-.sub-total-line__k {
-  font-size: 13px;
-  color: var(--text-mid);
-}
-.sub-total-line__v {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--text-hi);
-  white-space: nowrap;
-  margin-left: auto;
-}
-.sub-total-line__rest {
-  font-size: 12px;
-  color: var(--text-mid);
-  white-space: nowrap;
 }
 
 /* What a funding row paid for. On these rows both chains are always the same, so

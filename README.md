@@ -2,7 +2,7 @@
 
 **Refuse the bad send. Lock the good one. Return the money if nobody claims it.**
 
-[![Watch the demo](https://img.shields.io/badge/Watch_the_demo-FF0000?style=flat-square&logo=youtube&logoColor=white)](https://www.youtube.com/watch?v=fcgyqBUbkcg) [![Live app](https://img.shields.io/badge/Live-ctrlarcz.xyz-4b9fff?style=flat-square)](https://ctrlarcz.xyz) [![Docs](https://img.shields.io/badge/Docs-docs.ctrlarcz.xyz-8b93a1?style=flat-square)](https://docs.ctrlarcz.xyz) [![Arc Testnet](https://img.shields.io/badge/Arc_Testnet-5042002-2fbf71?style=flat-square)](https://testnet.arcscan.app/address/0x8dAb7148cdc31DAcad6d7e12161AA3DEDb572Dca) [![Tests](https://img.shields.io/badge/tests-515_passing-2fbf71?style=flat-square)](#tech-stack) [![Custody](https://img.shields.io/badge/custody-none-8b93a1?style=flat-square)](#security)
+[![Watch the demo](https://img.shields.io/badge/Watch_the_demo-FF0000?style=flat-square&logo=youtube&logoColor=white)](https://www.youtube.com/watch?v=fcgyqBUbkcg) [![Live app](https://img.shields.io/badge/Live-ctrlarcz.xyz-4b9fff?style=flat-square)](https://ctrlarcz.xyz) [![Android beta](https://img.shields.io/badge/Android-beta-3ddc84?style=flat-square&logo=googleplay&logoColor=white)](https://play.google.com/apps/testing/com.xyz.ctrlarcz) [![Docs](https://img.shields.io/badge/Docs-docs.ctrlarcz.xyz-8b93a1?style=flat-square)](https://docs.ctrlarcz.xyz) [![Arc Testnet](https://img.shields.io/badge/Arc_Testnet-5042002-2fbf71?style=flat-square)](https://testnet.arcscan.app/address/0x8dAb7148cdc31DAcad6d7e12161AA3DEDb572Dca) [![Tests](https://img.shields.io/badge/tests-528_passing-2fbf71?style=flat-square)](#tech-stack) [![Custody](https://img.shields.io/badge/custody-none-8b93a1?style=flat-square)](#security)
 
 Protected USDC transfers on Arc: an SDK and a single contract that screen a payment before it is signed, hold it until the recipient proves they were meant to have it, and give it back to the sender if they never do.
 
@@ -37,7 +37,7 @@ Protected USDC transfers on Arc: an SDK and a single contract that screen a paym
 | **Protection** | Pre-send risk firewall, code-gated claim, sender cancel, automatic expiry refund      |
 | **Custody**    | None. Funds are with the user or in the contract. No owner, no pause, no upgrade path |
 | **Product**    | An SDK any wallet, exchange or payments app embeds. Not another wallet                |
-| **Tests**      | 515 in total: 99 Foundry, 333 SDK, 50 demo-kit, 33 keeper, plus live testnet runs |
+| **Tests**      | 528 in total: 99 Foundry, 346 SDK, 50 demo-kit, 33 keeper, plus live testnet runs |
 
 ## The problem
 
@@ -77,27 +77,37 @@ flowchart LR
         RISK["risk/<br/>Layer 1 firewall<br/>pure rule engine"]
         TR["transfer/<br/>send, claim, cancel, reclaim"]
         HIST["history/<br/>Layer 3 clean history"]
-        CFG["config/<br/>per-integrator behaviour"]
+        SHIELD["shield/<br/>Layer 4 spend boxes<br/>stealth, co-signer"]
+        BRIDGE["bridge/<br/>CCTP and Gateway<br/>signed by the user"]
     end
 
     SCOUT["ArcScan<br/>Blockscout REST API"]
     MEMO["Memo predeploy<br/>EOA wrapper"]
+    CIRCLE["Circle<br/>attestation and mint"]
 
     subgraph C["CtrlArcZ.sol"]
         SM["sendProtected, claim,<br/>cancel, reclaimExpired<br/>isVerifiedRecipient"]
     end
 
+    BOX["SpendPolicyAccount<br/>target, caps, interval, expiry"]
     USDC["USDC ERC-20<br/>0x3600…0000, 6 decimals"]
 
     I -->|sendProtected| TR
     TR ==>|firewall, before any funds move| RISK
     I -.->|check, optional, for a pre-send UI| RISK
     I -->|getCleanHistory| HIST
-    I -->|defineConfig| CFG
+    I -->|subscriptions, private pay| SHIELD
+    I -->|bring USDC to Arc| BRIDGE
     RISK -.->|reads| SCOUT
     TR -->|viem| MEMO
     MEMO --> C
     C --> USDC
+    SHIELD ==>|every spend, firewall then co-sign| RISK
+    SHIELD --> BOX
+    BOX --> USDC
+    BRIDGE --> CIRCLE
+    CIRCLE -->|mints into| BOX
+    CIRCLE --> USDC
     SM -.->|RecipientVerified| RISK
 ```
 
@@ -145,7 +155,7 @@ The cost of being wrong is bounded here in a way it is not in a browser's "proce
 
 **Every path that moves money runs it.** Sending, bridging to someone else, paying privately and authorising a subscription all take an address a person typed, so all four run the same check against one policy, from one module, and none of them arms its button until the answer is in. That last clause is stricter than it sounds: a verdict that is still forming is not a verdict, and a screen that arms while the scan is running can dispatch a payment that the answer would have stopped. The same rule decides for all of them, so a new way to send cannot quietly ship with a weaker door.
 
-<p><img src="docs/screens/15-firewall-everywhere.png" alt="The firewall refusing a merchant address on the subscription form" width="420"></p>
+<p><img src="docs/screens/15-firewall-everywhere.png" alt="The firewall refusing a merchant address on the subscription form" width="520"></p>
 
 A subscription is not one payment to an address, it is standing permission to pull from a funded box on a schedule, so the address matters more here than anywhere. The verdict lands under the field while you are still typing, and the create button never arms.
 
@@ -243,7 +253,7 @@ Settlement is immediate, because Arc has sub-second deterministic finality. Ther
 
 The Send form does the whole attack in one click. It reads who this wallet has actually paid, crafts a **real** lookalike of one of them (same first and last four hex characters, random middle), and drops it into the recipient field, so the firewall you are about to trust is the one that judges it. Nothing is sent; the verdict appears where every verdict appears.
 
-<p><img src="docs/screens/05-poisoning-scenario.png" alt="A crafted lookalike, blocked by the firewall" width="330"></p>
+<p><img src="docs/screens/05-poisoning-scenario.png" alt="A crafted lookalike, blocked by the firewall" width="560"></p>
 
 Both addresses render as `0x64Ea…Fe3F` in any wallet. The firewall blocks the second one, and the send never happens.
 
@@ -251,7 +261,7 @@ Both addresses render as `0x64Ea…Fe3F` in any wallet. The firewall blocks the 
 
 `cancel` is available to the sender at any point before a claim lands, inside or outside the window, and even on a transfer that has been frozen by wrong guesses. Unclaimed money belongs to the sender, so there is no deadline on getting it back.
 
-<p><img src="docs/screens/07-active-transfers.png" alt="Active transfers with the claim code and a cancel button" width="330"></p>
+<p><img src="docs/screens/07-active-transfers.png" alt="Active transfers with the claim code and a cancel button" width="480"></p>
 
 ### Case D: the recipient never claims
 
@@ -263,7 +273,7 @@ The recipient gets that button too. A payment you never wanted, arriving from so
 
 On Arc, gas is USDC, so a brand new recipient with an empty wallet cannot normally pay to claim. Because `claim` is permissionless and always pays the recorded recipient, a relayer can submit it and cover the gas. The recipient receives the full amount without ever sending a transaction. This is verified on-chain: a fresh, zero-balance, nonce-zero address received the whole transfer and its nonce stayed at zero.
 
-The recipient just presses **Gasless**. The claim is signed server-side so no relayer or Circle key reaches the browser, and with Circle Gas Station configured the gas is sponsored rather than paid by anyone in this project: measured on Arc testnet, the claim ran through EntryPoint v0.7 from a Circle Smart Account holding no USDC, the paymaster paid 0.0062 USDC of gas, and the relayer's own balance moved by zero. Without Gas Station credentials the same route falls back to a relayer signing and paying out of its own balance, so the recipient's experience is identical either way.
+The recipient just presses **Claim without gas**. The claim is signed server-side so no relayer or Circle key reaches the browser, and with Circle Gas Station configured the gas is sponsored rather than paid by anyone in this project: measured on Arc testnet, the claim ran through EntryPoint v0.7 from a Circle Smart Account holding no USDC, the paymaster paid 0.0062 USDC of gas, and the relayer's own balance moved by zero. Without Gas Station credentials the same route falls back to a relayer signing and paying out of its own balance, so the recipient's experience is identical either way.
 
 ## Moving USDC in: CCTP or Gateway
 
@@ -318,6 +328,8 @@ Gateway supports fewer chains than CCTP, so the pickers narrow themselves when y
 Both routes are signed by **the user's own wallet**. Nothing in this project ever holds a key that could move somebody's USDC: the burn, the Gateway deposit and the Gateway spend are all transactions or EIP-712 signatures the wallet produces, and Circle's own attestation service does the rest. There is no operator balance to fund and nothing to trust with custody, which is the only version of a bridge worth shipping inside a product about not losing money to the wrong address.
 
 That costs a little more work than calling Circle's Node-first kits from a server, and the SDK carries it: `packages/sdk/src/bridge` speaks to the CCTP and Gateway contracts and REST APIs directly, queues transactions per signer so two flows on one wallet cannot race a nonce, checks that the source chain can actually pay for its own burn, and can pick a stalled transfer back up from its burn hash after a reload.
+
+**A transfer that does not arrive is not money lost, and the row says so.** A Gateway spend does not burn on the source chain when the intent is accepted: Circle debits its own ledger and settles later, so a mint that fails means the burn never ran and what left the balance was a hold. Circle lets it go, measured twice at under ten minutes with the fee included. Calling that "failed" would tell someone their money is gone while it is on its way back, so the row reads `returning` and then `returned`. Circle's status stays `failed` for good and can never report the release, so the app watches the balance instead, against the figure it wrote down before the spend.
 
 ## Why Arc
 
@@ -478,7 +490,7 @@ You stay invisible (the merchant sees the box, never your wallet), you stay boun
 
 The co-signer is a gatekeeper, not a custodian. Bringing the money home (`sweepToVault`, or `sweepExpired` once the date passes) needs only your own key, never the co-signer's, so if The Machine goes offline or turns hostile it can stall a pull but can never hold your funds. Its role is liveness, not custody: worst case you sweep and the subscription simply ends. There is no timezone or clock trick to exploit either, since the on-chain caps (per-pull and total) bound the loss independently of time, and the contract reads a plain UTC block timestamp with intervals measured in days.
 
-**Create a subscription.** Name it, point it at a merchant, then say the two things anyone actually has in mind: how much each charge is, and how many of them. The budget and the end date are shown rather than asked, because they are answers.
+**Create a subscription.** Name it, point it at a merchant, then say the two things anyone actually has in mind: how much each charge is, and how many of them. The budget is shown rather than asked, because it is an answer, and it is shown beside what Circle charges to move it into the box and what the two come to together. Authorising a subscription is a payment, and it was the last payment screen in the app that did not say what would leave the wallet.
 
 ![Create a subscription](./docs/screenshots/subscriptions-create.png)
 
@@ -506,7 +518,9 @@ The endpoint takes no address and returns identical bytes to every caller, verif
 
 **A box is owned by a one-time address, and the payer stays off its transactions.** The owner and vault of each box is a fresh ERC-5564 stealth address, announced so that only the payer's viewing key can rediscover it; that is how the list above is built, without an identity or a wallet-derived tag on chain. The two transactions that would otherwise name the payer are relayed: the deploy, and the announcement (`StealthAnnouncer` indexes `msg.sender`, so announcing from your own wallet would publish "this wallet made a stealth box"). So is the small gas top-up a stealth address needs before it can sweep itself, since paying that from your own wallet would write the exact link the stealth address exists to avoid. None of the relayed calls can move a user's funds.
 
-What that does **not** hide is funding: the budget still moves from the payer's wallet into the box in the clear, and no amount of relaying changes that, because the money starts in a public balance. It closes when the transfer itself is confidential, which on Arc means APS. [`docs/privacy.md`](./docs/privacy.md) traces every USDC movement around one real box and states exactly what is and is not hidden.
+**The budget arrives from Circle, not from your wallet.** Funding used to be an ordinary transfer from the payer into the box, and that single line undid everything above it: both ends of an ERC-20 transfer are indexed, so anyone could take a wallet's outgoing transfers, intersect them with the announcer's metadata, and recover its boxes without a viewing key at all. Measured on a real wallet: eight boxes out of eight, no false positives. The box is now funded by a Circle Gateway mint, so what Arc records is Circle's minter paying the box, and the payer is not in it. There is deliberately no fallback to the old transfer, because a second route is a second way to write that line, and it is the one taken when something else has already gone wrong.
+
+What this is not is anonymity. The deposit into Gateway is a public transaction from the payer's wallet, and Circle sees both ends of the mint, so the link is off the chain rather than gone. [`docs/privacy.md`](./docs/privacy.md) traces every USDC movement around one real box and states exactly what is and is not hidden.
 
 ## The keeper: an agent with a wallet, bounded by the chain
 
@@ -553,12 +567,8 @@ verdict and the app behaves exactly as it does without the feature.
 
 - The contract has not been audited. Testnet only.
 - The firewall depends on a single indexer (ArcScan). If it cannot be reached, the report degrades to a warning, or to a block when a lookalike cannot be ruled out. It never degrades to safe.
-- The lookalike in the poisoning scenario is constructed rather than ground out of a keypair. The firewall decides from the address alone, so no private key is needed to prove that it blocks a genuine lookalike.
-- A stealth box hides who owns it, not that it was funded. The budget still moves from the payer's wallet into the box in public. See [`docs/privacy.md`](./docs/privacy.md).
-- Privacy here is unlinkability inside a crowd, and the crowd is however many people use the relayer. The relayer also learns who asked it to submit, because requests are signed so each caller can be quota-limited.
+- Privacy here is unlinkability, not anonymity. The chain no longer connects a payer to their boxes, but Circle sees both ends of a Gateway mint, and the relayer learns who asked it to submit, because requests are signed so each caller can be quota-limited.
 - Anyone can freeze a pending transfer by burning its five attempts. Funds stay safe; the sender cancels and re-sends.
-- The received history reaches back 200,000 blocks and then follows the chain forward from there. A wallet older than that would need an indexer rather than `eth_getLogs`, the way stealth discovery already does.
-- The announcement index lives in one server process's memory. It rebuilds on restart, which takes one backfill, and until it finishes the browser falls back to reading the chain. A deployment with more than one instance would want it in shared storage.
-- A claim code that matches nothing costs a full scan of that window before the app can say so, because the commitment is in the event data rather than a topic. The screen says it is looking while it does.
+- The received history reaches back 200,000 blocks and then follows the chain forward. A wallet older than that would need a dedicated indexer, the way stealth discovery already does.
+- The announcement index lives in one server process's memory. It rebuilds on restart, and until it finishes the browser falls back to reading the chain. A deployment with more than one instance would want it in shared storage.
 - The keeper spends its own gas to return other people's money, so it never profits. It is a service the operator runs, not an incentivised keeper network.
-- The investigator has been verified end to end on its failure paths (disabled, unreachable, malformed, refused, prompt-injected) and against a stubbed model; the wording it produces with a live key is not covered by tests.

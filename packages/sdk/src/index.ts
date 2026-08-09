@@ -87,6 +87,14 @@ export {
   type StatusBucket,
 } from './transfer/status.js';
 export {
+  gasReserve,
+  readGasReserve,
+  spendableAfterGas,
+  SEND_GAS_LIMIT,
+  PAY_GAS_LIMIT,
+  MIN_GAS_RESERVE,
+} from './transfer/gas.js';
+export {
   generateClaimCode,
   fromSecret,
   normaliseSecret,

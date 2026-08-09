@@ -8,6 +8,9 @@ import {
   MODE_PUSH,
   explorerTxUrl,
   percentOf,
+  spendableAfterGas,
+  usdc,
+  PAY_GAS_LIMIT,
 } from '@ctrl-arcz/sdk';
 import { type Session } from '@ctrl-arcz/demo-kit';
 import {
@@ -15,9 +18,11 @@ import {
   Button,
   Card,
   CopyButton,
+  CostBlock,
   Field,
   Input,
   Stepper,
+  parseAmount,
   IconLock,
   IconExternal,
   useSubmitGuard,
@@ -26,6 +31,7 @@ import {
   type Step,
 } from '@ctrl-arcz/demo-kit/ui';
 import { useRecipientGate } from '../lib/useRecipientGate.js';
+import { useGasReserve } from '../lib/useGasReserve.js';
 import { RiskGate } from './RiskGate.js';
 
 const USDC = ADDRESSES.USDC as Address;
@@ -68,6 +74,20 @@ export function PrivatePayTab({
 
   const amountValue = Number(amount);
   const validMerchant = isAddress(merchant);
+
+  /**
+   * A private payment sends three transactions from this wallet -- deploy the
+   * disposable account, fund it, pay the merchant out of it -- and on Arc all three
+   * are paid for in the money being sent. A bigger limit than the plain send for
+   * that reason: running out after the account exists and holds the money, but
+   * before the transaction that pays it out, is the one failure with nowhere to go.
+   */
+  const reserve = useGasReserve(PAY_GAS_LIMIT);
+  const spendable =
+    balance == null || reserve == null ? null : spendableAfterGas(balance, reserve);
+  // The same parser the field uses, so the block can never total a figure the form
+  // would not accept.
+  const amountAmt = parseAmount(amount) ?? 0n;
 
   /**
    * The same firewall the send screen runs, on the same address, before anything
@@ -220,10 +240,27 @@ export function PrivatePayTab({
             onChange={setAmount}
             chain="Arc_Testnet"
             balance={balance}
-            onMax={(f) => balance != null && setAmount(percentOf(balance, f))}
+            onMax={(f) => spendable != null && setAmount(percentOf(spendable, f))}
             boxed
             data-testid="ppay-amount"
           />
+
+          {/* This screen said nothing at all about cost until the money had moved,
+              and it is the one that spends the most on gas. */}
+          {reserve != null && (
+            <CostBlock
+              testId="ppay-cost"
+              lines={[
+                { label: t('cost.amount'), value: `${usdc(amountAmt)} USDC` },
+                { label: t('cost.networkMax'), value: `${usdc(reserve)} USDC` },
+              ]}
+              total={{
+                label: t('cost.youPay'),
+                value: `${usdc(amountAmt + reserve)} USDC`,
+                testId: 'ppay-youpay',
+              }}
+            />
+          )}
 
           <Button
             onClick={() => void guard(run)}

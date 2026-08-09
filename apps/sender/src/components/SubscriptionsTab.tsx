@@ -46,6 +46,7 @@ import {
   Button,
   Card,
   ChainLogo,
+  CostBlock,
   GatewayFundBox,
   HistoryList,
   HistoryRow,
@@ -60,7 +61,6 @@ import {
   useT,
   useToast,
   short,
-  humanDuration,
   parseAmount,
   type Step,
 } from '@ctrl-arcz/demo-kit/ui';
@@ -797,38 +797,55 @@ export function SubscriptionsTab({
             </Field>
           </div>
           {/*
-            One line for the answer, where there were two.
+            What this costs, in the same block the bridge and the send screen use.
 
-            A "Total" field sat beside the count showing the same figure this
-            sentence opens with, so the budget was on screen twice and the field
-            version was a box with nothing to type into. The sentence says more in
-            less room: what it adds up to, out of what, how often, and until when.
-          */}
-          {/*
-            Two facts, and only the two that are not already on screen.
+            It was a thin grey line reading "Total  0.1 USDC  over 5 min": three
+            type sizes on one row, the duration trailing the figure like an
+            afterthought, and no mention at all of the fee Circle charges to move
+            the money into the box. Creating a subscription is a payment, and it was
+            the one payment screen that never said what would leave the wallet.
 
-            This line used to read "Total 0.1 USDC  5 x 0.02 USDC, Every minute.
-            Ends 8/9/2026, 2:23:00 AM." followed by a second grey line about test
-            frequencies. The middle clause repeated the two fields directly above
-            it, the timestamp carried seconds for something running a year, and two
-            small grey lines stacked read as one smear. What the reader cannot work
-            out from the fields is the budget and how long it runs, so that is what
-            is left.
+            The duration is gone rather than restyled. It answered a question the
+            end date in the detail panel already answers, and "0.1 USDC over 5 min"
+            reads as a rate when it is a budget.
           */}
           {capNum > 0 && chargeCount > 0 && (
-            <p className="sub-total-line" data-testid="sub-summary">
-              <span className="sub-total-line__k">{t('sub.total')}</span>
-              <output className="sub-total-line__v" data-testid="sub-total">
-                {trimAmount(capNum)} USDC
-              </output>
-              <span className="sub-total-line__rest">
-                {t('sub.runsFor', {
-                  duration: humanDuration(durationSecs, (n, u) =>
-                    t(`sub.dur.${u}` as never, { n }),
-                  ),
-                })}
-              </span>
-            </p>
+            <CostBlock
+              testId="sub-summary"
+              lines={[
+                {
+                  label: t('sub.paymentTotal', {
+                    // Locale-aware: Turkish lowercases I to a dotless one.
+                    freq: t(`sub.freq.${frequency}` as never).toLocaleLowerCase(),
+                  }),
+                  value: `${trimAmount(capNum)} USDC`,
+                  testId: 'sub-total',
+                },
+                // The box is funded out of the Gateway balance, so Circle's fee is
+                // part of the price of creating one. Absent rather than zero while
+                // the quote is still out: a zero here would be a claim.
+                ...(gwCeiling != null
+                  ? [
+                      {
+                        label: t('cost.circleFee'),
+                        value: `${fmtUsdc(gwCeiling)} USDC`,
+                        testId: 'sub-fee',
+                      },
+                    ]
+                  : []),
+              ]}
+              total={
+                gwNeeded != null
+                  ? {
+                      label: t('cost.youPay'),
+                      // The same figure the funding check refuses against, so the
+                      // block and the refusal can never disagree about the price.
+                      value: `${fmtUsdc(gwNeeded)} USDC`,
+                      testId: 'sub-youpay',
+                    }
+                  : null
+              }
+            />
           )}
           <Button
             onClick={() => void guard(create)}
@@ -965,15 +982,16 @@ export function SubscriptionsTab({
                       `sub.freq.${frequencyKeyOf(s.interval)}` as never,
                     ).toLocaleLowerCase()}`}
                   />
-                  {/* The two addresses were only ever shown shortened inside the
-                      detail panel, so paying the same merchant again meant opening a
-                      drawer to read something you could not copy. */}
+                  {/* The merchant was only ever shown shortened inside the detail
+                      panel, so paying the same merchant again meant opening a drawer
+                      to read something you could not copy. The box address is not
+                      here for the same reason: it is the subscription's identity and
+                      what support and the explorer go by, but nobody copies one out
+                      of a list they are scanning for "which, and how much is left".
+                      It stays in the detail panel. */}
                   <HistoryRow.Facts>
                     <HistoryRow.Fact label={t('sub.d.merchant')}>
                       <AddressChip address={s.target} />
-                    </HistoryRow.Fact>
-                    <HistoryRow.Fact label={t('sub.d.account')}>
-                      <AddressChip address={s.account} />
                     </HistoryRow.Fact>
                     <HistoryRow.Fact label={t('sub.remaining')}>
                       <span className="mono">

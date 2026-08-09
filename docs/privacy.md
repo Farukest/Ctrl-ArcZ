@@ -13,15 +13,21 @@ The trace below is every USDC movement around one real box on Arc Testnet
 app:
 
 ```
-deploy   (SpendPolicyFactory.createAccount)  sent by relayer
-announce (StealthAnnouncer.announce)         sent by relayer, caller = relayer
-fund     PAYER  -> box       0.1  USDC       sent by PAYER      <-- the one link
-gas      relayer -> stealth  0.05 USDC       sent by relayer
-sweep    box    -> stealth   0.1  USDC       sent by stealth
+deploy   (SpendPolicyFactory.createAccount)   sent by relayer
+announce (StealthAnnouncer.announce)          sent by relayer, caller = relayer
+fund     Circle minter -> box   0.1  USDC     sent by Circle's forwarder
+gas      relayer -> stealth     0.05 USDC     sent by relayer
+sweep    box    -> stealth      0.1  USDC     sent by stealth
 ```
 
-Four of the five carry no payer identity. The funding transfer does, and it is
-enough on its own to tie the payer to the box.
+None of the five carries the payer's address.
+
+The funding line used to, and it was the one that mattered: it read
+`PAYER -> box`, both ends indexed, so anyone could take a wallet's outgoing
+transfers, intersect them with the announcer's metadata and recover its boxes with
+no viewing key. Measured on a real wallet, that recovered eight boxes out of eight
+with no false positives. The box is funded through Circle Gateway now, so the
+transfer Arc records is a mint from Circle's minter.
 
 ## Why the relay is not cosmetic
 
@@ -35,9 +41,12 @@ reasons that survive any future privacy upgrade:
   wallet. On Arc gas is USDC, so this was a plain, public `payer -> stealthAddress`
   transfer: not a hint, the link itself.
 
-Both are gone. What remains is the funding transfer, and no amount of relaying
-fixes that: the money is the payer's, it starts in a public balance, and moving it
-is a public act.
+Both are gone, and so is the funding transfer they used to sit beside.
+
+What is left is not on the chain. The payer still deposits into Gateway from their
+own wallet, in public, and Circle sees both ends of the mint that follows. So the
+link moved off the ledger rather than disappearing: reading Arc no longer connects
+a payer to their boxes, and Circle could.
 
 ## What APS changes, and what it does not
 
@@ -46,8 +55,9 @@ confidential execution environment: a transaction is encrypted to the APS networ
 key and submitted as calldata to a precompile, and the public ledger sees no state,
 no return values and no event logs. It is on Arc's roadmap and not yet live.
 
-APS closes the funding link, because the transfer into the box becomes part of
-private state. It does not close the sender link: the precompile call is still an
+APS would close the deposit, which is the last public step the payer takes: moving
+USDC into Gateway is an ordinary transfer from their own wallet, and inside APS it
+would not be. It does not close the sender link: the precompile call is still an
 ordinary Arc transaction with a public `from` that pays public gas. "This wallet
 submitted a private transaction at this height" stays visible.
 
@@ -65,10 +75,9 @@ carried, only what it should do. When APS is available:
 1. `relayServer.ts` encrypts the same call to the APS network key and sends the
    ciphertext to the privacy precompile instead of calling the contract directly.
    The endpoints, validation and quota are unchanged.
-2. Funding moves inside APS as well, at which point `SubscriptionsTab`'s step 4 (the
-   only step still submitted by the payer's own wallet) stops being a public
-   transfer. That is the change that takes the trace above from one public link to
-   none.
+2. The Gateway deposit moves inside APS as well, which is the last step still
+   submitted by the payer's own wallet. That is what would take the remaining link
+   off Circle's books as well as off the chain.
 3. Discovery keeps working as it does today, or gets cheaper: with events private,
    the announcement registry can be read from private state instead of scanned.
 
@@ -86,9 +95,13 @@ what let a relayer take them over in the first place.
   It is not trusted with money: `createAccount` and `announce` cannot move funds,
   and the gas top-up is a fixed 0.05 USDC of the relayer's own balance, skipped when
   the address already has enough.
+- **Circle knows.** The mint that funds a box is Circle's, and it debited the
+  payer's Gateway balance to make it. Nothing on Arc joins those two, and Circle
+  can. Moving the link off a public ledger and onto one company's records is a real
+  improvement over writing it on chain, and it is not the same as nobody knowing.
 - **APS is enclave-based.** Confidentiality rests on hardware attestation and a
   threshold key held across validators, not on a proof anyone can check. That is a
   different assumption from zk, and worth stating rather than blurring.
 
-The honest one-line version: **who you pay, how much, and on what terms is private;
-that you funded something is not.**
+The honest one-line version: **nothing on Arc connects you to your boxes; Circle
+still could, and that you hold a Gateway balance is public.**

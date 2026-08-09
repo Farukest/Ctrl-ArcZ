@@ -42,6 +42,7 @@ import {
   Button,
   Card,
   ChainLogo,
+  CostBlock,
   Field,
   GatewayFundBox,
   InfoPopover,
@@ -239,12 +240,15 @@ export function BridgeTab({ session }: { session: Session }) {
   /** Deposited, on chain, but not yet counted by Circle. */
   const [gwPending, setGwPending] = useState<bigint>(0n);
   /**
-   * Two figures, deliberately. `gwFee` is what Circle actually charges and is what
-   * the user is shown; `gwCeiling` is the padded number that gets signed and is
-   * what the balance has to cover. Showing the ceiling would quote a fee nobody
-   * pays, and checking against the quote would pass a balance that cannot sign.
+   * The fee ceiling: the padded figure that gets signed, that the balance has to
+   * cover, and that the cost block quotes.
+   *
+   * There used to be a second figure beside it, the quote Circle actually charges,
+   * shown as the fee while the total underneath added the ceiling. Two numbers that
+   * differ by the margin, one line apart, and only one of them consistent with the
+   * balance check. The ceiling is the one every other part of the screen already
+   * uses, so it is the one the screen says out loud.
    */
-  const [gwFee, setGwFee] = useState<bigint | null>(null);
   const [gwCeiling, setGwCeiling] = useState<bigint | null>(null);
   const [depositing, setDepositing] = useState(false);
   /**
@@ -411,7 +415,7 @@ export function BridgeTab({ session }: { session: Session }) {
   /** A fee larger than the transfer is not a rounding detail, it is the reason to
    *  pick another route or to send more at once. */
   const feeSteep =
-    amountValue > 0 && gwFee != null && gwFee > BigInt(Math.round(amountValue * 1e6));
+    amountValue > 0 && gwCeiling != null && gwCeiling > BigInt(Math.round(amountValue * 1e6));
 
   /**
    * Why this cannot be sent, worked out while the amount is being typed.
@@ -491,7 +495,6 @@ export function BridgeTab({ session }: { session: Session }) {
         setGwOnSource(here);
         setGwByChain(bal.byChain);
         setGwPending(pendingOn(gwSource));
-        setGwFee(quote.quotedFee);
         setGwCeiling(quote.maxFee);
       } catch {
         // Leave the last known figures rather than blanking the screen on one
@@ -548,7 +551,6 @@ export function BridgeTab({ session }: { session: Session }) {
    */
   function forgetSourceReads() {
     setGwOnSource(null);
-    setGwFee(null);
     setGwCeiling(null);
     setWalletOnChain(null);
     setGwPending(0n);
@@ -567,7 +569,6 @@ export function BridgeTab({ session }: { session: Session }) {
   function selectDest(chain: CctpChainName) {
     if (chain === to) return;
     setTo(chain);
-    setGwFee(null);
     setGwCeiling(null);
   }
 
@@ -1290,34 +1291,40 @@ export function BridgeTab({ session }: { session: Session }) {
           Sepolia, because it pays for gas on the destination. Learning that from
           the balance afterwards is not an acceptable way to learn it.
         */}
-        {(gwFee != null || gwCeiling != null) && engine === 'gateway' && (
-          <div
-            className={`feecard ${feeSteep ? 'feecard--warn' : ''}`}
-            data-testid="bridge-fee-card"
-          >
-            <div className="feecard__row">
-              <span className="feecard__k">{t('bridge.feeLabel')}</span>
-              <span className="feecard__v" data-testid="bridge-fee">
-                {gwFee == null ? '…' : `${usdc(gwFee)} USDC`}
-              </span>
-            </div>
-            {amountValue > 0 && gwNeeded != null && (
-              <>
-                <div className="feecard__sep" />
-                <div className="feecard__row">
-                  <span className="feecard__k">{t('bridge.youPay')}</span>
-                  <span className="feecard__v feecard__v--big" data-testid="bridge-youpay">
-                    {usdc(gwNeeded)} USDC
-                  </span>
-                </div>
-              </>
-            )}
-            {feeSteep && (
-              <p className="feecard__warn" data-testid="bridge-fee-steep">
-                {t('bridge.feeOverAmount')}
-              </p>
-            )}
-          </div>
+        {/*
+          The fee shown is the ceiling, not the quote, and the two used to differ
+          here: the line said what Circle would charge while the total below it
+          added the padded figure the signature authorises. Anyone who subtracted
+          got a third number. A block whose parts do not sum to its own bottom line
+          invites the arithmetic and then fails it, so both are the ceiling. It is
+          the safe direction to be wrong in -- nobody is charged more than this --
+          and it is the figure the balance actually has to cover.
+        */}
+        {gwCeiling != null && engine === 'gateway' && (
+          <CostBlock
+            testId="bridge-fee-card"
+            lines={[
+              {
+                label: t('cost.circleFee'),
+                value: `${usdc(gwCeiling)} USDC`,
+                testId: 'bridge-fee',
+              },
+            ]}
+            // Only once there is an amount to total up. The quote is asked for with
+            // a nominal amount before anything is typed, so that Max can leave room
+            // for the fee; printing a total here would tell someone what they are
+            // about to pay for a transfer they have not entered.
+            total={
+              amountValue > 0 && gwNeeded != null
+                ? {
+                    label: t('cost.youPay'),
+                    value: `${usdc(gwNeeded)} USDC`,
+                    testId: 'bridge-youpay',
+                  }
+                : null
+            }
+            warning={feeSteep ? t('bridge.feeOverAmount') : null}
+          />
         )}
 
         {/* One line, and the button that fixes it. Naming the problem and leaving

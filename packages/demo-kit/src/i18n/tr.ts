@@ -2,6 +2,11 @@ import type { TranslationKey } from './en.js';
 
 /** Turkish. Mirrors the keys in en.ts; any missing key falls back to English. */
 export const tr: Record<TranslationKey, string> = {
+  'cost.amount': 'Tutar',
+  'cost.networkMax': 'Ağ ücreti (en fazla)',
+  'cost.circleFee': 'Circle ücreti',
+  'cost.youPay': 'Ödeyeceğin',
+
   'common.appName': 'Ctrl+ArcZ',
   'common.connect': 'Cüzdan bağla',
   'common.connecting': 'Bağlanıyor...',
@@ -91,14 +96,7 @@ export const tr: Record<TranslationKey, string> = {
   'sub.freq.weekly': 'Haftalık',
   'sub.freq.monthly': 'Aylık',
   'sub.freq.yearly': 'Yıllık',
-  'sub.total': 'Toplam',
-  'sub.runsFor': '{duration} boyunca',
-  'sub.dur.minute': '{n} dk',
-  'sub.dur.hour': '{n} saat',
-  'sub.dur.day': '{n} gün',
-  'sub.dur.week': '{n} hafta',
-  'sub.dur.month': '{n} ay',
-  'sub.dur.year': '{n} yıl',
+  'sub.paymentTotal': '{freq} ödeme toplamın',
   'sub.countTooLow': 'En az bir {unit}',
   'sub.countTooHigh': 'En fazla {max} {unit}',
   'sub.gwShort': '{chain} üzerinde {amount} USDC Gateway bakiyesi eksik. Aboneliği kurmak için yukarıdan doldur.',
@@ -256,8 +254,6 @@ export const tr: Record<TranslationKey, string> = {
   'bridge.youReceive': 'Alacağın',
   'bridge.balance': 'Bakiye',
   'bridge.gwBalanceLabel': 'Gateway bakiyesi',
-  'bridge.feeLabel': 'Ücret',
-  'bridge.youPay': 'Ödeyeceğin',
   'bridge.feeOverAmount':
     'Ücret transferden büyük. Başka bir rota, ya da tek seferde daha büyük bir transfer daha ucuza gelir.',
   'bridge.refusal.gwNoBalanceHere':
@@ -448,7 +444,7 @@ export const tr: Record<TranslationKey, string> = {
   'claim.matched': 'Eşleşti: transfer #{id}, {amount} USDC, gönderen {from}',
   'claim.matchedExpired': 'Transfer #{id} eşleşti ama claim süresi doldu. Tutar gönderene döner.',
   'claim.claimOwnGas': 'Claim et (kendi gas’ım)',
-  'claim.claimGasless': 'Gasless al (relayer öder)',
+  'claim.claimGasless': 'Gazsız al',
   'claim.gasless1': 'Gas’ı Circle Gas Station sponsorlar, sen hiçbir şey ödemezsin.',
   'claim.gasless2': 'Cüzdanın tamamen boş olsa bile USDC’yi alırsın.',
   'claim.claiming': 'Claim ediliyor...',

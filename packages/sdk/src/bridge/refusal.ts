@@ -11,6 +11,8 @@
  * wallet has been opened rather than while the amount is still being typed.
  */
 
+import { spendableAfterGas } from '../transfer/gas.js';
+
 /** The one change that would make this transfer possible. */
 export type RefusalFix =
   | { kind: 'switchSource'; chain: string; label: string }
@@ -59,8 +61,7 @@ export function maxGatewaySpendable(here: bigint, feeCeiling: bigint): bigint {
  * pay for its own transaction, so a reserve stays behind.
  */
 export function maxDepositable(walletBalance: bigint, gasReserve: bigint): bigint {
-  const max = walletBalance - gasReserve;
-  return max > 0n ? max : 0n;
+  return spendableAfterGas(walletBalance, gasReserve);
 }
 
 /**
