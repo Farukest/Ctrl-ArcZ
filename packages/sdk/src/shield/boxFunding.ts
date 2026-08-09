@@ -64,6 +64,14 @@ export interface FundBoxParams {
   onTransferId?: (transferId: string) => void;
   onStep?: (step: GatewayStep, txHash?: string) => void;
   timeoutMs?: number;
+  /**
+   * The spend itself, injectable so the handover can be tested without Circle.
+   *
+   * The same shape the rest of this SDK uses for `fetchImpl`: the interesting
+   * behaviour here is the order things happen in and what survives an interrupted
+   * wait, and that is worth a test that does not need a network.
+   */
+  spend?: typeof spendFromGateway;
 }
 
 /**
@@ -78,8 +86,9 @@ export async function fundBoxFromGateway(
   params: FundBoxParams,
 ): Promise<{ transferId?: string }> {
   if (params.amount <= 0n) throw new Error('Funding amount must be positive.');
+  const doSpend = params.spend ?? spendFromGateway;
   let transferId: string | undefined;
-  await spendFromGateway(clients, {
+  await doSpend(clients, {
     from: params.from,
     to: 'Arc_Testnet',
     amount: params.amount,

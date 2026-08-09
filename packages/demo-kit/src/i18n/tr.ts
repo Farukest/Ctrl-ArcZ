@@ -109,7 +109,6 @@ export const tr: Record<TranslationKey, string> = {
   'sub.step.machine': 'Satıcı kontrol ediliyor',
   'sub.step.create': 'Kutu oluşturuluyor',
   'sub.step.listing': 'Listede göster',
-  'sub.step.fund': 'Bütçe yükleniyor',
   'sub.vetoTitle': 'Veto',
   'sub.vetoedToast': 'The Machine bu satıcıyı veto etti.',
   'sub.createdToast': 'Abonelik oluşturuldu.',

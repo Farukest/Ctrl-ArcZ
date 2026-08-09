@@ -23,8 +23,8 @@ const policy = {
   target: '0x4444444444444444444444444444444444444444' as Address,
   maxAmount: 10n,
   perPullMax: 2n,
-  expiry: 999n,
-  interval: 60n,
+  expiry: 999,
+  interval: 60,
   mode: 1,
 } as const;
 

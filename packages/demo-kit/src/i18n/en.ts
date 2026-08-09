@@ -116,7 +116,6 @@ export const en = {
   'sub.step.machine': 'Checking merchant',
   'sub.step.create': 'Creating box',
   'sub.step.listing': 'Show it in the list',
-  'sub.step.fund': 'Funding budget',
   'sub.vetoTitle': 'Vetoed',
   'sub.vetoedToast': 'The Machine vetoed this merchant.',
   'sub.createdToast': 'Subscription created.',
