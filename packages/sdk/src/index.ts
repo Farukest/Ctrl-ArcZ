@@ -272,3 +272,13 @@ export {
   type GatewaySpendResult,
   type GatewayTransferStatus,
 } from './bridge/gateway.js';
+export {
+  usdc,
+  maxGatewaySpendable,
+  maxDepositable,
+  gatewayShortfall,
+  cctpShortfall,
+  percentOf,
+  type Refusal,
+  type RefusalFix,
+} from './bridge/refusal.js';

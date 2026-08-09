@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Session } from '@ctrl-arcz/demo-kit';
-import { isAddress, parseUnits, type Address } from 'viem';
+import { erc20Abi, isAddress, parseUnits, type Address } from 'viem';
 import {
   bridgeFromWallet,
   chainLabel,
@@ -15,12 +15,17 @@ import {
   CCTP_CHAINS,
   GATEWAY_CHAIN_NAMES,
   DEPOSIT_CONFIRMATION_SECONDS,
+  usdc,
+  percentOf,
+  maxGatewaySpendable,
+  maxDepositable,
+  gatewayShortfall,
   type CctpChainName,
   type CctpStep,
   type GatewayChain,
   type GatewayStep,
 } from '@ctrl-arcz/sdk';
-import { bridgeClients, switchWalletChain } from '@ctrl-arcz/demo-kit';
+import { bridgeClients, getPublicClient, switchWalletChain } from '@ctrl-arcz/demo-kit';
 import { activeJobIds, forgetJob, readBridgeJob, type BridgeJob } from '../lib/bridgeJob.js';
 import {
   BRIDGE_STEPS,
@@ -31,6 +36,7 @@ import {
   type BridgeOutcome,
 } from '@ctrl-arcz/demo-kit';
 import {
+  AmountField,
   Button,
   Card,
   ChainLogo,
@@ -46,6 +52,7 @@ import {
   short,
   Stepper,
   TxLink,
+  sanitizeAmount,
   useSubmitGuard,
   useT,
   useToast,
@@ -74,6 +81,58 @@ const SDK_STEP_TO_UI: Record<CctpStep, string | undefined> = {
   attest: 'fetchAttestation',
   forward: 'mint',
 };
+
+/** How long a deposit takes to count, as something a person reads rather than a
+ *  number of seconds. Shared so the box and the toast never disagree. */
+function waitLabel(chain: GatewayChain | undefined): string {
+  if (!chain) return '';
+  const secs = DEPOSIT_CONFIRMATION_SECONDS[chain];
+  return secs < 60 ? `${secs}s` : `${Math.round(secs / 60)}m`;
+}
+
+const ARC_CHAIN_ID = CCTP_CHAINS.Arc_Testnet.chainId;
+
+/**
+ * What a deposit leaves behind for its own gas, on chains that charge it in USDC.
+ *
+ * Measured rather than guessed: an approve plus a deposit on Arc costs a little
+ * under a hundredth of a USDC, and this is that rounded up. Being generous here
+ * costs a cent of headroom; being tight produces a Max that reverts, which is the
+ * one outcome a Max button must never have.
+ */
+const DEPOSIT_GAS_RESERVE = 10_000n;
+
+/**
+ * USDC the wallet holds on a chain, when it can be read at all.
+ *
+ * Arc has its own RPC in this app. Every other chain is reachable only through the
+ * wallet's own provider, which answers for the network the wallet is currently on:
+ * asking it about Base Sepolia while it sits on Arc runs the call against Arc,
+ * where that token address is not a token, and answers nothing useful.
+ *
+ * Null is "cannot be read from here", and the cards show it as a dash. A zero would
+ * be a claim about the balance, and this is not one.
+ */
+async function readUsdcOn(
+  chain: CctpChainName,
+  connectedChainId: number,
+  address: Address,
+): Promise<bigint | null> {
+  const c = CCTP_CHAINS[chain];
+  if (c.chainId !== ARC_CHAIN_ID && connectedChainId !== c.chainId) return null;
+  try {
+    const client =
+      c.chainId === ARC_CHAIN_ID ? getPublicClient() : bridgeClients(c.chainId, address).publicClient;
+    return (await client.readContract({
+      address: c.usdc as Address,
+      abi: erc20Abi,
+      functionName: 'balanceOf',
+      args: [address],
+    })) as bigint;
+  } catch {
+    return null;
+  }
+}
 
 /** Same idea for Gateway, whose four rows are deposit, sign, attestation, mint. */
 const GW_STEP_TO_UI: Record<GatewayStep, string | undefined> = {
@@ -166,16 +225,12 @@ export function BridgeTab({ session }: { session: Session }) {
   /** Set while the wallet is being asked to move to the source chain. */
   const [switching, setSwitching] = useState(false);
   /**
-   * What this wallet can spend through Gateway right now, in USDC subunits.
-   * `null` until read; a deposit that has not reached its confirmations is not here.
-   */
-  const [gwBalance, setGwBalance] = useState<bigint | null>(null);
-  /**
    * Per chain, because that is what a transfer actually spends. Showing only the
    * total would tell someone with money on Arc that they can send from Base.
    */
   const [gwOnSource, setGwOnSource] = useState<bigint | null>(null);
-  /** Every chain that holds something, so the UI can offer the funded one. */
+  /** Every chain that holds something, so a refusal can point at the funded one
+   *  instead of asking for a deposit the user does not need to make. */
   const [gwByChain, setGwByChain] = useState<Partial<Record<GatewayChain, bigint>>>({});
   /** Deposited, on chain, but not yet counted by Circle. */
   const [gwPending, setGwPending] = useState<bigint>(0n);
@@ -188,6 +243,26 @@ export function BridgeTab({ session }: { session: Session }) {
   const [gwFee, setGwFee] = useState<bigint | null>(null);
   const [gwCeiling, setGwCeiling] = useState<bigint | null>(null);
   const [depositing, setDepositing] = useState(false);
+  /**
+   * The deposit's own amount, and the reason this field exists at all.
+   *
+   * Depositing used to borrow the bridge amount and appear only when that amount
+   * exceeded the balance, which broke three ways at once. The primary button
+   * changed identity under the user, so pressing it after filling in a transfer
+   * deposited instead of bridging and looked, for the twenty minutes a deposit
+   * takes to count, exactly like a bridge in progress. It deposited the transfer
+   * amount without the fee, so funding an empty balance for a 5 USDC transfer left
+   * it short by the fee and offered the same button again. And topping up by any
+   * other amount was impossible: with 3 USDC already there, adding 2 meant typing
+   * a transfer you did not want. Funding a balance and spending it are two
+   * actions, so they get two fields and two buttons.
+   */
+  const [depositAmount, setDepositAmount] = useState('');
+  /** USDC in the wallet on the source chain, so the deposit box can say what
+   *  there is to deposit. `null` while unread. */
+  const [walletOnChain, setWalletOnChain] = useState<bigint | null>(null);
+  /** The same, on the destination, for the card that says what arrives there. */
+  const [toBalance, setToBalance] = useState<bigint | null>(null);
   /**
    * Empty means "send it to myself", which is what a bridge normally is. Typing an
    * address here turns the transfer into a payment, and a payment to a hand-typed
@@ -238,29 +313,66 @@ export function BridgeTab({ session }: { session: Session }) {
   const gwSource =
     engine === 'gateway' && isGatewayChain(from) ? (from as GatewayChain) : undefined;
   const gwNeeded = gwCeiling != null ? BigInt(Math.round(amountValue * 1e6)) + gwCeiling : null;
-  // Short against the SOURCE chain, not the total: the check that matters.
-  const gwShort = gwOnSource != null && gwNeeded != null && gwOnSource < gwNeeded;
+  const depositNum = Number(depositAmount);
+  const depositValue =
+    Number.isFinite(depositNum) && depositNum > 0 ? BigInt(Math.round(depositNum * 1e6)) : 0n;
+  /**
+   * The most that can be moved into Gateway from this chain.
+   *
+   * On a chain that charges gas in USDC, the whole balance is an amount that
+   * cannot pay for its own deposit transaction: filling it in produces a signature
+   * and then a revert. What stays behind is a reserve, and only on those chains --
+   * elsewhere gas is a separate token and none of this balance is owed to it.
+   */
+  const maxDeposit =
+    walletOnChain == null
+      ? null
+      : maxDepositable(
+          walletOnChain,
+          // Only Arc declares a gas token, so the field is absent elsewhere rather
+          // than set to something else; read it off a widened view of the entry.
+          gwSource && (CCTP_CHAINS[gwSource] as { gasToken?: string }).gasToken === 'usdc'
+            ? DEPOSIT_GAS_RESERVE
+            : 0n,
+        );
+  /** More than the wallet holds is not a deposit, it is a revert after a signature. */
+  const depositTooBig = maxDeposit != null && depositValue > maxDeposit;
+
+  /**
+   * The balance a spend actually draws on, which differs by engine.
+   *
+   * Kept apart on purpose: money in Gateway is spendable with a signature alone,
+   * money in the wallet is not, and a screen that showed one as the other would
+   * offer transfers the signature cannot cover.
+   */
+  const spendable = engine === 'gateway' ? gwOnSource : walletOnChain;
+  /**
+   * The most that balance can send, fee included.
+   *
+   * On Gateway the fee comes out of the same balance, so the whole balance is the
+   * one figure guaranteed to be refused. Null while the fee is unknown, which
+   * disables the percentage chips rather than letting them offer that figure.
+   */
+  const maxSpendable =
+    spendable == null
+      ? null
+      : engine === 'gateway'
+        ? gwCeiling == null
+          ? null
+          : maxGatewaySpendable(spendable, gwCeiling)
+        : spendable;
+
+  function fillPercent(fraction: number) {
+    if (maxSpendable == null) return;
+    setAmount(percentOf(maxSpendable, fraction));
+  }
+
   /**
    * Same chain in and out is not a mistake in Gateway, it is the way money comes
    * back. Calling it a bridge would be wrong, so the button says what it does.
    */
   const gwWithdraw = engine === 'gateway' && sameChain;
   const walletOnDepositChain = !gwSource || session.chainId === CCTP_CHAINS[gwSource].chainId;
-  /**
-   * The funded chain worth offering: the richest one that is not already selected
-   * and that could actually cover this transfer. Null when there is nothing to
-   * suggest, which is when the hint should say nothing at all.
-   */
-  const gwElsewhere = (() => {
-    if (engine !== 'gateway' || !gwSource || gwNeeded == null) return null;
-    let best: { chain: GatewayChain; amount: bigint } | null = null;
-    for (const [name, amount] of Object.entries(gwByChain) as [GatewayChain, bigint][]) {
-      if (name === gwSource || amount < gwNeeded) continue;
-      if (!best || amount > best.amount) best = { chain: name, amount };
-    }
-    return best;
-  })();
-
   const running = jobs.filter((j) => j.state === 'running').length;
   const canBridge =
     bridgeEnabled &&
@@ -293,6 +405,50 @@ export function BridgeTab({ session }: { session: Session }) {
     text: c.label,
     icon: <ChainLogo id={c.id} size={20} />,
   }));
+
+  /** A fee larger than the transfer is not a rounding detail, it is the reason to
+   *  pick another route or to send more at once. */
+  const feeSteep =
+    amountValue > 0 && gwFee != null && gwFee > BigInt(Math.round(amountValue * 1e6));
+
+  /**
+   * Why this cannot be sent, worked out while the amount is being typed.
+   *
+   * Asked here rather than inside submit, because a refusal that arrives after the
+   * wallet has been opened has already cost the user something. The rule itself is
+   * in the SDK and tested there, so this and the check that runs at burn time
+   * cannot drift into disagreeing.
+   */
+  const refusal =
+    engine !== 'gateway' || amountValue <= 0 || gwOnSource == null || gwNeeded == null
+      ? null
+      : gatewayShortfall({
+          here: gwOnSource,
+          byChain: gwByChain as Record<string, bigint>,
+          from,
+          fromLabel,
+          committed: gwNeeded,
+          labelOf: labelFor,
+        });
+
+  /**
+   * The button agrees with the refusal above it.
+   *
+   * Two answers to "can this be sent" is how a disabled button and an encouraging
+   * sentence end up on screen together, or worse, an enabled button under a line
+   * saying it cannot work.
+   */
+  const canSend = canBridge && refusal === null;
+
+  /** The refusal names one thing to change; this changes it, so the user is not
+   *  sent off to find a picker or to work out an amount. */
+  function applyFix() {
+    const fix = refusal?.fix;
+    if (!fix) return;
+    if (fix.kind === 'switchSource') selectSource(fix.chain as CctpChainName);
+    else if (fix.kind === 'useMax') setAmount(fix.display);
+    else setDepositAmount(fix.display);
+  }
 
   // Gateway supports fewer chains than CCTP; when switching to it, snap any
   // now-unsupported selection back to a valid default so the pickers never show
@@ -327,7 +483,6 @@ export function BridgeTab({ session }: { session: Session }) {
           }),
         ]);
         if (!live) return;
-        setGwBalance(bal.total);
         const here = bal.byChain[gwSource] ?? 0n;
         // Clear anything Circle has caught up on before reading what is still out.
         reconcile(gwSource, here, gwOnSource ?? here);
@@ -348,6 +503,78 @@ export function BridgeTab({ session }: { session: Session }) {
       clearInterval(timer);
     };
   }, [engine, gwSource, to, session.address]);
+
+  /**
+   * The wallet's USDC on both ends of the route.
+   *
+   * One effect for both sides so the two figures can never describe different
+   * moments, and one read function so neither side can quietly learn a different
+   * rule about which chains are readable.
+   */
+  useEffect(() => {
+    let live = true;
+    const read = async () => {
+      const [a, b] = await Promise.all([
+        readUsdcOn(from, session.chainId, session.address as Address),
+        readUsdcOn(to, session.chainId, session.address as Address),
+      ]);
+      if (!live) return;
+      setWalletOnChain(a);
+      setToBalance(b);
+    };
+    void read();
+    const timer = setInterval(() => void read(), 20000);
+    return () => {
+      live = false;
+      clearInterval(timer);
+    };
+  }, [from, to, session.address, session.chainId]);
+
+  /**
+   * Everything that described the old source chain, forgotten.
+   *
+   * The balance, the fee, the ceiling, the wallet holding and any amount typed
+   * against them are all about one particular chain. Left in place when the chain
+   * changes they do not go missing, which would be obvious; they go wrong, which
+   * is not. The reads are keyed on the source, so clearing here and letting them
+   * run again is the whole of the update.
+   *
+   * One function so there is one answer to "what does changing the source
+   * invalidate", whether the change came from the picker in the funding box, the
+   * From picker, or the arrow between them. Anything added later that depends on
+   * the source is cleared here and is then correct in all three.
+   */
+  function forgetSourceReads() {
+    setGwOnSource(null);
+    setGwFee(null);
+    setGwCeiling(null);
+    setWalletOnChain(null);
+    setGwPending(0n);
+    setDepositAmount('');
+  }
+
+  /** The source chain, from whichever picker asked. */
+  function selectSource(chain: CctpChainName) {
+    if (chain === from) return;
+    setFrom(chain);
+    forgetSourceReads();
+  }
+
+  /** The destination. Cheaper to invalidate: only the quote depends on it, but it
+   *  does depend on it, and a fee quoted for the previous destination is wrong. */
+  function selectDest(chain: CctpChainName) {
+    if (chain === to) return;
+    setTo(chain);
+    setGwFee(null);
+    setGwCeiling(null);
+  }
+
+  function swapRoute() {
+    if (from === to) return;
+    setFrom(to);
+    setTo(from);
+    forgetSourceReads();
+  }
 
   const activeSteps = engine === 'gateway' ? GATEWAY_STEPS : BRIDGE_STEPS;
   const stepLabel = (name: string) =>
@@ -552,7 +779,7 @@ export function BridgeTab({ session }: { session: Session }) {
   }
 
   async function deposit() {
-    if (!gwSource) return;
+    if (!gwSource || depositValue <= 0n) return;
     setDepositing(true);
     setSelfBridge({ steps: [], state: 'running' });
     try {
@@ -560,7 +787,7 @@ export function BridgeTab({ session }: { session: Session }) {
         bridgeClients(CCTP_CHAINS[gwSource].chainId, session.address),
         {
           chain: gwSource,
-          amount: parseUnits(amount, 6),
+          amount: depositValue,
           onStep: (step, txHash) => {
             const name = GW_STEP_TO_UI[step];
             if (!name) return;
@@ -575,13 +802,13 @@ export function BridgeTab({ session }: { session: Session }) {
         },
       );
       setSelfBridge(null);
-      rememberDeposit(gwSource, parseUnits(amount, 6));
+      rememberDeposit(gwSource, depositValue);
       setGwPending(pendingOn(gwSource));
-      const wait = DEPOSIT_CONFIRMATION_SECONDS[gwSource];
+      setDepositAmount('');
       toast.push(
         t('bridge.deposited')
-          .replace('{amount}', amount)
-          .replace('{wait}', wait < 60 ? `${wait}s` : `${Math.round(wait / 60)}m`),
+          .replace('{amount}', depositAmount)
+          .replace('{wait}', waitLabel(gwSource)),
         'success',
       );
       void res;
@@ -685,8 +912,7 @@ export function BridgeTab({ session }: { session: Session }) {
           createdAt: Date.now(),
         });
         setBridges(loadBridges());
-        setGwBalance(null);
-        setGwOnSource(null);
+            setGwOnSource(null);
         toast.push(
           res.mintTxHash ? t('bridge.done') : t('bridge.forwardPending'),
           res.mintTxHash ? 'success' : 'info',
@@ -826,104 +1052,270 @@ export function BridgeTab({ session }: { session: Session }) {
           </InfoPopover>
         </div>
 
-        <div className="bridge-route-row" style={{ marginTop: 16 }}>
-          <div className="bridge-route-col">
-            <Field label={t('bridge.from')}>
+        {/*
+          Funding the balance comes first, because in Gateway it happens first.
+
+          A transfer here spends a balance that has to already exist, so putting
+          the thing that creates it above the route is the order the product
+          actually works in. It also stops the deposit reading as a footnote to a
+          transfer: it is not, and someone who only wants to top up should not have
+          to scroll past a form they are not filling in.
+        */}
+        {engine === 'gateway' && (
+          <div className="gwfund" data-testid="gateway-deposit-box">
+            <div className="gwfund__head">
+              <span className="gwfund__title">{t('bridge.gwFundTitle')}</span>
+              <output className="gwfund__figure" data-testid="gateway-balance">
+                {gwOnSource == null ? '—' : `${usdc(gwOnSource)} USDC`}
+              </output>
+            </div>
+            {/*
+              The chain is chosen here, and it is the same choice the From card
+              makes. A deposit is only spendable on the chain it was made on, so two
+              independent pickers is exactly how a screen ends up showing a zero
+              balance on one chain beside a deposit box pointing at another.
+            */}
+            <div className="gwfund__pickrow">
               <Select
                 value={from}
                 options={chainOptions}
-                onChange={(v) => setFrom(v as CctpChainName)}
+                onChange={(v) => selectSource(v as CctpChainName)}
                 ariaLabel={t('bridge.from')}
                 searchable
                 searchPlaceholder={t('bridge.searchChain')}
                 noResultsText={t('common.noResults')}
-                full
               />
-            </Field>
+              <button
+                type="button"
+                className="gwfund__wallet"
+                onClick={() => maxDeposit != null && setDepositAmount(usdc(maxDeposit))}
+                disabled={maxDeposit == null || maxDeposit <= 0n}
+                data-testid="gateway-wallet-balance"
+              >
+                <span className="gwfund__walletk">{t('bridge.gwWalletLabel')}</span>
+                <output className="gwfund__walletv">
+                  {!walletOnDepositChain
+                    ? '—'
+                    : walletOnChain == null
+                      ? '…'
+                      : `${usdc(walletOnChain)} USDC`}
+                </output>
+              </button>
+            </div>
+            <div className="gwfund__row">
+              <Input
+                value={depositAmount}
+                onChange={(e) => setDepositAmount(sanitizeAmount(e.target.value))}
+                inputMode="decimal"
+                placeholder="0.00"
+                invalid={depositTooBig}
+                aria-label={t('bridge.gwDepositCta')}
+                data-testid="gateway-deposit-amount"
+              />
+              <Button
+                disabled={depositValue <= 0n || depositTooBig || depositing || switching || !gwSource}
+                loading={depositing || switching}
+                data-testid="gateway-deposit"
+                onClick={() =>
+                  void (async () => {
+                    // Being on the wrong network is a step, not a refusal: move the
+                    // wallet, then deposit, rather than sending the user to find the
+                    // network switcher and come back.
+                    if (!walletOnDepositChain && gwSource) {
+                      setSwitching(true);
+                      try {
+                        await switchWalletChain(CCTP_CHAINS[gwSource].chainId, fromLabel);
+                      } catch (e) {
+                        toast.push(e instanceof Error ? e.message : String(e), 'error');
+                        return;
+                      } finally {
+                        setSwitching(false);
+                      }
+                    }
+                    await guard(deposit);
+                  })()
+                }
+              >
+                {t('bridge.gwDepositCta')}
+              </Button>
+            </div>
+            {depositTooBig && (
+              <span className="gwfund__err" data-testid="gateway-deposit-error">
+                {t('bridge.gwDepositTooBig')}
+              </span>
+            )}
+            {!walletOnDepositChain && (
+              <span className="gwfund__note">
+                {t('bridge.gwWalletOtherChain').replace('{chain}', fromLabel)}
+              </span>
+            )}
+            {gwPending > 0n && (
+              <span className="gwfund__note" data-testid="gateway-pending">
+                {t('bridge.gwPending').replace('{amount}', usdc(gwPending))}
+              </span>
+            )}
+            <span className="gwfund__note">
+              {t('bridge.gwDepositWait')
+                .replace('{chain}', fromLabel)
+                .replace('{wait}', waitLabel(gwSource))}
+            </span>
           </div>
-          <span className="bridge-route-sep" aria-hidden>
-            &rarr;
-          </span>
-          <div className="bridge-route-col">
-            <Field label={t('bridge.to')}>
+        )}
+
+        {/*
+          Two cards and a flip between them, the shape every swap screen uses.
+
+          The old row was two dropdowns labelled From and To with the amount in a
+          third field underneath, which asked the reader to hold the route in their
+          head while typing into something that named neither end of it. Here the
+          amount sits inside the card of the chain it leaves, the balance it draws
+          on is on the same line, and the second card shows what arrives.
+        */}
+        <div className="swapstack" style={{ marginTop: 16 }}>
+          <div className="swapcard" data-testid="bridge-from-card">
+            <div className="swapcard__head">
+              <span className="swapcard__label">{t('bridge.from')}</span>
+              <Select
+                value={from}
+                options={chainOptions}
+                onChange={(v) => selectSource(v as CctpChainName)}
+                ariaLabel={t('bridge.from')}
+                searchable
+                searchPlaceholder={t('bridge.searchChain')}
+                noResultsText={t('common.noResults')}
+              />
+            </div>
+            <AmountField
+              value={amount}
+              onChange={setAmount}
+              chain={from}
+              // The balance, not the spendable figure. Labelling "Gateway balance"
+              // over a number that already had the fee taken out of it contradicts
+              // the box above, which shows the real one. What the label says and
+              // what tapping it fills in are allowed to differ; what the label says
+              // and what it is are not.
+              balance={spendable}
+              balanceLabel={
+                engine === 'gateway' ? t('bridge.gwBalanceLabel') : t('bridge.balance')
+              }
+              onMax={fillPercent}
+              percents={[0.25, 0.5]}
+              data-testid="bridge-amount"
+            />
+          </div>
+
+          {/* In the gap between the cards, painted in the page background so it
+              reads as a cut-out rather than a third element. */}
+          <div className="swapstack__flip">
+            <button
+              type="button"
+              onClick={swapRoute}
+              title={t('bridge.swap')}
+              aria-label={t('bridge.swap')}
+              data-testid="bridge-swap-route"
+            >
+              &darr;
+            </button>
+          </div>
+
+          <div className="swapcard" data-testid="bridge-to-card">
+            <div className="swapcard__head">
+              <span className="swapcard__label">{t('bridge.to')}</span>
               <Select
                 value={to}
                 options={chainOptions}
-                onChange={(v) => setTo(v as CctpChainName)}
+                onChange={(v) => selectDest(v as CctpChainName)}
                 ariaLabel={t('bridge.to')}
                 searchable
                 searchPlaceholder={t('bridge.searchChain')}
                 noResultsText={t('common.noResults')}
-                full
               />
-            </Field>
+            </div>
+            {/* What arrives, not a second thing to fill in. Gateway takes its fee
+                out of the balance rather than out of the transfer, and CCTP's comes
+                off the sender's side too, so the figure is the same one. */}
+            <AmountField
+              value={amount}
+              onChange={() => {}}
+              readOnly
+              chain={to}
+              balance={toBalance}
+              balanceLabel={t('bridge.balance')}
+              label={t('bridge.youReceive')}
+              data-testid="bridge-receive"
+            />
           </div>
         </div>
-        {sameChain && !gwWithdraw && <p className="hint">{t('bridge.sameChain')}</p>}
+
+        {sameChain && !gwWithdraw && (
+          <p className="gwfund__err" data-testid="bridge-samechain">
+            {t('bridge.sameChain')}
+          </p>
+        )}
         {gwWithdraw && <p className="hint">{t('bridge.withdrawHint')}</p>}
         {/* Whose money moves is the thing that changed, so say it plainly rather
             than leaving the user to infer it from a MetaMask prompt. */}
-        {engine === 'cctp' && (
+        {engine === 'cctp' && !walletOnSource && (
           <p className="hint" data-testid="bridge-selfnote">
-            {walletOnSource
-              ? t('bridge.selfFunded')
-              : t('bridge.wrongSourceChain').replace('{chain}', fromLabel)}
+            {t('bridge.wrongSourceChain').replace('{chain}', fromLabel)}
           </p>
         )}
-        {/*
-          One short line, then a way out of the problem it describes.
 
-          This was a paragraph explaining unified balances, per-chain spending and
-          confirmation times. All of it true, none of it what someone wants at the
-          moment they are trying to send money. Where the old text explained that
-          the funds were on another chain, there is now a button that moves the
-          picker there; where it explained a shortfall, the deposit button below
-          already carries the amount. Nobody reads the essay, and the essay was
-          only ever describing a click we could make for them.
+        {/*
+          What this costs, before it is agreed to.
+          The fee is not small and it depends on the route rather than the amount:
+          the same transfer costs 0.055 to Base and sixteen times that to Ethereum
+          Sepolia, because it pays for gas on the destination. Learning that from
+          the balance afterwards is not an acceptable way to learn it.
         */}
-        {engine === 'gateway' && (
-          <div className="gwbal" data-testid="gateway-balance">
-            <span className="hint">
-              {gwBalance == null || gwOnSource == null
-                ? t('bridge.gwBalanceLoading')
-                : t('bridge.gwBalanceShort')
-                    .replace('{here}', String(Number(gwOnSource) / 1e6))
-                    .replace('{chain}', fromLabel)
-                    .replace('{fee}', gwFee == null ? '?' : String(Number(gwFee) / 1e6))}
-            </span>
-            {gwPending > 0n && (
-              <span className="hint gwbal__pending" data-testid="gateway-pending">
-                {t('bridge.gwPending').replace('{amount}', String(Number(gwPending) / 1e6))}
+        {(gwFee != null || gwCeiling != null) && engine === 'gateway' && (
+          <div
+            className={`feecard ${feeSteep ? 'feecard--warn' : ''}`}
+            data-testid="bridge-fee-card"
+          >
+            <div className="feecard__row">
+              <span className="feecard__k">{t('bridge.feeLabel')}</span>
+              <span className="feecard__v" data-testid="bridge-fee">
+                {gwFee == null ? '…' : `${usdc(gwFee)} USDC`}
               </span>
+            </div>
+            {amountValue > 0 && gwNeeded != null && (
+              <>
+                <div className="feecard__sep" />
+                <div className="feecard__row">
+                  <span className="feecard__k">{t('bridge.youPay')}</span>
+                  <span className="feecard__v feecard__v--big" data-testid="bridge-youpay">
+                    {usdc(gwNeeded)} USDC
+                  </span>
+                </div>
+              </>
             )}
-            {/* The money is somewhere else. Offer the chain, do not describe it. */}
-            {gwElsewhere && (
-              <Button
-                variant="ghost"
-                data-testid="gateway-use-funded"
-                onClick={() => {
-                  setFrom(gwElsewhere.chain);
-                  if (to === gwElsewhere.chain) setTo(from);
-                }}
-              >
-                {t('bridge.gwUseFunded')
-                  .replace('{chain}', labelFor(gwElsewhere.chain))
-                  .replace('{amount}', String(Number(gwElsewhere.amount) / 1e6))}
+            {feeSteep && (
+              <p className="feecard__warn" data-testid="bridge-fee-steep">
+                {t('bridge.feeOverAmount')}
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* One line, and the button that fixes it. Naming the problem and leaving
+            the user to find the chain picker is most of the way to not saying it. */}
+        {refusal && (
+          <div className="refusal" data-testid="bridge-refusal">
+            <p className="refusal__msg">
+              {t(`bridge.refusal.${refusal.code}` as never, refusal.params)}
+            </p>
+            {refusal.fix && (
+              <Button variant="ghost" onClick={applyFix} data-testid="bridge-refusal-fix">
+                {refusal.fix.kind === 'switchSource'
+                  ? t('bridge.fixSwitch').replace('{chain}', refusal.fix.label)
+                  : refusal.fix.kind === 'deposit'
+                    ? t('bridge.fixDeposit').replace('{amount}', refusal.fix.display)
+                    : t('bridge.fixMax').replace('{amount}', refusal.fix.display)}
               </Button>
             )}
           </div>
         )}
-
-        <div style={{ marginTop: 16 }}>
-          <Field label={t('bridge.amount')} hint={t('bridge.feeNote')}>
-            <Input
-              inputMode="decimal"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              data-testid="bridge-amount"
-            />
-          </Field>
-        </div>
 
         <div style={{ marginTop: 16 }}>
           <Field
@@ -950,40 +1342,7 @@ export function BridgeTab({ session }: { session: Session }) {
         <div style={{ marginTop: 16 }}>
           {/* Being on the wrong network is a step, not a failure. Offering the
               switch is one click; a disabled button is a dead end. */}
-          {engine === 'gateway' && gwShort ? (
-            !walletOnDepositChain && gwSource ? (
-              <Button
-                full
-                disabled={switching}
-                data-testid="bridge-switch"
-                onClick={() =>
-                  void (async () => {
-                    setSwitching(true);
-                    try {
-                      await switchWalletChain(CCTP_CHAINS[gwSource].chainId, fromLabel);
-                    } catch (e) {
-                      toast.push(e instanceof Error ? e.message : String(e), 'error');
-                    } finally {
-                      setSwitching(false);
-                    }
-                  })()
-                }
-              >
-                {t('bridge.switchTo').replace('{chain}', fromLabel)}
-              </Button>
-            ) : (
-              <Button
-                full
-                disabled={!canBridge || depositing}
-                data-testid="gateway-deposit"
-                onClick={() => void guard(deposit)}
-              >
-                {t('bridge.depositButton')
-                  .replace('{amount}', amount)
-                  .replace('{chain}', fromLabel)}
-              </Button>
-            )
-          ) : !walletOnSource && cctpSource ? (
+          {!walletOnSource && cctpSource ? (
             <Button
               full
               disabled={switching}
@@ -1007,7 +1366,7 @@ export function BridgeTab({ session }: { session: Session }) {
             <Button
               full
               onClick={() => void guard(run)}
-              disabled={!canBridge}
+              disabled={!canSend}
               data-testid="bridge-button"
             >
               {gwWithdraw
