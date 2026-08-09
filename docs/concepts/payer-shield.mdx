@@ -83,11 +83,11 @@ event-dependent), and clean function-level access boundaries.
 
 The same account with `MODE_PULL` expresses recurring, policy-bounded spending:
 
-- **Safe allowances / subscriptions** — a merchant can pull up to a cap on an
+- **Safe allowances / subscriptions.** A merchant can pull up to a cap on an
   interval, every pull gated by the co-signer. A `perPullMax` field caps each
   single pull: a subscription sets it to the per-period amount, so even a
   misbehaving co-signer cannot drain the whole cumulative cap in one pull. That
   per-pull cap is the real subscription guarantee. Kill the subscription by
   sweeping the account; the co-signer stops signing. No infinite-approval drainer.
-- **Agent wallets** — hand an agent a tightly-scoped disposable account; it
+- **Agent wallets.** Hand an agent a tightly-scoped disposable account; it
   transacts autonomously but cannot exceed policy, because the enclave vetoes.

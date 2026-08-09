@@ -20,7 +20,7 @@ Expose two routes on the same origin as your app:
 - `POST /api/cosign` authorizes a spend and returns a signature or a veto.
 
 ```ts
-// server-only — the key stays here
+// server-only: the key stays here
 import { cosign, cosignerAddress } from '@ctrl-arcz/demo-kit/cosign';
 
 const COSIGNER_PK = process.env.COSIGNER_PK; // never a VITE_/public var

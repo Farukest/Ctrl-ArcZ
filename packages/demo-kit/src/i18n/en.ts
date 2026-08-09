@@ -1,5 +1,5 @@
 /**
- * English — the base dictionary. Every other locale is checked against these
+ * English, the base dictionary. Every other locale is checked against these
  * keys, and any missing key falls back to the English string here. To add a
  * language, copy this file, translate the values, and register it in `locales.ts`.
  *

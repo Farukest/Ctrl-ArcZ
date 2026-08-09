@@ -45,11 +45,11 @@ A stablecoin transfer is **final, blind and one-shot**, and every product built 
 
 **Final.** Sign it and it is gone. No undo, no dispute, no cancelling while it is pending, because there is no pending. The most common way to lose money on chain is not a hack; it is a correct signature over a wrong address.
 
-**Blind.** Nothing between the user and the chain reads the recipient before they commit. Address poisoning is the sharpest version of this, and it works because of a detail every wallet shares: addresses are shown abbreviated, as `0x64Ea…Fe3F`. The attacker grinds an address whose first and last characters match one you already pay, sends you a zero-value transfer from it so it lands in your history, and waits for you to copy it back out. The defining property is that **the victim sends to the wrong address on purpose** — no unexpected signature, no malicious contract, nothing downstream behaving abnormally. It is why the ritual of sending one dollar first proves nothing: the test payment confirms perfectly against the poisoned address. And it is why an escrow alone does not help: locking the funds for the wrong recipient just locks them for the attacker. Something has to refuse the send.
+**Blind.** Nothing between the user and the chain reads the recipient before they commit. Address poisoning is the sharpest version of this, and it works because of a detail every wallet shares: addresses are shown abbreviated, as `0x64Ea…Fe3F`. The attacker grinds an address whose first and last characters match one you already pay, sends you a zero-value transfer from it so it lands in your history, and waits for you to copy it back out. The defining property is that **the victim sends to the wrong address on purpose**: no unexpected signature, no malicious contract, nothing downstream behaving abnormally. It is why the ritual of sending one dollar first proves nothing: the test payment confirms perfectly against the poisoned address. And it is why an escrow alone does not help: locking the funds for the wrong recipient just locks them for the attacker. Something has to refuse the send.
 
-**One-shot.** A transfer pays one address, one time. Anything that repeats — a subscription, an allowance, an agent that pays its own bills — has to be built on top, and the two ways it is normally built are an unlimited token approval or a shared key. Both are a blank cheque, and both write *this wallet pays that merchant, on this schedule* onto a public ledger where it stays.
+**One-shot.** A transfer pays one address, one time. Anything that repeats, a subscription, an allowance, an agent that pays its own bills, has to be built on top, and the two ways it is normally built are an unlimited token approval or a shared key. Both are a blank cheque, and both write *this wallet pays that merchant, on this schedule* onto a public ledger where it stays.
 
-Ctrl+ArcZ answers the three in one place. A firewall refuses a bad recipient before anything is signed. The transfer that follows is locked behind a code the sender hands over out of band, recallable at any time until it is claimed and refunded on its own if it never is. And what repeats runs from a spend box whose policy is on chain — this merchant, this much, this often, until this date — owned by a one-time address, so what the chain records is a box, not a person.
+Ctrl+ArcZ answers the three in one place. A firewall refuses a bad recipient before anything is signed. The transfer that follows is locked behind a code the sender hands over out of band, recallable at any time until it is claimed and refunded on its own if it never is. And what repeats runs from a spend box whose policy is on chain (this merchant, this much, this often, until this date), owned by a one-time address, so what the chain records is a box, not a person.
 
 The rest of the product is the same three properties applied elsewhere: private payments through a disposable account, subscriptions and agent wallets on the same box, and CCTP and Gateway to bring the USDC in, every one of them screened by the same firewall before its button will arm.
 
@@ -447,7 +447,7 @@ Run both: the web app calls the backend for the gasless claim, the co-signer, th
 stealth relay and the investigator, and without it those answer 404 from a page
 that otherwise looks perfectly healthy. The backend refuses any browser origin not
 listed in its `CORS_ORIGINS`, so a local run needs `http://localhost:5173` in
-there — see [`apps/api/.env.example`](./apps/api/.env.example).
+there. See [`apps/api/.env.example`](./apps/api/.env.example).
 
 Using the SDK is three calls, and the firewall is one of them whether you ask for it or not:
 
