@@ -7,9 +7,11 @@ import {
   RemoteCoSigner,
   MODE_PUSH,
   explorerTxUrl,
+  percentOf,
 } from '@ctrl-arcz/sdk';
 import { type Session } from '@ctrl-arcz/demo-kit';
 import {
+  AmountField,
   Button,
   Card,
   CopyButton,
@@ -48,7 +50,13 @@ function randomSalt(): Hex {
   return ('0x' + Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('')) as Hex;
 }
 
-export function PrivatePayTab({ session }: { session: Session }) {
+export function PrivatePayTab({
+  session,
+  balance,
+}: {
+  session: Session;
+  balance: bigint | null;
+}) {
   const t = useT();
   const toast = useToast();
   const guard = useSubmitGuard();
@@ -207,14 +215,14 @@ export function PrivatePayTab({ session }: { session: Session }) {
 
           <RiskGate gate={gate} overridable={false} recoverable={false} data-testid="ppay-risk" />
 
-          <Field label={t('ppay.amount')}>
-            <Input
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              data-testid="ppay-amount"
-              inputMode="decimal"
-            />
-          </Field>
+          <AmountField
+            value={amount}
+            onChange={setAmount}
+            chain="Arc_Testnet"
+            balance={balance}
+            onMax={(f) => balance != null && setAmount(percentOf(balance, f))}
+            data-testid="ppay-amount"
+          />
 
           <Button
             onClick={() => void guard(run)}

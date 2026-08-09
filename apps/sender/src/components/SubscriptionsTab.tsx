@@ -24,11 +24,13 @@ import {
   explorerAddressUrl,
   newStealthOwner,
   computeStealthPrivateKey,
+  percentOf,
 } from '@ctrl-arcz/sdk';
 import { getPublicClient, type Session } from '@ctrl-arcz/demo-kit';
 import { getStealthKeys } from '../lib/stealthKeys.js';
 import { relayCreateBox, relayStealthGas } from '../lib/relay.js';
 import {
+  AmountField,
   Button,
   Card,
   HistoryList,
@@ -43,6 +45,7 @@ import {
   useT,
   useToast,
   short,
+  humanDuration,
   type Step,
 } from '@ctrl-arcz/demo-kit/ui';
 import { useSubscriptions, type Subscription, type SubStatus } from '../lib/useSubscriptions.js';
@@ -99,7 +102,13 @@ function subHaystack(s: Subscription): string {
   return `${displayLabel(s.account, s.announcedLabel)} ${s.announcedLabel} ${s.target} ${s.account}`;
 }
 
-export function SubscriptionsTab({ session }: { session: Session }) {
+export function SubscriptionsTab({
+  session,
+  balance,
+}: {
+  session: Session;
+  balance: bigint | null;
+}) {
   const t = useT();
   const toast = useToast();
   const guard = useSubmitGuard();
@@ -472,16 +481,30 @@ export function SubscriptionsTab({ session }: { session: Session }) {
               the full width, and as a grid child it was squeezed into one column
               beside an empty cell. */}
           <RiskGate gate={gate} overridable={false} recoverable={false} data-testid="sub-risk" />
+          {/*
+            The amount gets the whole row.
+
+            It was sharing one with the frequency picker, which gave a figure, a
+            balance, a token pill and a dollar line half the width of the form
+            while a dropdown sat in the other half. Three lines squeezed beside
+            one is not a pair of equals, and the amount is the number this form is
+            actually about.
+          */}
+          <AmountField
+            value={perPull}
+            onChange={setPerPull}
+            chain="Arc_Testnet"
+            balance={balance}
+            onMax={(f) => balance != null && setPerPull(percentOf(balance, f))}
+            label={t('sub.perPull')}
+            data-testid="sub-perpull"
+          />
+          {/* The two questions that are actually a pair: how often, and how many. */}
           <div className="sub-grid">
-            <Field label={t('sub.perPull')}>
-              <Input
-                value={perPull}
-                onChange={(e) => setPerPull(e.target.value)}
-                inputMode="decimal"
-                data-testid="sub-perpull"
-              />
-            </Field>
-            <Field label={t('sub.frequency')}>
+            <Field
+              label={t('sub.frequency')}
+              {...(frequency === 'minute' ? { hint: t('sub.freq.minuteNote') } : {})}
+            >
               <Select
                 value={frequency}
                 options={FREQUENCIES.map((f) => ({
@@ -493,8 +516,6 @@ export function SubscriptionsTab({ session }: { session: Session }) {
                 full
               />
             </Field>
-          </div>
-          <div className="sub-grid">
             <Field label={t('sub.count', { unit })} error={countError}>
               <Input
                 value={charges}
@@ -504,27 +525,40 @@ export function SubscriptionsTab({ session }: { session: Session }) {
                 data-testid="sub-count"
               />
             </Field>
-            {/* The budget and the end date used to be things to fill in. They are
-                answers, not questions, so they are shown rather than asked. */}
-            <Field label={t('sub.total')}>
-              <output className="sub-total" data-testid="sub-total">
-                {capNum > 0 ? `${trimAmount(capNum)} USDC` : '—'}
-              </output>
-            </Field>
           </div>
-          {canCreate && (
-            <p className="muted sub-summary" data-testid="sub-summary">
-              {t('sub.summary', {
-                total: trimAmount(capNum),
-                count: chargeCount,
-                perPull: trimAmount(perPullNum),
-                freq: t(`sub.freq.${frequency}` as never),
-                date: fmtTime(Math.floor(Date.now() / 1000) + durationSecs),
-              })}
+          {/*
+            One line for the answer, where there were two.
+
+            A "Total" field sat beside the count showing the same figure this
+            sentence opens with, so the budget was on screen twice and the field
+            version was a box with nothing to type into. The sentence says more in
+            less room: what it adds up to, out of what, how often, and until when.
+          */}
+          {/*
+            Two facts, and only the two that are not already on screen.
+
+            This line used to read "Total 0.1 USDC  5 x 0.02 USDC, Every minute.
+            Ends 8/9/2026, 2:23:00 AM." followed by a second grey line about test
+            frequencies. The middle clause repeated the two fields directly above
+            it, the timestamp carried seconds for something running a year, and two
+            small grey lines stacked read as one smear. What the reader cannot work
+            out from the fields is the budget and how long it runs, so that is what
+            is left.
+          */}
+          {capNum > 0 && chargeCount > 0 && (
+            <p className="sub-total-line" data-testid="sub-summary">
+              <span className="sub-total-line__k">{t('sub.total')}</span>
+              <output className="sub-total-line__v" data-testid="sub-total">
+                {trimAmount(capNum)} USDC
+              </output>
+              <span className="sub-total-line__rest">
+                {t('sub.runsFor', {
+                  duration: humanDuration(durationSecs, (n, u) =>
+                    t(`sub.dur.${u}` as never, { n }),
+                  ),
+                })}
+              </span>
             </p>
-          )}
-          {frequency === 'minute' && (
-            <p className="muted sub-summary">{t('sub.freq.minuteNote')}</p>
           )}
           <Button
             onClick={() => void guard(create)}

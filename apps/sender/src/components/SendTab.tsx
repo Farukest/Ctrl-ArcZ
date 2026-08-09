@@ -1,27 +1,27 @@
 import { useState } from 'react';
-import { isAddress, parseUnits, type Address } from 'viem';
+import { isAddress, type Address } from 'viem';
 import {
-  approvePermit2,
   approveUsdc,
   defineConfig,
   explorerTxUrl,
   generateClaimCode,
+  percentOf,
   recommendTransferMode,
   registerConfig,
   RiskBlockedError,
   sendProtected,
-  sendProtectedWithPermit,
 } from '@ctrl-arcz/sdk';
 import type { Session } from '@ctrl-arcz/demo-kit';
 import {
+  AmountField,
   Button,
   Card,
-  Checkbox,
   CopyButton,
   Field,
   Input,
   Select,
   Stepper,
+  parseAmount,
   useSubmitGuard,
   useT,
   useToast,
@@ -54,14 +54,21 @@ interface SentInfo {
   amount: string;
 }
 
-export function SendTab({ session, onSent }: { session: Session; onSent: () => void }) {
+export function SendTab({
+  session,
+  balance,
+  onSent,
+}: {
+  session: Session;
+  balance: bigint | null;
+  onSent: () => void;
+}) {
   const toast = useToast();
   const t = useT();
   const guard = useSubmitGuard();
   const [to, setTo] = useState('');
   const [amount, setAmount] = useState('');
   const [windowSec, setWindowSec] = useState('3600');
-  const [usePermit, setUsePermit] = useState(false);
   const [busy, setBusy] = useState(false);
   const [step, setStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -82,13 +89,8 @@ export function SendTab({ session, onSent }: { session: Session; onSent: () => v
   const gate = useRecipientGate(session, to);
   const { investigating, activeReport } = gate;
 
-  const amountValue = (() => {
-    try {
-      return amount ? parseUnits(amount, 6) : 0n;
-    } catch {
-      return -1n;
-    }
-  })();
+  // The field cannot hold anything this refuses, because both use the one parser.
+  const amountValue = parseAmount(amount) ?? 0n;
   const mode = amountValue > 0n ? recommendTransferMode(config, amountValue) : null;
 
   // `gate.armed` carries the firewall's whole opinion, including the wait for a
@@ -163,16 +165,19 @@ export function SendTab({ session, onSent }: { session: Session; onSent: () => v
         ...(gate.acknowledged ? { acknowledged: gate.acknowledged } : {}),
       };
 
-      let result;
-      if (usePermit) {
-        await approvePermit2(session.clients);
-        setStep(2);
-        result = await sendProtectedWithPermit(session.clients, args, guard);
-      } else {
-        await approveUsdc(session.clients, amountValue);
-        setStep(2);
-        result = await sendProtected(session.clients, args, guard);
-      }
+      /*
+       * One path, and it approves only what this transfer needs.
+       *
+       * There was a "Send with Permit2" checkbox that saved a transaction per send
+       * by approving USDC to Permit2 for the maximum uint256 once. It worked, and
+       * it asked the user to weigh a word they have no way to weigh -- while doing
+       * the exact thing the rest of this app exists to argue against. A screen that
+       * sells bounded spending permission should not offer an unbounded one in a
+       * checkbox, and the saving was a fraction of a cent of gas.
+       */
+      await approveUsdc(session.clients, amountValue);
+      setStep(2);
+      const result = await sendProtected(session.clients, args, guard);
 
       saveTransfer(session.address as Address, {
         transferId: result.transferId.toString(),
@@ -298,15 +303,15 @@ export function SendTab({ session, onSent }: { session: Session; onSent: () => v
       <RiskGate gate={gate} />
 
       <div style={{ marginTop: 16 }}>
-        <Field label={t('send.amount')} hint={mode === 'plain' ? t('send.plainHint') : undefined}>
-          <Input
-            inputMode="decimal"
-            placeholder="0.00"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            data-testid="amount-input"
-          />
-        </Field>
+        <AmountField
+          value={amount}
+          onChange={setAmount}
+          chain="Arc_Testnet"
+          balance={balance}
+          onMax={(f) => balance != null && setAmount(percentOf(balance, f))}
+          {...(mode === 'plain' ? { hint: t('send.plainHint') } : {})}
+          data-testid="amount"
+        />
       </div>
 
       <div style={{ marginTop: 16 }}>
@@ -319,15 +324,6 @@ export function SendTab({ session, onSent }: { session: Session; onSent: () => v
             full
           />
         </Field>
-      </div>
-
-      <div style={{ marginTop: 14 }}>
-        <Checkbox
-          checked={usePermit}
-          onChange={(e) => setUsePermit(e.target.checked)}
-          data-testid="permit-toggle"
-          label={t('send.permitToggle')}
-        />
       </div>
 
       {busy && <Stepper steps={steps} />}

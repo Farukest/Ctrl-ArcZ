@@ -127,7 +127,14 @@
   --ease-emph: cubic-bezier(0.3, 0, 0.1, 1);
   --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
 
-  --maxw: 480px;
+  /* 480 was set when a screen held one form. It now holds two stacked cards with a
+     chain picker and a balance on the same line, and at 480 those three fought for
+     the width. Twenty per cent more is enough for them and still narrow enough that
+     the page reads as one column rather than spreading into a dashboard.
+
+     It sits above the 560px breakpoint on purpose: phones are already below both
+     numbers, so nothing about the mobile layout moves. */
+  --maxw: 576px;
   --maxw-wide: 720px;
 
   color-scheme: dark;

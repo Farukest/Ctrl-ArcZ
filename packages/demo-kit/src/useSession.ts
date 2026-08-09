@@ -14,6 +14,14 @@ import {
 export interface SessionState {
   session: Session | null;
   balance: string;
+  /**
+   * The same figure in USDC subunits, for arithmetic.
+   *
+   * `balance` is formatted for reading and every caller that needed to compare or
+   * subtract was parsing that string back, which is a lossy round trip through a
+   * display format. Both come from the one read, so they cannot disagree.
+   */
+  balanceRaw: bigint | null;
   connecting: boolean;
   /** True during the silent reconnect on first load — show a placeholder, not the
    *  Connect prompt, so a remembered wallet never flashes "connect" before it
@@ -59,6 +67,7 @@ const remember = {
 export function useSession(): SessionState {
   const [session, setSession] = useState<Session | null>(null);
   const [balance, setBalance] = useState('0');
+  const [balanceRaw, setBalanceRaw] = useState<bigint | null>(null);
   const [connecting, setConnecting] = useState(false);
   // Start "reconnecting" synchronously when a prior connection is remembered, so
   // the very first render already knows to show a placeholder (no connect flash).
@@ -76,6 +85,7 @@ export function useSession(): SessionState {
       args: [session.address as Address],
     });
     setBalance(formatUnits(raw, 6));
+    setBalanceRaw(raw);
   }, [session]);
 
   // Silent reconnect: no prompt. Used on mount (reload persistence) and on
@@ -158,6 +168,7 @@ export function useSession(): SessionState {
   return {
     session,
     balance,
+    balanceRaw,
     connecting,
     reconnecting,
     error,

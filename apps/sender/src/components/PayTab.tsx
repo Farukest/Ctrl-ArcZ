@@ -12,7 +12,17 @@ type PayMode = 'standard' | 'private';
  * modes, not separate places, so they live behind one segmented control instead of
  * two peer tabs.
  */
-export function PayTab({ session, onSent }: { session: Session; onSent: () => void }) {
+export function PayTab({
+  session,
+  balance,
+  onSent,
+}: {
+  session: Session;
+  /** Spendable USDC on Arc, in subunits. Passed down rather than read again: two
+   *  reads of one balance is two answers, and the header already has it. */
+  balance: bigint | null;
+  onSent: () => void;
+}) {
   const t = useT();
   const [pay, setPay] = useState<PayMode>('standard');
 
@@ -29,9 +39,9 @@ export function PayTab({ session, onSent }: { session: Session; onSent: () => vo
         />
       </div>
       {pay === 'standard' ? (
-        <SendTab session={session} onSent={onSent} />
+        <SendTab session={session} balance={balance} onSent={onSent} />
       ) : (
-        <PrivatePayTab session={session} />
+        <PrivatePayTab session={session} balance={balance} />
       )}
     </div>
   );

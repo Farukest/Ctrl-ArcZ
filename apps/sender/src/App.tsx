@@ -109,11 +109,19 @@ export function App() {
                     {t('nav.bridge')}
                   </button>
                 </div>
-                {tab === 'pay' && <PayTab session={state.session} onSent={state.refreshBalance} />}
+                {tab === 'pay' && (
+                  <PayTab
+                    session={state.session}
+                    balance={state.balanceRaw}
+                    onSent={state.refreshBalance}
+                  />
+                )}
                 {tab === 'activity' && (
                   <ActivityTab session={state.session} onChange={state.refreshBalance} />
                 )}
-                {tab === 'subscriptions' && <SubscriptionsTab session={state.session} />}
+                {tab === 'subscriptions' && (
+                  <SubscriptionsTab session={state.session} balance={state.balanceRaw} />
+                )}
                 {tab === 'bridge' && <BridgeTab session={state.session} />}
               </>
             ) : (

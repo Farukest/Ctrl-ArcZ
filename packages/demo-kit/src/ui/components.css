@@ -113,17 +113,28 @@
 }
 
 /* Connect bar ------------------------------------------------------------- */
+/* Wraps, and its parts may shrink. Neither was true before: at a shell width
+   around 415px the balance and the Disconnect button had nowhere to go and the
+   button was drawn over the word USDC. The 420px media query below does not help,
+   because it asks about the viewport while the overlap is about the shell. */
 .connectbar__row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--sp-4);
+  flex-wrap: wrap;
+  gap: var(--sp-3) var(--sp-4);
+  min-width: 0;
+}
+.connectbar__row > .btn {
+  flex: 0 0 auto;
 }
 .connectbar__id {
   display: flex;
   align-items: center;
-  gap: var(--sp-4);
+  flex-wrap: wrap;
+  gap: var(--sp-2) var(--sp-4);
   min-width: 0;
+  flex: 1 1 auto;
 }
 .connectbar__balance {
   display: flex;
@@ -798,24 +809,6 @@
 }
 
 /* Bridge From -> To row --------------------------------------------------- */
-.bridge-route-row {
-  display: flex;
-  align-items: flex-end;
-  gap: 10px;
-}
-.bridge-route-col {
-  flex: 1 1 0;
-  min-width: 0;
-}
-.bridge-route-sep {
-  flex: 0 0 auto;
-  height: 46px;
-  display: inline-flex;
-  align-items: center;
-  color: var(--accent);
-  font-size: 18px;
-  font-weight: 700;
-}
 
 /* Info popover (click to open, mobile-friendly) --------------------------- */
 .infodot {
@@ -1055,6 +1048,7 @@
 .addr__text {
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .addr__copy {
   display: inline-flex;
@@ -1903,22 +1897,6 @@
 /* Gateway balance: one short line and, when there is one, the click that fixes it.
    The row keeps them on the same optical line so the action reads as part of the
    sentence rather than a second thing to consider. */
-.gwbal {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  margin-top: 8px;
-}
-.gwbal .hint {
-  margin: 0;
-}
-.gwbal .btn {
-  padding: 4px 10px;
-  font-size: 12px;
-  min-height: 0;
-  width: auto;
-}
 
 /* History day grouping. The heading is quiet on purpose: it orients, it is not
    content, and a loud one competes with the rows it is introducing. */
@@ -2070,4 +2048,431 @@ a.hstep__go:hover {
 .hrow__arrow {
   color: var(--text-lo);
   margin: 0 2px;
+}
+
+/* The one amount control -------------------------------------------------- */
+/* Sizes come from the scale the rest of this file uses (11-18px), with a single
+   deliberate step above it for the figure itself. An earlier version borrowed
+   34px from a phone layout, where the viewport is half as wide and that size is a
+   heading; here it was simply the largest number on the page by a wide margin. */
+.amountf {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+/* Wraps rather than clips. At 360px "Amount" plus "Gateway balance 3.285952 USDC"
+   does not fit on one line, and the balance is information: an ellipsis through
+   the middle of a figure is worse than a second line. */
+.amountf__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  min-width: 0;
+}
+.amountf__label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-mid);
+  white-space: nowrap;
+}
+.amountf__bal {
+  flex: 0 0 auto;
+  margin-left: auto;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  padding: 0 6px;
+  font-size: 12px;
+  line-height: 20px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.amountf__bal:hover:not(:disabled) {
+  background: var(--surface-2);
+  border-color: var(--border-subtle);
+}
+.amountf__bal:disabled {
+  cursor: default;
+}
+.amountf__balk {
+  font-size: 12px;
+  color: var(--text-mid);
+  white-space: nowrap;
+}
+.amountf__balv {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+  white-space: nowrap;
+}
+.amountf__bal:disabled .amountf__balv {
+  color: var(--text-mid);
+}
+.amountf__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.amountf__input {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
+  background: transparent;
+  border: 0;
+  outline: none;
+  color: var(--text-hi);
+  font-size: 24px;
+  font-weight: 700;
+  font-family: inherit;
+  padding: 0;
+  text-overflow: ellipsis;
+}
+.amountf__input::placeholder {
+  color: var(--text-lo);
+}
+.amountf--invalid .amountf__input {
+  color: var(--block);
+}
+.amountf__input--out {
+  overflow: hidden;
+  white-space: nowrap;
+}
+.amountf__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 22px;
+}
+.amountf__fiat {
+  font-size: 12px;
+  color: var(--text-mid);
+}
+.amountf__pcts {
+  display: inline-flex;
+  gap: 6px;
+}
+.amountf__err {
+  font-size: 12px;
+  color: var(--block);
+}
+.amountf__hint {
+  font-size: 12px;
+  color: var(--text-mid);
+}
+.usdcpill {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-hi);
+  white-space: nowrap;
+}
+.pctchip {
+  border: 0;
+  border-radius: 999px;
+  background: var(--surface-3);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 9px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.pctchip:hover:not(:disabled) {
+  background: var(--accent-soft);
+}
+.pctchip:disabled {
+  color: var(--text-lo);
+  cursor: default;
+}
+
+/* Bridge: two cards and a flip between them -------------------------------- */
+.swapstack {
+  display: flex;
+  flex-direction: column;
+}
+.swapcard {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 18px;
+  background: var(--surface-2);
+  min-width: 0;
+}
+.swapcard__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.swapcard__label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-mid);
+  white-space: nowrap;
+}
+/* The picker reads as a title here, not as a form control: the card is the field. */
+.swapcard__head .select {
+  min-width: 0;
+}
+.swapcard__head .select-trigger {
+  background: transparent;
+  border-color: transparent;
+  padding: 2px 6px;
+  min-height: 0;
+  font-weight: 700;
+  font-size: 15px;
+  max-width: 100%;
+}
+.swapcard__head .select-trigger:hover:not(:disabled) {
+  background: var(--surface-3);
+  border-color: var(--border-subtle);
+}
+/* In the gap between the cards, painted in the page background so it reads as a
+   cut-out rather than as a third element stacked between them. */
+.swapstack__flip {
+  height: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  z-index: 1;
+}
+.swapstack__flip button {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: 0;
+  background: var(--bg-base);
+  color: var(--text-hi);
+  font-size: 18px;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    background var(--dur-2) var(--ease),
+    transform var(--dur-1) var(--ease);
+}
+.swapstack__flip button:hover {
+  background: var(--surface-3);
+}
+.swapstack__flip button:active {
+  transform: scale(0.92);
+}
+
+/* What it costs, raised off the background: at the weight of the rest of the
+   screen, the number that decides whether a route is worth taking read as a
+   footnote under the button. */
+.feecard {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  background: var(--surface-2);
+}
+.feecard--warn {
+  border-color: var(--warn-border);
+}
+.feecard__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.feecard__k {
+  font-size: 13px;
+  color: var(--text-mid);
+}
+.feecard__v {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-hi);
+}
+.feecard--warn .feecard__v {
+  color: var(--warn);
+}
+.feecard__v--big {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text-hi);
+}
+.feecard__sep {
+  height: 1px;
+  background: var(--border-subtle);
+}
+.feecard__warn {
+  margin: 0;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--warn);
+}
+
+/* A refusal is not a failure: nothing was attempted, and one tap moves the form
+   out of it. So the fix sits with the sentence rather than in a toast. */
+.refusal {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+.refusal__msg {
+  margin: 0;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--block);
+}
+
+/* Funding the Gateway balance: its own block, above the route, because it is its
+   own action and the one that has to happen first. The chain is chosen here and
+   the From card follows, so a deposit can never point at a chain the transfer is
+   not spending from. */
+.gwfund {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 16px;
+  padding: 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 14px;
+  background: var(--surface-2);
+  min-width: 0;
+}
+.gwfund__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+  min-width: 0;
+}
+.gwfund__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-mid);
+  white-space: nowrap;
+}
+.gwfund__figure {
+  margin-left: auto;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text-hi);
+  white-space: nowrap;
+}
+/* Two rows, two behaviours. The picker row may wrap so a six-decimal balance
+   keeps its digits; the deposit row may not, or the button leaves its field. */
+.gwfund__pickrow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  min-width: 0;
+}
+.gwfund__pickrow > .select {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.gwfund__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.gwfund__row .input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.gwfund__row .btn {
+  flex: 0 0 auto;
+  width: auto;
+  padding: 0 16px;
+}
+.gwfund__wallet {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 6px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 4px 7px;
+  cursor: pointer;
+  font: inherit;
+}
+.gwfund__wallet:hover:not(:disabled) {
+  background: var(--surface-3);
+  border-color: var(--border-subtle);
+}
+.gwfund__wallet:disabled {
+  cursor: default;
+}
+.gwfund__walletk {
+  font-size: 12px;
+  color: var(--text-mid);
+  white-space: nowrap;
+}
+.gwfund__walletv {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+  white-space: nowrap;
+}
+.gwfund__wallet:disabled .gwfund__walletv {
+  color: var(--text-mid);
+}
+.gwfund__note {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--text-mid);
+}
+.gwfund__err {
+  font-size: 12px;
+  color: var(--block);
+}
+
+/* The budget, as one line rather than a field and a sentence saying the same
+   number. The figure leads because it is the thing being agreed to; the rest of
+   the sentence follows it at the weight of a caption. */
+.sub-total-line {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  margin: 0;
+}
+.sub-total-line__k {
+  font-size: 13px;
+  color: var(--text-mid);
+}
+.sub-total-line__v {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text-hi);
+  white-space: nowrap;
+}
+.sub-total-line__rest {
+  font-size: 12px;
+  color: var(--text-mid);
 }

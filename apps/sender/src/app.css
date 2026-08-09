@@ -123,6 +123,9 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: var(--sp-3, 10px);
+  /* Tops aligned. The amount field carries a third line under it, so stretched
+     cells put its label a row above the one beside it. */
+  align-items: start;
 }
 @media (max-width: 560px) {
   .sub-grid { grid-template-columns: 1fr; }
