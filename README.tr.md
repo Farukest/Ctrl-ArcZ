@@ -355,7 +355,6 @@ Denetimin tamamı [`SECURITY.md`](./SECURITY.md) içinde. Kısa hali:
 - **Firewall kapalı düşer**, veri kaynağı çöktüğünde "iyi görünüyor"a gerilemez.
 - **Parayı hareket ettiren her yol firewall'u çalıştırır**, tek bir modülden, ve hiçbiri karar gelmeden butonunu kurmaz. Dört ekranın bunu kendi başına karara bağlaması, birinin diğerlerinden zayıf bir kapıyla kalmasının yoludur.
 - **Claim makbuzları kontrat adresine ve tam transfer id'sine bağlanır**, böylece toplu bir makbuzdaki ilgisiz veya kasten yerleştirilmiş bir event, bir kurbanın transferinin sonucunu belirleyemez.
-- **Kabul edilen ödünleşim:** bir transferin beş yanlış deneme hakkını herkes yakıp onu dondurabilir. Para kaybolmaz (gönderen iptal edip yeniden gönderir) ve alternatif, yani denemeleri yalnız alıcı için saymak, saldırganın tek kullanımlık adreslerden kodu bedavaya kırmasına izin verirdi.
 
 ## Teknoloji
 
@@ -504,7 +503,9 @@ Uç nokta hiçbir adres almıyor ve her çağırana aynı baytları dönüyor; i
 
 **Kutunun sahibi tek kullanımlık bir adres ve ödeyen, kutunun işlemlerinin dışında kalıyor.** Her kutunun sahibi ve kasası taze bir ERC-5564 stealth adresi; öyle duyuruluyor ki yalnızca ödeyenin görüntüleme anahtarı onu yeniden bulabiliyor. Yukarıdaki liste böyle kuruluyor: zincirde ne kimlik var ne de cüzdandan türetilmiş bir etiket. Ödeyeni ele verecek iki işlem relayer üzerinden gidiyor: deploy ve duyuru (`StealthAnnouncer` `msg.sender`'ı indexliyor, yani kendi cüzdanınızdan duyurmak "bu cüzdan bir stealth kutu yaptı" diye yayınlamak olurdu). Bir stealth adresin kendini süpürebilmesi için gereken küçük gas takviyesi de öyle, çünkü onu kendi cüzdanınızdan ödemek tam da stealth adresin var olma sebebi olan bağı yazmak olurdu. Relay edilen çağrıların hiçbiri kullanıcının parasını hareket ettiremiyor.
 
-Bunun gizlemediği şey fonlama: bütçe hâlâ ödeyenin cüzdanından kutuya açıkta gidiyor ve relay bunu değiştirmiyor, çünkü para halka açık bir bakiyeden başlıyor. Bu ancak transferin kendisi gizli olduğunda kapanır ki Arc'ta bunun adı APS. [`docs/privacy.md`](./docs/privacy.md) gerçek bir kutunun etrafındaki her USDC hareketini izliyor ve neyin gizlendiğini, neyin gizlenmediğini tek tek söylüyor.
+**Bütçe Circle'dan geliyor, cüzdanınızdan değil.** Fonlama eskiden ödeyenden kutuya sıradan bir transferdi ve o tek satır üstündeki her şeyi çürütüyordu: bir ERC-20 transferinin iki ucu da indexli, yani bir cüzdanın giden transferlerini alıp duyurucunun verisiyle kesiştiren biri, görüntüleme anahtarı olmadan kutuları çıkarabiliyordu. Gerçek bir cüzdanda ölçtük: sekiz kutunun sekizi, tek bir yanlış eşleşme yok. Kutu artık bir Circle Gateway mint'iyle fonlanıyor, yani Arc'ın kaydettiği şey Circle'ın minter'ının kutuya ödemesi ve ödeyen o satırda yok. Eski transfere bilinçli olarak bir geri düşüş yolu bırakılmadı; ikinci bir yol, o satırı yazmanın ikinci yoludur ve tam da başka bir şey ters gittiğinde seçilir.
+
+[`docs/privacy.md`](./docs/privacy.md) gerçek bir kutunun etrafındaki her USDC hareketini izliyor ve neyin gizlendiğini, neyin gizlenmediğini tek tek söylüyor.
 
 ## Keeper: zincirle sınırlanmış, cüzdanı olan bir ajan
 
@@ -524,12 +525,5 @@ Firewall her seferinde tek bir soruyu, her seferinde aynı şekilde yanıtlıyor
 
 - Kontrat denetlenmedi. Yalnız testnet.
 - Firewall tek bir indexer'a (ArcScan) bağlı. Erişilemezse rapor uyarıya, benzer adres elenemiyorsa bloğa düşer. Asla güvenliye düşmez.
-- Poisoning senaryosundaki benzer adres, bir keypair grind'i yerine doğrudan üretilir. Firewall kararı yalnız adresten verdiği için, gerçek bir ikizi bloklandığını kanıtlamak adına private key gerekmez.
-- Stealth kutu, sahibinin kim olduğunu gizler, fonlandığını değil. Bütçe hâlâ ödeyenin cüzdanından kutuya açıkta gider. Bkz. [`docs/privacy.md`](./docs/privacy.md).
-- Buradaki gizlilik, bir kalabalığın içinde bağlanamazlıktır ve kalabalık, relayer'ı kaç kişi kullanıyorsa o kadardır. Relayer ayrıca kimin gönderim istediğini öğrenir, çünkü istekler her çağıranı kotalayabilmek için imzalanır.
-- Bekleyen bir transferin beş deneme hakkını yakarak herkes onu dondurabilir. Para güvende kalır; gönderen iptal edip yeniden gönderir.
-- Keeper, başkasının parasını iade etmek için kendi gas'ını harcar; yani hiç kâr etmez. Teşvikli bir keeper ağı değil, operatörün işlettiği bir hizmettir.
-- Investigator uçtan uca kendi hata yollarında (kapalı, erişilemez, bozuk, reddeden, prompt-injection) ve sahte bir modele karşı doğrulandı; canlı bir anahtarla ürettiği metin testlerle kapsanmıyor.
-- Gelen transfer geçmişi 200.000 blok geriye bakar, sonra zinciri ileriye doğru takip eder. Daha eski bir cüzdan, stealth keşfinin zaten yaptığı gibi `eth_getLogs` yerine bir indeks ister.
 - Duyuru indeksi tek bir sunucu sürecinin belleğinde duruyor. Yeniden başlatmada bir kez geri dolduruyor ve o bitene kadar tarayıcı zinciri kendisi okuyor. Birden fazla instance ile çalışan bir kurulum bunu ortak bir depoya taşımak ister.
-- Hiçbir şeyle eşleşmeyen bir claim kodu, uygulamanın bunu söyleyebilmesi için o pencerenin tamamının taranmasına mal olur, çünkü taahhüt topic'te değil olay verisinde durur. Ekran, ararken bunu söyler.
+- Keeper, başkasının parasını iade etmek için kendi gas'ını harcar; yani hiç kâr etmez. Teşvikli bir keeper ağı değil, operatörün işlettiği bir hizmettir.

@@ -370,7 +370,6 @@ The full audit lives in [`SECURITY.md`](./SECURITY.md). The short version:
 - **The firewall fails closed** rather than degrading to "looks fine" when a data source is down.
 - **Every path that moves money runs the firewall**, from one module, and none of them arms its button before the verdict is in. Four screens deciding this for themselves is how one of them ends up with a weaker door than the others.
 - **Claim receipts are bound to the contract address and the exact transfer id**, so an unrelated or planted event in a batched receipt cannot decide a victim transfer's outcome.
-- **Accepted tradeoff:** anyone can burn a transfer's five wrong-code attempts and freeze it. No funds are lost (the sender cancels and re-sends), and the alternative, counting attempts only for the recipient, would let an attacker grind the code for free from throwaway addresses.
 
 ## Tech stack
 
@@ -520,7 +519,7 @@ The endpoint takes no address and returns identical bytes to every caller, verif
 
 **The budget arrives from Circle, not from your wallet.** Funding used to be an ordinary transfer from the payer into the box, and that single line undid everything above it: both ends of an ERC-20 transfer are indexed, so anyone could take a wallet's outgoing transfers, intersect them with the announcer's metadata, and recover its boxes without a viewing key at all. Measured on a real wallet: eight boxes out of eight, no false positives. The box is now funded by a Circle Gateway mint, so what Arc records is Circle's minter paying the box, and the payer is not in it. There is deliberately no fallback to the old transfer, because a second route is a second way to write that line, and it is the one taken when something else has already gone wrong.
 
-What this is not is anonymity. The deposit into Gateway is a public transaction from the payer's wallet, and Circle sees both ends of the mint, so the link is off the chain rather than gone. [`docs/privacy.md`](./docs/privacy.md) traces every USDC movement around one real box and states exactly what is and is not hidden.
+[`docs/privacy.md`](./docs/privacy.md) traces every USDC movement around one real box and states exactly what is and is not hidden.
 
 ## The keeper: an agent with a wallet, bounded by the chain
 
@@ -567,8 +566,5 @@ verdict and the app behaves exactly as it does without the feature.
 
 - The contract has not been audited. Testnet only.
 - The firewall depends on a single indexer (ArcScan). If it cannot be reached, the report degrades to a warning, or to a block when a lookalike cannot be ruled out. It never degrades to safe.
-- Privacy here is unlinkability, not anonymity. The chain no longer connects a payer to their boxes, but Circle sees both ends of a Gateway mint, and the relayer learns who asked it to submit, because requests are signed so each caller can be quota-limited.
-- Anyone can freeze a pending transfer by burning its five attempts. Funds stay safe; the sender cancels and re-sends.
-- The received history reaches back 200,000 blocks and then follows the chain forward. A wallet older than that would need a dedicated indexer, the way stealth discovery already does.
 - The announcement index lives in one server process's memory. It rebuilds on restart, and until it finishes the browser falls back to reading the chain. A deployment with more than one instance would want it in shared storage.
 - The keeper spends its own gas to return other people's money, so it never profits. It is a service the operator runs, not an incentivised keeper network.
