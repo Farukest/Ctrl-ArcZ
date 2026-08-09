@@ -37,7 +37,7 @@ Arc üzerinde korumalı USDC transferi: bir ödemeyi imzalanmadan önce tarayan,
 | **Koruma**  | Gönderim öncesi risk firewall'u, kodla claim, gönderen iptali, süre dolunca otomatik iade       |
 | **Custody** | Yok. Para ya kullanıcıda ya kontratta. Owner yok, pause yok, upgrade yolu yok                   |
 | **Ürün**    | Herhangi bir cüzdanın, borsanın veya ödeme uygulamasının gömdüğü bir SDK. Yeni bir cüzdan değil |
-| **Testler** | Toplam 428: 99 Foundry, 265 SDK, 33 keeper, 31 demo-kit, artı canlı testnet koşuları |
+| **Testler** | Toplam 515: 99 Foundry, 333 SDK, 50 demo-kit, 33 keeper, artı canlı testnet koşuları |
 
 ## Problem
 
@@ -367,7 +367,7 @@ Denetimin tamamı [`SECURITY.md`](./SECURITY.md) içinde. Kısa hali:
 | Zincirler arası | Circle CCTP ve Circle Gateway; ikisi de kullanıcının cüzdanıyla imzalı |
 | Gasless         | İzin gerektirmeyen `claim`, Circle Gas Station sponsorluğu, relayer yedeği |
 | Onaylar         | Permit2, tek imzalı gönderim için                                    |
-| Uygulamalar     | React, Vite, Expo, `@ctrl-arcz/demo-kit` içinde ortak tasarım sistemi |
+| Uygulamalar     | React, Vite, `@ctrl-arcz/demo-kit` içinde ortak tasarım sistemi       |
 
 Uygulamadaki her geçmiş listesi tek bir bileşen. Gönderilen transferler, düz geçmiş,
 gelen transferler, köprüler ve abonelikler; her biri kendi arama kutusunu, kendi
@@ -387,10 +387,17 @@ olan her şey kendi kopyala butonunu taşır.
 | `packages/sdk`       | `@ctrl-arcz/sdk`, entegratörün gerçekten kurduğu şey                      |
 | `packages/demo-kit`  | Ortak cüzdan oturumu, tasarım sistemi ve sunucu tarafı yardımcılar        |
 | `apps/sender`        | Web uygulaması, port 5173. Gönderme ve alma onun iki modu                 |
-| `apps/api`           | Arka uç: ortak imzacı, relayer, gasless claim, push, investigator         |
+| `apps/api`           | Arka uç: ortak imzacı, relayer, gasless claim, keşif, investigator        |
 | `apps/keeper`        | Keeper ajanı: süresi dolan transferleri iade eder, sınırlı bir kutudan    |
-| `apps/mobile`        | Expo uygulaması: telefonda gönderim, claim ve aynı korumalı transferler   |
 | `examples`           | Bağımsız bir Node quickstart'ı, çerçevesiz                                |
+
+Android istemcisi buradaki bir paket değil, ayrı bir native Kotlin/Compose
+uygulaması. Web uygulamasının portu da değil: kendi risk motoru, stealth
+kriptosu ve CCTP/Gateway istemcileri var, aynı `apps/api` ile aynı deploy edilmiş
+kontratları çağırıyor. İki uygulamayı hizada tutan şey
+`packages/sdk/parity-vectors.json`: `scripts/gen-parity-vectors.ts` üretiyor, iki
+test takımı da ona karşı koşuyor, böylece TypeScript'ten sapan bir Kotlin portu
+bir ödemeyi değil bir testi düşürüyor.
 
 Her adres, RPC ve chain sabiti tek bir dosyada durur: `packages/sdk/src/chains/arcTestnet.ts`. Foundry deploy script'i ondan üretilen bir JSON dosyasını okur, böylece hiçbir adres iki kez yazılmaz.
 

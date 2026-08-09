@@ -1,8 +1,8 @@
 # @ctrl-arcz/api
 
-The Ctrl+ArcZ backend. One small service that both the web and mobile apps call,
-holding the server-only keys and running the event watcher. It replaces the Vite
-dev endpoints so the mobile app (and any real deployment) has a stable API.
+The Ctrl+ArcZ backend. One small service that every client calls (the web app and
+the native Android app), holding the server-only keys. It replaces the Vite dev
+endpoints so a real deployment has a stable API.
 
 ## Endpoints
 
@@ -18,10 +18,12 @@ dev endpoints so the mobile app (and any real deployment) has a stable API.
 | POST | `/api/relay/announce` | Announce that box (`StealthAnnouncer` indexes `msg.sender`). |
 | POST | `/api/relay/gas` | Fixed 0.05 USDC so a stealth address can pay for its own sweep. |
 | POST | `/api/investigate` | A reasoned second opinion on a recipient. Advisory only; it can only tighten a verdict. |
-| POST | `/api/notifications/register` | Register a device Expo push token for a wallet address. |
+| GET | `/api/verified-recipients` | Everyone a sender has settled a protected transfer to. Public, from public events. |
+| GET | `/api/announcements` | Every stealth announcement. Undirected: it takes no address and returns the same bytes to everyone. |
+| GET | `/api/bridge/:jobId` | The state of one relayer-run transfer. |
 
 The co-signer, bridge, gasless and gateway logic is reused from `@ctrl-arcz/demo-kit`
-so the web and mobile apps share exactly one implementation.
+so every client shares exactly one implementation.
 
 Every route that spends the relayer's gas requires a signed request
 (`x-ctrl-address` / `x-ctrl-timestamp` / `x-ctrl-signature` over path, timestamp and
@@ -40,16 +42,18 @@ with the token pinned to USDC and the cosigner pinned to itself, so the relayer 
 only ever sign a call the operator intended. What this does not hide is funding;
 see [`docs/privacy.md`](../../docs/privacy.md).
 
-## Notifications
+## No notifications here, on purpose
 
-The mobile app registers its Expo push token against the user's address. The Arc
-event watcher polls the CtrlArcZ contract and delivers pushes:
+There used to be a push path: the Expo app registered a device token and an event
+watcher pushed "you have a payment to claim". Both are gone with that app. The
+native Android client watches the chain itself and raises its own notifications,
+so nothing asks for this.
 
-- `TransferCreated` to you -> "you have a payment to claim"
-- `TransferClaimed` of yours -> "your transfer was claimed"
-
-Tokens are kept in `.tokens.json` (gitignored); a production deploy would use a
-database.
+Removing it removed a registry too. A table of wallet address to device token is a
+map of who is being paid, held by a server that has no other reason to know, and
+keeping one for a client that never calls it is the worst version of that trade.
+If a client ever needs push again, note that the watcher has to see
+`TransferCreated` to know who to tell, which is the same lookup.
 
 ## Run
 
@@ -58,8 +62,8 @@ cp .env.example .env.local   # fill in COSIGNER_PK, RELAYER_PK (throwaway testne
 pnpm --filter @ctrl-arcz/api dev
 ```
 
-All keys are server-only and never reach a browser or the mobile bundle. In
-production this runs behind nginx (e.g. `api.ctrlarcz.xyz`) with TLS.
+All keys are server-only and never reach a browser or an app bundle. In production
+this runs behind nginx (e.g. `api.ctrlarcz.xyz`) with TLS.
 
 ## The investigator
 

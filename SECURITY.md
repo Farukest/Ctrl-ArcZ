@@ -219,6 +219,14 @@ app (`apps/mobile`). Three parallel reviews; findings below with status
 
 ## C. Mobile app (`apps/mobile`): pre-ship
 
+> **Retired.** `apps/mobile` was the Expo client. It has been removed from the
+> repository: the shipping Android client is a separate native Kotlin/Compose app,
+> which is not a port of it and does not inherit its code. The findings below are
+> kept as the audit record for the Expo app and do **not** describe the native one;
+> read them as history, not as current state. The `/api/notifications/register`
+> route and the push watcher went with it, so the token registry that section B
+> hardened no longer exists at all.
+
 - **HIGH. Claim QR is a bearer credential** (code + salt in one QR): anyone who
   sees it can claim. **Documented (ship-blocker):** split the 6-digit code
   out-of-band from the salt QR; the contract's 5-attempt lockout already mitigates

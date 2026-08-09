@@ -14,13 +14,15 @@ import {
   verifiedRecipientsGet,
   announcementsGet,
 } from './handlers.js';
-import { registerHandler } from './notifications.js';
-import { startWatcher } from './watcher.js';
-
 /**
- * The Ctrl+ArcZ backend. One service for the web and mobile apps: the enclave
- * co-signer, the cross-chain bridge and gasless claim (server-held keys), device
- * push registration, and the Arc event watcher that delivers notifications.
+ * The Ctrl+ArcZ backend. One service for every client: the enclave co-signer, the
+ * cross-chain bridge and gasless claim (server-held keys), the stealth relay, and
+ * the two undirected indexes discovery reads from.
+ *
+ * There is deliberately no push notification path here. It existed for the Expo
+ * app, which the native Android client replaced; that client watches the chain
+ * itself, so a server holding device tokens would be a registry of who is being
+ * paid, kept for nobody.
  */
 serve({
   'GET /api/health': healthGet,
@@ -47,9 +49,4 @@ serve({
 
   // Advisory only, and it can only ever tighten a verdict — never weaken one.
   'POST /api/investigate': investigatePost,
-
-  // Notifications
-  'POST /api/notifications/register': registerHandler,
 });
-
-startWatcher();

@@ -35,22 +35,6 @@ export default tseslint.config(
     },
   },
   {
-    // Expo loads these with `require` before any bundler runs, so they are
-    // CommonJS running in Node rather than modules in the app.
-    files: ['apps/mobile/metro.config.js', 'apps/mobile/plugins/**/*.js'],
-    languageOptions: {
-      sourceType: 'commonjs',
-      globals: {
-        console: 'readonly',
-        process: 'readonly',
-        __dirname: 'readonly',
-        require: 'readonly',
-        module: 'writable',
-      },
-    },
-    rules: { '@typescript-eslint/no-require-imports': 'off' },
-  },
-  {
     rules: {
       '@typescript-eslint/no-unused-vars': [
         'error',
