@@ -1,10 +1,10 @@
 # Ctrl+ArcZ
 
-**Refuse the bad send. Lock the good one. Return the money if nobody claims it.**
+**Screened before it is signed. Recallable until it is claimed. Repeatable without handing over your wallet.**
 
 [![Watch the demo](https://img.shields.io/badge/Watch_the_demo-FF0000?style=flat-square&logo=youtube&logoColor=white)](https://www.youtube.com/watch?v=fcgyqBUbkcg) [![Live app](https://img.shields.io/badge/Live-ctrlarcz.xyz-4b9fff?style=flat-square)](https://ctrlarcz.xyz) [![Android beta](https://img.shields.io/badge/Android-beta-3ddc84?style=flat-square&logo=googleplay&logoColor=white)](https://play.google.com/apps/testing/com.xyz.ctrlarcz) [![Docs](https://img.shields.io/badge/Docs-docs.ctrlarcz.xyz-8b93a1?style=flat-square)](https://docs.ctrlarcz.xyz) [![Arc Testnet](https://img.shields.io/badge/Arc_Testnet-5042002-2fbf71?style=flat-square)](https://testnet.arcscan.app/address/0x8dAb7148cdc31DAcad6d7e12161AA3DEDb572Dca) [![Tests](https://img.shields.io/badge/tests-528_passing-2fbf71?style=flat-square)](#tech-stack) [![Custody](https://img.shields.io/badge/custody-none-8b93a1?style=flat-square)](#security)
 
-Protected USDC transfers on Arc: an SDK and a single contract that screen a payment before it is signed, hold it until the recipient proves they were meant to have it, and give it back to the sender if they never do.
+USDC payments on Arc with the three things a plain transfer does not have: a firewall that refuses a bad recipient before anything is signed, a lock the sender can undo until the recipient proves the money was meant for them, and a bounded spend box that lets a merchant or an agent charge you again without ever touching your wallet. One SDK, one contract, no custody.
 
 [Turkish version](./README.tr.md)
 
@@ -41,17 +41,21 @@ Protected USDC transfers on Arc: an SDK and a single contract that screen a paym
 
 ## The problem
 
-Address poisoning is the fastest growing way to lose stablecoins, and it works because of a detail every wallet shares: addresses are shown abbreviated, as `0x64Ea…Fe3F`. The attacker grinds an address whose first and last characters match one you already pay, sends you a zero-value transfer from it so it lands in your transaction history, and waits. The next time you pay that counterparty you copy the address from your own history, and the two are indistinguishable.
+A stablecoin transfer is **final, blind and one-shot**, and every product built on one inherits all three.
 
-The defining property is this: **the victim sends to the wrong address on purpose.** They are not tricked into signing something unexpected. They believe the address is correct, and everything downstream of that belief behaves normally.
+**Final.** Sign it and it is gone. No undo, no dispute, no cancelling while it is pending, because there is no pending. The most common way to lose money on chain is not a hack; it is a correct signature over a wrong address.
 
-That is why the ritual everyone performs before a large transfer, sending one dollar first and waiting for the recipient to confirm, does not help. The test transfer goes to the poisoned address too, and it confirms perfectly. You have paid twice, waited, and proven nothing.
+**Blind.** Nothing between the user and the chain reads the recipient before they commit. Address poisoning is the sharpest version of this, and it works because of a detail every wallet shares: addresses are shown abbreviated, as `0x64Ea…Fe3F`. The attacker grinds an address whose first and last characters match one you already pay, sends you a zero-value transfer from it so it lands in your history, and waits for you to copy it back out. The defining property is that **the victim sends to the wrong address on purpose** — no unexpected signature, no malicious contract, nothing downstream behaving abnormally. It is why the ritual of sending one dollar first proves nothing: the test payment confirms perfectly against the poisoned address. And it is why an escrow alone does not help: locking the funds for the wrong recipient just locks them for the attacker. Something has to refuse the send.
 
-It is also why an escrow on its own does not help. Locking the funds for the wrong recipient just locks them for the attacker.
+**One-shot.** A transfer pays one address, one time. Anything that repeats — a subscription, an allowance, an agent that pays its own bills — has to be built on top, and the two ways it is normally built are an unlimited token approval or a shared key. Both are a blank cheque, and both write *this wallet pays that merchant, on this schedule* onto a public ledger where it stays.
 
-Something has to refuse the send.
+Ctrl+ArcZ answers the three in one place. A firewall refuses a bad recipient before anything is signed. The transfer that follows is locked behind a code the sender hands over out of band, recallable at any time until it is claimed and refunded on its own if it never is. And what repeats runs from a spend box whose policy is on chain — this merchant, this much, this often, until this date — owned by a one-time address, so what the chain records is a box, not a person.
+
+The rest of the product is the same three properties applied elsewhere: private payments through a disposable account, subscriptions and agent wallets on the same box, and CCTP and Gateway to bring the USDC in, every one of them screened by the same firewall before its button will arm.
 
 ## How it compares
+
+On the first two properties there is a crowded field, and it splits cleanly: the tools that see the problem coming cannot stop it, and the tools that can recover the money need somebody to arbitrate and hold it first.
 
 |                             | Stops the send | Funds recoverable after the fact | Needs an arbiter | Takes custody | Works for plain P2P |
 | --------------------------- | -------------- | -------------------------------- | ---------------- | ------------- | ------------------- |
@@ -185,7 +189,7 @@ The alphabet is Crockford base32, so there is no I, L, O or U to confuse with 1 
 
 Two design decisions in the contract are worth knowing:
 
-**A wrong code does not revert, it returns false.** An attempt limiter cannot be built on a reverting call, because the revert would roll back the very counter that records the failed guess, and the twenty-bit code could then be ground down on-chain for the price of gas. The failed attempt has to commit. `claim` returns a boolean and writes the attempt to storage; five wrong guesses freeze the transfer, and the SDK reads the receipt and throws `WrongClaimCodeError` rather than treating a mined transaction as a successful claim.
+**A wrong code does not revert, it returns false.** An attempt limiter cannot be built on a reverting call, because the revert would roll back the very counter that records the failed guess, leaving the guesses unbounded and the limiter decorative. The failed attempt has to commit. `claim` returns a boolean and writes the attempt to storage; five wrong guesses freeze the transfer, and the SDK reads the receipt and throws `WrongClaimCodeError` rather than treating a mined transaction as a successful claim.
 
 **Anyone may submit a claim, and the funds always go to the recipient recorded at send time.** That makes a claim front-run-safe (replaying a revealed proof merely settles the transfer for its intended recipient) and it is what makes the gasless path possible.
 
@@ -227,7 +231,7 @@ sequenceDiagram
 <tr>
 <td>Paste the recipient. The firewall runs as you type, on a debounce.</td>
 <td>The funds are locked. One code comes out, and it is shown once.</td>
-<td>The recipient claims, paying their own gas or letting a relayer pay.</td>
+<td>The recipient claims, paying their own gas or having it sponsored.</td>
 </tr>
 </table>
 
@@ -237,8 +241,8 @@ sequenceDiagram
 <td width="50%"><img src="docs/screens/14-received-history.png" alt="The received history, searchable and filterable"></td>
 </tr>
 <tr>
-<td>The recipient never had to hold gas: a zero-balance wallet claimed this through the relayer.</td>
-<td>Everything ever sent to this wallet, read from chain rather than from this browser. Search, a date range, days grouped as days, and every id, address and transaction copyable.</td>
+<td>The recipient never had to hold gas: a zero-balance wallet claimed this without sending a transaction.</td>
+<td>Everything ever sent to this wallet, read from chain rather than from this browser. Search, a date range, days grouped as days, and every address and transaction copyable.</td>
 </tr>
 </table>
 
@@ -390,7 +394,9 @@ drifted the way copies do: only some values were copyable, only some rows carrie
 the transaction, and none of them could be narrowed by date. `HistoryList` and
 `HistoryRow` in `@ctrl-arcz/demo-kit/ui` are the one vocabulary all five now speak,
 so adding a date filter was one change in one place rather than five. The rule that
-shaped the row: anything that is data rather than prose carries its own copy button.
+shaped the row: anything you would paste somewhere else carries its own copy button,
+and anything you would only read does not. An address and a transaction hash are the
+first; a two-character row number is the second.
 
 ## Repository layout
 
@@ -408,7 +414,7 @@ The Android client is a separate native Kotlin/Compose app rather than a package
 here. It is not a port of the web app: it holds its own risk engine, stealth
 cryptography and CCTP/Gateway clients, and calls the same `apps/api` and the same
 deployed contracts. What keeps the two implementations honest is
-`packages/sdk/parity-vectors.json`, generated by `scripts/gen-parity-vectors.ts`
+`packages/sdk/parity-vectors.json`, generated by `packages/sdk/scripts/gen-parity-vectors.ts`
 and asserted by both test suites, so a Kotlin port that drifts from the TypeScript
 one fails a test rather than a payment.
 
@@ -487,7 +493,7 @@ Ctrl+ArcZ solves this with a **disposable spend box**. You do not pay the mercha
 
 You stay invisible (the merchant sees the box, never your wallet), you stay bounded (the worst case is the budget you funded), and you can cancel any time (sweep the box, funds come home, the pulls stop).
 
-The co-signer is a gatekeeper, not a custodian. Bringing the money home (`sweepToVault`, or `sweepExpired` once the date passes) needs only your own key, never the co-signer's, so if The Machine goes offline or turns hostile it can stall a pull but can never hold your funds. Its role is liveness, not custody: worst case you sweep and the subscription simply ends. There is no timezone or clock trick to exploit either, since the on-chain caps (per-pull and total) bound the loss independently of time, and the contract reads a plain UTC block timestamp with intervals measured in days.
+The co-signer is a gatekeeper, not a custodian. Bringing the money home (`sweepToVault`, or `sweepExpired` once the date passes) needs only your own key, never the co-signer's, so if The Machine goes offline or turns hostile it can stall a pull but can never hold your funds. Its role is liveness, not custody: worst case you sweep and the subscription simply ends. There is no timezone or clock trick to exploit either, since the on-chain caps (per-pull and total) bound the loss independently of time, and the contract compares a plain UTC block timestamp against an interval in seconds.
 
 **Create a subscription.** Name it, point it at a merchant, then say the two things anyone actually has in mind: how much each charge is, and how many of them. The budget is shown rather than asked, because it is an answer, and it is shown beside what Circle charges to move it into the box and what the two come to together. Authorising a subscription is a payment, and it was the last payment screen in the app that did not say what would leave the wallet.
 

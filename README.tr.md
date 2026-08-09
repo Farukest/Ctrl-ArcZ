@@ -1,10 +1,10 @@
 # Ctrl+ArcZ
 
-**Yanlış gönderimi reddet. Doğrusunu kilitle. Kimse almazsa parayı geri ver.**
+**İmzalanmadan taranır. Claim edilene kadar geri alınabilir. Cüzdanını vermeden tekrarlanır.**
 
 [![Demoyu izle](https://img.shields.io/badge/Demoyu_izle-FF0000?style=flat-square&logo=youtube&logoColor=white)](https://www.youtube.com/watch?v=fcgyqBUbkcg) [![Canlı uygulama](https://img.shields.io/badge/Canl%C4%B1-ctrlarcz.xyz-4b9fff?style=flat-square)](https://ctrlarcz.xyz) [![Android beta](https://img.shields.io/badge/Android-beta-3ddc84?style=flat-square&logo=googleplay&logoColor=white)](https://play.google.com/apps/testing/com.xyz.ctrlarcz) [![Dokümanlar](https://img.shields.io/badge/Dok%C3%BCmanlar-docs.ctrlarcz.xyz-8b93a1?style=flat-square)](https://docs.ctrlarcz.xyz) [![Arc Testnet](https://img.shields.io/badge/Arc_Testnet-5042002-2fbf71?style=flat-square)](https://testnet.arcscan.app/address/0x8dAb7148cdc31DAcad6d7e12161AA3DEDb572Dca) [![Testler](https://img.shields.io/badge/test-528_ge%C3%A7iyor-2fbf71?style=flat-square)](#teknoloji) [![Emanet](https://img.shields.io/badge/emanet-yok-8b93a1?style=flat-square)](#g%C3%BCvenlik)
 
-Arc üzerinde korumalı USDC transferi: bir ödemeyi imzalanmadan önce tarayan, alıcı kendisine ait olduğunu kanıtlayana kadar kontratta tutan ve hiç talep edilmezse gönderene iade eden bir SDK ve tek bir kontrat.
+Arc üzerinde USDC ödemeleri, düz bir transferde olmayan üç şeyle: hiçbir şey imzalanmadan kötü alıcıyı reddeden bir firewall, alıcı paranın kendisine ait olduğunu kanıtlayana kadar gönderenin geri alabildiği bir kilit ve bir satıcının ya da bir ajanın cüzdanınıza hiç dokunmadan tekrar tekrar çekim yapabildiği sınırlı bir harcama kutusu. Tek SDK, tek kontrat, custody yok.
 
 [English version](./README.md)
 
@@ -41,17 +41,21 @@ Arc üzerinde korumalı USDC transferi: bir ödemeyi imzalanmadan önce tarayan,
 
 ## Problem
 
-Address poisoning, stablecoin kaybetmenin en hızlı büyüyen yolu ve her cüzdanın paylaştığı tek bir ayrıntı yüzünden işliyor: adresler kısaltılarak gösteriliyor, `0x64Ea…Fe3F` gibi. Saldırgan, sizin zaten ödeme yaptığınız bir adresle ilk ve son karakterleri aynı olan bir adres üretiyor, oradan size 0 değerli bir transfer atıp kendini işlem geçmişinize yerleştiriyor ve bekliyor. Aynı kişiye bir daha ödeme yaparken adresi kendi geçmişinizden kopyalıyorsunuz ve ikisi ayırt edilemiyor.
+Bir stablecoin transferi **nihai, kör ve tek seferliktir** ve üzerine kurulan her ürün üçünü de miras alır.
 
-Belirleyici özellik şu: **kurban yanlış adrese bilerek gönderiyor.** Beklenmedik bir şeyi imzalaması için kandırılmıyor. Adresin doğru olduğuna inanıyor ve bu inancın ardından gelen her şey normal işliyor.
+**Nihai.** İmzaladın, gitti. Geri alma yok, itiraz yok, "beklemedeyken iptal et" yok; çünkü bekleme diye bir şey yok. Zincirde para kaybetmenin en yaygın yolu bir hack değil, yanlış bir adres üzerine atılmış doğru bir imza.
 
-Büyük transferlerden önce herkesin yaptığı ritüelin, yani önce bir dolar gönderip onay beklemenin, bu yüzden faydası yok. Test transferi de zehirlenmiş adrese gidiyor ve sorunsuz onaylanıyor. İki kez ödediniz, beklediniz ve hiçbir şey kanıtlamadınız.
+**Kör.** Kullanıcıyla zincir arasında, o taahhüt etmeden alıcıyı okuyan hiçbir şey yok. Address poisoning bunun en keskin hâli ve her cüzdanın paylaştığı tek bir ayrıntı yüzünden işliyor: adresler kısaltılarak gösteriliyor, `0x64Ea…Fe3F` gibi. Saldırgan, sizin zaten ödeme yaptığınız bir adresle ilk ve son karakterleri aynı olan bir adres üretiyor, oradan size 0 değerli bir transfer atıp kendini geçmişinize yerleştiriyor ve sizin onu geri kopyalamanızı bekliyor. Belirleyici özellik şu: **kurban yanlış adrese bilerek gönderiyor** — beklenmedik bir imza yok, kötü niyetli bir kontrat yok, sonrasında anormal davranan hiçbir şey yok. Önce bir dolar gönderme ritüelinin hiçbir şey kanıtlamamasının sebebi bu: test ödemesi de zehirlenmiş adrese gidiyor ve sorunsuz onaylanıyor. Tek başına escrow'un da işe yaramamasının sebebi bu: yanlış alıcı için parayı kilitlemek, parayı saldırgan için kilitlemektir. Bir yerde birinin gönderimi reddetmesi gerekiyor.
 
-Tek başına escrow'un da bu yüzden faydası yok. Yanlış alıcı için parayı kilitlemek, parayı saldırgan için kilitlemektir.
+**Tek seferlik.** Bir transfer tek bir adrese, bir kez öder. Tekrarlayan her şey — abonelik, harçlık, kendi faturasını ödeyen bir ajan — bunun üzerine inşa edilmek zorunda ve normalde inşa edilme yolu iki tane: sınırsız bir token approve'u ya da paylaşılan bir anahtar. İkisi de açık çektir ve ikisi de *bu cüzdan şu satıcıya, şu düzenle ödüyor* cümlesini herkese açık bir deftere kalıcı olarak yazar.
 
-Bir yerde birinin gönderimi reddetmesi gerekiyor.
+Ctrl+ArcZ üçüne de tek yerde cevap veriyor. Bir firewall, hiçbir şey imzalanmadan kötü alıcıyı reddediyor. Ardından gelen transfer, gönderenin kanaldan elden verdiği bir kodun arkasında kilitleniyor; claim edilene kadar her an geri alınabiliyor ve hiç edilmezse kendiliğinden iade oluyor. Tekrarlayan şey ise politikası zincirde duran bir harcama kutusundan çalışıyor — şu satıcı, şu kadar, şu sıklıkta, şu tarihe kadar — ve o kutunun sahibi tek kullanımlık bir adres, yani zincirin kaydettiği şey bir kutu, bir kişi değil.
+
+Ürünün geri kalanı aynı üç özelliğin başka yerlere uygulanmış hâli: tek kullanımlık bir hesap üzerinden gizli ödeme, aynı kutu üzerinde abonelikler ve ajan cüzdanları, USDC'yi içeri getirmek için CCTP ve Gateway. Hepsi, butonu kurulmadan önce aynı firewall'dan geçiyor.
 
 ## Karşılaştırma
+
+İlk iki özellikte kalabalık bir alan var ve temiz ikiye ayrılıyor: sorunu önceden gören araçlar onu durduramıyor, parayı kurtarabilen araçlar ise önce birinin hakemlik etmesini ve parayı tutmasını istiyor.
 
 |                              | Gönderimi durdurur | Sonradan para kurtarılabilir  | Arbiter gerekir | Custody alır | Düz P2P'de çalışır |
 | ---------------------------- | ------------------ | ----------------------------- | --------------- | ------------ | ------------------ |
@@ -77,27 +81,37 @@ flowchart LR
         RISK["risk/<br/>Katman 1 firewall<br/>saf kural motoru"]
         TR["transfer/<br/>send, claim, cancel, reclaim"]
         HIST["history/<br/>Katman 3 temiz geçmiş"]
-        CFG["config/<br/>entegratöre özel davranış"]
+        SHIELD["shield/<br/>Katman 4 harcama kutuları<br/>stealth, ortak imzacı"]
+        BRIDGE["bridge/<br/>CCTP ve Gateway<br/>kullanıcı imzalar"]
     end
 
     SCOUT["ArcScan<br/>Blockscout REST API"]
     MEMO["Memo predeploy<br/>EOA sarmalayıcı"]
+    CIRCLE["Circle<br/>attestation ve mint"]
 
     subgraph C["CtrlArcZ.sol"]
         SM["sendProtected, claim,<br/>cancel, reclaimExpired<br/>isVerifiedRecipient"]
     end
 
+    BOX["SpendPolicyAccount<br/>hedef, limitler, aralık, bitiş"]
     USDC["USDC ERC-20<br/>0x3600…0000, 6 decimals"]
 
     I -->|sendProtected| TR
     TR ==>|firewall, para kımıldamadan önce| RISK
     I -.->|check, opsiyonel, gönderim öncesi UI için| RISK
     I -->|getCleanHistory| HIST
-    I -->|defineConfig| CFG
+    I -->|abonelik, gizli ödeme| SHIELD
+    I -->|USDC'yi Arc'a getir| BRIDGE
     RISK -.->|okur| SCOUT
     TR -->|viem| MEMO
     MEMO --> C
     C --> USDC
+    SHIELD ==>|her harcama: önce firewall, sonra ortak imza| RISK
+    SHIELD --> BOX
+    BOX --> USDC
+    BRIDGE --> CIRCLE
+    CIRCLE -->|mint eder| BOX
+    CIRCLE --> USDC
     SM -.->|RecipientVerified| RISK
 ```
 
@@ -175,7 +189,7 @@ Alfabe Crockford base32'dir, yani 1 ve 0 ile karışan I, L, O, U harfleri yoktu
 
 Kontratta bilinmesi gereken iki karar var:
 
-**Yanlış kod revert etmez, `false` döner.** Deneme sınırlayıcısı revert eden bir çağrının üzerine kurulamaz, çünkü revert tam da başarısız denemeyi kaydeden sayacı geri alır ve 20 bitlik kod zincir üstünde gas parasına kırılabilir hale gelir. Başarısız denemenin kaydedilmesi şart. `claim` bir boolean döner ve denemeyi zincire yazar; beş yanlış deneme transferi dondurur, SDK makbuzu okuyup `WrongClaimCodeError` fırlatır ve madenilen bir işlemi başarılı claim saymaz.
+**Yanlış kod revert etmez, `false` döner.** Deneme sınırlayıcısı revert eden bir çağrının üzerine kurulamaz, çünkü revert tam da başarısız denemeyi kaydeden sayacı geri alır; denemeler sınırsız, sınırlayıcı da süs olur. Başarısız denemenin kaydedilmesi şart. `claim` bir boolean döner ve denemeyi zincire yazar; beş yanlış deneme transferi dondurur, SDK makbuzu okuyup `WrongClaimCodeError` fırlatır ve madenilen bir işlemi başarılı claim saymaz.
 
 **Claim'i herkes gönderebilir ve para her zaman gönderim anında kaydedilen alıcıya gider.** Bu, claim'i front-run'a karşı güvenli kılar (açığa çıkmış bir kanıtı tekrarlayan biri yalnızca transferi asıl alıcısı için sonuçlandırır) ve gasless yolunu mümkün kılan da budur.
 
@@ -217,7 +231,7 @@ sequenceDiagram
 <tr>
 <td>Alıcıyı yapıştırın. Firewall siz yazarken, debounce ile çalışır.</td>
 <td>Para kilitlendi. Tek bir kod çıkar ve bir kez gösterilir.</td>
-<td>Alıcı claim eder: kendi gas'ıyla ya da relayer ödeyerek.</td>
+<td>Alıcı claim eder: kendi gas'ıyla ya da gas sponsor edilerek.</td>
 </tr>
 </table>
 
@@ -227,8 +241,8 @@ sequenceDiagram
 <td width="50%"><img src="docs/screens/14-received-history.png" alt="Gelen transferler listesi"></td>
 </tr>
 <tr>
-<td>Alıcının gas tutması hiç gerekmedi: bunu sıfır bakiyeli bir cüzdan relayer üzerinden claim etti.</td>
-<td>Bu cüzdana şimdiye kadar gönderilen her şey; bu tarayıcıdan değil zincirden okunuyor. Arama, tarih aralığı, günleri gün gibi gruplayan başlıklar ve kopyalanabilir her numara, adres, işlem.</td>
+<td>Alıcının gas tutması hiç gerekmedi: bunu sıfır bakiyeli bir cüzdan, tek bir işlem göndermeden claim etti.</td>
+<td>Bu cüzdana şimdiye kadar gönderilen her şey; bu tarayıcıdan değil zincirden okunuyor. Arama, tarih aralığı, günleri gün gibi gruplayan başlıklar ve kopyalanabilir her adres ve işlem.</td>
 </tr>
 </table>
 
@@ -260,7 +274,7 @@ Bu buton alıcıda da var. Tanımadığınız birinden gelen, hiç istemediğini
 
 Arc'ta gas USDC olduğu için, cüzdanı bomboş yepyeni bir alıcı normalde claim için ödeme yapamaz. `claim` izin gerektirmediği ve parayı her zaman kayıtlı alıcıya ödediği için, bir relayer onu gönderip gas'ı üstlenebilir. Alıcı hiç işlem göndermeden tutarın tamamını alır. Bu zincirde doğrulandı: taze, sıfır bakiyeli, nonce'u 0 olan bir adres transferin tamamını aldı ve nonce'u 0 kaldı.
 
-Alıcı sadece **Gasless**'a basar. Claim sunucu tarafında imzalanır, yani ne relayer ne de Circle anahtarı tarayıcıya ulaşır; Circle Gas Station yapılandırılmışsa gas'ı bu projeden kimse ödemez, sponsor edilir. Arc testnet'te ölçüldü: claim EntryPoint v0.7 üzerinden, hiç USDC'si olmayan bir Circle Smart Account'tan geçti, paymaster 0.0062 USDC gas ödedi ve relayer'ın bakiyesi sıfır değişti. Gas Station bilgileri yoksa aynı yol relayer'ın kendi bakiyesinden imzalayıp ödemesine düşer; alıcının deneyimi iki durumda da aynıdır.
+Alıcı sadece **Gazsız al**'a basar. Claim sunucu tarafında imzalanır, yani ne relayer ne de Circle anahtarı tarayıcıya ulaşır; Circle Gas Station yapılandırılmışsa gas'ı bu projeden kimse ödemez, sponsor edilir. Arc testnet'te ölçüldü: claim EntryPoint v0.7 üzerinden, hiç USDC'si olmayan bir Circle Smart Account'tan geçti, paymaster 0.0062 USDC gas ödedi ve relayer'ın bakiyesi sıfır değişti. Gas Station bilgileri yoksa aynı yol relayer'ın kendi bakiyesinden imzalayıp ödemesine düşer; alıcının deneyimi iki durumda da aynıdır.
 
 ## USDC'yi Arc'a getirmek: CCTP veya Gateway
 
@@ -315,6 +329,8 @@ Gateway, CCTP'den daha az zincir destekler; bu yüzden ona geçtiğinizde seçic
 Her iki rota da **kullanıcının kendi cüzdanı** tarafından imzalanır. Bu projede hiçbir bileşen, birinin USDC'sini hareket ettirebilecek bir anahtar tutmaz: burn, Gateway yatırması ve Gateway harcaması cüzdanın ürettiği işlemler ya da EIP-712 imzalarıdır, gerisini Circle'ın attestation servisi yapar. Fonlanacak bir operatör bakiyesi ve custody'sine güvenilecek bir taraf yoktur; yanlış adrese para kaptırmamak üzerine kurulu bir üründe köprünün gönderilmeye değer tek hâli budur.
 
 Bunun bedeli, Circle'ın Node öncelikli kitlerini bir sunucudan çağırmaktan biraz daha fazla iş ve o işi SDK üstleniyor: `packages/sdk/src/bridge` doğrudan CCTP ve Gateway kontratlarıyla ve REST API'leriyle konuşuyor, aynı cüzdandaki iki akış nonce yarışına girmesin diye işlemleri imzalayan başına sıraya alıyor, kaynak zincirin kendi burn'ünü ödeyebildiğini kontrol ediyor ve sayfa yenilense bile takılı kalmış bir transferi burn hash'inden devralabiliyor.
+
+**Ulaşmayan bir transfer kaybolmuş para değildir ve satır bunu söyler.** Gateway harcamasında niyet kabul edildiğinde kaynak zincirde bir burn olmaz: Circle kendi defterinden düşer ve mutabakatı sonra yapar. Yani başarısız bir mint, burn'ün hiç çalışmadığı ve bakiyeden çıkanın bir blokaj olduğu anlamına gelir. Circle onu serbest bırakıyor; ücret dahil, on dakikanın altında iki kez ölçtük. Buna "başarısız" demek, parası yoldayken birine parasının gittiğini söylemek olurdu; o yüzden satır önce `dönüyor`, sonra `döndü` diyor. Circle'ın durumu temelli `failed` kalıyor ve serbest bırakmayı hiç raporlayamıyor, bu yüzden uygulama bunun yerine bakiyeyi izliyor: harcamadan önce not ettiği rakama karşı.
 
 ## Neden Arc
 
@@ -375,8 +391,9 @@ kopyaların yaptığı gibi birbirinden ayrılmışlardı: değerlerin yalnızca
 kopyalanabiliyordu, satırların yalnızca bazıları işlemi taşıyordu ve hiçbiri tarihe
 göre daraltılamıyordu. `@ctrl-arcz/demo-kit/ui` içindeki `HistoryList` ve
 `HistoryRow`, artık beşinin de konuştuğu tek dil; tarih filtresi eklemek beş yerde
-değil tek yerde bir değişiklik oldu. Satırı şekillendiren kural: metin değil veri
-olan her şey kendi kopyala butonunu taşır.
+değil tek yerde bir değişiklik oldu. Satırı şekillendiren kural: başka bir yere
+yapıştıracağın her şey kendi kopyala butonunu taşır, sadece okuyacağın şey taşımaz.
+Adres ve işlem hash'i birincisi; iki karakterlik satır numarası ikincisi.
 
 ## Depo yapısı
 
@@ -394,7 +411,7 @@ Android istemcisi buradaki bir paket değil, ayrı bir native Kotlin/Compose
 uygulaması. Web uygulamasının portu da değil: kendi risk motoru, stealth
 kriptosu ve CCTP/Gateway istemcileri var, aynı `apps/api` ile aynı deploy edilmiş
 kontratları çağırıyor. İki uygulamayı hizada tutan şey
-`packages/sdk/parity-vectors.json`: `scripts/gen-parity-vectors.ts` üretiyor, iki
+`packages/sdk/parity-vectors.json`: `packages/sdk/scripts/gen-parity-vectors.ts` üretiyor, iki
 test takımı da ona karşı koşuyor, böylece TypeScript'ten sapan bir Kotlin portu
 bir ödemeyi değil bir testi düşürüyor.
 
@@ -473,7 +490,7 @@ Ctrl+ArcZ bunu **tek kullanımlık harcama kutusu** ile çözüyor. Satıcıya d
 
 Görünmez kalıyorsunuz (satıcı kutuyu görüyor, cüzdanınızı değil), sınırlı kalıyorsunuz (en kötü ihtimal yüklediğiniz bütçe) ve istediğiniz an iptal edebiliyorsunuz (kutuyu süpürün, para eve döner, çekimler durur).
 
-Ortak imzacı bir kapı bekçisi, kasadar değil. Parayı eve getirmek (`sweepToVault` ya da tarih geçtiyse `sweepExpired`) yalnızca sizin anahtarınızı ister, ortak imzacınınkini asla; yani The Machine çökerse ya da düşman olursa bir çekimi geciktirebilir ama paranızı tutamaz. Rolü canlılık, custody değil: en kötü ihtimalle süpürürsünüz ve abonelik biter. Saat ya da zaman dilimi oyunu da yok, çünkü zincirdeki tavanlar (çekim başına ve toplam) zarardan bağımsız olarak zamanı sınırlıyor ve kontrat düz bir UTC blok zaman damgası okuyor.
+Ortak imzacı bir kapı bekçisi, kasadar değil. Parayı eve getirmek (`sweepToVault` ya da tarih geçtiyse `sweepExpired`) yalnızca sizin anahtarınızı ister, ortak imzacınınkini asla; yani The Machine çökerse ya da düşman olursa bir çekimi geciktirebilir ama paranızı tutamaz. Rolü canlılık, custody değil: en kötü ihtimalle süpürürsünüz ve abonelik biter. Saat ya da zaman dilimi oyunu da yok, çünkü zincirdeki tavanlar (çekim başına ve toplam) zararı zamandan bağımsız olarak sınırlıyor ve kontrat düz bir UTC blok zaman damgasını saniye cinsinden bir aralıkla karşılaştırıyor.
 
 **Abonelik oluşturun.** İsim verin, bir satıcıya yöneltin, sonra insanın kafasındaki iki şeyi söyleyin: her çekim ne kadar ve kaç tane. Bütçe sorulmuyor, gösteriliyor; çünkü o bir cevap. Yanında Circle'ın kutuyu fonlamak için aldığı ücret ve ikisinin toplamı da duruyor. Abonelik yetkilendirmek bir ödemedir ve uygulamada cüzdandan ne çıkacağını söylemeyen son ödeme ekranı burasıydı.
 

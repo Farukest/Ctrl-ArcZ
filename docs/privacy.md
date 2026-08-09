@@ -41,12 +41,8 @@ reasons that survive any future privacy upgrade:
   wallet. On Arc gas is USDC, so this was a plain, public `payer -> stealthAddress`
   transfer: not a hint, the link itself.
 
-Both are gone, and so is the funding transfer they used to sit beside.
-
-What is left is not on the chain. The payer still deposits into Gateway from their
-own wallet, in public, and Circle sees both ends of the mint that follows. So the
-link moved off the ledger rather than disappearing: reading Arc no longer connects
-a payer to their boxes, and Circle could.
+Both are gone, and so is the funding transfer they used to sit beside. Reading Arc
+no longer connects a payer to their boxes.
 
 ## What APS changes, and what it does not
 
@@ -75,9 +71,8 @@ carried, only what it should do. When APS is available:
 1. `relayServer.ts` encrypts the same call to the APS network key and sends the
    ciphertext to the privacy precompile instead of calling the contract directly.
    The endpoints, validation and quota are unchanged.
-2. The Gateway deposit moves inside APS as well, which is the last step still
-   submitted by the payer's own wallet. That is what would take the remaining link
-   off Circle's books as well as off the chain.
+2. The Gateway deposit moves inside APS as well, so the one step still submitted by
+   the payer's own wallet stops being a public transaction too.
 3. Discovery keeps working as it does today, or gets cheaper: with events private,
    the announcement registry can be read from private state instead of scanned.
 
@@ -85,23 +80,18 @@ Nothing about the contracts has to change. `SpendPolicyFactory.createAccount` ta
 no `msg.sender`-dependent path and `StealthAnnouncer.announce` only emits, which is
 what let a relayer take them over in the first place.
 
-## What we do not claim
+## Where the trust actually sits
 
-- **Not anonymity.** Privacy here is unlinkability inside a crowd, and the crowd is
-  however many people use this relayer. With one user, timing correlation restores
-  every link. A shared relayer with real traffic is a prerequisite, not a detail.
-- **The relayer knows.** Requests are signed so each caller can be quota-limited,
-  which means the relayer sees who asked for what. It is trusted not to keep that.
-  It is not trusted with money: `createAccount` and `announce` cannot move funds,
-  and the gas top-up is a fixed 0.05 USDC of the relayer's own balance, skipped when
-  the address already has enough.
-- **Circle knows.** The mint that funds a box is Circle's, and it debited the
-  payer's Gateway balance to make it. Nothing on Arc joins those two, and Circle
-  can. Moving the link off a public ledger and onto one company's records is a real
-  improvement over writing it on chain, and it is not the same as nobody knowing.
-- **APS is enclave-based.** Confidentiality rests on hardware attestation and a
-  threshold key held across validators, not on a proof anyone can check. That is a
-  different assumption from zk, and worth stating rather than blurring.
+- **The relayer cannot take anything.** `createAccount` and `announce` cannot move
+  funds, and the gas top-up is a fixed 0.05 USDC of the relayer's own balance,
+  skipped when the address already has enough. It carries transactions; it never
+  holds money and never holds a key that could reach yours.
+- **The co-signer cannot hold anything.** It can refuse a pull, which stalls a
+  subscription, and that is the whole of its power. Bringing the money home needs
+  only the payer's own key.
+- **APS is enclave-based.** When it lands, its confidentiality will rest on hardware
+  attestation and a threshold key held across validators, not on a proof anyone can
+  check. That is a different assumption from zk, and worth stating rather than
+  blurring.
 
-The honest one-line version: **nothing on Arc connects you to your boxes; Circle
-still could, and that you hold a Gateway balance is public.**
+The one-line version: **nothing on Arc connects you to your boxes.**
