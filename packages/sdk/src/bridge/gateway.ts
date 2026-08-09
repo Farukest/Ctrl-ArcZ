@@ -1,4 +1,12 @@
-import { erc20Abi, pad, type Address, type Hex, type PublicClient, type WalletClient } from 'viem';
+import {
+  erc20Abi,
+  pad,
+  parseUnits,
+  type Address,
+  type Hex,
+  type PublicClient,
+  type WalletClient,
+} from 'viem';
 import { CCTP_CHAINS, chainLabel, type CctpChainName } from './cctp.js';
 
 /**
@@ -147,6 +155,24 @@ function jsonBigints(value: unknown): string {
  * real sentence meant for a person. Printing the whole body puts JSON punctuation
  * and a status code in front of it, which reads like a crash rather than an answer.
  */
+/**
+ * The shortfall Circle names when it refuses a maxFee, in subunits.
+ *
+ * It rejects with "Insufficient total maxFee across intents to cover forwarding
+ * fee. Required additional: 0.000565", which is the exact number needed and
+ * better than any buffer that could be guessed at. Null when the message is
+ * about something else, so the caller re-throws rather than retrying blind.
+ */
+function requiredAdditional(message: string): bigint | null {
+  const m = /required additional:\s*([0-9]*\.?[0-9]+)/i.exec(message);
+  if (!m?.[1]) return null;
+  try {
+    return parseUnits(m[1], 6);
+  } catch {
+    return null;
+  }
+}
+
 async function circleMessage(res: Response, fallback: string): Promise<string> {
   const text = await res.text().catch(() => '');
   try {
@@ -344,12 +370,45 @@ function buildSpec(params: {
  * additional: 0.000034". No money moves, but the transfer is dead and the whole
  * flow starts over, which is a miserable way to lose three cents of headroom.
  */
-const FEE_MARGIN_BPS = 200n; // 2%
-const FEE_MARGIN_MIN = 500n; // 0.0005 USDC
+/** Floor, for when Circle returns no fee breakdown to size the buffer against. */
+const FEE_MARGIN_MIN = 5_000n; // 0.005 USDC
 
-function withMargin(fee: bigint): bigint {
-  const pad = (fee * FEE_MARGIN_BPS) / 10_000n;
-  return fee + (pad > FEE_MARGIN_MIN ? pad : FEE_MARGIN_MIN);
+/** A decimal USDC figure from Circle ("0.015494") as subunits. Bad input is 0n. */
+function toSubunits(value: string | undefined): bigint {
+  if (!value) return 0n;
+  try {
+    return parseUnits(value, 6);
+  } catch {
+    return 0n;
+  }
+}
+
+/**
+ * The headroom to sign over Circle's quote.
+ *
+ * Not a percentage, and not a guess. Circle's own formula is
+ *
+ *     maxFee >= gas fee + forwarding fee + (transfer amount * 0.00005)
+ *
+ * and the guidance printed beside it is to "add a buffer to your maxFee
+ * calculation to account for gas fee fluctuations". So the part that moves is
+ * the gas, and the estimate response names it: `perIntent[].baseFee` is the
+ * source chain's gas and `forwardingFee` carries the destination's. The transfer
+ * fee is a fixed fraction of the amount and does not move at all.
+ *
+ * The buffer is therefore the whole gas-bearing part over again, which absorbs a
+ * doubling of gas between quoting and submitting. It costs the sender nothing:
+ * `maxFee` is a ceiling, Circle charges what the transfer actually cost and
+ * ignores the rest. Measured on Arc->Base: 0.056654 signed, 0.055489 taken.
+ *
+ * The percentage this replaces was not enough in practice. On a 0.0178 fee a 2%
+ * pad offers 0.000356, so its 0.0005 floor applied, and Circle came back asking
+ * for 0.000565 more. That is a rejection after the signature, and on the
+ * subscription route it landed after the box had already been deployed: a box on
+ * chain with no money in it.
+ */
+function withMargin(quoted: bigint, gasPart: bigint): bigint {
+  return quoted + (gasPart > FEE_MARGIN_MIN ? gasPart : FEE_MARGIN_MIN);
 }
 
 export interface GatewayQuote {
@@ -402,11 +461,19 @@ export async function quoteGatewaySpend(params: {
   if (!res.ok) throw new Error(await circleMessage(res, 'Could not price this transfer'));
   const body = (await res.json()) as {
     body?: { burnIntent?: { maxFee: string; maxBlockHeight: string } }[];
+    /** The same figure, broken into the parts Circle's fee page names. */
+    fees?: { perIntent?: { baseFee?: string }[]; forwardingFee?: string };
   };
   const estimate = body.body?.[0]?.burnIntent;
   if (!estimate) throw new Error('Circle did not quote this Gateway route.');
   const quotedFee = BigInt(estimate.maxFee);
-  const maxFee = withMargin(quotedFee);
+  // Source gas plus the forwarding fee that carries the destination's gas. What
+  // is left of the total is the transfer fee, which is a fixed fraction of the
+  // amount and cannot drift, so it needs no headroom.
+  const gasPart =
+    (body.fees?.perIntent ?? []).reduce((sum, i) => sum + toSubunits(i.baseFee), 0n) +
+    toSubunits(body.fees?.forwardingFee);
+  const maxFee = withMargin(quotedFee, gasPart);
   return {
     maxFee,
     quotedFee,
@@ -518,26 +585,49 @@ export async function spendFromGateway(
     amount: params.amount,
     salt: params.salt ?? randomSalt(),
   });
-  const message = { maxBlockHeight: quote.maxBlockHeight, maxFee: quote.maxFee, spec };
 
-  // Cast wholesale: viem infers the message shape from `types`, and BurnIntent's
-  // nested TransferSpec does not survive that inference. The shape is pinned by the
-  // TYPES table above and asserted in the tests instead.
-  const signature = await clients.walletClient.signTypedData({
-    account,
-    domain: EIP712_DOMAIN,
-    types: TYPES,
-    primaryType: 'BurnIntent',
-    message,
-  } as never);
-  params.onStep?.('sign');
+  /**
+   * Sign the intent and hand it to Circle, once more if it names a shortfall.
+   *
+   * The fee can move between quoting and submitting, and with a wallet that gap
+   * is however long the user takes to approve. When it moves past the ceiling,
+   * Circle refuses and says by how much, which is a better number than any
+   * buffer: it is the answer rather than an estimate of it. So the second
+   * attempt uses Circle's own figure instead of widening blindly, and there is
+   * no third, because a shortfall that survives being told the exact amount is
+   * not a fee that drifted.
+   *
+   * Re-signing is required rather than optional: `maxFee` is inside the signed
+   * struct, so a new ceiling is a new signature.
+   */
+  const submit = async (maxFee: bigint) => {
+    const message = { maxBlockHeight: quote.maxBlockHeight, maxFee, spec };
+    // Cast wholesale: viem infers the message shape from `types`, and BurnIntent's
+    // nested TransferSpec does not survive that inference. The shape is pinned by the
+    // TYPES table above and asserted in the tests instead.
+    const signature = await clients.walletClient.signTypedData({
+      account,
+      domain: EIP712_DOMAIN,
+      types: TYPES,
+      primaryType: 'BurnIntent',
+      message,
+    } as never);
+    params.onStep?.('sign');
+    return doFetch(`${apiBase}/v1/transfer?enableForwarder=true`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: jsonBigints([{ burnIntent: message, signature }]),
+    });
+  };
 
-  const res = await doFetch(`${apiBase}/v1/transfer?enableForwarder=true`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: jsonBigints([{ burnIntent: message, signature }]),
-  });
-  if (!res.ok) throw new Error(await circleMessage(res, 'Gateway refused the transfer'));
+  let res = await submit(quote.maxFee);
+  if (!res.ok) {
+    const reason = await circleMessage(res, 'Gateway refused the transfer');
+    const short = requiredAdditional(reason);
+    if (short == null) throw new Error(reason);
+    res = await submit(quote.maxFee + short);
+    if (!res.ok) throw new Error(await circleMessage(res, 'Gateway refused the transfer'));
+  }
   const { transferId } = (await res.json()) as { transferId?: string };
   if (!transferId) throw new Error('Gateway accepted the transfer but returned no id.');
   params.onTransferId?.(transferId);

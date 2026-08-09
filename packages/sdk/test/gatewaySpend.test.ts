@@ -28,6 +28,13 @@ const SALT = `0x${'11'.repeat(32)}` as Hex;
 
 /** Circle quotes a flat fee; measured identical for 1, 5 and 200 USDC. */
 const FEE = '55457';
+/**
+ * The same figure, split the way Circle's estimate actually returns it: the
+ * source chain's gas, the forwarding fee that carries the destination's, and
+ * whatever is left as the transfer fee. Only the first two can drift, which is
+ * what the headroom is sized against.
+ */
+const GAS_PART = 45_457n; // 0.01 baseFee + 0.035457 forwardingFee
 
 function api(
   over: {
@@ -36,9 +43,12 @@ function api(
     transferId?: string | null;
     transferOk?: boolean;
     estimateOk?: boolean;
+    /** Refuse the first submit with Circle's own shortfall sentence. */
+    shortBy?: string;
   } = {},
 ) {
   const calls: { url: string; init?: RequestInit }[] = [];
+  let transferPosts = 0;
   const impl = vi.fn(async (url: string, init?: RequestInit) => {
     calls.push({ url: String(url), ...(init ? { init } : {}) });
     const u = String(url);
@@ -47,7 +57,10 @@ function api(
         ok: over.estimateOk ?? true,
         status: 500,
         text: async () => 'nope',
-        json: async () => ({ body: [{ burnIntent: { maxFee: FEE, maxBlockHeight: '99' } }] }),
+        json: async () => ({
+          body: [{ burnIntent: { maxFee: FEE, maxBlockHeight: '99' } }],
+          fees: { perIntent: [{ baseFee: '0.01' }], forwardingFee: '0.035457' },
+        }),
       } as never;
     }
     if (u.includes('/v1/balances')) {
@@ -65,6 +78,17 @@ function api(
       } as never;
     }
     // POST /v1/transfer
+    transferPosts += 1;
+    if (over.shortBy && transferPosts === 1) {
+      return {
+        ok: false,
+        status: 400,
+        text: async () =>
+          JSON.stringify({
+            message: `Insufficient total maxFee across intents to cover forwarding fee. Required additional: ${over.shortBy}`,
+          }),
+      } as never;
+    }
     return {
       ok: over.transferOk ?? true,
       status: 400,
@@ -268,10 +292,12 @@ describe('the quote is flat, and it is asked for every time', () => {
     });
     // Measured against Circle: the same fee for 1, 5 and 200 USDC.
     expect(q.quotedFee).toBe(55_457n);
-    // Signed with 2% headroom, because the fee drifts while a wallet is being
-    // unlocked and the signature locks in whatever was signed.
-    expect(q.maxFee).toBe(56_566n);
-    expect(q.total).toBe(200_056_566n);
+    // The headroom is the gas-bearing part again, which is what Circle's fee page
+    // says can move ("add a buffer to account for gas fee fluctuations"). Not a
+    // percentage of the total: the transfer fee is a fixed fraction of the amount
+    // and cannot drift, so padding it buys nothing.
+    expect(q.maxFee).toBe(55_457n + GAS_PART);
+    expect(q.total).toBe(200_000_000n + 55_457n + GAS_PART);
   });
 
   it('signs a ceiling above the quote, since Circle charges the real fee anyway', async () => {
@@ -289,10 +315,13 @@ describe('the quote is flat, and it is asked for every time', () => {
     expect(signed.message.maxFee).toBeGreaterThan(55_457n);
   });
 
-  it('never lets the headroom fall below a floor on a tiny fee', async () => {
-    // 2% of a very small fee is nothing; the drift is absolute, not proportional.
-    const tiny = api();
-    tiny.impl = (async (url: string, init?: RequestInit) => {
+  it('falls back to a floor when Circle sends no fee breakdown', async () => {
+    // Without the split there is nothing to size the buffer against, and a fee
+    // that arrives as one number is the case where guessing small has already
+    // cost a funded subscription. The floor is deliberately far above the old
+    // 0.0005, which a 0.000565 shortfall walked straight through.
+    const bare = api();
+    bare.impl = (async (url: string, init?: RequestInit) => {
       if (String(url).includes('/v1/estimate')) {
         return {
           ok: true,
@@ -306,9 +335,50 @@ describe('the quote is flat, and it is asked for every time', () => {
       to: 'Base_Sepolia',
       amount: 1_000_000n,
       depositor: WALLET,
-      fetchImpl: tiny.impl as never,
+      fetchImpl: bare.impl as never,
     });
-    expect(q.maxFee).toBe(600n); // 100 + the 500 floor, not 100 + 2
+    expect(q.maxFee).toBe(5_100n); // 100 + the 0.005 floor
+  });
+
+  it('takes Circle at its word when it refuses and names the shortfall', async () => {
+    /**
+     * The fee moved past the ceiling between quoting and signing, which with a
+     * wallet is however long the user takes to approve. Circle refuses and says
+     * by exactly how much, and that figure beats any buffer: it is the answer
+     * rather than an estimate of it. The intent is re-signed because `maxFee` is
+     * inside the signed struct.
+     */
+    const a = api({ shortBy: '0.000565' });
+    const w = wallet();
+    const out = await spendFromGateway(w.clients as never, {
+      from: 'Arc_Testnet',
+      to: 'Base_Sepolia',
+      amount: 1_000_000n,
+      fetchImpl: a.impl as never,
+    });
+    expect(out.transferId).toBe('tr_1');
+
+    const signed = w.signTypedData.mock.calls.map(
+      (c) => (c[0] as { message: { maxFee: bigint } }).message.maxFee,
+    );
+    expect(signed).toHaveLength(2);
+    expect(signed[1]).toBe(signed[0]! + 565n);
+  });
+
+  it('does not retry a refusal that is not about the fee', async () => {
+    // A shortfall it was told the size of is one thing; anything else is a real
+    // refusal, and retrying it blind would just sign twice for the same answer.
+    const a = api({ transferOk: false });
+    const w = wallet();
+    await expect(
+      spendFromGateway(w.clients as never, {
+        from: 'Arc_Testnet',
+        to: 'Base_Sepolia',
+        amount: 1_000_000n,
+        fetchImpl: a.impl as never,
+      }),
+    ).rejects.toThrow(/refused/);
+    expect(w.signTypedData.mock.calls).toHaveLength(1);
   });
 
   it('refuses a route Circle will not price, rather than guessing', async () => {
