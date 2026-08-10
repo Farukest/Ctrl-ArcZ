@@ -492,7 +492,7 @@ Görünmez kalıyorsunuz (satıcı kutuyu görüyor, cüzdanınızı değil), s�
 
 Ortak imzacı bir kapı bekçisi, kasadar değil. Parayı eve getirmek (`sweepToVault` ya da tarih geçtiyse `sweepExpired`) yalnızca sizin anahtarınızı ister, ortak imzacınınkini asla; yani The Machine çökerse ya da düşman olursa bir çekimi geciktirebilir ama paranızı tutamaz. Rolü canlılık, custody değil: en kötü ihtimalle süpürürsünüz ve abonelik biter. Saat ya da zaman dilimi oyunu da yok, çünkü zincirdeki tavanlar (çekim başına ve toplam) zararı zamandan bağımsız olarak sınırlıyor ve kontrat düz bir UTC blok zaman damgasını saniye cinsinden bir aralıkla karşılaştırıyor.
 
-**Abonelik oluşturun.** İsim verin, bir satıcıya yöneltin, sonra insanın kafasındaki iki şeyi söyleyin: her çekim ne kadar ve kaç tane. Bütçe sorulmuyor, gösteriliyor; çünkü o bir cevap. Yanında Circle'ın kutuyu fonlamak için aldığı ücret ve ikisinin toplamı da duruyor. Abonelik yetkilendirmek bir ödemedir ve uygulamada cüzdandan ne çıkacağını söylemeyen son ödeme ekranı burasıydı.
+**Abonelik oluşturun.** Satıcıyı adını yazarak değil listeden seçin, bir adrese yöneltin, sonra insanın kafasındaki iki şeyi söyleyin: her çekim ne kadar ve kaç tane. İsim seçiliyor çünkü yerel bir ayrıntı değil: kutunun stealth duyurusunun içine paketleniyor, yani bir yazım hatası kutuyu diğer her cihaza kadar takip ederdi. Bütçe sorulmuyor, gösteriliyor; çünkü o bir cevap. Yanında Circle'ın kutuyu fonlamak için aldığı ücret ve ikisinin toplamı da duruyor. Abonelik yetkilendirmek bir ödemedir ve uygulamada cüzdandan ne çıkacağını söylemeyen son ödeme ekranı burasıydı.
 
 ![Abonelik oluştur](./docs/screenshots/subscriptions-create.png)
 
