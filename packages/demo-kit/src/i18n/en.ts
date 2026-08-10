@@ -84,7 +84,10 @@ export const en = {
   // fields the reader is looking at.
   'sub.createSummary':
     'The merchant can pull this much, this often, and no more. Cancel any time.',
-  'sub.label': 'Name (optional)',
+  // Names the thing being picked rather than the field it fills in. "(optional)" went
+  // with it: the control is a list with an escape hatch, so what it wants is obvious,
+  // and nothing stops a box being created without one.
+  'sub.label': 'Merchant',
   'sub.labelPh': 'e.g. Netflix',
   'sub.merchant': 'Merchant address',
   'sub.perPull': 'Per pull',

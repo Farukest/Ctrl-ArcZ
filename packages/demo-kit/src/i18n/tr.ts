@@ -74,7 +74,7 @@ export const tr: Record<TranslationKey, string> = {
   'sub.createTitle': 'Yeni abonelik',
   'sub.createSummary':
     'Satıcı bu kadarını, bu sıklıkta çekebilir, fazlasını değil. İstediğin an iptal edersin.',
-  'sub.label': 'İsim (opsiyonel)',
+  'sub.label': 'Satıcı',
   'sub.labelPh': 'ör. Netflix',
   'sub.merchant': 'Satıcı adresi',
   'sub.perPull': 'Çekim başına',
