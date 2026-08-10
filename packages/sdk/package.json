@@ -11,7 +11,20 @@
     "viem"
   ],
   "license": "MIT",
+  "author": "Farukest <0xflydev@gmail.com>",
+  "homepage": "https://github.com/Farukest/Ctrl-ArcZ/tree/main/packages/sdk#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Farukest/Ctrl-ArcZ.git",
+    "directory": "packages/sdk"
+  },
+  "bugs": {
+    "url": "https://github.com/Farukest/Ctrl-ArcZ/issues"
+  },
   "private": false,
+  "publishConfig": {
+    "access": "public"
+  },
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
