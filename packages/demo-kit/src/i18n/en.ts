@@ -112,6 +112,9 @@ export const en = {
   // The budget, in the words of the schedule that produces it. The frequency is
   // interpolated lowercased, so "Monthly" reads as "Your monthly payment total".
   'sub.paymentTotal': 'Your {freq} payment total',
+  'sub.pickMerchant': 'Choose a merchant',
+  'sub.merchantOther': 'Something else',
+  'sub.merchantList': 'Back to list',
   'sub.countTooLow': 'At least one {unit}',
   'sub.countTooHigh': 'At most {max} {unit}',
   'sub.gwShort': 'Short {amount} USDC of Gateway balance on {chain}. Top it up above to create this subscription.',

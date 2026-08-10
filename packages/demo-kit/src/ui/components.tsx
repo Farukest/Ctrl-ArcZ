@@ -182,11 +182,18 @@ export function Field({
   label,
   error,
   hint,
+  accent,
   children,
 }: {
   label?: ReactNode;
   error?: string | null;
   hint?: ReactNode;
+  /**
+   * Marks the one field on a form that decides the rest of it. Colours the label
+   * only, in the theme's accent, and deliberately not in the link blue: this is a
+   * label, and a label that looks clickable is a label people click.
+   */
+  accent?: boolean;
   children: ReactNode;
 }) {
   // Associate the label with the control so screen readers name the field. When the
@@ -200,7 +207,10 @@ export function Field({
   return (
     <div className="field">
       {label && (
-        <label className="field__label" htmlFor={id}>
+        <label
+          className={accent ? 'field__label field__label--accent' : 'field__label'}
+          htmlFor={id}
+        >
           {label}
         </label>
       )}
@@ -258,6 +268,7 @@ export function Select({
   searchable,
   searchPlaceholder,
   noResultsText,
+  placeholder,
   id,
 }: {
   value: string;
@@ -269,6 +280,9 @@ export function Select({
   searchable?: boolean;
   searchPlaceholder?: string;
   noResultsText?: string;
+  /** What the trigger says before anything is chosen. Without it an unset select is
+   *  an empty box, which reads as broken rather than as waiting. */
+  placeholder?: string;
   id?: string;
 }) {
   const [open, setOpen] = useState(false);
@@ -299,7 +313,13 @@ export function Select({
       >
         <span className="select-trigger__value">
           {current?.icon}
-          <span className="select-trigger__text">{current?.label ?? ''}</span>
+          <span
+            className={
+              current ? 'select-trigger__text' : 'select-trigger__text select-trigger__text--ph'
+            }
+          >
+            {current?.label ?? placeholder ?? ''}
+          </span>
         </span>
         <IconChevron className={open ? 'select-trigger__chev is-open' : 'select-trigger__chev'} />
       </button>

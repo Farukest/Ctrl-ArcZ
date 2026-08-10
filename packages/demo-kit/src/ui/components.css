@@ -358,6 +358,14 @@
   color: var(--text-hi);
   font-weight: 600;
 }
+/* The one field on a form that decides the rest of it. The accent, not the link
+   blue: a label that looks clickable is a label people click, and this one is not
+   going anywhere. Slightly tighter tracking so it reads as a heading rather than as
+   a highlighted word. */
+.field__label--accent {
+  color: var(--accent);
+  letter-spacing: 0.01em;
+}
 .field__control {
   position: relative;
   display: flex;
@@ -504,6 +512,11 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+/* Nothing chosen yet. Same weight as an input's placeholder, so an unset select and
+   an empty field say "waiting" in the same voice. */
+.select-trigger__text--ph {
+  color: var(--text-lo);
 }
 
 /* Network logo token: real brand SVG inlined on a white circle (keeps every

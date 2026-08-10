@@ -5,6 +5,7 @@ export * from './components.js';
 export * from './icons.js';
 export { RiskCard } from './RiskCard.js';
 export { ChainLogo } from './ChainLogo.js';
+export { MerchantLogo, MERCHANTS, merchantByName, type Merchant } from './MerchantLogo.js';
 export { AmountField, type AmountFieldProps } from './AmountField.js';
 export { GatewayFundBox, type GatewayFundBoxProps } from './GatewayFundBox.js';
 export { CostBlock, type CostBlockProps, type CostLine } from './CostBlock.js';
