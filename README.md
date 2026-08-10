@@ -2,15 +2,22 @@
 
 **Screened before it is signed. Recallable until it is claimed. Repeatable without handing over your wallet.**
 
-[![Watch the demo](https://img.shields.io/badge/Watch_the_demo-FF0000?style=flat-square&logo=youtube&logoColor=white)](https://www.youtube.com/watch?v=fcgyqBUbkcg) [![Live app](https://img.shields.io/badge/Live-ctrlarcz.xyz-4b9fff?style=flat-square)](https://ctrlarcz.xyz) [![Android beta](https://img.shields.io/badge/Android-beta-3ddc84?style=flat-square&logo=googleplay&logoColor=white)](https://play.google.com/apps/testing/com.xyz.ctrlarcz) [![Docs](https://img.shields.io/badge/Docs-docs.ctrlarcz.xyz-8b93a1?style=flat-square)](https://docs.ctrlarcz.xyz) [![Arc Testnet](https://img.shields.io/badge/Arc_Testnet-5042002-2fbf71?style=flat-square)](https://testnet.arcscan.app/address/0x8dAb7148cdc31DAcad6d7e12161AA3DEDb572Dca) [![Tests](https://img.shields.io/badge/tests-528_passing-2fbf71?style=flat-square)](#tech-stack) [![Custody](https://img.shields.io/badge/custody-none-8b93a1?style=flat-square)](#security)
+[![Watch the demo](https://img.shields.io/badge/Watch_the_demo-FF0000?style=flat-square&logo=youtube&logoColor=white)](https://www.youtube.com/watch?v=fcgyqBUbkcg) [![Live app](https://img.shields.io/badge/Live-ctrlarcz.xyz-4b9fff?style=flat-square)](https://ctrlarcz.xyz) [![npm](https://img.shields.io/badge/npm-%40ctrl--arcz%2Fsdk-cb3837?style=flat-square&logo=npm&logoColor=white)](https://www.npmjs.com/package/@ctrl-arcz/sdk) [![Android app](https://img.shields.io/badge/Android_app-Google_Play-3ddc84?style=flat-square&logo=googleplay&logoColor=white)](https://play.google.com/store/apps/details?id=com.xyz.ctrlarcz) [![Docs](https://img.shields.io/badge/Docs-docs.ctrlarcz.xyz-8b93a1?style=flat-square)](https://docs.ctrlarcz.xyz) [![Arc Testnet](https://img.shields.io/badge/Arc_Testnet-5042002-2fbf71?style=flat-square)](https://testnet.arcscan.app/address/0x8dAb7148cdc31DAcad6d7e12161AA3DEDb572Dca) [![Tests](https://img.shields.io/badge/tests-528_passing-2fbf71?style=flat-square)](#tech-stack) [![Custody](https://img.shields.io/badge/custody-none-8b93a1?style=flat-square)](#security)
 
 USDC payments on Arc with the three things a plain transfer does not have: a firewall that refuses a bad recipient before anything is signed, a lock the sender can undo until the recipient proves the money was meant for them, and a bounded spend box that lets a merchant or an agent charge you again without ever touching your wallet. One SDK, one contract, no custody.
+
+Three surfaces on one backend: **[ctrlarcz.xyz](https://ctrlarcz.xyz)** is the web app, **[`@ctrl-arcz/sdk`](https://www.npmjs.com/package/@ctrl-arcz/sdk)** is the engine behind it and is published on npm, and the **[Android app](https://play.google.com/store/apps/details?id=com.xyz.ctrlarcz)** is a native Kotlin client on Google Play. The Android app is fed by the same `apps/api` endpoints and the same deployed contracts the SDK drives, and `packages/sdk/parity-vectors.json` holds both implementations to one specification.
+
+```bash
+npm install @ctrl-arcz/sdk viem
+```
 
 [Turkish version](./README.tr.md)
 
 ## Contents
 
 - [In one look](#in-one-look)
+- [Two clients: web and Android](#two-clients-web-and-android)
 - [The problem](#the-problem)
 - [How it compares](#how-it-compares)
 - [System architecture](#system-architecture)
@@ -38,6 +45,26 @@ USDC payments on Arc with the three things a plain transfer does not have: a fir
 | **Custody**    | None. Funds are with the user or in the contract. No owner, no pause, no upgrade path |
 | **Product**    | An SDK any wallet, exchange or payments app embeds. Not another wallet                |
 | **Tests**      | 528 in total: 99 Foundry, 346 SDK, 50 demo-kit, 33 keeper, plus live testnet runs |
+
+## Two clients: web and Android
+
+The same contract and the same API are driven by two full clients. The web app is the reference integration of the SDK. The **Android app is a first-class product, not a wrapper**: a native Kotlin/Compose application with its own risk engine, its own stealth cryptography and its own CCTP and Gateway clients, calling the same `apps/api` and the same deployed contracts.
+
+**[Get it on Google Play](https://play.google.com/store/apps/details?id=com.xyz.ctrlarcz)**
+
+| Firewall verdict and the real cost | Subscriptions by merchant | A bridge that gives the money back |
+| ---------------------------------- | ------------------------- | ---------------------------------- |
+| ![Send confirmation on Android](./docs/android/send-confirm.png) | ![Merchant picker on Android](./docs/android/merchant-picker.png) | ![Returned bridge transfer on Android](./docs/android/bridge-returned.png) |
+
+Three things the app does that a browser cannot:
+
+**Notifications with no server anywhere.** The app reads the contract's events straight from Arc RPC: `TransferCreated` filtered on the indexed recipient topic, every 15 seconds while it is open and on a background job when it is not. There is no push service, nothing to register with, and no server that learns who is watching which address. The cursor lives on the device and does not advance for an event it could not deliver, so nothing is silently lost.
+
+**A screen that refuses to be photographed.** The one screen that shows a claim code sets `FLAG_SECURE`, so it is blank in a screenshot and blank in the recents list. Since the clipboard is not the only honest way to keep a code, the same screen offers Copy, Save and Share, and says in plain words what saving costs: the QR lands in your photo library, where anything that can read your photos can read it.
+
+**Parity that is tested, not asserted.** Gas reserve maths, claim code encoding, stealth derivation and the risk rules are two implementations of one specification. `packages/sdk/parity-vectors.json`, generated by `packages/sdk/scripts/gen-parity-vectors.ts`, is asserted by both the TypeScript and the Kotlin suites, so a port that drifts fails a test rather than a payment.
+
+The Android source lives in its own repository rather than here. A Gradle project vendored into a pnpm monorepo would be a build nobody runs and a CI job nobody trusts; the parity vectors are what actually hold the two together.
 
 ## The problem
 
@@ -410,13 +437,9 @@ first; a two-character row number is the second.
 | `apps/keeper`        | The keeper agent: returns expired transfers, paid from a bounded box    |
 | `examples`           | A standalone Node quickstart, no framework                              |
 
-The Android client is a separate native Kotlin/Compose app rather than a package
-here. It is not a port of the web app: it holds its own risk engine, stealth
-cryptography and CCTP/Gateway clients, and calls the same `apps/api` and the same
-deployed contracts. What keeps the two implementations honest is
-`packages/sdk/parity-vectors.json`, generated by `packages/sdk/scripts/gen-parity-vectors.ts`
-and asserted by both test suites, so a Kotlin port that drifts from the TypeScript
-one fails a test rather than a payment.
+The Android client is a separate native Kotlin/Compose app in its own repository
+rather than a package here, held to the TypeScript implementation by
+`packages/sdk/parity-vectors.json`. See [Two clients: web and Android](#two-clients-web-and-android).
 
 Every address, RPC and chain constant lives in exactly one file, `packages/sdk/src/chains/arcTestnet.ts`. The Foundry deploy script reads a JSON file generated from it, so no address is written down twice.
 

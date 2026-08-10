@@ -2,15 +2,22 @@
 
 **İmzalanmadan taranır. Claim edilene kadar geri alınabilir. Cüzdanını vermeden tekrarlanır.**
 
-[![Demoyu izle](https://img.shields.io/badge/Demoyu_izle-FF0000?style=flat-square&logo=youtube&logoColor=white)](https://www.youtube.com/watch?v=fcgyqBUbkcg) [![Canlı uygulama](https://img.shields.io/badge/Canl%C4%B1-ctrlarcz.xyz-4b9fff?style=flat-square)](https://ctrlarcz.xyz) [![Android beta](https://img.shields.io/badge/Android-beta-3ddc84?style=flat-square&logo=googleplay&logoColor=white)](https://play.google.com/apps/testing/com.xyz.ctrlarcz) [![Dokümanlar](https://img.shields.io/badge/Dok%C3%BCmanlar-docs.ctrlarcz.xyz-8b93a1?style=flat-square)](https://docs.ctrlarcz.xyz) [![Arc Testnet](https://img.shields.io/badge/Arc_Testnet-5042002-2fbf71?style=flat-square)](https://testnet.arcscan.app/address/0x8dAb7148cdc31DAcad6d7e12161AA3DEDb572Dca) [![Testler](https://img.shields.io/badge/test-528_ge%C3%A7iyor-2fbf71?style=flat-square)](#teknoloji) [![Emanet](https://img.shields.io/badge/emanet-yok-8b93a1?style=flat-square)](#g%C3%BCvenlik)
+[![Demoyu izle](https://img.shields.io/badge/Demoyu_izle-FF0000?style=flat-square&logo=youtube&logoColor=white)](https://www.youtube.com/watch?v=fcgyqBUbkcg) [![Canlı uygulama](https://img.shields.io/badge/Canl%C4%B1-ctrlarcz.xyz-4b9fff?style=flat-square)](https://ctrlarcz.xyz) [![npm](https://img.shields.io/badge/npm-%40ctrl--arcz%2Fsdk-cb3837?style=flat-square&logo=npm&logoColor=white)](https://www.npmjs.com/package/@ctrl-arcz/sdk) [![Android uygulaması](https://img.shields.io/badge/Android_uygulamas%C4%B1-Google_Play-3ddc84?style=flat-square&logo=googleplay&logoColor=white)](https://play.google.com/store/apps/details?id=com.xyz.ctrlarcz) [![Dokümanlar](https://img.shields.io/badge/Dok%C3%BCmanlar-docs.ctrlarcz.xyz-8b93a1?style=flat-square)](https://docs.ctrlarcz.xyz) [![Arc Testnet](https://img.shields.io/badge/Arc_Testnet-5042002-2fbf71?style=flat-square)](https://testnet.arcscan.app/address/0x8dAb7148cdc31DAcad6d7e12161AA3DEDb572Dca) [![Testler](https://img.shields.io/badge/test-528_ge%C3%A7iyor-2fbf71?style=flat-square)](#teknoloji) [![Emanet](https://img.shields.io/badge/emanet-yok-8b93a1?style=flat-square)](#g%C3%BCvenlik)
 
 Arc üzerinde USDC ödemeleri, düz bir transferde olmayan üç şeyle: hiçbir şey imzalanmadan kötü alıcıyı reddeden bir firewall, alıcı paranın kendisine ait olduğunu kanıtlayana kadar gönderenin geri alabildiği bir kilit ve bir satıcının ya da bir ajanın cüzdanınıza hiç dokunmadan tekrar tekrar çekim yapabildiği sınırlı bir harcama kutusu. Tek SDK, tek kontrat, custody yok.
+
+Tek arka uçta üç yüz: **[ctrlarcz.xyz](https://ctrlarcz.xyz)** web uygulaması, **[`@ctrl-arcz/sdk`](https://www.npmjs.com/package/@ctrl-arcz/sdk)** onun arkasındaki motor ve npm'de yayında, **[Android uygulaması](https://play.google.com/store/apps/details?id=com.xyz.ctrlarcz)** ise Google Play'deki native Kotlin istemci. Android uygulaması, SDK'nın sürdüğü aynı `apps/api` uçlarından ve aynı yayınlanmış kontratlardan besleniyor; iki implementasyonu tek bir spesifikasyona `packages/sdk/parity-vectors.json` bağlıyor.
+
+```bash
+npm install @ctrl-arcz/sdk viem
+```
 
 [English version](./README.md)
 
 ## İçindekiler
 
 - [Tek bakışta](#tek-bakışta)
+- [Web ve Android: iki istemci](#web-ve-android-iki-istemci)
 - [Problem](#problem)
 - [Karşılaştırma](#karşılaştırma)
 - [Sistem mimarisi](#sistem-mimarisi)
@@ -38,6 +45,26 @@ Arc üzerinde USDC ödemeleri, düz bir transferde olmayan üç şeyle: hiçbir 
 | **Custody** | Yok. Para ya kullanıcıda ya kontratta. Owner yok, pause yok, upgrade yolu yok                   |
 | **Ürün**    | Herhangi bir cüzdanın, borsanın veya ödeme uygulamasının gömdüğü bir SDK. Yeni bir cüzdan değil |
 | **Testler** | Toplam 528: 99 Foundry, 346 SDK, 50 demo-kit, 33 keeper, artı canlı testnet koşuları |
+
+## Web ve Android: iki istemci
+
+Aynı kontratı ve aynı API'yi iki tam istemci sürüyor. Web uygulaması SDK'nın referans entegrasyonu. **Android uygulaması bir sarmalayıcı değil, başlı başına bir ürün**: kendi risk motoru, kendi stealth kriptografisi ve kendi CCTP ile Gateway istemcileri olan native bir Kotlin/Compose uygulaması; aynı `apps/api`yi ve aynı yayınlanmış kontratları çağırıyor.
+
+**[Google Play'den indir](https://play.google.com/store/apps/details?id=com.xyz.ctrlarcz)**
+
+| Firewall kararı ve gerçek maliyet | Satıcıya göre abonelik | Parayı geri veren köprü |
+| --------------------------------- | ---------------------- | ----------------------- |
+| ![Android'de gönderim onayı](./docs/android/send-confirm.png) | ![Android'de satıcı seçici](./docs/android/merchant-picker.png) | ![Android'de iade edilen köprü transferi](./docs/android/bridge-returned.png) |
+
+Tarayıcının yapamadığı üç şey:
+
+**Hiçbir yerde sunucu olmadan bildirim.** Uygulama kontratın olaylarını doğrudan Arc RPC'den okuyor: indeksli alıcı topic'ine göre filtrelenmiş `TransferCreated`, uygulama açıkken 15 saniyede bir, kapalıyken arka plan işiyle. Push servisi yok, kaydolunacak bir yer yok ve kimin hangi adresi izlediğini öğrenen bir sunucu yok. İmleç cihazda duruyor ve teslim edilemeyen bir olay için ilerlemiyor, yani sessizce kaybolan bir şey olmuyor.
+
+**Fotoğraflanmayı reddeden bir ekran.** Claim kodunu gösteren tek ekran `FLAG_SECURE` kuruyor; ekran görüntüsünde de son kullanılanlar listesinde de boş çıkıyor. Kodu saklamanın tek dürüst yolu pano olmadığı için aynı ekran Kopyala, Kaydet ve Paylaş sunuyor ve kaydetmenin bedelini açıkça yazıyor: QR fotoğraflarına iniyor, fotoğraflarını okuyabilen her şey onu da okuyabiliyor.
+
+**İddia edilen değil, test edilen eşitlik.** Gas rezervi hesabı, claim kodu kodlaması, stealth türetimi ve risk kuralları tek bir şartnamenin iki uygulaması. `packages/sdk/scripts/gen-parity-vectors.ts` tarafından üretilen `packages/sdk/parity-vectors.json` hem TypeScript hem Kotlin test takımı tarafından koşuluyor; sapan bir port bir ödemeyi değil bir testi düşürüyor.
+
+Android kaynağı burada değil, kendi deposunda duruyor. Bir Gradle projesini pnpm monorepo'suna gömmek kimsenin koşmadığı bir build ve kimsenin güvenmediği bir CI işi üretirdi; ikisini gerçekten bir arada tutan şey parity vektörleri.
 
 ## Problem
 
@@ -407,13 +434,9 @@ Adres ve işlem hash'i birincisi; iki karakterlik satır numarası ikincisi.
 | `apps/keeper`        | Keeper ajanı: süresi dolan transferleri iade eder, sınırlı bir kutudan    |
 | `examples`           | Bağımsız bir Node quickstart'ı, çerçevesiz                                |
 
-Android istemcisi buradaki bir paket değil, ayrı bir native Kotlin/Compose
-uygulaması. Web uygulamasının portu da değil: kendi risk motoru, stealth
-kriptosu ve CCTP/Gateway istemcileri var, aynı `apps/api` ile aynı deploy edilmiş
-kontratları çağırıyor. İki uygulamayı hizada tutan şey
-`packages/sdk/parity-vectors.json`: `packages/sdk/scripts/gen-parity-vectors.ts` üretiyor, iki
-test takımı da ona karşı koşuyor, böylece TypeScript'ten sapan bir Kotlin portu
-bir ödemeyi değil bir testi düşürüyor.
+Android istemcisi buradaki bir paket değil, kendi deposunda duran ayrı bir native
+Kotlin/Compose uygulaması; TypeScript uygulamasına `packages/sdk/parity-vectors.json`
+ile bağlı. Bkz. [Web ve Android: iki istemci](#web-ve-android-iki-istemci).
 
 Her adres, RPC ve chain sabiti tek bir dosyada durur: `packages/sdk/src/chains/arcTestnet.ts`. Foundry deploy script'i ondan üretilen bir JSON dosyasını okur, böylece hiçbir adres iki kez yazılmaz.
 
