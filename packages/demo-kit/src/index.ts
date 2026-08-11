@@ -31,3 +31,15 @@ export {
   type BridgeStep,
   type BridgeOutcome,
 } from './bridgeChains.js';
+export {
+  DEPOSIT_STEPS,
+  stepsForEngine,
+  stepsForRun,
+  ownedBy,
+  jobForEngine,
+  deriveStepStatuses,
+  stepIndexFor,
+  type StepStatus,
+  type ReportedStep,
+  type LiveRun,
+} from './bridgeProgress.js';

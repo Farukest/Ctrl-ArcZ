@@ -30,12 +30,18 @@ import { bridgeClients, getPublicClient, switchWalletChain } from '@ctrl-arcz/de
 import { activeJobIds, forgetJob, readBridgeJob, type BridgeJob } from '../lib/bridgeJob.js';
 import { knownBoxes } from '../lib/useSubscriptions.js';
 import {
-  BRIDGE_STEPS,
-  GATEWAY_STEPS,
   bridgeChainLabel,
+  deriveStepStatuses,
+  jobForEngine,
+  ownedBy,
+  stepIndexFor,
+  stepsForEngine,
+  stepsForRun,
   type BridgeChainName,
   type BridgeEngine,
   type BridgeOutcome,
+  type LiveRun,
+  type ReportedStep,
 } from '@ctrl-arcz/demo-kit';
 import {
   AmountField,
@@ -125,7 +131,9 @@ async function readUsdcOn(
   if (c.chainId !== ARC_CHAIN_ID && connectedChainId !== c.chainId) return null;
   try {
     const client =
-      c.chainId === ARC_CHAIN_ID ? getPublicClient() : bridgeClients(c.chainId, address).publicClient;
+      c.chainId === ARC_CHAIN_ID
+        ? getPublicClient()
+        : bridgeClients(c.chainId, address).publicClient;
     return (await client.readContract({
       address: c.usdc as Address,
       abi: erc20Abi,
@@ -173,15 +181,6 @@ function rowStep(s: StoredBridgeStep, t: (k: 'bridge.rowstep.mint') => string): 
     ...(s.txHash ? { txHash: s.txHash } : {}),
     ...(s.explorerUrl ? { explorerUrl: s.explorerUrl } : {}),
   };
-}
-
-/** Map a server step name to its index in the active engine's step list. */
-function stepIndexFor(name: string, list: readonly string[]): number {
-  const n = name.toLowerCase();
-  const i = list.findIndex((s) => n.includes(s.toLowerCase()));
-  if (i >= 0) return i;
-  if (n.includes('attest')) return list.findIndex((s) => s.toLowerCase().includes('attest'));
-  return -1;
 }
 
 function relativeTime(ts: number): string {
@@ -279,21 +278,33 @@ export function BridgeTab({ session }: { session: Session }) {
    */
   const [recipient, setRecipient] = useState('');
   const [amount, setAmount] = useState('0.1');
-  const [result, setResult] = useState<BridgeOutcome | null>(null);
+  /**
+   * The last finished transfer, tagged with the engine that performed it, because
+   * the receipt block below reads its step names against the engine on screen. An
+   * untagged CCTP result rendered on the Gateway tab labelled its burn "Minting on
+   * the destination chain", which is the same lie the stepper was telling.
+   */
+  const [result, setResult] = useState<(BridgeOutcome & { engine: BridgeEngine }) | null>(null);
   /** Every transfer this browser is following, live from the server. */
   const [jobs, setJobs] = useState<BridgeJob[]>([]);
-  /** A CCTP transfer signed by this wallet. It has no server job behind it. */
-  const [selfBridge, setSelfBridge] = useState<{
-    state: string;
-    steps: { name: string; txHash?: string }[];
-  } | null>(null);
+  /** A transfer signed by this wallet. It has no server job behind it. */
+  const [selfBridge, setSelfBridge] = useState<LiveRun | null>(null);
+  /**
+   * Which wallet-signed run owns the slot above.
+   *
+   * A Gateway screen can be funding and spending at the same time, and both write
+   * here. Without an identity the first to finish would call `setSelfBridge(null)`
+   * and wipe the other one's live progress, which reads as a transfer that stopped
+   * happening. A finisher now only clears the slot if the slot is still its own.
+   */
+  const runSeq = useRef(0);
   /** Jobs already written to history, so polling cannot write them twice. */
   const saved = useRef<Set<string>>(new Set());
-  /** The one the stepper describes: the newest still running, else the newest. */
-  const job = useMemo(
-    () => jobs.find((j) => j.state === 'running') ?? jobs[jobs.length - 1] ?? null,
-    [jobs],
-  );
+  /**
+   * The one the stepper describes: the newest still running on this engine, else the
+   * newest on this engine. Never one from the other tab.
+   */
+  const job = useMemo(() => jobForEngine(engine, jobs), [jobs, engine]);
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
   const [bridges, setBridges] = useState<StoredBridge[]>(() => loadBridges());
   const [histEngine, setHistEngine] = useState<'all' | BridgeEngine>('all');
@@ -462,7 +473,14 @@ export function BridgeTab({ session }: { session: Session }) {
   const changeEngine = (e: BridgeEngine) => {
     setEngine(e);
     if (e === 'gateway') {
-      if (!isGatewayChain(from)) setFrom('Arc_Testnet');
+      // Snapping the source is a source change like any other, and the balances,
+      // the ceiling and any typed deposit are all about the chain being left. Left
+      // in place they describe Avalanche while the screen says Arc, and the refusal
+      // that guards the Send button reads them.
+      if (!isGatewayChain(from)) {
+        setFrom('Arc_Testnet');
+        forgetSourceReads();
+      }
       if (!isGatewayChain(to)) setTo('Base_Sepolia');
     }
   };
@@ -579,7 +597,7 @@ export function BridgeTab({ session }: { session: Session }) {
     forgetSourceReads();
   }
 
-  const activeSteps = engine === 'gateway' ? GATEWAY_STEPS : BRIDGE_STEPS;
+  const activeSteps = stepsForEngine(engine);
   const stepLabel = (name: string) =>
     t(
       (engine === 'gateway'
@@ -587,27 +605,44 @@ export function BridgeTab({ session }: { session: Session }) {
         : `bridge.step.${name}`) as 'bridge.step.mint',
     );
 
+  /**
+   * The line for a step the runner named, rather than for a row number.
+   *
+   * What this replaces ended in `?? 'mint'`, so a name that matched nothing in the
+   * engine's list was announced as a mint. With the receipt now filtered to its own
+   * engine that should not arise, and if it ever does the honest answer is the name
+   * itself, not the most consequential step on the screen.
+   */
+  const reportedLabel = (name: string) => {
+    const at = stepIndexFor(name, activeSteps);
+    return at >= 0 ? stepLabel(activeSteps[at] as string) : name;
+  };
+
+  /**
+   * Everything on this screen that describes a transfer, filtered to the engine the
+   * screen is showing.
+   *
+   * The two tabs used to share one set of these. Since CCTP and Gateway both end on
+   * a step called `mint`, a finished CCTP transfer put a green tick on the Gateway
+   * stepper's last row: a mint that this engine had not performed, sitting under
+   * three rows that correctly said nothing had started. Switching tabs is not a
+   * transfer, so it should not be able to report one.
+   */
+  const liveRun = ownedBy(engine, selfBridge);
+  const shownResult = ownedBy(engine, result);
+
   const steps: Step[] = useMemo(() => {
-    // Which step is actually running, from the server, rather than lighting all of
+    // Which step is actually running, from the runner, rather than lighting all of
     // them up for the duration. The job reports each one as it happens; before this
     // the indicator could only say "something is in progress" for half a minute.
-    const reported = selfBridge?.steps ?? job?.steps ?? [];
-    const finished = selfBridge ? selfBridge.state !== 'running' : job && job.state !== 'running';
-    return activeSteps.map((name) => {
-      const at = reported.findIndex((r) => r.name === name);
-      if (finished) {
-        const st = (reported[at] as { state?: string } | undefined)?.state;
-        return {
-          label: stepLabel(name),
-          status: st === 'error' ? 'error' : at >= 0 ? 'done' : 'pending',
-        };
-      }
-      if (at < 0) return { label: stepLabel(name), status: 'pending' };
-      // The most recent report is the one still running; anything before it is done.
-      const isLast = at === reported.length - 1;
-      return { label: stepLabel(name), status: isLast ? 'active' : 'done' };
-    }) as Step[];
-  }, [job, selfBridge, activeSteps, t, engine]);
+    const run = liveRun ?? job;
+    // A deposit gets its own single row, because that is all a deposit is.
+    const rows = stepsForRun(engine, liveRun);
+    return deriveStepStatuses(rows, run).map((status, i) => ({
+      label: stepLabel(rows[i] as string),
+      status,
+    }));
+  }, [job, liveRun, engine, t]);
 
   /**
    * Which of these records paid for a subscription box.
@@ -665,7 +700,12 @@ export function BridgeTab({ session }: { session: Session }) {
         saved.current.add(next.jobId);
         forgetJob(next.jobId);
         if (next.state !== 'unknown') {
-          setResult({ state: next.state, amount: next.amount, steps: next.steps } as BridgeOutcome);
+          setResult({
+            engine: next.engine,
+            state: next.state,
+            amount: next.amount,
+            steps: next.steps,
+          } as BridgeOutcome & { engine: BridgeEngine });
           saveBridge({
             id: next.jobId,
             engine: next.engine,
@@ -755,7 +795,10 @@ export function BridgeTab({ session }: { session: Session }) {
               ...b,
               state: 'success',
               steps: status.mintTxHash
-                ? [...b.steps, stepRow('mint', status.mintTxHash, b.to as CctpChainName)]
+                ? [
+                    ...b.steps.filter((s) => s.name !== 'mint'),
+                    stepRow('mint', status.mintTxHash, b.to as CctpChainName),
+                  ]
                 : b.steps,
             });
             setBridges(loadBridges());
@@ -791,8 +834,11 @@ export function BridgeTab({ session }: { session: Session }) {
         saveBridge({
           ...b,
           state: 'success',
+          // Replace rather than append: a row saved while the mint was still out
+          // already carries the attestation step, and appending a second one put
+          // the same line in the record twice.
           steps: [
-            ...b.steps,
+            ...b.steps.filter((s) => s.name !== 'fetchAttestation' && s.name !== 'mint'),
             stepRow('fetchAttestation'),
             stepRow('mint', forward, b.to as CctpChainName),
           ],
@@ -853,10 +899,63 @@ export function BridgeTab({ session }: { session: Session }) {
     };
   }
 
+  /**
+   * Claim the stepper slot for a new run, and hand back the only three ways it may
+   * be written to.
+   *
+   * Every writer checks the run id first, so a deposit that finishes while a spend
+   * is on screen leaves the spend alone instead of blanking it, and a step arriving
+   * late from an abandoned run cannot repopulate a slot someone else now owns. The
+   * engine tag goes on here, once, rather than at each of the seven `setSelfBridge`
+   * calls that used to exist.
+   */
+  function beginRun(runEngine: BridgeEngine, kind: 'transfer' | 'deposit') {
+    const id = ++runSeq.current;
+    const mine = (prev: LiveRun | null) => prev?.id === id;
+    setSelfBridge({ engine: runEngine, kind, id, state: 'running', steps: [] });
+    return {
+      /** One step happened. Reported steps stay in the order they first arrived. */
+      step(name: string, txHash?: string) {
+        setSelfBridge((prev) =>
+          prev && mine(prev)
+            ? {
+                ...prev,
+                steps: [
+                  ...prev.steps.filter((x) => x.name !== name),
+                  { name, ...(txHash ? { txHash } : {}) },
+                ],
+              }
+            : prev,
+        );
+      },
+      /** A step this run will not be performing, said out loud from the start. */
+      skip(name: string) {
+        setSelfBridge((prev) =>
+          prev && mine(prev)
+            ? {
+                ...prev,
+                steps: [...prev.steps.filter((x) => x.name !== name), { name, state: 'noop' }],
+              }
+            : prev,
+        );
+      },
+      /** The run is over, or as over as it gets: `pending` is still in flight. */
+      finish(state: string, steps: ReportedStep[]) {
+        setSelfBridge((prev) =>
+          mine(prev) ? { engine: runEngine, kind, id, state, steps } : prev,
+        );
+      },
+      /** Let the slot go, but only if it is still ours. */
+      clear() {
+        setSelfBridge((prev) => (mine(prev) ? null : prev));
+      },
+    };
+  }
+
   async function deposit() {
     if (!gwSource || depositValue <= 0n) return;
     setDepositing(true);
-    setSelfBridge({ steps: [], state: 'running' });
+    const run = beginRun('gateway', 'deposit');
     try {
       const res = await depositToGateway(
         bridgeClients(CCTP_CHAINS[gwSource].chainId, session.address),
@@ -866,17 +965,11 @@ export function BridgeTab({ session }: { session: Session }) {
           onStep: (step, txHash) => {
             const name = GW_STEP_TO_UI[step];
             if (!name) return;
-            setSelfBridge((prev) => ({
-              state: 'running',
-              steps: [
-                ...(prev?.steps ?? []).filter((x) => x.name !== name),
-                { name, ...(txHash ? { txHash } : {}) },
-              ],
-            }));
+            run.step(name, txHash);
           },
         },
       );
-      setSelfBridge(null);
+      run.clear();
       rememberDeposit(gwSource, depositValue);
       setGwPending(pendingOn(gwSource));
       setDepositAmount('');
@@ -888,7 +981,7 @@ export function BridgeTab({ session }: { session: Session }) {
       );
       void res;
     } catch (e) {
-      setSelfBridge(null);
+      run.clear();
       toast.push(e instanceof Error ? e.message : String(e), 'error');
     } finally {
       setDepositing(false);
@@ -910,7 +1003,9 @@ export function BridgeTab({ session }: { session: Session }) {
   }
 
   async function runToCompletion(dispatch: ReturnType<typeof untilDispatched>) {
-    setResult(null);
+    // Clear this engine's last receipt, not the other engine's. Wiping both meant
+    // a Gateway transfer erased the CCTP receipt sitting on the tab next door.
+    setResult((prev) => (prev && prev.engine !== engine ? prev : null));
     if (engine === 'gateway') {
       // Should be unreachable: the button is disabled without both chains. Kept as
       // a spoken refusal rather than a silent `return`, because a button that does
@@ -921,7 +1016,20 @@ export function BridgeTab({ session }: { session: Session }) {
         dispatch.release();
         return;
       }
-      setSelfBridge({ steps: [], state: 'running' });
+      const run = beginRun('gateway', 'transfer');
+      /**
+       * A spend does not fund anything.
+       *
+       * The whole point of Gateway is that the balance was deposited earlier, by
+       * the box above, possibly minutes ago. The spend reports quote, sign,
+       * transfer and mint, and never a deposit -- yet the stepper's first row said
+       * "Funding unified balance" and the completion handler wrote that row down as
+       * having happened, so a green tick appeared over a deposit this transfer had
+       * not made. The row stays, because it is how the model works; what changes is
+       * that it says so. A run that does report a deposit overwrites this.
+       */
+      run.skip('deposit');
+      let funded = false;
       try {
         // No wallet client bound to a chain: a spend is a signature, so it works
         // wherever the wallet happens to be.
@@ -935,13 +1043,8 @@ export function BridgeTab({ session }: { session: Session }) {
             onStep: (step, txHash) => {
               const name = GW_STEP_TO_UI[step];
               if (!name) return;
-              setSelfBridge((prev) => ({
-                state: 'running',
-                steps: [
-                  ...(prev?.steps ?? []).filter((x) => x.name !== name),
-                  { name, ...(txHash ? { txHash } : {}) },
-                ],
-              }));
+              if (name === 'deposit') funded = true;
+              run.step(name, txHash);
             },
             // Write the receipt down the moment Circle accepts the intent, not when
             // the mint lands. The wait in between is where a tab gets closed, and
@@ -958,7 +1061,9 @@ export function BridgeTab({ session }: { session: Session }) {
                 amount,
                 ...(isAddress(recipient.trim()) ? { recipient: recipient.trim() } : {}),
                 state: 'pending',
-                steps: [{ name: 'deposit' }, { name: 'sign' }, { name: 'attestation' }],
+                // The record lists what this transfer did. A deposit it did not make
+                // is not one of those things, so it is not written down as one.
+                steps: [{ name: 'sign' }, { name: 'attestation' }],
                 createdAt: Date.now(),
                 /**
                  * What the balance was before this spend, written now because now
@@ -978,13 +1083,21 @@ export function BridgeTab({ session }: { session: Session }) {
             },
           },
         );
+        // What was done, for the record.
         const steps = [
-          { name: 'deposit' },
           { name: 'sign' },
           { name: 'attestation' },
           ...(res.mintTxHash ? [stepRow('mint', res.mintTxHash, to)] : []),
         ];
-        setSelfBridge({ state: res.mintTxHash ? 'success' : 'running', steps });
+        // `pending`, not `running`: Circle has the intent and the mint has not
+        // landed. Both keep the indicator moving, and `pending` is the word the
+        // stored row already uses for the same moment. The indicator also keeps the
+        // funding row, marked as the no-op it was, because it has four rows and
+        // dropping one at the end would renumber the other three.
+        run.finish(res.mintTxHash ? 'success' : 'pending', [
+          { name: 'deposit', ...(funded ? {} : { state: 'noop' }) },
+          ...steps,
+        ]);
         saveBridge({
           // The transferId is the receipt here, the way the burn hash is for CCTP.
           id: res.transferId,
@@ -1000,13 +1113,13 @@ export function BridgeTab({ session }: { session: Session }) {
           createdAt: Date.now(),
         });
         setBridges(loadBridges());
-            setGwOnSource(null);
+        setGwOnSource(null);
         toast.push(
           res.mintTxHash ? t('bridge.done') : t('bridge.forwardPending'),
           res.mintTxHash ? 'success' : 'info',
         );
       } catch (e) {
-        setSelfBridge(null);
+        run.clear();
         toast.push(e instanceof Error ? e.message : String(e), 'error');
       } finally {
         dispatch.release();
@@ -1014,7 +1127,7 @@ export function BridgeTab({ session }: { session: Session }) {
       return;
     }
 
-    setSelfBridge({ steps: [], state: 'running' });
+    const run = beginRun('cctp', 'transfer');
     try {
       // Clients bound to the source chain, not to Arc. The wallet is already there
       // -- the button would have offered to switch otherwise -- but the app's own
@@ -1029,13 +1142,7 @@ export function BridgeTab({ session }: { session: Session }) {
           onStep: (step, txHash) => {
             const name = SDK_STEP_TO_UI[step];
             if (!name) return; // quoting is instant; it has no row in the stepper
-            setSelfBridge((prev) => ({
-              state: 'running',
-              steps: [
-                ...(prev?.steps ?? []).filter((x) => x.name !== name),
-                { name, ...(txHash ? { txHash } : {}) },
-              ],
-            }));
+            run.step(name, txHash);
             // Write the burn down the moment it confirms, not when the whole
             // transfer resolves. The wait for Circle is the long part and a reload
             // during it would otherwise lose the one hash the money can be traced
@@ -1067,9 +1174,13 @@ export function BridgeTab({ session }: { session: Session }) {
         // final list left it showing as pending underneath a completed mint.
         ...(res.forwardTxHash
           ? [stepRow('fetchAttestation'), stepRow('mint', res.forwardTxHash, to)]
-          : []),
+          : // Burned, and Circle has not minted yet. The attestation row is added
+            // anyway so the spinner sits on the step that is actually outstanding;
+            // without it the indicator spun on "Burning on the source chain" long
+            // after the burn had confirmed.
+            [stepRow('fetchAttestation')]),
       ];
-      setSelfBridge({ state: res.forwardTxHash ? 'success' : 'running', steps });
+      run.finish(res.forwardTxHash ? 'success' : 'pending', steps);
       saveBridge({
         id: res.burnTxHash,
         engine: 'cctp',
@@ -1218,9 +1329,7 @@ export function BridgeTab({ session }: { session: Session }) {
               // what tapping it fills in are allowed to differ; what the label says
               // and what it is are not.
               balance={spendable}
-              balanceLabel={
-                engine === 'gateway' ? t('bridge.gwBalanceLabel') : t('bridge.balance')
-              }
+              balanceLabel={engine === 'gateway' ? t('bridge.gwBalanceLabel') : t('bridge.balance')}
               onMax={fillPercent}
               percents={[0.25, 0.5]}
               data-testid="bridge-amount"
@@ -1366,7 +1475,10 @@ export function BridgeTab({ session }: { session: Session }) {
             could refuse on an advisory the user was never shown. */}
         <RiskGate gate={risk} recoverable={false} data-testid="bridge-risk" />
 
-        {(result || job || selfBridge) && <Stepper steps={steps} highlightIndex={hoverIdx} />}
+        {/* Only for a transfer this engine performed. The condition used to be three
+            untagged pieces of state, so arriving on a tab that had never run
+            anything still drew a stepper, filled in from the other tab's transfer. */}
+        {(shownResult || job || liveRun) && <Stepper steps={steps} highlightIndex={hoverIdx} />}
 
         <div style={{ marginTop: 16 }}>
           {/* Being on the wrong network is a step, not a failure. Offering the
@@ -1411,15 +1523,15 @@ export function BridgeTab({ session }: { session: Session }) {
         {/* A bridge can come back 200 and still have failed at a step. Rendering only
             the success case left the screen unchanged, which reads as "the button
             does nothing" rather than "CCTP refused this amount". */}
-        {result && result.state !== 'success' && (
+        {shownResult && shownResult.state !== 'success' && (
           <div className="risk risk--block" style={{ marginTop: 14 }} data-testid="bridge-error">
             <div className="risk__head">{t('bridge.failed')}</div>
             <ul className="risk__reasons">
-              {result.steps
+              {shownResult.steps
                 .filter((s) => s.state !== 'success')
                 .map((s) => (
                   <li key={s.name} className="risk__reason risk__reason--block">
-                    {stepLabel(activeSteps[stepIndexFor(s.name, activeSteps)] ?? 'mint')}
+                    {reportedLabel(s.name)}
                     {s.error ? `: ${s.error}` : ''}
                   </li>
                 ))}
@@ -1427,9 +1539,9 @@ export function BridgeTab({ session }: { session: Session }) {
           </div>
         )}
 
-        {result?.state === 'success' && (
+        {shownResult?.state === 'success' && (
           <div className="row wrap" style={{ marginTop: 14 }} data-testid="bridge-success">
-            {result.steps
+            {shownResult.steps
               .filter((s) => s.txHash && safeHttpUrl(s.explorerUrl))
               .map((s) => (
                 <TxLink
@@ -1437,7 +1549,7 @@ export function BridgeTab({ session }: { session: Session }) {
                   href={safeHttpUrl(s.explorerUrl)}
                   label={s.name}
                   copyValue={s.txHash ?? ''}
-                  title={stepLabel(activeSteps[stepIndexFor(s.name, activeSteps)] ?? 'mint')}
+                  title={reportedLabel(s.name)}
                   onMouseEnter={() => setHoverIdx(stepIndexFor(s.name, activeSteps))}
                   onMouseLeave={() => setHoverIdx(null)}
                 />

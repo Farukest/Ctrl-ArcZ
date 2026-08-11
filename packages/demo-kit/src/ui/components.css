@@ -1464,6 +1464,13 @@
 .step--done {
   color: var(--safe);
 }
+.step--error {
+  color: var(--block);
+}
+/* A step that was not needed. Legible, but plainly not a completed one. */
+.step--skipped {
+  opacity: 0.55;
+}
 /* Cross-highlight: hovering a result link marks which step it belongs to. */
 .step--highlight {
   color: var(--accent);
