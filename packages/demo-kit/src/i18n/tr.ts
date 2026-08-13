@@ -241,7 +241,6 @@ export const tr: Record<TranslationKey, string> = {
   'bridge.amount': 'Tutar (USDC)',
   'bridge.feeNote': 'Küçük bir ağ ücreti var; tutar bundan büyük olmalı.',
   'bridge.button': 'Köprüle',
-  'bridge.buttonAnother': 'Bir tane daha köprüle',
   'bridge.bridging': 'Köprüleniyor...',
   'bridge.step.approve': 'USDC onaylanıyor...',
   'bridge.step.burn': 'Kaynak zincirde yakılıyor...',

@@ -358,7 +358,7 @@ Gateway supports fewer chains than CCTP, so the pickers narrow themselves when y
 
 Both routes are signed by **the user's own wallet**. Nothing in this project ever holds a key that could move somebody's USDC: the burn, the Gateway deposit and the Gateway spend are all transactions or EIP-712 signatures the wallet produces, and Circle's own attestation service does the rest. There is no operator balance to fund and nothing to trust with custody, which is the only version of a bridge worth shipping inside a product about not losing money to the wrong address.
 
-That costs a little more work than calling Circle's Node-first kits from a server, and the SDK carries it: `packages/sdk/src/bridge` speaks to the CCTP and Gateway contracts and REST APIs directly, queues transactions per signer so two flows on one wallet cannot race a nonce, checks that the source chain can actually pay for its own burn, and can pick a stalled transfer back up from its burn hash after a reload.
+That costs a little more work than calling Circle's Node-first kits from a server, and the SDK carries it: `packages/sdk/src/bridge` speaks to the CCTP and Gateway contracts and REST APIs directly, queues transactions per signer so two flows on one wallet cannot race a nonce, checks that the source chain can actually pay for its own burn, and can pick a stalled transfer back up after a reload from its burn hash on CCTP or its transfer id on Gateway.
 
 **A transfer that does not arrive is not money lost, and the row says so.** A Gateway spend does not burn on the source chain when the intent is accepted: Circle debits its own ledger and settles later, so a mint that fails means the burn never ran and what left the balance was a hold. Circle lets it go, measured twice at under ten minutes with the fee included. Calling that "failed" would tell someone their money is gone while it is on its way back, so the row reads `returning` and then `returned`. Circle's status stays `failed` for good and can never report the release, so the app watches the balance instead, against the figure it wrote down before the spend.
 
@@ -378,7 +378,7 @@ The lock-then-claim mechanic needs two transactions. That is exactly what has ke
 | **CodeClaimVerifier** | [`0x2C0f268DE2Aa8BB2ab27F2Ea5Ae8a0f9a0E068c4`](https://testnet.arcscan.app/address/0x2C0f268DE2Aa8BB2ab27F2Ea5Ae8a0f9a0E068c4) | Checks `keccak256(salt, code)` for `ClaimMode.CODE`       |
 | USDC (Arc predeploy)  | `0x3600000000000000000000000000000000000000`                                                                                   | The asset, and the gas                                    |
 
-Deploy block `51326557`. Nothing is deployed to mainnet, and nothing will be.
+Deploy block `51326557`. Everything here is Arc Testnet. Mainnet follows the audit.
 
 | Function                                    | Caller      | Purpose                                                          |
 | ------------------------------------------- | ----------- | ---------------------------------------------------------------- |
@@ -397,7 +397,7 @@ The contract is **ownerless**: no owner, no pause, no proxy, no upgrade path, no
 The full audit lives in [`SECURITY.md`](./SECURITY.md). The short version:
 
 - **No key is hardcoded anywhere.** Every signing key is read from the environment, and both Vite configs **refuse a production build** that would inline one, unless the operator explicitly acknowledges it.
-- **Nothing signs for the user but the user.** The protected transfer, the CCTP burn and both halves of a Gateway move are the wallet's own signatures. The one server-signed path is the gasless claim, and it settles a transfer that can only ever pay the recipient recorded on chain; the browser posts the transfer id, code and salt and never holds a relayer or Circle key.
+- **Nothing signs for the user but the user, and every server-signed path is fenced in by something already on chain.** The protected transfer, the CCTP burn and both halves of a Gateway move are the wallet's own signatures. The gasless claim settles only to the recipient recorded at send time, and the browser posts the transfer id, code and salt while never holding a relayer or Circle key. The co-signer can authorise a pull only inside the policy its box was deployed with and only to the target locked into it, which the box enforces itself. The relayer deploys boxes, announces them and tops a stealth address up with gas out of its own balance, and touches no user's USDC.
 - **The firewall fails closed** rather than degrading to "looks fine" when a data source is down.
 - **Every path that moves money runs the firewall**, from one module, and none of them arms its button before the verdict is in. Four screens deciding this for themselves is how one of them ends up with a weaker door than the others.
 - **Claim receipts are bound to the contract address and the exact transfer id**, so an unrelated or planted event in a batched receipt cannot decide a victim transfer's outcome.

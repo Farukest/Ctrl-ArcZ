@@ -21,8 +21,6 @@ import {
   cosignerAddress,
   verifiedRecipients,
 } from '@ctrl-arcz/demo-kit/cosign';
-import { bridgeUsdc } from '@ctrl-arcz/demo-kit/cctp';
-import { gatewayTransfer } from '@ctrl-arcz/demo-kit/gateway';
 import { gaslessClaimToResult } from '@ctrl-arcz/demo-kit/gasless';
 import {
   relayCreateBox,
@@ -31,8 +29,7 @@ import {
   boxExists,
 } from '@ctrl-arcz/demo-kit/relay';
 import { env } from './env.js';
-import { createJob, finishJob, getJob, recordStep } from './jobs.js';
-import { json, readJson, readRaw, HttpError, classify } from './http.js';
+import { json, readJson, readRaw, HttpError } from './http.js';
 import { requireSignedRequest, checkQuota, takeInvestigatorBudget } from './auth.js';
 
 /** JSON-parse a raw body already read for signature verification. */
@@ -43,28 +40,6 @@ function parseBody(raw: string): unknown {
     throw new HttpError(400, 'invalid json');
   }
 }
-
-const BRIDGE_CHAIN_IDS = new Set([
-  'Arc_Testnet',
-  'Ethereum_Sepolia',
-  'Base_Sepolia',
-  'Arbitrum_Sepolia',
-  'Optimism_Sepolia',
-  'Avalanche_Fuji',
-  'Polygon_Amoy_Testnet',
-  'Unichain_Sepolia',
-  'Linea_Sepolia',
-  'Sonic_Testnet',
-  'World_Chain_Sepolia',
-]);
-const GATEWAY_CHAIN_IDS = new Set([
-  'Arc_Testnet',
-  'Ethereum_Sepolia',
-  'Base_Sepolia',
-  'Avalanche_Fuji',
-  'Sonic_Testnet',
-]);
-const MAX_BRIDGE_AMOUNT = 5; // USDC, testnet demo ceiling
 
 /** How far back the firewall scans for RecipientVerified. Matches the co-signer. */
 const VERIFIED_LOOKBACK_BLOCKS = 200_000;
@@ -168,140 +143,16 @@ export async function healthGet(_req: IncomingMessage, res: ServerResponse): Pro
       arcUsdc: balance,
       low: balance != null && balance < LOW_RELAYER_BALANCE,
       ...(balance != null && balance < LOW_RELAYER_BALANCE
-        ? { warning: `Relayer USDC on Arc is ${balance}. Bridges fail below the amount they send.` }
+        ? {
+            warning: `Relayer USDC on Arc is ${balance}. Box deploys, announcements and gasless claims stop when it runs out.`,
+          }
         : {}),
     },
   });
 }
 
-/** Below this, a demo-sized bridge is one transfer away from failing. */
+/** Below this, the relayer is a few box deploys away from refusing to work. */
 const LOW_RELAYER_BALANCE = 5;
-
-// --- cross-chain (shared validation for CCTP + Gateway) ---
-
-function parseCrossChain(body: unknown, allowed: Set<string>) {
-  const { from, to, amount } = (body ?? {}) as { from?: unknown; to?: unknown; amount?: unknown };
-  // Name the accepted values. They are underscored (`Arc_Testnet`, not
-  // `Arc Testnet`), which nobody guesses, and the set is right here in this file --
-  // there is no reason to make a caller discover it by trial.
-  const accepted = [...allowed].join(', ');
-  if (typeof from !== 'string' || !allowed.has(from)) {
-    throw new HttpError(400, `invalid source chain. Accepted: ${accepted}`);
-  }
-  if (typeof to !== 'string' || !allowed.has(to)) {
-    throw new HttpError(400, `invalid destination chain. Accepted: ${accepted}`);
-  }
-  if (from === to) throw new HttpError(400, 'source and destination must differ');
-  // Canonical USDC decimal only: no scientific notation, no whitespace, at most 6
-  // decimals. We forward exactly the validated string, so the bound that was
-  // checked and the value that is sent are the same quantity.
-  const amtStr = typeof amount === 'number' ? String(amount) : amount;
-  if (typeof amtStr !== 'string' || !/^\d+(\.\d{1,6})?$/.test(amtStr)) {
-    throw new HttpError(400, 'invalid amount format');
-  }
-  const amt = Number(amtStr);
-  if (!(amt > 0 && amt <= MAX_BRIDGE_AMOUNT)) throw new HttpError(400, 'invalid amount');
-  return { from, to, amount: amtStr };
-}
-
-/**
- * Run a bridge as a tracked job, or inline, depending on what the caller asked for.
- *
- * `async: true` in the body returns a jobId immediately and leaves the transfer
- * running; anything else keeps the original blocking behaviour, because a client
- * this repo does not own (the Android app) depends on that response shape and
- * changing it out from under it would break a working product to add a feature.
- *
- * Either way the job is recorded, so a transfer started inline is still recoverable
- * from its hashes if this process dies partway through it.
- */
-async function runCrossChain(
-  req: IncomingMessage,
-  res: ServerResponse,
-  engine: 'cctp' | 'gateway',
-): Promise<void> {
-  const path = engine === 'cctp' ? '/api/bridge' : '/api/gateway';
-  const raw = await readRaw(req);
-  const caller = await requireSignedRequest(req, raw, path);
-  const body = parseBody(raw);
-  const chains = engine === 'cctp' ? BRIDGE_CHAIN_IDS : GATEWAY_CHAIN_IDS;
-  const { from, to, amount } = parseCrossChain(body, chains);
-  checkQuota(caller, Number(amount));
-  if (!env.relayerPk) throw new HttpError(400, 'no relayer key configured');
-
-  const job = createJob({ engine, from, to, amount, caller });
-  const onStep = (step: { name: string; txHash?: string }) =>
-    recordStep(job.jobId, { ...step, state: 'running' });
-
-  const work =
-    engine === 'cctp'
-      ? bridgeUsdc({ privateKey: env.relayerPk, from, to, amount, onStep } as never)
-      : gatewayTransfer({ privateKey: env.relayerPk, from, to, amount, onStep } as never);
-
-  const settle = work.then(
-    (result) => {
-      finishJob(job.jobId, {
-        state: result.state === 'success' ? 'success' : 'failed',
-        steps: result.steps as never,
-        ...(result.state === 'success' ? {} : { error: 'the transfer did not complete' }),
-      });
-      return result;
-    },
-    (e: unknown) => {
-      const { message } = classify(e);
-      finishJob(job.jobId, { state: 'failed', error: message });
-      throw e;
-    },
-  );
-
-  const wantsJob = (body as { async?: unknown } | null)?.async === true;
-  if (!wantsJob) {
-    json(res, 200, await settle);
-    return;
-  }
-
-  // Nobody is waiting on this promise any more, so an unhandled rejection would
-  // take the process down with it. The job already records why it failed.
-  settle.catch(() => {});
-  json(res, 202, { jobId: job.jobId, state: 'running' });
-}
-
-export function bridgePost(req: IncomingMessage, res: ServerResponse): Promise<void> {
-  return runCrossChain(req, res, 'cctp');
-}
-
-export function gatewayPost(req: IncomingMessage, res: ServerResponse): Promise<void> {
-  return runCrossChain(req, res, 'gateway');
-}
-
-/**
- * The state of one transfer.
- *
- * Unauthenticated: a jobId is 128 bits of randomness handed only to the caller who
- * started the transfer, and the response carries nothing that is not already public
- * on a block explorer. Demanding a signature to poll would cost a wallet prompt
- * every second or two.
- *
- * An id this process has never seen is `unknown`, never `failed`. A restart drops
- * the in-memory index while the burn may well have landed, and answering "failed"
- * about money that is one attestation away from arriving is the worst thing this
- * endpoint could say.
- */
-export function bridgeJobGet(
-  _req: IncomingMessage,
-  res: ServerResponse,
-  params: Record<string, string>,
-): void {
-  const job = getJob(params.jobId ?? '');
-  if (!job) {
-    return json(res, 404, {
-      state: 'unknown',
-      error:
-        'No record of this transfer. It may have been started before a restart; check the relayer address on the explorer before assuming it did not happen.',
-    });
-  }
-  json(res, 200, job);
-}
 
 // --- gasless claim (Circle Gas Station) ---
 

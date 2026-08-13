@@ -11,8 +11,6 @@ endpoints so a real deployment has a stable API.
 | GET | `/api/health` | Liveness. |
 | GET | `/api/cosign` | The co-signer's public address. |
 | POST | `/api/cosign` | The Machine: validate a spend against on-chain policy + the firewall, sign or veto. |
-| POST | `/api/bridge` | CCTP bridge (server-held relayer key). |
-| POST | `/api/gateway` | Circle Gateway transfer. |
 | POST | `/api/gasless-claim` | Gas-sponsored claim (Circle Gas Station). |
 | POST | `/api/relay/create` | Deploy a stealth spend box, so the deploy does not name the payer. |
 | POST | `/api/relay/announce` | Announce that box (`StealthAnnouncer` indexes `msg.sender`). |
@@ -20,14 +18,28 @@ endpoints so a real deployment has a stable API.
 | POST | `/api/investigate` | A reasoned second opinion on a recipient. Advisory only; it can only tighten a verdict. |
 | GET | `/api/verified-recipients` | Everyone a sender has settled a protected transfer to. Public, from public events. |
 | GET | `/api/announcements` | Every stealth announcement. Undirected: it takes no address and returns the same bytes to everyone. |
-| GET | `/api/bridge/:jobId` | The state of one relayer-run transfer. |
 
-The co-signer, bridge, gasless and gateway logic is reused from `@ctrl-arcz/demo-kit`
-so every client shares exactly one implementation.
+The co-signer, gasless and relay logic is reused from `@ctrl-arcz/demo-kit` so every
+client shares exactly one implementation.
+
+## Nothing here bridges
+
+There used to be `POST /api/bridge`, `POST /api/gateway` and `GET /api/bridge/:jobId`:
+the relayer ran a cross-chain transfer out of its own balance, capped at 5 USDC a
+call, and clients polled a job id for the result. Both clients moved that work to
+the wallet that owns the money, the web app signing the CCTP burn and the Gateway
+spend in the browser and the Android client doing the same on the device, and
+nothing had called the routes for a while.
+
+Deleting them removed a way to spend the relayer's balance, which is the same
+balance the relay routes and the gasless claim depend on. A demo faucet that drains
+the key box deploys need is a poor trade for a feature no client uses.
 
 Every route that spends the relayer's gas requires a signed request
 (`x-ctrl-address` / `x-ctrl-timestamp` / `x-ctrl-signature` over path, timestamp and
-body hash) and is quota-limited per caller and per day.
+body hash) and is quota-limited per caller and per day. What is left of that surface
+is the three relay routes and the gasless claim, none of which can move a user's
+funds.
 
 ## The relay routes
 
@@ -39,8 +51,11 @@ when the address already has enough.
 
 The server rebuilds the policy from named fields rather than accepting calldata,
 with the token pinned to USDC and the cosigner pinned to itself, so the relayer can
-only ever sign a call the operator intended. What this does not hide is funding;
-see [`docs/privacy.md`](../../docs/privacy.md).
+only ever sign a call the operator intended. Funding does not go through here at
+all: both clients pay the box out of the payer's Circle Gateway balance, so Arc
+records a mint from Circle's minter rather than a transfer from the payer. What is
+and is not hidden, traced around one real box, is in
+[`docs/privacy.md`](../../docs/privacy.md).
 
 ## No notifications here, on purpose
 

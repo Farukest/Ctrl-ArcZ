@@ -108,8 +108,9 @@ self-transfer guards, SafeERC20 on every movement, and no admin / upgrade /
   `@ctrl-arcz/demo-kit/gasless`); the browser only posts `{ transferId, code, salt }`.
   `VITE_RELAYER_PK` and `VITE_CLIENT_KEY` are no longer referenced in any client code
   and are **verified absent from the production bundle** (grep of `dist/` returns
-  none). The bridge is likewise server-side (`/api/bridge`), and its tab gates on a
-  non-secret `VITE_BRIDGE_ENABLED` flag.
+  none). The bridge was likewise server-side (`/api/bridge`) when this was written;
+  it has since moved into the user's own wallet and those routes are deleted, so the
+  tab gates on a non-secret `VITE_BRIDGE_ENABLED` flag and there is no key behind it.
 - **Mitigated: remaining `VITE_DEMO_PK`.** The demo's "connect wallet" is a headless
   test signer standing in for MetaMask (the user's own wallet), so it is read in dev
   only; it is not a server secret. A **build guard** in both apps refuses any
@@ -149,7 +150,8 @@ self-transfer guards, SafeERC20 on every movement, and no admin / upgrade /
 ## Production checklist
 
 1. Rotate every key that has ever been in a build; never use real-value keys.
-2. Signing is already server-side (bridge and gasless). Keep it that way; the only
+2. The only server-signed path left is the gasless claim, and it can settle to
+   nobody but the recipient already recorded on chain. Keep it that way; the only
    key still reaching the browser is the dev-only test-wallet stand-in.
 3. Set `onWarning: 'block'` on your `IntegratorConfig` and pass it to `sendProtected`
    if your users must be hard-stopped on any doubt, not just a hard block.
@@ -248,9 +250,9 @@ app (`apps/mobile`). Three parallel reviews; findings below with status
 
 ## Production checklist (additions)
 
-5. Backend: add authentication + per-address rate limits **before** re-enabling the
-   relayer endpoints (`bridge`, `gateway`, `gasless-claim`); keep the loopback bind
-   + TLS.
+5. Backend: keep the signed-request guard and per-address quotas on every route that
+   spends the relayer's balance, and keep the loopback bind + TLS. The bridge routes
+   this item was written for no longer exist; see the note at the end.
 6. Mobile: ship with Privy (the device key is interim), split the claim code
    out-of-band, and add screenshot protection + certificate pinning.
 
@@ -411,3 +413,21 @@ Verified on Arc Testnet: a transfer sent, a wrong secret rejected with the attem
 counter, then settled with the right one including lowercase input and spaces in
 place of the dashes; and a gasless claim through the live API where the recipient
 received the full amount with their nonce unchanged.
+
+## Removed: the relayer-run bridge routes
+
+`POST /api/bridge`, `POST /api/gateway` and `GET /api/bridge/:jobId` are gone. They
+ran a cross-chain transfer from the relayer's own balance, capped at 5 USDC a call
+and fenced behind a signed request and a daily quota, and every finding above about
+them describes that route rather than anything a user signs today.
+
+They are deleted because nothing called them. The web app signs the CCTP burn and
+the Gateway spend in the browser (`BridgeTab` uses `bridgeFromWallet`,
+`depositToGateway` and `spendFromGateway`), and the Android client signs both on the
+device; a grep of its source for `/api/bridge` and `/api/gateway` returns nothing.
+
+What that removes is not a bug but a budget. The quota bounded a caller to 50 USDC a
+day and the process to 2000, out of the same balance that pays for box deploys,
+stealth announcements and gasless claims, so an endpoint no client used could still
+have stopped the ones they do. `GET /api/health` reports that balance and flags it
+low for exactly this reason.

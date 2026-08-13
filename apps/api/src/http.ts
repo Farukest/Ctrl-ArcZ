@@ -166,9 +166,10 @@ export function classify(e: unknown): { status: number; message: string } {
 }
 
 /**
- * One level of `:param`, resolved only after an exact match misses. Enough for
- * `GET /api/bridge/:jobId` and not a router; the day this needs more than that is
- * the day it should stop being hand-written.
+ * One level of `:param`, resolved only after an exact match misses. Not a router;
+ * the day this needs more than that is the day it should stop being hand-written.
+ * No route uses it right now, and it stays because deleting it would mean the next
+ * `/thing/:id` arrives with a routing rewrite attached.
  */
 function matchRoute(
   routes: Routes,

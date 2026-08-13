@@ -27,17 +27,14 @@ import {
   type GatewayStep,
 } from '@ctrl-arcz/sdk';
 import { bridgeClients, getPublicClient, switchWalletChain } from '@ctrl-arcz/demo-kit';
-import { activeJobIds, forgetJob, readBridgeJob, type BridgeJob } from '../lib/bridgeJob.js';
 import { knownBoxes } from '../lib/useSubscriptions.js';
 import {
   bridgeChainLabel,
   deriveStepStatuses,
-  jobForEngine,
   ownedBy,
   stepIndexFor,
   stepsForEngine,
   stepsForRun,
-  type BridgeChainName,
   type BridgeEngine,
   type BridgeOutcome,
   type LiveRun,
@@ -73,8 +70,8 @@ import { useRecipientGate } from '../lib/useRecipientGate.js';
 import { RiskGate } from './RiskGate.js';
 import { pendingOn, reconcile, rememberDeposit } from '../lib/pendingDeposits.js';
 
-// The bridge signs server-side (/api/bridge), so the client never needs the key;
-// gate on a non-secret flag instead of inlining a private key just to read a bool.
+// The wallet signs both engines, so there is no key here to gate on. A plain flag
+// is enough to hide the tab where a deployment does not want it.
 const bridgeEnabled = import.meta.env.VITE_BRIDGE_ENABLED !== 'false';
 const HISTORY_PAGE_SIZE = 5;
 
@@ -285,9 +282,7 @@ export function BridgeTab({ session }: { session: Session }) {
    * the destination chain", which is the same lie the stepper was telling.
    */
   const [result, setResult] = useState<(BridgeOutcome & { engine: BridgeEngine }) | null>(null);
-  /** Every transfer this browser is following, live from the server. */
-  const [jobs, setJobs] = useState<BridgeJob[]>([]);
-  /** A transfer signed by this wallet. It has no server job behind it. */
+  /** The transfer this wallet is signing right now. */
   const [selfBridge, setSelfBridge] = useState<LiveRun | null>(null);
   /**
    * Which wallet-signed run owns the slot above.
@@ -298,13 +293,6 @@ export function BridgeTab({ session }: { session: Session }) {
    * happening. A finisher now only clears the slot if the slot is still its own.
    */
   const runSeq = useRef(0);
-  /** Jobs already written to history, so polling cannot write them twice. */
-  const saved = useRef<Set<string>>(new Set());
-  /**
-   * The one the stepper describes: the newest still running on this engine, else the
-   * newest on this engine. Never one from the other tab.
-   */
-  const job = useMemo(() => jobForEngine(engine, jobs), [jobs, engine]);
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
   const [bridges, setBridges] = useState<StoredBridge[]>(() => loadBridges());
   const [histEngine, setHistEngine] = useState<'all' | BridgeEngine>('all');
@@ -390,7 +378,6 @@ export function BridgeTab({ session }: { session: Session }) {
    */
   const gwWithdraw = engine === 'gateway' && sameChain;
   const walletOnDepositChain = !gwSource || session.chainId === CCTP_CHAINS[gwSource].chainId;
-  const running = jobs.filter((j) => j.state === 'running').length;
   const canBridge =
     bridgeEnabled &&
     amountValue > 0 &&
@@ -633,16 +620,15 @@ export function BridgeTab({ session }: { session: Session }) {
 
   const steps: Step[] = useMemo(() => {
     // Which step is actually running, from the runner, rather than lighting all of
-    // them up for the duration. The job reports each one as it happens; before this
-    // the indicator could only say "something is in progress" for half a minute.
-    const run = liveRun ?? job;
+    // them up for the duration. The runner reports each one as it happens; before
+    // this the indicator could only say "something is in progress" for half a minute.
     // A deposit gets its own single row, because that is all a deposit is.
     const rows = stepsForRun(engine, liveRun);
-    return deriveStepStatuses(rows, run).map((status, i) => ({
+    return deriveStepStatuses(rows, liveRun).map((status, i) => ({
       label: stepLabel(rows[i] as string),
       status,
     }));
-  }, [job, liveRun, engine, t]);
+  }, [liveRun, engine, t]);
 
   /**
    * Which of these records paid for a subscription box.
@@ -674,75 +660,10 @@ export function BridgeTab({ session }: { session: Session }) {
   );
 
   /**
-   * Follow the running transfer, including one this browser did not start in this
-   * page load. A reload used to lose the bridge entirely; the id outlives the tab,
-   * so picking it back up is just reading it.
-   */
-  /**
-   * Follow every running transfer, including ones this browser did not start in this
-   * page load. A reload used to lose the bridge entirely; the ids outlive the tab, so
-   * picking them back up is just reading them.
-   */
-  useEffect(() => {
-    let live = true;
-    const tick = async () => {
-      const ids = activeJobIds();
-      if (!ids.length) return;
-      const seen = await Promise.all(ids.map((id) => readBridgeJob(id)));
-      if (!live) return;
-      const got = seen.filter((j): j is BridgeJob => j !== null);
-      setJobs(got);
-
-      for (const next of got) {
-        if (next.state === 'running' || saved.current.has(next.jobId)) continue;
-        // Record once. The poll runs every two seconds, and a finished job would
-        // otherwise be appended to history on every tick until the user left.
-        saved.current.add(next.jobId);
-        forgetJob(next.jobId);
-        if (next.state !== 'unknown') {
-          setResult({
-            engine: next.engine,
-            state: next.state,
-            amount: next.amount,
-            steps: next.steps,
-          } as BridgeOutcome & { engine: BridgeEngine });
-          saveBridge({
-            id: next.jobId,
-            engine: next.engine,
-            from: next.from as BridgeChainName,
-            to: next.to as BridgeChainName,
-            fromLabel: bridgeChainLabel(next.from as BridgeChainName),
-            toLabel: bridgeChainLabel(next.to as BridgeChainName),
-            amount: next.amount,
-            state: next.state,
-            steps: next.steps.map((st) => ({
-              name: st.name,
-              ...(st.txHash ? { txHash: st.txHash } : {}),
-              ...(st.explorerUrl ? { explorerUrl: st.explorerUrl } : {}),
-            })),
-            createdAt: next.startedAt,
-          });
-          setBridges(loadBridges());
-        }
-        toast.push(
-          next.state === 'success' ? t('bridge.done') : next.error || t('bridge.failed'),
-          next.state === 'success' ? 'success' : 'error',
-        );
-      }
-    };
-    void tick();
-    const timer = setInterval(() => void tick(), 2000);
-    return () => {
-      live = false;
-      clearInterval(timer);
-    };
-  }, [t, toast]);
-
-  /**
    * Finish transfers that were interrupted between the burn and the mint.
    *
-   * A wallet-signed bridge has no server job watching it, so closing the tab during
-   * the wait used to leave a row saying "pending" with no way past it -- even though
+   * Nothing on a server is watching this transfer, so closing the tab during the
+   * wait used to leave a row saying "pending" with no way past it -- even though
    * the money had arrived. Nothing needs to be re-signed or re-sent to find out: the
    * burn hash is enough to ask Circle where it went, so every pending burn is asked
    * again on load and every half minute after.
@@ -856,12 +777,14 @@ export function BridgeTab({ session }: { session: Session }) {
   }, [t, toast, session.address]);
 
   /**
-   * CCTP goes through the connected wallet; Gateway still goes through the server.
+   * Both engines go through the connected wallet.
    *
-   * They are genuinely different flows now, not two buttons on one. CCTP burns the
-   * user's own USDC and Circle mints it back to them, so the browser signs and no
-   * server key is involved. Gateway's kit is Node-first and cannot run here, so it
-   * remains a relayer-funded job until it can.
+   * CCTP burns the user's own USDC and Circle mints it back to them; a Gateway
+   * spend is an EIP-712 signature over an intent Circle settles. Neither needs a
+   * server key, so there is none in this file and no operator balance behind it.
+   * Gateway used to run on the server because its kit is Node-first, which is why
+   * `packages/sdk/src/bridge/gateway.ts` speaks to the contracts and the REST API
+   * directly instead.
    */
   /**
    * Put the wallet's own USDC into its Gateway balance.
@@ -1478,7 +1401,7 @@ export function BridgeTab({ session }: { session: Session }) {
         {/* Only for a transfer this engine performed. The condition used to be three
             untagged pieces of state, so arriving on a tab that had never run
             anything still drew a stepper, filled in from the other tab's transfer. */}
-        {(shownResult || job || liveRun) && <Stepper steps={steps} highlightIndex={hoverIdx} />}
+        {(shownResult || liveRun) && <Stepper steps={steps} highlightIndex={hoverIdx} />}
 
         <div style={{ marginTop: 16 }}>
           {/* Being on the wrong network is a step, not a failure. Offering the
@@ -1510,11 +1433,7 @@ export function BridgeTab({ session }: { session: Session }) {
               disabled={!canSend}
               data-testid="bridge-button"
             >
-              {gwWithdraw
-                ? t('bridge.withdrawButton')
-                : running > 0
-                  ? t('bridge.buttonAnother')
-                  : t('bridge.button')}
+              {gwWithdraw ? t('bridge.withdrawButton') : t('bridge.button')}
             </Button>
           )}
         </div>

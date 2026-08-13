@@ -355,7 +355,7 @@ Gateway, CCTP'den daha az zincir destekler; bu yüzden ona geçtiğinizde seçic
 
 Her iki rota da **kullanıcının kendi cüzdanı** tarafından imzalanır. Bu projede hiçbir bileşen, birinin USDC'sini hareket ettirebilecek bir anahtar tutmaz: burn, Gateway yatırması ve Gateway harcaması cüzdanın ürettiği işlemler ya da EIP-712 imzalarıdır, gerisini Circle'ın attestation servisi yapar. Fonlanacak bir operatör bakiyesi ve custody'sine güvenilecek bir taraf yoktur; yanlış adrese para kaptırmamak üzerine kurulu bir üründe köprünün gönderilmeye değer tek hâli budur.
 
-Bunun bedeli, Circle'ın Node öncelikli kitlerini bir sunucudan çağırmaktan biraz daha fazla iş ve o işi SDK üstleniyor: `packages/sdk/src/bridge` doğrudan CCTP ve Gateway kontratlarıyla ve REST API'leriyle konuşuyor, aynı cüzdandaki iki akış nonce yarışına girmesin diye işlemleri imzalayan başına sıraya alıyor, kaynak zincirin kendi burn'ünü ödeyebildiğini kontrol ediyor ve sayfa yenilense bile takılı kalmış bir transferi burn hash'inden devralabiliyor.
+Bunun bedeli, Circle'ın Node öncelikli kitlerini bir sunucudan çağırmaktan biraz daha fazla iş ve o işi SDK üstleniyor: `packages/sdk/src/bridge` doğrudan CCTP ve Gateway kontratlarıyla ve REST API'leriyle konuşuyor, aynı cüzdandaki iki akış nonce yarışına girmesin diye işlemleri imzalayan başına sıraya alıyor, kaynak zincirin kendi burn'ünü ödeyebildiğini kontrol ediyor ve sayfa yenilense bile takılı kalmış bir transferi CCTP'de burn hash'inden, Gateway'de transfer id'sinden devralabiliyor.
 
 **Ulaşmayan bir transfer kaybolmuş para değildir ve satır bunu söyler.** Gateway harcamasında niyet kabul edildiğinde kaynak zincirde bir burn olmaz: Circle kendi defterinden düşer ve mutabakatı sonra yapar. Yani başarısız bir mint, burn'ün hiç çalışmadığı ve bakiyeden çıkanın bir blokaj olduğu anlamına gelir. Circle onu serbest bırakıyor; ücret dahil, on dakikanın altında iki kez ölçtük. Buna "başarısız" demek, parası yoldayken birine parasının gittiğini söylemek olurdu; o yüzden satır önce `dönüyor`, sonra `döndü` diyor. Circle'ın durumu temelli `failed` kalıyor ve serbest bırakmayı hiç raporlayamıyor, bu yüzden uygulama bunun yerine bakiyeyi izliyor: harcamadan önce not ettiği rakama karşı.
 
@@ -375,7 +375,7 @@ Kilitle sonra claim et mekaniği iki işlem gerektirir. Bu mekaniği diğer zinc
 | **CodeClaimVerifier** | [`0x2C0f268DE2Aa8BB2ab27F2Ea5Ae8a0f9a0E068c4`](https://testnet.arcscan.app/address/0x2C0f268DE2Aa8BB2ab27F2Ea5Ae8a0f9a0E068c4) | `ClaimMode.CODE` için `keccak256(salt, kod)` doğrular    |
 | USDC (Arc predeploy)  | `0x3600000000000000000000000000000000000000`                                                                                   | Hem varlık hem gas                                       |
 
-Deploy bloğu `51326557`. Mainnet'e hiçbir şey deploy edilmedi ve edilmeyecek.
+Deploy bloğu `51326557`. Buradaki her şey Arc Testnet. Mainnet, denetimden sonra.
 
 | Fonksiyon                                   | Çağıran         | Ne yapar                                              |
 | ------------------------------------------- | --------------- | ----------------------------------------------------- |
@@ -394,7 +394,7 @@ Kontrat **sahipsizdir**: owner yok, pause yok, proxy yok, upgrade yolu yok, kili
 Denetimin tamamı [`SECURITY.md`](./SECURITY.md) içinde. Kısa hali:
 
 - **Hiçbir anahtar kod içine gömülü değil.** Her imzalama anahtarı ortam değişkeninden okunur ve iki Vite config'i de, operatör açıkça onaylamadıkça, anahtarı bundle'a gömecek bir production build'i **reddeder**.
-- **Kullanıcı adına kullanıcıdan başkası imzalamaz.** Korumalı transfer, CCTP burn ve Gateway'in iki ayağı da cüzdanın kendi imzalarıdır. Sunucu tarafında imzalanan tek yol gasless claim'dir ve o da yalnızca zincirde kayıtlı alıcıya ödeyebilen bir transferi sonuçlandırır; tarayıcı yalnızca transfer id'sini, kodu ve salt'ı gönderir.
+- **Kullanıcı adına kullanıcıdan başkası imzalamaz ve sunucuda imzalanan her yolun sınırı zaten zincire yazılıdır.** Korumalı transfer, CCTP burn ve Gateway'in iki ayağı da cüzdanın kendi imzalarıdır. Gasless claim yalnızca gönderim anında kayıtlı olan alıcıya ödeyebilir; tarayıcı yalnızca transfer id'sini, kodu ve salt'ı gönderir, ne relayer ne de Circle anahtarı ona ulaşır. Co-signer bir çekimi yalnızca kutunun kurulduğu politikanın içinde ve yalnızca kutuya kilitlenmiş hedefe yetkilendirebilir, aynı sınırları kutunun kendi kodu da uygular. Relayer kutuları kurar, duyurularını atar ve bir stealth adrese kendi bakiyesinden gas desteği yollar; kullanıcının USDC'sine hiç dokunmaz.
 - **Firewall kapalı düşer**, veri kaynağı çöktüğünde "iyi görünüyor"a gerilemez.
 - **Parayı hareket ettiren her yol firewall'u çalıştırır**, tek bir modülden, ve hiçbiri karar gelmeden butonunu kurmaz. Dört ekranın bunu kendi başına karara bağlaması, birinin diğerlerinden zayıf bir kapıyla kalmasının yoludur.
 - **Claim makbuzları kontrat adresine ve tam transfer id'sine bağlanır**, böylece toplu bir makbuzdaki ilgisiz veya kasten yerleştirilmiş bir event, bir kurbanın transferinin sonucunu belirleyemez.

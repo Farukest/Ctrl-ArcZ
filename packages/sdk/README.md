@@ -17,6 +17,7 @@ import {
   registerConfig,
   approveUsdc,
   generateClaimCode,
+  fromSecret,
   sendProtected,
   claim,
   RiskBlockedError,
@@ -153,6 +154,25 @@ The guard calls `check()`, which reads ArcScan. **If the indexer cannot be reach
 | `getCleanHistory(address, opts)`                                     | Layer 3, a spam-free history                                                  |
 
 All addresses and chain constants live in one export: `import { ADDRESSES, arcTestnet, CTRL_ARCZ_ADDRESS } from '@ctrl-arcz/sdk'`.
+
+### Spend boxes
+
+Anything that repeats, a subscription or an agent's budget, runs from a `SpendPolicyAccount` whose policy is on chain rather than from a token allowance. The recipient is locked at deploy time, so whoever submits the pull, the funds can only ever reach it.
+
+| Function                                            | Purpose                                                                                              |
+| --------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `createEphemeral(clients, factory, salt, policy)`   | Deploy a box for one payee. `policy`: target, per-pull cap, min interval, total budget, expiry       |
+| `predictEphemeral(publicClient, factory, salt, policy)` | The CREATE2 address a policy would get, before spending anything on it                           |
+
+### CCTP and Gateway
+
+Both are signed by the wallet that owns the money. No server key appears in either path, so no operator balance stands behind a user's transfer.
+
+| Function                                    | Purpose                                                                            |
+| -------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `bridgeFromWallet(clients, params)`         | CCTP v2 burn-and-mint between chains. Circle's Forwarding Service submits the mint  |
+| `depositToGateway(clients, params)`         | Deposit into `GatewayWallet`; the balance stays credited to the depositor           |
+| `spendFromGateway(clients, params)`         | Spend the unified balance to any supported chain with an EIP-712 intent, no source-chain tx |
 
 ## Custom data source
 

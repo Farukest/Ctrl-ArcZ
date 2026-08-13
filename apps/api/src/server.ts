@@ -2,22 +2,25 @@ import { serve } from './http.js';
 import {
   cosignGet,
   cosignPost,
-  bridgePost,
-  gatewayPost,
   gaslessPost,
   relayCreatePost,
   relayAnnouncePost,
   relayGasPost,
   investigatePost,
-  bridgeJobGet,
   healthGet,
   verifiedRecipientsGet,
   announcementsGet,
 } from './handlers.js';
 /**
  * The Ctrl+ArcZ backend. One service for every client: the enclave co-signer, the
- * cross-chain bridge and gasless claim (server-held keys), the stealth relay, and
- * the two undirected indexes discovery reads from.
+ * gasless claim (server-held keys), the stealth relay, and the two undirected
+ * indexes discovery reads from.
+ *
+ * Nothing here bridges. Both clients moved cross-chain transfers to the wallet
+ * that owns the money: the web app signs the CCTP burn and the Gateway spend in
+ * the browser, and the Android client does the same on the device. The routes that
+ * used to do it from the relayer's own balance are gone with them, and with them a
+ * way to spend the key the relay and the gasless claim depend on.
  *
  * There is deliberately no push notification path here. It existed for the Expo
  * app, which the native Android client replaced; that client watches the chain
@@ -33,16 +36,12 @@ serve({
   'GET /api/announcements': announcementsGet,
   'POST /api/cosign': cosignPost,
 
-  // Cross-chain (server-held relayer key)
-  'POST /api/bridge': bridgePost,
-  'POST /api/gateway': gatewayPost,
-  // The state of one transfer, for a client that left and came back. Serves both
-  // engines: a Gateway transfer is a bridge as far as anyone using this is concerned.
-  'GET /api/bridge/:jobId': bridgeJobGet,
   'POST /api/gasless-claim': gaslessPost,
 
   // Stealth relay: the box's deploy and announcement go out as the relayer, so
-  // neither names the payer. Funding still comes from the payer's own wallet.
+  // neither names the payer. Neither does the funding any more: both clients pay
+  // the box from the payer's Circle Gateway balance, so what Arc records is a mint
+  // from Circle's minter rather than a transfer out of the payer's wallet.
   'POST /api/relay/create': relayCreatePost,
   'POST /api/relay/announce': relayAnnouncePost,
   'POST /api/relay/gas': relayGasPost,
