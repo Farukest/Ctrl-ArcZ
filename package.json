@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "description": "Ctrl+ArcZ — korumali USDC transferi: gonderim oncesi risk taramasi, kodla claim, iptal ve otomatik iade (Arc)",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "packageManager": "pnpm@9.15.9",
   "engines": {
