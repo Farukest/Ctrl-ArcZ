@@ -2,6 +2,17 @@
 
 Bu proje [Keep a Changelog](https://keepachangelog.com/) biçimini izler.
 
+## [0.1.2]: 2026-08-15
+
+Yine yalnız `@ctrl-arcz/sdk` README'si, paket kodu değişmedi. 0.1.1 eksik import'u kapattı ama blok hâlâ iki tanımsız isim taşıyordu, yani kopyalayan biri derleyemiyordu.
+
+### Düzeltildi
+
+- `typedByRecipient` hiçbir yerde tanımlı değildi. Adı SDK'dan geliyormuş gibi durduğu için yanıltıcıydı; artık `secret.secret`'tan türetiliyor ve gerçek hayatta yerine ne konacağı yanında yazıyor.
+- `renderRiskCard` okuyucunun kendi UI fonksiyonuydu ama çağrısı olduğu gibi duruyordu. Yerine `console.error(e.report)` kondu, kendi kartına vermesi gerektiği yorum satırında.
+
+30 saniyelik quickstart artık yayınlanan pakete karşı `tsc --strict` ile sıfır hatayla derleniyor. Ölçüm: temiz dizin, `npm i @ctrl-arcz/sdk`, README'den blok aynen çıkarılıp derlendi.
+
 ## [0.1.1]: 2026-08-15
 
 Yalnız `@ctrl-arcz/sdk`. Paketin kodu 0.1.0 ile birebir aynı; değişen tek şey npm'de görünen README. Yine de yama sürümü çıkarılıyor, çünkü kırık olan şey okunan doküman değil, kopyalanan kod.

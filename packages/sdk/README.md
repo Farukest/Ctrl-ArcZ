@@ -59,13 +59,15 @@ try {
   // address also reaches a poisoning attacker, who owns that address.
 
   // 3. The recipient releases it, or you relay for them. Funds always go to `to`.
-  // The recipient types it back; fromSecret rebuilds what claim needs.
+  // Whatever the recipient typed back; fromSecret rebuilds what claim needs.
+  const typedByRecipient = secret.secret;
   const { code, salt } = fromSecret(typedByRecipient);
   await claim(clients, transferId, code, salt);
 } catch (e) {
   if (e instanceof RiskBlockedError) {
     // e.report is the full RiskReport: level, rule codes, lookalikeOf, complete.
-    renderRiskCard(e.report);
+    // Hand it to your own risk card. Nothing reached the chain.
+    console.error(e.report);
   } else throw e;
 }
 ```
