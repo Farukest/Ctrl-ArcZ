@@ -94,8 +94,12 @@ const hits = new Map<string, number[]>();
  * evade the per-IP limit entirely (and grow the map unbounded). We trust exactly
  * one proxy hop (our nginx on loopback); the rightmost XFF value is the address it
  * observed.
+ *
+ * Exported for the regression test. Nothing outside this module calls it, but the
+ * leftmost version of this function was a real hole, and a bug that has already
+ * shipped once deserves a test that cannot be deleted by accident.
  */
-function clientIp(req: IncomingMessage): string {
+export function clientIp(req: IncomingMessage): string {
   const xff = req.headers['x-forwarded-for'];
   const raw = Array.isArray(xff) ? xff[xff.length - 1] : xff;
   const parts = raw?.split(',').map((s) => s.trim()).filter(Boolean);
