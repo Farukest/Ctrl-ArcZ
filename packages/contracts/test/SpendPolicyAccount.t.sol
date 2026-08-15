@@ -290,6 +290,62 @@ contract SpendPolicyAccountTest is Test {
         );
     }
 
+    /// The rest of the `init` guards. A clone that gets past any of these is a box
+    /// nobody can sweep, or one whose cap is zero and whose funds are therefore
+    /// stuck: the account is not upgradeable, so a bad init is permanent.
+    function test_init_zeroToken_reverts() public {
+        SpendPolicyFactory.InitParams memory p = _params(SpendPolicyAccount.Mode.PUSH, 0, 0);
+        p.token = IERC20(address(0));
+        vm.expectRevert(SpendPolicyAccount.ZeroAddress.selector);
+        factory.createAccount(ownerHash, bytes32(uint256(0xA1)), p);
+    }
+
+    function test_init_zeroCosigner_reverts() public {
+        SpendPolicyFactory.InitParams memory p = _params(SpendPolicyAccount.Mode.PUSH, 0, 0);
+        p.cosigner = address(0);
+        vm.expectRevert(SpendPolicyAccount.ZeroAddress.selector);
+        factory.createAccount(ownerHash, bytes32(uint256(0xA2)), p);
+    }
+
+    /// The target is the whole guarantee: funds can only ever reach it. A zero target
+    /// would be a box that pays nobody.
+    function test_init_zeroTarget_reverts() public {
+        SpendPolicyFactory.InitParams memory p = _params(SpendPolicyAccount.Mode.PUSH, 0, 0);
+        p.target = address(0);
+        vm.expectRevert(SpendPolicyAccount.ZeroAddress.selector);
+        factory.createAccount(ownerHash, bytes32(uint256(0xA3)), p);
+    }
+
+    /// The vault is stored only as a commitment, and sweeping proves the preimage. A
+    /// zero commitment is one no address can satisfy, so the money never comes home.
+    function test_init_zeroVaultCommitment_reverts() public {
+        SpendPolicyFactory.InitParams memory p = _params(SpendPolicyAccount.Mode.PUSH, 0, 0);
+        p.vaultHash = bytes32(0);
+        vm.expectRevert(SpendPolicyAccount.ZeroCommitment.selector);
+        factory.createAccount(ownerHash, bytes32(uint256(0xA4)), p);
+    }
+
+    function test_init_zeroMaxAmount_reverts() public {
+        SpendPolicyFactory.InitParams memory p = _params(SpendPolicyAccount.Mode.PUSH, 0, 0);
+        p.maxAmount = 0;
+        vm.expectRevert(SpendPolicyAccount.ZeroAmount.selector);
+        factory.createAccount(ownerHash, bytes32(uint256(0xA5)), p);
+    }
+
+    /// `remaining` is what a UI shows before asking for a signature, so it must not
+    /// underflow once the cap is reached.
+    function test_remaining_countsDownAndFloorsAtZero() public {
+        SpendPolicyAccount acct = _push();
+        _fund(acct, MAX);
+        assertEq(acct.remaining(), MAX);
+
+        acct.pay(30e6, _cosign(acct, 30e6, 0));
+        assertEq(acct.remaining(), MAX - 30e6);
+
+        acct.pay(MAX - 30e6, _cosign(acct, MAX - 30e6, 0));
+        assertEq(acct.remaining(), 0);
+    }
+
     function test_pull_happyPath_cosignerOnly() public {
         SpendPolicyAccount acct = _create(SpendPolicyAccount.Mode.PULL, PER_PULL, 1 days);
         _fund(acct, 100e6);

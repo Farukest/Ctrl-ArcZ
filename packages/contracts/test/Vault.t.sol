@@ -67,4 +67,34 @@ contract VaultTest is Test {
         vault.fundAccount(address(0), 1);
         vm.stopPrank();
     }
+
+    /// `withdraw` had the same two guards as `fundAccount` and none of the coverage.
+    /// It is the path that takes money out of the vault to an arbitrary address, so
+    /// it is the one where a zero address burns the balance rather than moving it.
+    function test_withdraw_zeroChecks() public {
+        vm.startPrank(owner);
+        vm.expectRevert(Vault.ZeroAddress.selector);
+        vault.withdraw(address(0), 1);
+        vm.expectRevert(Vault.ZeroAmount.selector);
+        vault.withdraw(owner, 0);
+        vm.stopPrank();
+    }
+
+    function test_deposit_zeroAmount_reverts() public {
+        vm.expectRevert(Vault.ZeroAmount.selector);
+        vault.deposit(0);
+    }
+
+    /// Both immutables are set once and there is no setter, so a vault constructed
+    /// with a zero token or a zero owner is a contract that can receive USDC and
+    /// never let it out again.
+    function test_constructor_rejectsZeroToken() public {
+        vm.expectRevert(Vault.ZeroAddress.selector);
+        new Vault(IERC20(address(0)), owner);
+    }
+
+    function test_constructor_rejectsZeroOwner() public {
+        vm.expectRevert(Vault.ZeroAddress.selector);
+        new Vault(IERC20(address(usdc)), address(0));
+    }
 }

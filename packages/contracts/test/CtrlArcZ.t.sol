@@ -129,6 +129,33 @@ contract CtrlArcZTest is Test {
         assertFalse(arcz.isClaimable(transferId));
     }
 
+    /// `claim` is sugar over `claimWithProof`, and every other test in this file goes
+    /// through the sugar. The mode-agnostic entry point is the one a future verifier
+    /// is reached through, so it is worth calling from outside at least once: the
+    /// proof encoding a caller has to build by hand is `abi.encode(salt, code)`.
+    function test_claimWithProof_calledDirectly_paysRecipient() public {
+        uint256 amount = 42 * ONE_USDC;
+        uint256 transferId = _send(amount);
+
+        vm.prank(recipient);
+        assertTrue(arcz.claimWithProof(transferId, abi.encode(SALT, CODE)));
+
+        assertEq(usdc.balanceOf(recipient), amount);
+        assertEq(uint8(arcz.getTransfer(transferId).status), uint8(CtrlArcZ.TransferStatus.CLAIMED));
+    }
+
+    /// And the same entry point must not revert on a wrong proof either, or the
+    /// attempt counter it exists to protect would roll back with it.
+    function test_claimWithProof_wrongProof_returnsFalseAndCountsTheAttempt() public {
+        uint256 transferId = _send(ONE_USDC);
+
+        vm.prank(recipient);
+        assertFalse(arcz.claimWithProof(transferId, abi.encode(SALT, "000000")));
+
+        assertEq(arcz.getTransfer(transferId).attempts, 1);
+        assertEq(uint8(arcz.getTransfer(transferId).status), uint8(CtrlArcZ.TransferStatus.PENDING));
+    }
+
     /// Layer 3: the first successful claim promotes the recipient to "verified".
     function test_claim_registersVerifiedRecipient() public {
         assertFalse(arcz.isVerifiedRecipient(sender, recipient));
