@@ -2,6 +2,51 @@
 
 Bu proje [Keep a Changelog](https://keepachangelog.com/) biçimini izler.
 
+## Yayınlanmamış: 2026-08-16
+
+Web arayüzünde ölçümle bulunmuş hatalar. Hepsi tarayıcıda sayıyla doğrulandı; denetim
+`apps/sender/src/audit/uiAudit.ts` içinde, kurallar ve eşikler `PLAN_UI.md`'de.
+
+### Düzeltildi
+
+- **Açık tema yapısızdı.** Kartlar sayfaya karşı 1.06:1 dolgu ve 1.19:1 kenarlıktaydı,
+  yani kenarlık görünmüyordu. Kenarlık katmanları 1.47 ve 1.94'e çıktı.
+- **Seçili sekme görünmüyordu.** Açık temada `--surface-3` ile `--bg-sunken` aynı değer
+  olduğu için Standart/Gizli sekmesi kendi zeminiyle 1.00:1'di. Segment kontrolleri artık
+  kendi `--seg-track`/`--seg-thumb` çiftini kullanıyor.
+- **Açık temada her birincil butonun yazısı eşiğin altındaydı** (beyaz üstü `#b4770c`,
+  3.76:1). Accent üç role ayrıldı: dolgu, dolgu üstü yazı, yüzey üstü yazı.
+- **Gönder/Al anahtarı temayı takip etmiyordu.** Var olmayan `--card` token'ına
+  dayandığı için açık temada siyah kalıyordu; ayrıca üründe başka hiçbir yerde
+  kullanılmayan iki doygun renk taşıyordu.
+- **Geçen süre yukarı yuvarlanıyordu.** 2 gün 14 saat önce gönderilen bir transfer,
+  iki günlük bir tarih başlığının altında "3d" yazıyordu. Aynı fonksiyonun dört kopyası
+  vardı, hepsi tek bir paylaşılan sürüme indi.
+- **Köprüden gelen para `0x0000…0000`'dan ödeme gibi görünüyordu.** `HistoryEntry` artık
+  `kind` ve `method` taşıyor; satır hangi köprüden geldiğini yazıyor.
+- **Abonelik bütçe çubuğu harcanana göre doluyordu**, üstündeki etiket "Kalan" derken.
+- **Bakiye okunmadan `0` yazıyordu**, ve cüzdan değişince eski cüzdanın bakiyesi
+  ekranda kalıyordu.
+- **Yükleme yer tutucuları olacakları boyutta değildi.** Abonelik kartı tek karede
+  115px'ten 1303px'e büyüyordu. Listeler artık `ListSkeleton` ile kendi satır
+  yükseklikleri kadar yer ayırıyor ve `reservedHeight.ts` her listenin oturduğu
+  yüksekliği hatırlıyor. Ölçüm: her ekranda 8px altı.
+- **Başarısız okuma sonsuza kadar parlıyordu.** Yükleniyor, okunamıyor ve başarısız
+  artık üç ayrı durum; Gateway ücreti okunamadığında ekran bunu yazıp "Tekrar dene"
+  sunuyor.
+
+### Değişti
+
+- **Firewall tek bir kart oldu.** Kurallar ve derin kontrol, adres geçerli olur olmaz
+  görünen tek bir panelde iki satır. Eskiden sırayla beliren dört kutuydu ve derin
+  kontrol temiz döndüğünde kaybolarak bitiyordu; artık "başka bir şey bulunmadı" ya da
+  "ulaşılamadı" diyor. Panel 16ms'de görünüyor, eskiden ekranda 537ms boyunca hiçbir şey
+  yoktu.
+- **Adres alanlarına temizleme butonu** eklendi (paylaşılan `Input`, `onClear`).
+- **Favicon**, Android uygulamasının launcher ikonu oldu.
+- Gönderim başarı ekranı artık paranın kilitlendiği adresi ve transfer numarasını
+  gösteriyor, claim kodunun kopyalama butonu etiketlendi.
+
 ## [0.1.2]: 2026-08-15
 
 Yine yalnız `@ctrl-arcz/sdk` README'si, paket kodu değişmedi. 0.1.1 eksik import'u kapattı ama blok hâlâ iki tanımsız isim taşıyordu, yani kopyalayan biri derleyemiyordu.
