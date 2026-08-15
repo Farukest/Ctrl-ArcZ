@@ -53,6 +53,27 @@ describe('relativeTime', () => {
     expect(relativeTime(NOW - 3 * 3_600_000, NOW)).toBe('3h');
     expect(relativeTime(NOW - 4 * 86_400_000, NOW)).toBe('4d');
   });
+
+  // Rounding claimed more time had passed than had. A transfer sent 2 days and 14
+  // hours ago read "3d" while sitting under a date header two days old, and the
+  // number beside a transfer is how long its claim window has been running.
+  it('never runs ahead of the clock', () => {
+    expect(relativeTime(NOW - (2 * 86_400_000 + 14 * 3_600_000), NOW)).toBe('2d');
+    expect(relativeTime(NOW - 36 * 3_600_000, NOW)).toBe('1d');
+    expect(relativeTime(NOW - 95 * 60_000, NOW)).toBe('1h');
+    expect(relativeTime(NOW - 119_000, NOW)).toBe('1m');
+  });
+
+  // Each unit has to hand over only once it is genuinely full, or the label skips
+  // from "59m" to "2h".
+  it('hands over at the boundary, not before', () => {
+    expect(relativeTime(NOW - 59_999, NOW)).toBe('59s');
+    expect(relativeTime(NOW - 60_000, NOW)).toBe('1m');
+    expect(relativeTime(NOW - 59 * 60_000, NOW)).toBe('59m');
+    expect(relativeTime(NOW - 60 * 60_000, NOW)).toBe('1h');
+    expect(relativeTime(NOW - 23 * 3_600_000, NOW)).toBe('23h');
+    expect(relativeTime(NOW - 24 * 3_600_000, NOW)).toBe('1d');
+  });
 });
 
 describe('receivedHaystack', () => {

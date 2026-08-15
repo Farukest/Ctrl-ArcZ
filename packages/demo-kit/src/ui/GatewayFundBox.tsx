@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Button } from './components.js';
+import { Button, Skeleton } from './components.js';
 import { Input } from './components.js';
 import { Select, type SelectOption } from './components.js';
 import { useT } from '../i18n/context.js';
@@ -27,6 +27,12 @@ export interface GatewayFundBoxProps {
   /** Gateway balance on `chain`, in USDC subunits. `null` while unread. */
   balance: bigint | null;
   /**
+   * Why the balance is missing, when it is. `loading` shimmers, `unavailable`
+   * holds still: a shimmer promises a number is coming, and where Circle simply
+   * did not answer, that promise is never kept. Defaults to `loading`.
+   */
+  balanceMissing?: 'loading' | 'unavailable';
+  /**
    * The most that can be moved in from the wallet on this chain, gas allowed for.
    * `null` when the wallet's balance cannot be read from here, which is not zero.
    */
@@ -51,6 +57,7 @@ export function GatewayFundBox({
   chainOptions,
   onChainChange,
   balance,
+  balanceMissing = 'loading',
   maxDeposit,
   amount,
   onAmountChange,
@@ -75,7 +82,11 @@ export function GatewayFundBox({
       <div className="gwfund__head">
         <span className="gwfund__title">{t('bridge.gwFundTitle')}</span>
         <output className="gwfund__figure" data-testid="gateway-balance">
-          {balance == null ? '—' : `${format(balance)} USDC`}
+          {balance == null ? (
+            <Skeleton width={92} height={17} still={balanceMissing === 'unavailable'} />
+          ) : (
+            `${format(balance)} USDC`
+          )}
         </output>
       </div>
       <div className="gwfund__pickrow">
@@ -100,7 +111,14 @@ export function GatewayFundBox({
         >
           <span className="gwfund__walletk">{t('bridge.gwWalletLabel')}</span>
           <output className="gwfund__walletv">
-            {maxDeposit == null ? '—' : `${format(maxDeposit)} USDC`}
+            {/* Null here means the wallet is connected to another chain, so this
+                balance cannot be read from where we are standing. That is a
+                settled fact, not a pending one. */}
+            {maxDeposit == null ? (
+              <Skeleton width={78} height={13} still />
+            ) : (
+              `${format(maxDeposit)} USDC`
+            )}
           </output>
         </button>
       </div>

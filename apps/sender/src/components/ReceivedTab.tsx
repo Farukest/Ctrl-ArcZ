@@ -8,7 +8,7 @@ import {
   HistoryList,
   HistoryRow,
   Address as AddressChip,
-  Skeleton,
+  ListSkeleton,
   receivedHaystack,
   relativeTime,
   statusTone,
@@ -80,7 +80,7 @@ export function ReceivedTab({ session }: { session: Session }) {
         {unreadable ? (
           <p className="muted">{t('received.unreadable')}</p>
         ) : (
-          <Skeleton height={72} />
+          <ListSkeleton rows={PAGE_SIZE} rowHeight={105} chips reserveId="received" />
         )}
       </Card>
     );
@@ -91,6 +91,7 @@ export function ReceivedTab({ session }: { session: Session }) {
       <HistoryList
         items={filtered}
         data-testid="received-history"
+        reserveId="received"
         resetKey={filter}
         // The chips carry counts, which a dropdown cannot, so they stay this
         // screen's own. Where they sit is not: under the search line, like every

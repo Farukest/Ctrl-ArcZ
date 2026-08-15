@@ -21,6 +21,15 @@ if (demoPk) {
   });
 }
 
+// Dev only: the UI audit on `window.__uiAudit`, so a browser session can measure a
+// screen (selected-state contrast, theme reach, target sizes, chip alignment) rather
+// than describe it. Tree-shaken out of the production bundle by the constant check.
+if (import.meta.env.DEV) {
+  void import('./audit/uiAudit.js').then((m) => {
+    (window as unknown as { __uiAudit: typeof m }).__uiAudit = m;
+  });
+}
+
 const root = document.getElementById('root');
 if (!root) throw new Error('#root not found');
 

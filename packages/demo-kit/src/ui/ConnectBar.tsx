@@ -6,7 +6,13 @@ import { IconWallet, IconAlert } from './icons.js';
 /** Wallet connection bar + chain guard. Presentational: driven by useSession(). */
 export function ConnectBar({ state }: { state: SessionState }) {
   const t = useT();
-  const { session, balance, connecting, reconnecting, error, walletDetected } = state;
+  const { session, balance, balanceRaw, connecting, reconnecting, error, walletDetected } = state;
+  // `balance` is a formatted string that starts at "0", so between connecting and
+  // the first balanceOf landing the bar stated, in the largest number on the page,
+  // that a funded wallet was empty. `balanceRaw` is null until something is
+  // actually known, and a skeleton is the honest answer to a question not yet
+  // answered.
+  const balanceKnown = balanceRaw !== null;
 
   return (
     <>
@@ -24,9 +30,13 @@ export function ConnectBar({ state }: { state: SessionState }) {
             <div className="connectbar__id">
               <AddressChip address={session.address} />
               <div className="connectbar__balance">
-                <span className="connectbar__amount">
-                  {Number(balance).toLocaleString(undefined, { maximumFractionDigits: 4 })}
-                </span>
+                {balanceKnown ? (
+                  <span className="connectbar__amount" data-testid="balance">
+                    {Number(balance).toLocaleString(undefined, { maximumFractionDigits: 4 })}
+                  </span>
+                ) : (
+                  <Skeleton width={76} height={18} />
+                )}
                 <span className="connectbar__unit">USDC</span>
               </div>
             </div>

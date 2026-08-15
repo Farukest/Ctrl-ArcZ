@@ -5,7 +5,7 @@ import { getPublicClient, type Session } from '@ctrl-arcz/demo-kit';
 import { isArmed } from '@ctrl-arcz/demo-kit/ui';
 import { riskProvider, clearRiskCache } from './riskProvider.js';
 import { verifiedRecipients, clearVerifiedRecipients } from './verifiedRecipients.js';
-import { investigate, effectiveLevel, type Advisory } from './investigate.js';
+import { investigate, effectiveLevel, advisoryOf, type Advisory, type Investigation } from './investigate.js';
 import { config } from './riskConfig.js';
 
 /**
@@ -76,6 +76,12 @@ export interface RecipientRisk {
   report: RiskReport | null;
   /** The investigator's opinion, once it lands. Additive only. */
   advisory: Advisory | null;
+  /**
+   * What the investigator actually did: found something, found nothing, or could
+   * not be reached. All three are shown, because a check that ends by disappearing
+   * is one the user has no reason to believe ran.
+   */
+  investigation: Investigation | null;
   /** Rules are running. */
   checking: boolean;
   /** The investigator is running. */
@@ -109,7 +115,8 @@ export function useRecipientRisk(session: Session, to: string): RecipientRisk {
   useEffect(() => warmFor(session), [session]);
 
   const [report, setReport] = useState<RiskReport | null>(null);
-  const [advisory, setAdvisory] = useState<Advisory | null>(null);
+  const [investigation, setInvestigation] = useState<Investigation | null>(null);
+  const advisory = advisoryOf(investigation);
   const [checking, setChecking] = useState(false);
   const [investigating, setInvestigating] = useState(false);
   const debounce = useRef<ReturnType<typeof setTimeout>>();
@@ -122,12 +129,12 @@ export function useRecipientRisk(session: Session, to: string): RecipientRisk {
       const id = ++reqId.current;
       if (!isAddress(target)) {
         setReport(null);
-        setAdvisory(null);
+        setInvestigation(null);
         setChecking(false);
         return;
       }
       setChecking(true);
-      setAdvisory(null);
+      setInvestigation(null);
       setInvestigating(false);
       // The verified set comes from the server's index, which has no block
       // window. Passing it in means `check` does no log scanning at all.
@@ -161,8 +168,8 @@ export function useRecipientRisk(session: Session, to: string): RecipientRisk {
           // USDC transfer to it is gone. No rule can see that; the dossier can.
           setInvestigating(true);
           void investigate(session, target as Address)
-            .then((a) => {
-              if (id === reqId.current) setAdvisory(a);
+            .then((outcome) => {
+              if (id === reqId.current) setInvestigation(outcome);
             })
             .finally(() => {
               if (id === reqId.current) setInvestigating(false);
@@ -180,6 +187,12 @@ export function useRecipientRisk(session: Session, to: string): RecipientRisk {
 
   useEffect(() => {
     clearTimeout(debounce.current);
+    // Acknowledge a valid address immediately, before the debounce. The typing
+    // pause is 400ms and the first render after it took another 140, so for over
+    // half a second a complete address produced nothing at all on screen and the
+    // firewall looked like it had not noticed. Setting it here also holds the
+    // button shut through that window, which it should already have been.
+    if (isAddress(to)) setChecking(true);
     debounce.current = setTimeout(() => runCheck(to), 400);
     return () => clearTimeout(debounce.current);
   }, [to, runCheck]);
@@ -195,6 +208,7 @@ export function useRecipientRisk(session: Session, to: string): RecipientRisk {
   return {
     report: active,
     advisory,
+    investigation,
     checking,
     investigating,
     level,

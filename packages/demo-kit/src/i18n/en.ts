@@ -65,7 +65,10 @@ export const en = {
   'received.expiredHint':
     'The claim window has lapsed. You cannot claim this any more, but you can send it back.',
   'received.returned': 'Sent back to the sender.',
-  'received.empty': 'Nothing has been sent to this wallet yet.',
+  // Scoped on purpose. This card lists protected transfers only, and it was
+  // saying "nothing has been sent to this wallet" to a wallet holding money that
+  // arrived over a bridge, which the History tab was showing at the same moment.
+  'received.empty': 'No protected transfer has been sent to this wallet yet.',
   'received.expiredLabel': 'Expired',
   'received.noMatch': 'No match',
   'received.filter.all': 'All',
@@ -77,6 +80,8 @@ export const en = {
   'common.prev': 'Prev',
   'common.next': 'Next',
   'common.save': 'Save',
+  'common.retry': 'Try again',
+  'common.clear': 'Clear',
   'common.loading': 'Loading…',
   'sub.createTitle': 'New subscription',
   // One line. The form below already says what the numbers are; this only has to
@@ -123,6 +128,10 @@ export const en = {
   'sub.gwShort': 'Short {amount} USDC of Gateway balance on {chain}. Top it up above to create this subscription.',
   'sub.fundingOnWay': 'Created. Circle is minting the budget into the box; it lands in a few minutes.',
   'sub.step.fundGw': 'Circle minting budget',
+  // Says which figure is missing and that nothing was charged. A price that
+  // cannot be quoted is not a failed subscription, it is a form that cannot
+  // total up yet.
+  'sub.quoteUnavailable': "Circle's fee could not be read, so this cannot be priced yet.",
   'sub.createButton': 'Create subscription',
   'sub.step.machine': 'Checking merchant',
   'sub.step.create': 'Creating box',
@@ -392,6 +401,8 @@ export const en = {
   'send.stepLock': 'Lock',
   'send.successTitle': 'Sent and locked',
   'send.successBody': '{amount} USDC locked. Give the recipient this code:',
+  'send.successTo': 'locked for',
+  'send.copyCode': 'Copy code',
   'send.claimStep1':
     'Hand the code to the recipient yourself: say it, or send it over a channel only they can read.',
   'send.claimStep2':
@@ -419,6 +430,19 @@ export const en = {
   'risk.hide': 'Hide',
   'risk.expandAll': 'Expand all',
   'risk.collapseAll': 'Collapse all',
+  // The two sources, named as the user sees them. "Rules" is what runs in the
+  // browser off chain data; "Deep check" is the server's reasoned second opinion.
+  'risk.checkRules': 'Rules',
+  'risk.rulePassed': 'Nothing matched',
+  'risk.ruleFinding': '1 finding',
+  'risk.ruleFindings': '{count} findings',
+  'risk.checkDeep': 'Deep check',
+  'risk.checkRunning': 'Checking',
+  'risk.checkingAddress': 'Checking this address',
+  'risk.deepClear': 'Nothing further found',
+  // Said out loud rather than left blank: this is the half of the firewall that
+  // did not run, and the rules alone are a thinner answer than the user thinks.
+  'risk.deepUnavailable': 'Could not be reached, rules only',
   'risk.investigating': 'Checking what the rules cannot see...',
   'risk.override.open': 'This is a different address, and I mean to pay it',
   'risk.override.openUnverified': 'Send without verifying this address',
@@ -455,6 +479,13 @@ export const en = {
   'history.hideSpam': 'Hide spam',
   'history.zeroValue': 'zero value',
   'history.unknownToken': 'unknown token',
+  // A mint has no sender, so these rows used to show 0x0000...0000 as the party
+  // who paid you. On Arc the money is almost always your own, arriving over a
+  // bridge, so the row says which bridge instead of naming nobody.
+  'history.bridgedIn': 'Bridged in',
+  'history.bridgedInCctp': 'Bridged in over CCTP',
+  'history.bridgedInGateway': 'Bridged in from Gateway balance',
+  'history.burned': 'Burned',
 
   'demo.tryIt': 'Try the poisoning attack',
   'demo.craftedFrom': 'Crafted to imitate {addr}. Both render the same in a wallet.',

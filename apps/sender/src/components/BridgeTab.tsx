@@ -56,6 +56,7 @@ import {
   HistoryRow,
   Address as AddressChip,
   Copyable,
+  relativeTime,
   short,
   Stepper,
   TxLink,
@@ -178,16 +179,6 @@ function rowStep(s: StoredBridgeStep, t: (k: 'bridge.rowstep.mint') => string): 
     ...(s.txHash ? { txHash: s.txHash } : {}),
     ...(s.explorerUrl ? { explorerUrl: s.explorerUrl } : {}),
   };
-}
-
-function relativeTime(ts: number): string {
-  const s = Math.max(1, Math.round((Date.now() - ts) / 1000));
-  if (s < 60) return `${s}s`;
-  const m = Math.round(s / 60);
-  if (m < 60) return `${m}m`;
-  const h = Math.round(m / 60);
-  if (h < 24) return `${h}h`;
-  return `${Math.round(h / 24)}d`;
 }
 
 /**
@@ -1295,6 +1286,10 @@ export function BridgeTab({ session }: { session: Session }) {
               readOnly
               chain={to}
               balance={toBalance}
+              // Null here is "cannot be read from this chain" (see readUsdcOn), not
+              // "still arriving", so the slot holds still rather than shimmering
+              // for a number that is never coming.
+              balanceMissing="unavailable"
               balanceLabel={t('bridge.balance')}
               label={t('bridge.youReceive')}
               data-testid="bridge-receive"
@@ -1387,6 +1382,7 @@ export function BridgeTab({ session }: { session: Session }) {
             <Input
               value={recipient}
               onChange={(e) => setRecipient(e.target.value)}
+              onClear={() => setRecipient('')}
               placeholder={t('bridge.recipientPlaceholder')}
               data-testid="bridge-recipient"
             />
@@ -1498,6 +1494,7 @@ export function BridgeTab({ session }: { session: Session }) {
           <HistoryList
             items={filteredByEngine}
             data-testid="bridge-history-list"
+            reserveId="bridge-history"
             searchText={bridgeHaystack}
             timestamp={(b) => b.createdAt}
             rowKey={(b) => b.id}

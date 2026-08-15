@@ -16,7 +16,8 @@ import {
   Address as AddressChip,
   Copyable,
   type RowTone,
-  Skeleton,
+  ListSkeleton,
+  relativeTime,
   useSubmitGuard,
   useT,
   useToast,
@@ -50,17 +51,6 @@ function statusTone(status: string): RowTone {
   if (status === 'CANCELLED' || status === 'EXPIRED') return 'err';
   if (status === 'LOCKED') return 'warn';
   return 'idle';
-}
-
-/** Rows are history, so time is relative: "3m" reads faster than a timestamp. */
-function relativeTime(ts: number): string {
-  const s = Math.max(1, Math.round((Date.now() - ts) / 1000));
-  if (s < 60) return `${s}s`;
-  const m = Math.round(s / 60);
-  if (m < 60) return `${m}m`;
-  const h = Math.round(m / 60);
-  if (h < 24) return `${h}h`;
-  return `${Math.round(h / 24)}d`;
 }
 
 export function TransfersTab({ session, onChange }: { session: Session; onChange: () => void }) {
@@ -111,9 +101,7 @@ export function TransfersTab({ session, onChange }: { session: Session; onChange
   if (rows === null) {
     return (
       <Card>
-        <Skeleton height={64} />
-        <div style={{ height: 10 }} />
-        <Skeleton height={64} />
+        <ListSkeleton rows={PAGE_SIZE} rowHeight={151} pager={false} reserveId="active" />
       </Card>
     );
   }
@@ -130,6 +118,7 @@ export function TransfersTab({ session, onChange }: { session: Session; onChange
       <HistoryList
         items={filtered}
         data-testid="transfers-history"
+        reserveId="active"
         searchText={transferHaystack}
         timestamp={(r) => r.stored.createdAt}
         rowKey={(r) => r.stored.transferId}

@@ -2,19 +2,20 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSession } from '@ctrl-arcz/demo-kit';
 import {
   ConnectBar,
+  ModeSwitch,
   NO_ARRIVALS,
   SegmentedTabs,
   TopBar,
   nextArrival,
   useT,
   useToast,
+  type Mode,
 } from '@ctrl-arcz/demo-kit/ui';
 import { PayTab } from './components/PayTab.js';
 import { ActivityTab } from './components/ActivityTab.js';
 import { BridgeTab } from './components/BridgeTab.js';
 import { SubscriptionsTab } from './components/SubscriptionsTab.js';
 import { ReceiveTab } from './components/ReceiveTab.js';
-import { ModeSwitch, type Mode } from './components/ModeSwitch.js';
 import { usePendingClaims } from './lib/usePendingClaims.js';
 
 // Primary destinations, kept to a handful of real places. Bridge is a secondary

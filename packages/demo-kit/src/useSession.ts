@@ -158,6 +158,15 @@ export function useSession(): SessionState {
     return watchWallet(() => void reconnect());
   }, [session, reconnect]);
 
+  // Forget the old number before asking for the new one. A different wallet has a
+  // different balance, and holding the previous one on screen until the read lands
+  // shows one account's money under another account's address. Null means unknown,
+  // which is what every consumer renders as a placeholder rather than as zero.
+  useEffect(() => {
+    setBalance('0');
+    setBalanceRaw(null);
+  }, [session?.address]);
+
   useEffect(() => {
     void refreshBalance();
     if (!session) return;

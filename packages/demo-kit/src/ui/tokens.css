@@ -18,13 +18,23 @@
 
   --text-hi: #e9edf2;
   --text-mid: #9ba6b4;
-  --text-lo: #5d6675;
+  /* Was #5d6675, which measured 3.0 to 3.2:1 on the surfaces it actually lands on.
+     That tier carries hints, timestamps, step names and select placeholders, so the
+     quietest text in the product was also the least readable. Still a clear step
+     below --text-mid; just above the 4.5:1 floor on surface-1 through surface-3. */
+  --text-lo: #828c9c;
 
-  --accent: #f5a524;
+  /* Three accent roles, not one. A single value cannot be both a fill you put
+     text on and a text color you put on a surface: brighten it enough to read as
+     a label and the fill goes pale, darken it enough to carry white and the label
+     goes muddy. On the dark theme the two happen to coincide, which is exactly why
+     the split went unnoticed until the light theme was measured. */
+  --accent: #f5a524; /* fills: buttons, thumbs, bars */
+  --accent-text: #f5a524; /* accent used AS text, on a surface */
   --accent-hover: #ffb43d;
   --accent-press: #db9016;
   --accent-soft: #2a2113;
-  --accent-on: #0a0c10;
+  --accent-on: #0a0c10; /* text placed ON --accent */
   --accent-ring: rgba(245, 165, 36, 0.35);
 
   --safe: #2fbf71;
@@ -34,6 +44,10 @@
   --warn-soft: #241606;
   --warn-border: #3d2a14;
   --block: #f0483e;
+  /* The fill under white text on a destructive button. Split from --block for the
+     same reason --accent-text was: the red that reads best as a warning label on a
+     dark surface is too bright to carry white, and "Cancel" measured 3.68:1 on it. */
+  --block-solid: #d13a31;
   --block-soft: #2a1210;
   --block-border: #8c2b27;
   --info: #5b8def;
@@ -47,28 +61,48 @@
   --el-3: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 20px 48px rgba(0, 0, 0, 0.62);
   --scrim: rgba(6, 7, 9, 0.62);
   --grid-dot: rgba(255, 255, 255, 0.022);
+
+  /* Segmented control. Explicit track/thumb pair rather than borrowed surface
+     steps: the selected tab is the only thing on screen telling you where you
+     are, so it cannot be left to whichever two surfaces happen to sit next to
+     each other. In the light palette --surface-3 and --bg-sunken are the same
+     value, which made the selected tab literally invisible (1.00:1). */
+  --seg-track: #05060a;
+  --seg-thumb: #1d222c;
+  --seg-thumb-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 1px 2px rgba(0, 0, 0, 0.5),
+    0 0 0 1px var(--border-strong);
 }
 
 :root[data-theme='light'] {
-  --bg-base: #f7f8fa;
-  --bg-sunken: #eef1f5;
+  /* In a light theme the border is the structure, not the fill. White on #f7f8fa is
+     1.06:1 and no fill will ever fix that, so every card, track and input was held
+     together by a #e0e5ec hairline measuring 1.19:1 against the page: a border you
+     cannot see. The page drops a step and the two border tiers step up to 1.47 and
+     1.94, which is where GitHub and Stripe put theirs. */
+  --bg-base: #f2f4f8;
+  --bg-sunken: #e4e9f0;
   --surface-1: #ffffff;
   --surface-2: #ffffff;
-  --surface-3: #eef1f5;
-  --border-subtle: #e0e5ec;
-  --border-strong: #c9d1db;
-  --hairline: rgba(15, 20, 30, 0.06);
+  --surface-3: #e9edf3;
+  --border-subtle: #c3ccda;
+  --border-strong: #a8b3c4;
+  --hairline: rgba(15, 20, 30, 0.08);
 
   --text-hi: #0c0e12;
   --text-mid: #4a5261;
-  --text-lo: #8a93a3;
+  --text-lo: #6b7385; /* was #8a93a3, 3.07:1 on white */
 
-  --accent: #b4770c;
-  --accent-hover: #a06a0a;
-  --accent-press: #8c5d08;
-  --accent-soft: #fbf1de;
-  --accent-on: #ffffff;
-  --accent-ring: rgba(180, 119, 12, 0.28);
+  /* The fill is bright and carries dark text (7.3:1), the way the dark theme
+     already worked. White on the old #b4770c was 3.76:1, which put every primary
+     button in the product, "Send protected" included, below the floor. */
+  --accent: #e2900f;
+  --accent-text: #8a5a08; /* 5.9:1 on white; the fill itself is 2.6:1 and unreadable */
+  --accent-hover: #cc8109;
+  --accent-press: #b47107;
+  --accent-soft: #fdf3e0;
+  --accent-on: #12100a;
+  --accent-ring: rgba(226, 144, 15, 0.32);
 
   --safe: #128a54;
   --safe-soft: #e4f5ec;
@@ -77,6 +111,7 @@
   --warn-soft: #fbeede;
   --warn-border: #ecc9a3;
   --block: #c4363b;
+  --block-solid: #c4363b; /* already 5.3:1 under white on the light theme */
   --block-soft: #fbe6e7;
   --block-border: #ecb7b9;
   --info: #2f6fd0;
@@ -86,6 +121,13 @@
   --el-3: 0 16px 40px rgba(0, 0, 0, 0.16), 0 0 0 1px var(--border-subtle);
   --scrim: rgba(20, 24, 33, 0.4);
   --grid-dot: rgba(15, 20, 30, 0.03);
+
+  /* Light-on-light segmented controls never win on fill contrast (a white thumb
+     on a grey track is about 1.2:1 even in iOS). The separation has to come from
+     a track that is unmistakably grey, a hard ring, and a real shadow. */
+  --seg-track: #dbe1ea;
+  --seg-thumb: #ffffff;
+  --seg-thumb-shadow: 0 1px 3px rgba(15, 20, 30, 0.18), 0 0 0 1px #b9c3d2;
 }
 
 :root {

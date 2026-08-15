@@ -124,6 +124,7 @@ export {
 export {
   getCleanHistory,
   type CleanHistory,
+  type EntryKind,
   type FilteredEntry,
   type GetCleanHistoryOptions,
   type HistoryEntry,

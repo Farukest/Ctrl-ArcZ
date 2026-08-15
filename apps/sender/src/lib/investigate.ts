@@ -26,19 +26,39 @@ export interface Advisory {
   points: string[];
 }
 
-export async function investigate(session: Session, target: Address): Promise<Advisory | null> {
+/**
+ * What came back, as three cases rather than one null.
+ *
+ * "It looked and found nothing" and "it could not be asked" were the same value,
+ * so the screen could not tell them apart and rendered neither: after five
+ * seconds of "Checking what the rules cannot see", the pending block simply
+ * disappeared. A check that ends by vanishing is a check the user has no reason
+ * to believe ran, and the one that could not run is the one they most need to
+ * know about.
+ */
+export type Investigation =
+  | { status: 'clear' }
+  | { status: 'advisory'; advisory: Advisory }
+  | { status: 'unavailable' };
+
+export async function investigate(session: Session, target: Address): Promise<Investigation> {
   try {
     const res = await fetch('/api/investigate', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ sender: session.address, target }),
     });
-    if (!res.ok) return null;
+    if (!res.ok) return { status: 'unavailable' };
     const body = (await res.json()) as { advisory?: Advisory | null };
-    return body.advisory ?? null;
+    return body.advisory ? { status: 'advisory', advisory: body.advisory } : { status: 'clear' };
   } catch {
-    return null;
+    return { status: 'unavailable' };
   }
+}
+
+/** The advisory to judge with, or null when there is nothing to judge. */
+export function advisoryOf(i: Investigation | null): Advisory | null {
+  return i && i.status === 'advisory' ? i.advisory : null;
 }
 
 const SEVERITY: Record<RiskLevel, number> = { safe: 0, warning: 1, block: 2 };

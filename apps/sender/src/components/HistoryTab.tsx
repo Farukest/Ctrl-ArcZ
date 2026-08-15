@@ -13,26 +13,55 @@ import {
   HistoryList,
   HistoryRow,
   Address as AddressChip,
-  Skeleton,
+  ListSkeleton,
+  relativeTime,
   useT,
 } from '@ctrl-arcz/demo-kit/ui';
 
-/** Everything a row can be matched on: who, how much, which token, which tx. */
+/**
+ * Everything a row can be matched on: who, how much, which token, which tx.
+ * `kind` and `method` are in here because a bridge arrival no longer shows an
+ * address, and a row you cannot search for is a row you cannot find: typing
+ * "bridge" or "gateway" has to reach the rows that say it.
+ */
 function entryHaystack(e: HistoryEntry): string {
-  return `${e.counterparty} ${formatUnits(e.amount, e.decimals)} ${e.tokenSymbol} ${e.txHash} ${e.direction}`;
-}
-
-function relativeTime(ts: number): string {
-  const s = Math.max(1, Math.round((Date.now() - ts) / 1000));
-  if (s < 60) return `${s}s`;
-  const m = Math.round(s / 60);
-  if (m < 60) return `${m}m`;
-  const h = Math.round(m / 60);
-  if (h < 24) return `${h}h`;
-  return `${Math.round(h / 24)}d`;
+  const bridge = e.kind === 'mint' ? 'bridge bridged in mint' : '';
+  return [
+    e.counterparty,
+    formatUnits(e.amount, e.decimals),
+    e.tokenSymbol,
+    e.txHash,
+    e.direction,
+    e.kind,
+    e.method ?? '',
+    bridge,
+  ].join(' ');
 }
 
 const PAGE_SIZE = 6;
+
+/**
+ * What to put where the counterparty goes.
+ *
+ * A mint has no sender, so the indexer hands back 0x0000...0000 and the row read
+ * "received 0.2 USDC from 0x0000...0000": money from nobody. On Arc that row is
+ * almost always the holder's own funds landing from the Bridge tab two clicks away,
+ * so it names the route it came in on. `method` comes from the explorer and is
+ * untrusted, which is fine here: it only picks between two labels, and an
+ * unrecognised value falls back to the plain one.
+ */
+function Party({ entry }: { entry: HistoryEntry }) {
+  const t = useT();
+  if (entry.kind === 'transfer') return <AddressChip address={entry.counterparty} />;
+  if (entry.kind === 'burn') return <span className="hrow__party">{t('history.burned')}</span>;
+  const label =
+    entry.method === 'receiveMessage'
+      ? t('history.bridgedInCctp')
+      : entry.method === 'gatewayMint'
+        ? t('history.bridgedInGateway')
+        : t('history.bridgedIn');
+  return <span className="hrow__party">{label}</span>;
+}
 
 export function HistoryTab({ session }: { session: Session }) {
   const t = useT();
@@ -54,12 +83,13 @@ export function HistoryTab({ session }: { session: Session }) {
         <div className="err-text">{error}</div>
       </Card>
     );
+  // Reserves the size this card is about to be. Two 48px bars stood in for a 951px
+  // list, so the page grew 389px the moment the read landed.
   if (!history)
     return (
       <Card>
-        <Skeleton height={48} />
-        <div style={{ height: 8 }} />
-        <Skeleton height={48} />
+        <p className="muted">{t('history.note')}</p>
+        <ListSkeleton rows={PAGE_SIZE} rowHeight={105} reserveId="history" />
       </Card>
     );
 
@@ -70,6 +100,7 @@ export function HistoryTab({ session }: { session: Session }) {
       <HistoryList
         items={entries}
         data-testid="history-list"
+        reserveId="history"
         searchText={entryHaystack}
         timestamp={(e) => e.timestamp.getTime()}
         rowKey={(e) => e.txHash}
@@ -85,7 +116,7 @@ export function HistoryTab({ session }: { session: Session }) {
                   <span className={`hrow__dir hrow__dir--${e.direction}`}>
                     {e.direction === 'in' ? '↓' : '↑'}
                   </span>
-                  <AddressChip address={e.counterparty} />
+                  <Party entry={e} />
                 </>
               }
               amount={`${formatUnits(e.amount, e.decimals)} ${e.tokenSymbol}`}
@@ -124,7 +155,7 @@ export function HistoryTab({ session }: { session: Session }) {
               <div key={e.txHash} style={{ opacity: 0.6, marginTop: 8 }}>
                 <HistoryRow data-testid="history-spam-row">
                   <HistoryRow.Head
-                    lead={<AddressChip address={e.counterparty} />}
+                    lead={<Party entry={e} />}
                     status={{
                       tone: 'warn',
                       label:

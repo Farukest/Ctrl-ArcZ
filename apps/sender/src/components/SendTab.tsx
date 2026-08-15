@@ -18,11 +18,13 @@ import {
   AmountField,
   Button,
   Card,
+  Address as AddressChip,
   CopyButton,
   CostBlock,
   Field,
   Input,
   Select,
+  Skeleton,
   Stepper,
   parseAmount,
   useSubmitGuard,
@@ -56,6 +58,12 @@ interface SentInfo {
   secret: string;
   txHash: `0x${string}`;
   amount: string;
+  /**
+   * Who the money is locked for. Kept because this screen clears the form, so
+   * without it the last thing the sender sees about a protected transfer is the
+   * one fact the whole product exists to get right, and it is not on the screen.
+   */
+  to: string;
 }
 
 export function SendTab({
@@ -206,6 +214,7 @@ export function SendTab({
         secret: secret.secret,
         txHash: result.txHash,
         amount,
+        to,
       });
       clearVerifiedRecipients();
       toast.push(t('send.sentToast'), 'success');
@@ -240,14 +249,27 @@ export function SendTab({
           </h2>
         </div>
         <p className="muted">{t('send.successBody', { amount: sent.amount })}</p>
+        {/* Who it went to, on the screen that clears the form. Everything else here
+            is about getting the code out; this is the last chance to notice that the
+            money is locked for the wrong address, which is the failure this product
+            exists to prevent. Transfer number beside it, because that is what the
+            Activity list and support both go by. */}
+        <div className="row wrap" data-testid="send-success-to">
+          <span className="hrow__id mono">#{sent.transferId}</span>
+          <span className="muted">{t('send.successTo')}</span>
+          <AddressChip address={sent.to as `0x${string}`} />
+        </div>
         {/* The whole credential, and the only thing that leaves this screen. It is
             not persisted and not put in a link: it has to reach the recipient
             through a channel an attacker is not in. */}
         <div className="code-reveal marked" data-testid="claim-code">
           {sent.secret}
         </div>
+        {/* Labelled, not a bare glyph. Getting this string to the recipient is the
+            only thing left to do on this screen, and it was the one unlabelled
+            control on it while "New transfer" got a full button. */}
         <div className="row" style={{ marginTop: 10, justifyContent: 'center' }}>
-          <CopyButton value={sent.secret} />
+          <CopyButton value={sent.secret} label={t('send.copyCode')} />
         </div>
         <ul className="hintlist">
           <li>{t('send.claimStep1')}</li>
@@ -280,6 +302,10 @@ export function SendTab({
           // recipient and it was false.
           onChange={(e) => {
             setTo(e.target.value.trim());
+            setPoisonOf(null);
+          }}
+          onClear={() => {
+            setTo('');
             setPoisonOf(null);
           }}
           data-testid="recipient-input"
@@ -336,24 +362,34 @@ export function SendTab({
       </div>
 
       {/* What leaves the wallet, which on Arc is never just the amount. The fee is
-          a ceiling: the chain charges what it charges and the rest is never spent. */}
-      {reserve != null && (
-        <CostBlock
-          testId="send-cost"
-          lines={[
-            { label: t('cost.amount'), value: `${usdc(amountValue)} USDC`, testId: 'send-cost-amount' },
-            { label: t('cost.networkMax'), value: `${usdc(reserve)} USDC` },
-          ]}
-          // Always, once the reserve is known. The amount is typed on this same
-          // screen, and a block whose bottom line comes and goes reads as one that
-          // failed to load.
-          total={{
-            label: t('cost.youPay'),
-            value: `${usdc(amountValue + reserve)} USDC`,
-            testId: 'send-youpay',
-          }}
-        />
-      )}
+          a ceiling: the chain charges what it charges and the rest is never spent.
+
+          Rendered from the first frame, not once the reserve arrives. Gated on
+          `reserve != null` it was a 124px block that appeared under the amount field
+          about half a second in, pushing the window picker and the send button down
+          the screen: measured, the card grew 446px to 588px. The two figures that
+          depend on the reserve wait on a placeholder instead; the amount, which is
+          typed on this screen and known immediately, does not. */}
+      <CostBlock
+        testId="send-cost"
+        lines={[
+          { label: t('cost.amount'), value: `${usdc(amountValue)} USDC`, testId: 'send-cost-amount' },
+          {
+            label: t('cost.networkMax'),
+            value: reserve == null ? <Skeleton width={72} height={14} /> : `${usdc(reserve)} USDC`,
+          },
+        ]}
+        total={{
+          label: t('cost.youPay'),
+          value:
+            reserve == null ? (
+              <Skeleton width={86} height={16} />
+            ) : (
+              `${usdc(amountValue + reserve)} USDC`
+            ),
+          testId: 'send-youpay',
+        }}
+      />
 
       <div style={{ marginTop: 16 }}>
         <Field label={t('send.window')}>

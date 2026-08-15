@@ -97,6 +97,23 @@ export const IconChevronsRight = (p: SVGProps<SVGSVGElement>) => (
   </svg>
 );
 
+/* Direction pair for the Send / Receive switch. Money leaving points away from
+   the reader, money arriving points back at them. The two are exact mirrors so
+   neither half of the switch looks heavier than the other. */
+export const IconArrowUpRight = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}>
+    <path d="M7 17 17 7" />
+    <path d="M8 7h9v9" />
+  </svg>
+);
+
+export const IconArrowDownLeft = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}>
+    <path d="M17 7 7 17" />
+    <path d="M16 17H7V8" />
+  </svg>
+);
+
 export const IconGlobe = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)}>
     <circle cx="12" cy="12" r="9" />

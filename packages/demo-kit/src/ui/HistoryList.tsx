@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { PagedList, Pagination, SearchField, Select, paginate } from './components.js';
+import { useRecordHeight } from './reservedHeight.js';
 import { useT } from '../i18n/context.js';
 
 /**
@@ -101,6 +102,11 @@ export interface HistoryListProps<T> {
    * had them. Passing them here fixes the order in one place.
    */
   filters?: ReactNode;
+  /**
+   * Ties this list to its loading placeholder, so the placeholder can be exactly
+   * as tall as this list settled at last time. See reservedHeight.ts.
+   */
+  reserveId?: string;
   'data-testid'?: string;
 }
 
@@ -118,9 +124,11 @@ export function HistoryList<T>({
   resetKey,
   dateDirection = 'past',
   filters,
+  reserveId,
   ...rest
 }: HistoryListProps<T>) {
   const t = useT();
+  const record = useRecordHeight(reserveId);
   const [query, setQuery] = useState('');
   const [window, setWindow] = useState<DateWindow>('all');
   /** Only meaningful while `window` is `custom`; kept so switching back restores it. */
@@ -184,10 +192,18 @@ export function HistoryList<T>({
 
   const reset = () => setPage(0);
 
-  if (items.length === 0) return <p className="muted">{emptyText}</p>;
+  // Recorded too, and this is the case that mattered most: a wallet with nothing
+  // received reserved five rows and then collapsed by 763px. An empty list is a
+  // height like any other, and next time it is the height that gets reserved.
+  if (items.length === 0)
+    return (
+      <p className="muted" ref={record as React.RefObject<HTMLParagraphElement>}>
+        {emptyText}
+      </p>
+    );
 
   return (
-    <div {...rest}>
+    <div {...rest} ref={record as React.RefObject<HTMLDivElement>}>
       <div className="hist-controls">
         <SearchField
           value={query}

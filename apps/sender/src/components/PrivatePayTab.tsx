@@ -225,6 +225,7 @@ export function PrivatePayTab({
               mono
               value={merchant}
               onChange={(e) => setMerchant(e.target.value.trim())}
+              onClear={() => setMerchant('')}
               placeholder="0x…"
               data-testid="ppay-merchant"
               spellCheck={false}

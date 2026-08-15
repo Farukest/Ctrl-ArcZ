@@ -83,7 +83,7 @@
   color: var(--info);
 }
 .logo__arc {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 /* ReactBits TextType engine (see TextType.tsx) — CSS cursor, no GSAP. */
@@ -107,7 +107,7 @@
 }
 /* The logo's cursor: a thin amber terminal bar. */
 .logo__caret {
-  color: var(--accent);
+  color: var(--accent-text);
   font-weight: 400;
   transform: translateX(-1px);
 }
@@ -252,7 +252,7 @@
     border-color: var(--border-strong);
   }
   .btn--danger:hover:not(:disabled) {
-    --btn-bg: color-mix(in srgb, var(--block) 86%, white);
+    --btn-bg: color-mix(in srgb, var(--block-solid) 88%, white);
   }
 }
 .btn:active:not(:disabled) {
@@ -299,7 +299,7 @@
   --btn-bd: var(--border-subtle);
 }
 .btn--danger {
-  --btn-bg: var(--block);
+  --btn-bg: var(--block-solid);
   --btn-fg: #fff;
 }
 .btn--sm {
@@ -334,7 +334,7 @@
   }
 }
 .iconbtn.is-active {
-  color: var(--accent);
+  color: var(--accent-text);
   border-color: var(--accent);
 }
 
@@ -363,7 +363,7 @@
    going anywhere. Slightly tighter tracking so it reads as a heading rather than as
    a highlighted word. */
 .field__label--accent {
-  color: var(--accent);
+  color: var(--accent-text);
   letter-spacing: 0.01em;
 }
 .field__control {
@@ -390,6 +390,46 @@
   font-size: var(--fs-sm);
 }
 
+/* Clear button (see the `onClear` prop on Input) --------------------------- */
+.inputwrap {
+  position: relative;
+  display: block;
+  width: 100%;
+}
+/* Only when the button is actually there. Reserving the room unconditionally
+   would indent the placeholder of every field that never shows one. */
+.input--clearable {
+  padding-right: 42px;
+}
+.inputwrap__clear {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* 30px is above the 24px target floor and still clears the field's border. */
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-xs);
+  background: transparent;
+  color: var(--text-lo);
+  cursor: pointer;
+  touch-action: manipulation;
+  transition:
+    color var(--dur-1) var(--ease),
+    background-color var(--dur-1) var(--ease);
+}
+@media (hover: hover) {
+  .inputwrap__clear:hover {
+    color: var(--text-hi);
+    background: var(--surface-3);
+  }
+}
+
 /* Modular search field (same look/feel in every list) --------------------- */
 .searchfield {
   display: flex;
@@ -412,6 +452,10 @@
 .searchfield__input {
   flex: 1;
   min-width: 0;
+  /* Fills the 40px row rather than sitting as an 18px band inside it. Without this
+     a tap on the obvious top or bottom of the search box lands on the wrapper and
+     nothing takes focus, which reads as the field being dead. */
+  align-self: stretch;
   border: 0;
   background: transparent;
   color: var(--text-hi);
@@ -535,9 +579,13 @@
   height: 100%;
   display: block;
 }
+/* The white plate above is deliberate: brand SVGs are drawn for a light ground and
+   need one in either theme. The initials fallback is not a brand mark, so it follows
+   the theme instead of staying a dark grey disc among white ones on a light page. */
 .chainlogo--fallback {
-  background: #3a4150;
-  color: #fff;
+  background: var(--surface-3);
+  color: var(--text-hi);
+  box-shadow: inset 0 0 0 1px var(--border-strong);
   font-family: var(--font-mono);
   font-weight: 700;
   line-height: 1;
@@ -632,7 +680,7 @@
   }
 }
 .menu__item.is-selected {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .menu__item-label {
   display: inline-flex;
@@ -843,13 +891,13 @@
 }
 @media (hover: hover) {
   .infodot:hover {
-    color: var(--accent);
+    color: var(--accent-text);
     border-color: var(--accent-ring);
     background: var(--accent-soft);
   }
 }
 .infodot[aria-expanded='true'] {
-  color: var(--accent);
+  color: var(--accent-text);
   border-color: var(--accent-ring);
   background: var(--accent-soft);
 }
@@ -1028,7 +1076,7 @@
 }
 .status--PENDING {
   background: var(--accent-soft);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .status--CLAIMED {
   background: var(--safe-soft);
@@ -1064,6 +1112,7 @@
   white-space: nowrap;
 }
 .addr__copy {
+  position: relative;
   display: inline-flex;
   color: var(--text-lo);
   background: none;
@@ -1071,15 +1120,192 @@
   padding: 2px;
   cursor: pointer;
   border-radius: var(--r-sm);
+  touch-action: manipulation;
   transition: color var(--dur-1) var(--ease);
+}
+/* The glyph stays 14px next to the address; the thing a thumb has to hit does not.
+   An overlay rather than padding, so widening the target moves nothing around it. */
+.addr__copy::after {
+  content: '';
+  position: absolute;
+  inset: 50% 50%;
+  width: 32px;
+  height: 32px;
+  transform: translate(-50%, -50%);
 }
 @media (hover: hover) {
   .addr__copy:hover {
-    color: var(--accent);
+    color: var(--accent-text);
   }
 }
 
 /* Risk card --------------------------------------------------------------- */
+/* Risk panel (see RiskPanel.tsx): one card, a row per source ---------------- */
+.riskp {
+  border-radius: var(--r-md);
+  padding: var(--sp-4);
+  border: 1px solid var(--border-subtle);
+  background: var(--surface-2);
+  animation: rise var(--dur-3) var(--ease);
+  /* Only the colours change between states. The card is the same size while it is
+     thinking as when it has answered, because it holds every row from the start. */
+  transition:
+    background-color var(--dur-3) var(--ease),
+    border-color var(--dur-3) var(--ease);
+}
+.riskp--safe {
+  border-color: var(--safe-border);
+  background: var(--safe-soft);
+}
+.riskp--warning {
+  border-color: var(--warn-border);
+  background: var(--warn-soft);
+}
+.riskp--block {
+  border-color: var(--block-border);
+  background: var(--block-soft);
+}
+.riskp__head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: 22px;
+  font-weight: 680;
+  font-size: var(--fs-body);
+  color: var(--text-mid);
+}
+.riskp--safe .riskp__head {
+  color: var(--safe);
+}
+.riskp--warning .riskp__head {
+  color: var(--warn);
+}
+.riskp--block .riskp__head {
+  color: var(--block);
+}
+.riskp__headline {
+  min-width: 0;
+  font-weight: inherit;
+}
+/* The one moving thing on the card while it waits, in place of the icon that is
+   not known yet. Same 18px box, so nothing shifts when it is replaced. */
+.riskp__spin {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid var(--border-strong);
+  border-top-color: var(--accent);
+  animation: riskp-spin 700ms linear infinite;
+}
+@keyframes riskp-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .riskp__spin {
+    animation: none;
+  }
+}
+.riskp__toggle {
+  margin-left: auto;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-xs);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.riskp__toggle svg {
+  transition: transform var(--dur-2) var(--ease);
+}
+.riskp__toggle.is-open svg {
+  transform: rotate(180deg);
+}
+
+.riskp__checks {
+  list-style: none;
+  margin: var(--sp-3) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.riskp__check {
+  display: grid;
+  grid-template-columns: 14px minmax(0, auto) minmax(0, 1fr);
+  align-items: baseline;
+  gap: var(--sp-2);
+  font-size: var(--fs-sm);
+  /* Every row is this tall in every state, so filling one in moves nothing. */
+  min-height: 20px;
+}
+/* The status dot. A ring while running, filled once answered, hollow and dim
+   where the source could not be reached. */
+.riskp__mark {
+  align-self: center;
+  width: 8px;
+  height: 8px;
+  margin-left: 3px;
+  border-radius: 50%;
+  background: var(--text-lo);
+}
+.riskp__check--running .riskp__mark {
+  background: transparent;
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+.riskp__check--unavailable .riskp__mark {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--text-lo);
+}
+/* Coloured by the row's own verdict, never the card's: a blocked card usually has
+   one source that objected and one that did not, and painting both dots red says
+   they both did. */
+.riskp__check--done.riskp__check--tone-safe .riskp__mark {
+  background: var(--safe);
+}
+.riskp__check--done.riskp__check--tone-warning .riskp__mark {
+  background: var(--warn);
+}
+.riskp__check--done.riskp__check--tone-block .riskp__mark {
+  background: var(--block);
+}
+.riskp__name {
+  color: var(--text-mid);
+  white-space: nowrap;
+}
+.riskp__result {
+  color: var(--text-hi);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.riskp__check--running .riskp__result,
+.riskp__check--unavailable .riskp__result {
+  color: var(--text-mid);
+}
+/* Detail sits under its own row and indented past the dot, so an expanded panel
+   still reads as two sources rather than one pile of sentences. */
+.riskp__detail {
+  grid-column: 2 / -1;
+  margin-top: var(--sp-1);
+  color: var(--text-mid);
+}
+.riskp__detail ul {
+  margin: 0;
+  padding-left: var(--sp-4);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
 .risk {
   border-radius: var(--r-md);
   padding: var(--sp-4);
@@ -1148,8 +1374,13 @@
   display: flex;
   flex-wrap: wrap; /* never clip a tab: wrap to a second row on narrow widths */
   gap: 2px;
-  background: var(--surface-1);
-  border: 1px solid var(--border-subtle);
+  background: var(--seg-track);
+  /* The strong tier, and a recessed inner edge. A segmented control is read as a
+     groove with a key sitting in it; with the subtle border and no inset the track
+     was the same value as the page and the unselected half looked like empty
+     background rather than the other half of a switch. */
+  border: 1px solid var(--border-strong);
+  box-shadow: inset 0 1px 2px var(--hairline);
   border-radius: var(--r-md);
   padding: 4px;
   margin-bottom: var(--sp-4);
@@ -1179,10 +1410,127 @@
     color: var(--text-hi);
   }
 }
+/* Two independent signals, because either one alone fails in a theme. The raised
+   thumb carries it in dark, where the fills genuinely differ; the accent label
+   carries it in light, where they never will. */
 .segtab.is-active {
-  background: var(--surface-3);
-  color: var(--text-hi);
+  background: var(--seg-thumb);
+  color: var(--accent-text);
+  font-weight: 700;
+  box-shadow: var(--seg-thumb-shadow);
+}
+@media (hover: hover) {
+  .segtab.is-active:hover {
+    color: var(--accent-text);
+  }
+}
+
+/* Mode switch (Send | Receive) --------------------------------------------
+
+   The same segmented control as `.segtabs`, one size up and driven by tokens so
+   it follows the theme. It used to be a fully round pill with a hardcoded blue
+   thumb and a hardcoded `#12141a` track, which meant it stayed black in light
+   mode and owned two saturated hues nothing else in the product used. */
+.modeswitch {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: stretch;
+  padding: 4px;
+  border-radius: var(--r-lg);
+  background: var(--seg-track);
+  border: 1px solid var(--border-strong);
+  box-shadow: inset 0 1px 2px var(--hairline);
+}
+
+/* Sliding active thumb. Inset by the track padding on all four sides, so the
+   50% width has to lose that padding back or the thumb overhangs the track. */
+.modeswitch__thumb {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 4px;
+  width: calc(50% - 4px);
+  border-radius: var(--r-sm);
+  background: var(--accent);
   box-shadow: var(--el-1);
+  transition: transform var(--dur-4) var(--ease-emph);
+}
+.modeswitch[data-mode='receive'] .modeswitch__thumb {
+  transform: translateX(100%);
+}
+
+.modeswitch__btn {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  appearance: none;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  min-height: 44px;
+  padding: 0 var(--sp-3);
+  border-radius: var(--r-sm);
+  font-family: inherit;
+  font-size: var(--fs-body);
+  font-weight: 620;
+  color: var(--text-mid);
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: color var(--dur-2) var(--ease);
+}
+@media (hover: hover) {
+  .modeswitch__btn:not([aria-selected='true']):hover {
+    color: var(--text-hi);
+  }
+}
+.modeswitch__btn[aria-selected='true'] {
+  color: var(--accent-on);
+}
+.modeswitch__btn svg {
+  flex: 0 0 auto;
+  opacity: 0.85;
+}
+
+/* Waiting-claim badge. A flex child of the button, so it sits on the same
+   optical line as the label without a vertical-align guess. */
+.modeswitch__dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 19px;
+  height: 19px;
+  padding: 0 5px;
+  border-radius: var(--r-xs);
+  background: var(--accent);
+  color: var(--accent-on);
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  animation: mode-pulse 1.5s var(--ease) 2;
+}
+/* On the selected half the thumb is already accent, so the chip inverts to stay
+   readable instead of disappearing into it. */
+.modeswitch__btn[aria-selected='true'] .modeswitch__dot {
+  background: var(--accent-on);
+  color: var(--accent-text);
+  animation: none;
+}
+@keyframes mode-pulse {
+  0% {
+    box-shadow: 0 0 0 0 var(--accent-ring);
+  }
+  70% {
+    box-shadow: 0 0 0 6px transparent;
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
 }
 
 /* Transfer row ------------------------------------------------------------ */
@@ -1312,7 +1660,7 @@
     background-color var(--dur-2) var(--ease);
 }
 .linkbtn > svg {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 /* Tx link chip: an "open in explorer" link joined to a copy-hash button. */
@@ -1337,7 +1685,7 @@
   transition: color var(--dur-2) var(--ease);
 }
 .txlink__go > svg {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .txlink .addr__copy {
   display: inline-flex;
@@ -1357,7 +1705,7 @@
     color: var(--text-hi);
   }
   .txlink .addr__copy:hover {
-    color: var(--accent);
+    color: var(--accent-text);
     background: var(--surface-3);
   }
 }
@@ -1473,7 +1821,7 @@
 }
 /* Cross-highlight: hovering a result link marks which step it belongs to. */
 .step--highlight {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .step--highlight .step__dot {
   box-shadow: 0 0 0 3px var(--accent-ring);
@@ -1513,6 +1861,44 @@
   animation: shimmer 1.3s ease-in-out infinite;
   border-radius: var(--r-sm);
   height: 14px;
+}
+/* Holds the space, promises nothing. See the `still` prop on Skeleton. */
+.skeleton--still {
+  background: var(--surface-2);
+  animation: none;
+  opacity: 0.6;
+}
+
+/* List skeleton (see ListSkeleton.tsx) ------------------------------------- */
+.listskel__chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  margin-bottom: 14px;
+}
+.listskel__rows {
+  display: flex;
+  flex-direction: column;
+  margin-top: 14px;
+}
+.listskel__group {
+  display: flex;
+  flex-direction: column;
+}
+.listskel__pager {
+  display: flex;
+  justify-content: center;
+  margin-top: 8px;
+}
+/* The shimmer is the only thing moving on a screen that is otherwise waiting, so
+   it is kept quiet and stopped outright when motion is unwelcome. */
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+    background: var(--surface-2);
+  }
 }
 
 /* Modal ------------------------------------------------------------------- */
@@ -1961,6 +2347,16 @@
   font-size: var(--fs-sm);
   color: var(--text-hi);
 }
+/* Takes the slot an address chip would have had, on a row that has no address:
+   a mint. Sans rather than mono, because it is a description and not a value you
+   would ever copy. */
+.hrow__party {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-hi);
+}
 .hrow__meta {
   display: flex;
   align-items: center;
@@ -2028,13 +2424,19 @@
 .hstep__name {
   color: var(--text-lo);
 }
+/* The transaction hash in a history step is a link out to the explorer. Padded to
+   clear the 24px target floor, pulled back by the same amount so the step row keeps
+   its height. */
 .hstep__go {
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  padding: 4px 0;
+  margin-block: -4px;
   color: var(--text-mid);
   text-decoration: none;
   font-family: var(--font-mono, monospace);
+  touch-action: manipulation;
 }
 a.hstep__go:hover {
   color: var(--text-hi);
@@ -2131,11 +2533,17 @@ a.hstep__go:hover {
   background: transparent;
   border: 0;
   border-radius: 8px;
-  padding: 0 6px;
+  /* "Balance 124.038417" is a button: tapping it fills the amount. At 20px tall it
+     was a 12px-text label that happened to be clickable, which is how a shortcut
+     goes unused. Vertical padding to clear the 24px target floor, negative margin
+     so the row it sits in keeps its old height. */
+  padding: 3px 6px;
+  margin-block: -3px;
   font-size: 12px;
   line-height: 20px;
   cursor: pointer;
   font-family: inherit;
+  touch-action: manipulation;
 }
 .amountf__bal:hover:not(:disabled) {
   background: var(--surface-2);
@@ -2150,9 +2558,12 @@ a.hstep__go:hover {
   white-space: nowrap;
 }
 .amountf__balv {
+  display: inline-flex;
+  align-items: center;
+  min-height: 18px;
   font-size: 12px;
   font-weight: 600;
-  color: var(--accent);
+  color: var(--accent-text);
   white-space: nowrap;
 }
 .amountf__bal:disabled .amountf__balv {
@@ -2228,7 +2639,7 @@ a.hstep__go:hover {
   border: 0;
   border-radius: 999px;
   background: var(--surface-3);
-  color: var(--accent);
+  color: var(--accent-text);
   font-size: 12px;
   font-weight: 600;
   padding: 4px 9px;
@@ -2427,8 +2838,14 @@ a.hstep__go:hover {
   color: var(--text-mid);
   white-space: nowrap;
 }
+/* Reserves its own text height. A placeholder is always shorter than the line it
+   stands in for, so without this the head grew 4px the moment the balance landed,
+   and every figure on the screen is read while it is arriving. */
 .gwfund__figure {
   margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
   font-size: 17px;
   font-weight: 700;
   color: var(--text-hi);
@@ -2489,9 +2906,12 @@ a.hstep__go:hover {
   white-space: nowrap;
 }
 .gwfund__walletv {
+  display: inline-flex;
+  align-items: center;
+  min-height: 18px;
   font-size: 12px;
   font-weight: 600;
-  color: var(--accent);
+  color: var(--accent-text);
   white-space: nowrap;
 }
 .gwfund__wallet:disabled .gwfund__walletv {

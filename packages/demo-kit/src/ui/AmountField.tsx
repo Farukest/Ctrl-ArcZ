@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { ChainLogo } from './ChainLogo.js';
+import { Skeleton } from './components.js';
 import { useT } from '../i18n/context.js';
 import { fiat, formatAmount, sanitizeAmount } from './amount.js';
 
@@ -25,9 +26,19 @@ export interface AmountFieldProps {
   label?: ReactNode;
   /** Chain whose logo rides in the token pill, so the amount names its network. */
   chain?: string;
-  /** Spendable balance in USDC subunits. `null` renders a dash, not a zero: a zero
-   *  is a claim about the balance and an unread balance is not one. */
+  /** Spendable balance in USDC subunits. Never zero when unknown: a zero is a claim
+   *  about the balance and an unread balance is not one. */
   balance?: bigint | null;
+  /**
+   * Why the balance is missing, when it is.
+   *
+   * `loading` is a shimmer, because something is on its way. `unavailable` is a
+   * still placeholder, because nothing is: the receiving side of a bridge cannot
+   * read a balance on a chain the wallet is not connected to, and a shimmer there
+   * promises a number that will never arrive. They were the same state until a
+   * mobile screenshot showed the destination card shimmering forever.
+   */
+  balanceMissing?: 'loading' | 'unavailable';
   /** Word in front of the balance, because Gateway's is not the wallet's. */
   balanceLabel?: ReactNode;
   /**
@@ -66,6 +77,7 @@ export function AmountField({
   chain,
   balance,
   balanceLabel,
+  balanceMissing = 'loading',
   onMax,
   percents,
   readOnly = false,
@@ -99,7 +111,11 @@ export function AmountField({
             {/* `output` rather than a span: it is the element for a value the page
                 computed, and it can never be typed into or submitted. */}
             <output className="amountf__balv">
-              {balance == null ? '—' : `${formatAmount(balance)} USDC`}
+              {balance == null ? (
+                <Skeleton width={74} height={13} still={balanceMissing === 'unavailable'} />
+              ) : (
+                `${formatAmount(balance)} USDC`
+              )}
             </output>
           </button>
         )}

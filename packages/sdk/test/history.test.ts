@@ -7,6 +7,7 @@ const ME = '0x1111111111111111111111111111111111111111' as Address;
 const REAL = '0x3A5f8b2c9d1e4f6a7b8c9d0e1f2a3b4c5d6e9C2b' as Address;
 const POISONER = '0x3A5f0000000000000000000000000000000009C2b'.slice(0, 42) as Address;
 const SCAM_TOKEN = '0xdead000000000000000000000000000000000000' as Address;
+const ZERO = '0x0000000000000000000000000000000000000000' as Address;
 
 function transfer(overrides: Record<string, unknown>) {
   return {
@@ -135,5 +136,60 @@ describe('getCleanHistory', () => {
     expect(history.entries).toHaveLength(0);
     expect(history.filtered).toHaveLength(1);
     expect(history.filtered[0]?.reason).toBe('UNKNOWN_TOKEN');
+  });
+
+  // A mint has no sender, so the explorer serves 0x0000...0000 and the row read
+  // "received from 0x0000...0000": paid by nobody. On Arc that row is almost always
+  // the holder's own money arriving over a bridge, so `kind` has to say so.
+  describe('a row with no counterparty', () => {
+    const bridged = (method: string) =>
+      transfer({ from: { hash: ZERO }, to: { hash: ME }, method, transaction_hash: '0xmint' });
+
+    it('marks a CCTP arrival as a mint, not a transfer from nobody', async () => {
+      const history = await getCleanHistory(ME, {
+        fetchFn: fakeFetch([bridged('receiveMessage')]),
+      });
+
+      const entry = history.entries[0];
+      expect(entry?.kind).toBe('mint');
+      expect(entry?.method).toBe('receiveMessage');
+      expect(entry?.direction).toBe('in');
+    });
+
+    it('marks a Gateway arrival the same way, told apart by its method', async () => {
+      const history = await getCleanHistory(ME, { fetchFn: fakeFetch([bridged('gatewayMint')]) });
+
+      expect(history.entries[0]?.kind).toBe('mint');
+      expect(history.entries[0]?.method).toBe('gatewayMint');
+    });
+
+    it('marks a burn from the other side', async () => {
+      const history = await getCleanHistory(ME, {
+        fetchFn: fakeFetch([transfer({ from: { hash: ME }, to: { hash: ZERO } })]),
+      });
+
+      expect(history.entries[0]?.kind).toBe('burn');
+      expect(history.entries[0]?.direction).toBe('out');
+    });
+
+    it('leaves an ordinary transfer alone, with no method to report', async () => {
+      const history = await getCleanHistory(ME, { fetchFn: fakeFetch([transfer({})]) });
+
+      expect(history.entries[0]?.kind).toBe('transfer');
+      expect(history.entries[0]?.method).toBeNull();
+    });
+
+    // The zero address is derived from the addresses, not from the indexer's own
+    // `type` string, so a mislabelled or absent type cannot turn a mint into a
+    // payment from 0x0000...0000.
+    it('does not take the indexer word for it', async () => {
+      const history = await getCleanHistory(ME, {
+        fetchFn: fakeFetch([
+          transfer({ from: { hash: ZERO }, to: { hash: ME }, type: 'token_transfer' }),
+        ]),
+      });
+
+      expect(history.entries[0]?.kind).toBe('mint');
+    });
   });
 });

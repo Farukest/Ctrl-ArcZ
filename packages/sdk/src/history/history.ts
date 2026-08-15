@@ -1,10 +1,30 @@
 import type { Address } from 'viem';
 import { EXPLORER_API_URL, ADDRESSES } from '../chains/arcTestnet.js';
 
+/**
+ * What produced a row, when the counterparty alone cannot say.
+ *
+ * A mint has no sender and a burn has no recipient, so both arrive from the
+ * indexer with `0x0000…0000` on one side. Rendering that as an address tells the
+ * holder they were paid by nobody, when on Arc it is almost always their own money
+ * arriving over a bridge: CCTP settles as `receiveMessage` and Circle Gateway as
+ * `gatewayMint`, and both are mints to the recipient.
+ */
+export type EntryKind = 'transfer' | 'mint' | 'burn';
+
 export interface HistoryEntry {
   txHash: `0x${string}`;
   direction: 'in' | 'out';
+  /** `0x0000…0000` when `kind` is not `transfer`; read `kind` before showing it. */
   counterparty: Address;
+  kind: EntryKind;
+  /**
+   * The contract call the indexer attributed the row to, verbatim and untrusted:
+   * `receiveMessage`, `gatewayMint`, `transfer`. Null when it named none. Useful
+   * for telling one kind of mint from another; never for deciding whether to trust
+   * a row.
+   */
+  method: string | null;
   /** Base units, in the token's own decimals. */
   amount: bigint;
   decimals: number;
@@ -39,6 +59,7 @@ export interface GetCleanHistoryOptions {
 interface RawTransfer {
   transaction_hash?: string;
   timestamp?: string | null;
+  method?: string | null;
   from?: { hash?: string } | null;
   to?: { hash?: string } | null;
   total?: { value?: string | null; decimals?: string | null } | null;
@@ -84,6 +105,7 @@ export async function getCleanHistory(
 
   const body = (await response.json()) as { items?: RawTransfer[] | null };
   const self = address.toLowerCase();
+  const ZERO = '0x0000000000000000000000000000000000000000';
 
   const entries: HistoryEntry[] = [];
   const filtered: FilteredEntry[] = [];
@@ -103,10 +125,18 @@ export async function getCleanHistory(
     const rawDecimals = Number(raw.token?.decimals ?? raw.total?.decimals);
     const decimals = Number.isFinite(rawDecimals) ? rawDecimals : 6;
 
+    // Derived from the addresses, not from the indexer's own `type` field: a mint
+    // is "came from nowhere" whatever the indexer chose to call it, and one less
+    // string to trust is one less string to be wrong about.
+    const kind: EntryKind =
+      from.toLowerCase() === ZERO ? 'mint' : to.toLowerCase() === ZERO ? 'burn' : 'transfer';
+
     const entry: HistoryEntry = {
       txHash: raw.transaction_hash as `0x${string}`,
       direction,
       counterparty,
+      kind,
+      method: raw.method ?? null,
       amount,
       decimals,
       tokenAddress,

@@ -21,15 +21,23 @@ export function statusTone(status: TransferStatus): RowTone {
   return 'idle';
 }
 
-/** How long ago, in the shortest form that is still unambiguous. */
+/**
+ * How long ago, in the shortest form that is still unambiguous.
+ *
+ * Floored, never rounded. Rounding claims more time has passed than actually has:
+ * with `Math.round`, something sent 2 days and 14 hours ago read "3d" and sat under
+ * a date header two days old, and 36 hours read "2d". On a screen where the number
+ * next to a transfer is how long its claim window has been running, a label that
+ * runs ahead of the clock is the one mistake this field must not make.
+ */
 export function relativeTime(ts: number, now: number = Date.now()): string {
-  const s = Math.max(1, Math.round((now - ts) / 1000));
+  const s = Math.max(1, Math.floor((now - ts) / 1000));
   if (s < 60) return `${s}s`;
-  const m = Math.round(s / 60);
+  const m = Math.floor(s / 60);
   if (m < 60) return `${m}m`;
-  const h = Math.round(m / 60);
+  const h = Math.floor(m / 60);
   if (h < 24) return `${h}h`;
-  return `${Math.round(h / 24)}d`;
+  return `${Math.floor(h / 24)}d`;
 }
 
 /** Everything searchable about a received row, so one box matches an amount, a

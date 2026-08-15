@@ -1,100 +1,11 @@
-/* Send / Receive hero mode switch + the "different world" transition. */
-
-.modeswitch {
-  position: relative;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  align-items: stretch;
-  padding: 5px;
-  border-radius: 999px;
-  background: var(--card, #12141a);
-  border: 1px solid var(--card-border, rgba(255, 255, 255, 0.08));
-  overflow: hidden;
-}
-
-/* Sliding active pill. */
-.modeswitch__thumb {
-  position: absolute;
-  top: 5px;
-  bottom: 5px;
-  left: 5px;
-  width: calc(50% - 5px);
-  border-radius: 999px;
-  background: var(--mode-accent, #4b9fff);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
-  transition:
-    transform 280ms cubic-bezier(0.22, 1, 0.36, 1),
-    background 280ms ease;
-}
-.modeswitch[data-mode='send'] {
-  --mode-accent: #4b9fff;
-}
-.modeswitch[data-mode='receive'] {
-  --mode-accent: #2ea043;
-}
-.modeswitch[data-mode='receive'] .modeswitch__thumb {
-  transform: translateX(100%);
-}
-
-.modeswitch__btn {
-  position: relative;
-  z-index: 1;
-  appearance: none;
-  border: 0;
-  background: transparent;
-  cursor: pointer;
-  padding: 11px 8px;
-  font-size: 15px;
-  font-weight: 700;
-  letter-spacing: 0.2px;
-  color: var(--muted, #9aa4b2);
-  transition: color 200ms ease;
-}
-.modeswitch__btn[aria-selected='true'] {
-  color: #0b0d12;
-}
-
-/* Waiting-claim badge on the inactive Receive half. */
-.modeswitch__dot {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 18px;
-  height: 18px;
-  margin-left: 7px;
-  padding: 0 5px;
-  border-radius: 999px;
-  background: #f85149;
-  color: #fff;
-  font-size: 11px;
-  font-weight: 800;
-  vertical-align: middle;
-  box-shadow: 0 0 0 0 rgba(248, 81, 73, 0.6);
-  animation: mode-pulse 1.6s ease-out infinite;
-}
-@keyframes mode-pulse {
-  0% {
-    box-shadow: 0 0 0 0 rgba(248, 81, 73, 0.55);
-  }
-  70% {
-    box-shadow: 0 0 0 7px rgba(248, 81, 73, 0);
-  }
-  100% {
-    box-shadow: 0 0 0 0 rgba(248, 81, 73, 0);
-  }
-}
+/* The "different world" transition behind the Send / Receive switch.
+   The switch itself is a shared control: see `.modeswitch` in demo-kit. */
 
 /* The content area: replays an enter transition on every mode switch so it reads as
-   moving to a different space, without a route change. Accent tint reinforces it. */
+   moving to a different space, without a route change. */
 .mode-view {
   margin-top: var(--sp-4, 16px);
   animation: mode-enter 300ms cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-.mode-view[data-mode='send'] {
-  --mode-accent: #4b9fff;
-}
-.mode-view[data-mode='receive'] {
-  --mode-accent: #2ea043;
 }
 @keyframes mode-enter {
   from {
@@ -108,12 +19,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .modeswitch__thumb,
   .mode-view {
-    transition: none;
-    animation: none;
-  }
-  .modeswitch__dot {
     animation: none;
   }
 }
@@ -155,7 +61,7 @@
 }
 .sub-chip--on { border-color: var(--accent, #f5a524); color: var(--text-hi, #e9edf2); }
 .sub-chip__n {
-  font-size: 11px; font-weight: 700; color: var(--text-lo, #5d6675);
+  font-size: 11px; font-weight: 700; color: var(--text-mid, #9ba6b4);
   background: var(--bg-sunken, #070809); border-radius: 999px; padding: 0 6px;
 }
 
@@ -215,7 +121,14 @@
     border-color var(--dur-2) var(--ease);
 }
 @media (hover: hover) { .tab-more:hover { color: var(--text-hi); border-color: var(--border-strong); } }
-.tab-more.is-active { background: var(--surface-3); color: var(--text-hi); border-color: var(--accent); }
+/* Matches `.segtab.is-active`: raised thumb plus accent label, so the secondary
+   destination reads as selected by the same two signals as the primary ones. */
+.tab-more.is-active {
+  background: var(--seg-thumb);
+  color: var(--accent-text);
+  font-weight: 700;
+  border-color: var(--accent);
+}
 
 /* Secondary sub-toggle inside a primary destination (Pay: Standard|Private,
    Activity: Active|History). Rendered smaller and sunken so it reads as a sub-choice,
@@ -225,7 +138,6 @@
   display: inline-flex;
   flex-wrap: nowrap;
   margin-bottom: 0;
-  background: var(--bg-sunken);
 }
 .paytab__seg .segtab, .activitytab__seg .segtab {
   flex: 0 0 auto;

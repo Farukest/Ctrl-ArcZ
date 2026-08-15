@@ -230,18 +230,62 @@ type InputProps = InputHTMLAttributes<HTMLInputElement> & {
   mono?: boolean;
   invalid?: boolean;
   sm?: boolean;
+  /**
+   * Put a clear button at the right edge, shown only when there is something to
+   * clear.
+   *
+   * For the fields people paste into: an address is 42 characters nobody retypes,
+   * and replacing one meant selecting all of it first. Selecting all of a long
+   * mono string inside a narrow field is exactly the fiddly gesture a clear button
+   * exists to remove.
+   *
+   * Handed the empty value through the same `onChange` the field already uses, so
+   * every consumer's validation, risk check and dirty tracking see a clear the way
+   * they see a deletion, with nothing new to subscribe to.
+   */
+  onClear?: () => void;
 };
-export function Input({ mono, invalid, sm, className, ...rest }: InputProps) {
+export function Input({ mono, invalid, sm, className, onClear, ...rest }: InputProps) {
+  const t = useT();
+  const ref = useRef<HTMLInputElement | null>(null);
+  const clearable = Boolean(onClear) && String(rest.value ?? '').length > 0 && !rest.disabled;
   const cls = [
     'input',
     mono && 'input--mono',
     sm && 'input--sm',
     invalid && 'is-invalid',
+    clearable && 'input--clearable',
     className,
   ]
     .filter(Boolean)
     .join(' ');
-  return <input className={cls} aria-invalid={invalid || undefined} {...rest} />;
+
+  const field = <input ref={ref} className={cls} aria-invalid={invalid || undefined} {...rest} />;
+  if (!onClear) return field;
+
+  return (
+    <span className="inputwrap">
+      {field}
+      {clearable && (
+        <button
+          type="button"
+          className="inputwrap__clear"
+          // Not a submit, and not a focus steal: the caret goes back where it was
+          // so the next thing typed lands in the field that was just emptied.
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => {
+            onClear();
+            ref.current?.focus();
+          }}
+          aria-label={t('common.clear')}
+          title={t('common.clear')}
+          data-testid="input-clear"
+        >
+          <IconClose width={14} height={14} />
+        </button>
+      )}
+    </span>
+  );
 }
 
 /* Select (custom, portal; bottom-sheet on mobile, popover on desktop) ------ */
@@ -596,11 +640,24 @@ export function AddressChip({ address, full }: { address: string; full?: boolean
 export function Skeleton({
   width = '100%',
   height = 14,
+  still = false,
 }: {
   width?: string | number;
   height?: number;
+  /**
+   * Hold the space without the shimmer. The shimmer says "on its way"; where a
+   * value simply cannot be read from here, holding the space is honest and
+   * animating it is a promise that never lands.
+   */
+  still?: boolean;
 }) {
-  return <span className="skeleton" style={{ display: 'block', width, height }} aria-hidden />;
+  return (
+    <span
+      className={still ? 'skeleton skeleton--still' : 'skeleton'}
+      style={{ display: 'block', width, height }}
+      aria-hidden
+    />
+  );
 }
 
 /* SegmentedTabs ----------------------------------------------------------- */
