@@ -2,6 +2,21 @@
 
 Bu proje [Keep a Changelog](https://keepachangelog.com/) biçimini izler.
 
+## [0.1.1]: 2026-08-15
+
+Yalnız `@ctrl-arcz/sdk`. Paketin kodu 0.1.0 ile birebir aynı; değişen tek şey npm'de görünen README. Yine de yama sürümü çıkarılıyor, çünkü kırık olan şey okunan doküman değil, kopyalanan kod.
+
+### Düzeltildi
+
+- Quickstart `fromSecret`'i 62. satırda kullanıyor ama import listesinde saymıyordu. npmjs.com'daki örneği olduğu gibi kopyalayan biri `ReferenceError: fromSecret is not defined` alıyordu.
+
+### Eklendi
+
+- `### Spend boxes`: `createEphemeral` ve `predictEphemeral`. Zincirdeki politika (kilitli hedef, çekim başına tavan, asgari aralık, toplam bütçe, bitiş) token allowance'ının yerine ne koyuyor.
+- `### CCTP and Gateway`: `bridgeFromWallet`, `depositToGateway`, `spendFromGateway`. Üçü de parayı elinde tutan cüzdan tarafından imzalanıyor; hiçbirinde sunucu anahtarı yok.
+
+Üçü de 0.1.0'da zaten export edilmişti, sadece belgelenmemişti.
+
 ## [0.1.0]: 2026-07-11
 
 İlk sürüm. Arc Testnet üzerinde korumalı USDC transferi: gönderim öncesi risk taraması, kodla claim, gönderen iptali, otomatik iade.
