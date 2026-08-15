@@ -64,7 +64,7 @@ Tarayıcının yapamadığı üç şey:
 
 **İddia edilen değil, test edilen eşitlik.** Gas rezervi hesabı, claim kodu kodlaması, stealth türetimi ve risk kuralları tek bir şartnamenin iki uygulaması. `packages/sdk/scripts/gen-parity-vectors.ts` tarafından üretilen `packages/sdk/parity-vectors.json` hem TypeScript hem Kotlin test takımı tarafından koşuluyor; sapan bir port bir ödemeyi değil bir testi düşürüyor.
 
-Android kaynağı burada değil, kendi deposunda duruyor. Bir Gradle projesini pnpm monorepo'suna gömmek kimsenin koşmadığı bir build ve kimsenin güvenmediği bir CI işi üretirdi; ikisini gerçekten bir arada tutan şey parity vektörleri.
+Android kaynağı açık değil; vektörlerin burada bir kolaylık olmamasının sebebi tam olarak bu. [`docs/android/ParityVectorsTest.kt`](./docs/android/ParityVectorsTest.kt), o projede koşan Kotlin testinin byte'ı byte'ına kopyası: uygulama kodu yok, anahtar yok, endpoint yok; yalnızca iki uygulamayı tek şartnameye bağlayan doğrulamalar. Okuyamadığın kısım, okuyabildiğin kısma sabitlenmiş durumda. [Neyi kapsıyor ve nasıl doğrulanır](./docs/android/README.md).
 
 ## Problem
 
@@ -434,9 +434,11 @@ Adres ve işlem hash'i birincisi; iki karakterlik satır numarası ikincisi.
 | `apps/keeper`        | Keeper ajanı: süresi dolan transferleri iade eder, sınırlı bir kutudan    |
 | `examples`           | Bağımsız bir Node quickstart'ı, çerçevesiz                                |
 
-Android istemcisi buradaki bir paket değil, kendi deposunda duran ayrı bir native
-Kotlin/Compose uygulaması; TypeScript uygulamasına `packages/sdk/parity-vectors.json`
-ile bağlı. Bkz. [Web ve Android: iki istemci](#web-ve-android-iki-istemci).
+Android istemcisi, kaynağı açık olmayan ayrı bir native Kotlin/Compose uygulaması.
+TypeScript uygulamasına `packages/sdk/parity-vectors.json` ile bağlı ve bu bağı kuran
+Kotlin testi burada yayınlanıyor:
+[`docs/android/ParityVectorsTest.kt`](./docs/android/ParityVectorsTest.kt).
+Bkz. [Web ve Android: iki istemci](#web-ve-android-iki-istemci).
 
 Her adres, RPC ve chain sabiti tek bir dosyada durur: `packages/sdk/src/chains/arcTestnet.ts`. Foundry deploy script'i ondan üretilen bir JSON dosyasını okur, böylece hiçbir adres iki kez yazılmaz.
 
