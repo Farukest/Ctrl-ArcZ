@@ -1,0 +1,63 @@
+name: CI
+
+# The same four commands a contributor runs locally, run on every push and every
+# pull request. Nothing here is CI-only: if this job is red, `pnpm lint`,
+# `pnpm typecheck` or `pnpm -r test` is red on a clean checkout too.
+#
+# `pnpm format:check` is deliberately absent. Prettier disagrees with the README
+# tables and roughly ninety other files that are formatted by hand on purpose,
+# and a gate that has to be silenced on day one is not a gate.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # forge-std and openzeppelin-contracts are pinned submodules; without
+          # them `forge build` cannot resolve a single import.
+          submodules: recursive
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - uses: foundry-rs/foundry-toolchain@v1
+
+      - run: pnpm install --frozen-lockfile
+
+      # The SDK is consumed through its `exports` map, which points at `dist`.
+      # demo-kit's tests and the three app typechecks resolve `@ctrl-arcz/sdk`
+      # that way, so they need the build before they need anything else.
+      - name: Build the SDK
+        run: pnpm --filter @ctrl-arcz/sdk build
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      # Contracts, SDK, demo-kit and keeper. Integration tests are excluded by
+      # `packages/sdk/vitest.config.ts` unless INTEGRATION=1, so this touches no
+      # network and needs no keys.
+      - name: Test
+        run: pnpm -r test
