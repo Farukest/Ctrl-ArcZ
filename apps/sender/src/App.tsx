@@ -3,6 +3,7 @@ import { useSession } from '@ctrl-arcz/demo-kit';
 import {
   ConnectBar,
   ModeSwitch,
+  NetworkMenu,
   NO_ARRIVALS,
   SegmentedTabs,
   TopBar,
@@ -79,7 +80,7 @@ export function App() {
 
   return (
     <main className="app-shell">
-      <TopBar />
+      <TopBar actions={<NetworkMenu state={state} />} />
       <p className="subtitle">{t('app.subtitle')}</p>
 
       <ConnectBar state={state} />
@@ -115,13 +116,18 @@ export function App() {
                     session={state.session}
                     balance={state.balanceRaw}
                     onSent={state.refreshBalance}
+                    onSwitchChain={state.switchTo}
                   />
                 )}
                 {tab === 'activity' && (
                   <ActivityTab session={state.session} onChange={state.refreshBalance} />
                 )}
                 {tab === 'subscriptions' && (
-                  <SubscriptionsTab session={state.session} balance={state.balanceRaw} />
+                  <SubscriptionsTab
+                    session={state.session}
+                    balance={state.balanceRaw}
+                    onSwitchChain={state.switchTo}
+                  />
                 )}
                 {tab === 'bridge' && <BridgeTab session={state.session} />}
               </>
@@ -132,6 +138,7 @@ export function App() {
                 reload={reload}
                 balance={state.balance}
                 onClaimed={state.refreshBalance}
+                onSwitchChain={state.switchTo}
               />
             )}
           </div>

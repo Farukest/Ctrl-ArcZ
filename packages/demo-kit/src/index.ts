@@ -31,6 +31,7 @@ export {
   type BridgeStep,
   type BridgeOutcome,
 } from './bridgeChains.js';
+export { supportsChain, preferredChainFor, type ChainFeature } from './chainSupport.js';
 export {
   DEPOSIT_STEPS,
   stepsForEngine,

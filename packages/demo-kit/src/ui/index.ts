@@ -29,6 +29,8 @@ export { Stepper, type Step } from './Stepper.js';
 export { ConnectBar } from './ConnectBar.js';
 export { ModeSwitch, type Mode } from './ModeSwitch.js';
 export { TopBar } from './TopBar.js';
+export { NetworkMenu } from './NetworkMenu.js';
+export { NeedsChain } from './NeedsChain.js';
 export { LogoWordmark } from './Logo.js';
 export { TextType, type TextTypeProps } from './TextType.js';
 export { ThemeProvider, useTheme, type Theme } from './theme.js';

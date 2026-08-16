@@ -16,12 +16,14 @@ export function PayTab({
   session,
   balance,
   onSent,
+  onSwitchChain,
 }: {
   session: Session;
   /** Spendable USDC on Arc, in subunits. Passed down rather than read again: two
    *  reads of one balance is two answers, and the header already has it. */
   balance: bigint | null;
   onSent: () => void;
+  onSwitchChain: (chainId: number) => Promise<void>;
 }) {
   const t = useT();
   const [pay, setPay] = useState<PayMode>('standard');
@@ -39,9 +41,14 @@ export function PayTab({
         />
       </div>
       {pay === 'standard' ? (
-        <SendTab session={session} balance={balance} onSent={onSent} />
+        <SendTab
+          session={session}
+          balance={balance}
+          onSent={onSent}
+          onSwitchChain={onSwitchChain}
+        />
       ) : (
-        <PrivatePayTab session={session} balance={balance} />
+        <PrivatePayTab session={session} balance={balance} onSwitchChain={onSwitchChain} />
       )}
     </div>
   );

@@ -1,9 +1,19 @@
 import type { SessionState } from '../useSession.js';
 import { useT } from '../i18n/context.js';
 import { AddressChip, Button, Skeleton } from './components.js';
-import { IconWallet, IconAlert } from './icons.js';
+import { IconWallet } from './icons.js';
 
-/** Wallet connection bar + chain guard. Presentational: driven by useSession(). */
+/**
+ * Wallet connection bar. Presentational: driven by useSession().
+ *
+ * The chain guard used to live here as a warning banner. It said the same thing
+ * the header's network control now says permanently, and it said it a second time
+ * next to whichever screen was already refusing to work, so being on the wrong
+ * network produced two warnings and two "Switch to Arc" buttons for one fact.
+ * The header states where the wallet is; the screen that cannot run states why and
+ * offers the fix. This bar is about the account, which does not change with the
+ * chain.
+ */
 export function ConnectBar({ state }: { state: SessionState }) {
   const t = useT();
   const { session, balance, balanceRaw, connecting, reconnecting, error, walletDetected } = state;
@@ -77,15 +87,6 @@ export function ConnectBar({ state }: { state: SessionState }) {
         )}
       </div>
 
-      {session && !session.onArc && (
-        <div className="banner banner--warn" data-testid="wrong-chain">
-          <IconAlert width={18} height={18} />
-          <span className="grow">{t('common.wrongChain', { chainId: session.chainId })}</span>
-          <Button size="sm" onClick={() => void state.switchChain()} data-testid="switch-chain">
-            {t('common.switchToArc')}
-          </Button>
-        </div>
-      )}
     </>
   );
 }

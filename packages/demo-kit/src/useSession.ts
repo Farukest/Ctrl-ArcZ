@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { erc20Abi, formatUnits, type Address } from 'viem';
-import { ADDRESSES } from '@ctrl-arcz/sdk';
+import { ADDRESSES, ARC_TESTNET_CHAIN_ID } from '@ctrl-arcz/sdk';
 import { useT } from './i18n/context.js';
 import {
   getPublicClient,
   hasWallet,
   injectedSession,
   switchToArc,
+  switchWalletChain,
   watchWallet,
   type Session,
 } from './session.js';
@@ -31,7 +32,17 @@ export interface SessionState {
   walletDetected: boolean;
   connect: () => Promise<void>;
   disconnect: () => void;
+  /** Back to Arc. Shorthand for `switchTo(ARC_TESTNET_CHAIN_ID)`. */
   switchChain: () => Promise<void>;
+  /**
+   * Move the wallet to `chainId`.
+   *
+   * Arc goes through `switchToArc`, which may add the network, because we operate
+   * its endpoints. Every other chain must already be in the wallet: adding one
+   * means naming an RPC the user then trusts with everything they do there, and
+   * that is not a choice to make on their behalf.
+   */
+  switchTo: (chainId: number, label?: string) => Promise<void>;
   refreshBalance: () => Promise<void>;
 }
 
@@ -126,18 +137,27 @@ export function useSession(): SessionState {
     setBalance('0');
   }, []);
 
-  const switchChain = useCallback(async () => {
-    setError(null);
-    try {
-      await switchToArc();
-      await reconnect();
-    } catch (e) {
-      const code = (e as { code?: number }).code;
-      setError(
-        code === 4001 ? t('common.switchRejected') : e instanceof Error ? e.message : String(e),
-      );
-    }
-  }, [reconnect, t]);
+  const switchTo = useCallback(
+    async (chainId: number, label?: string) => {
+      setError(null);
+      try {
+        if (chainId === ARC_TESTNET_CHAIN_ID) await switchToArc();
+        else await switchWalletChain(chainId, label ?? `chain ${chainId}`);
+        // The wallet emits `chainChanged` and `watchWallet` reconnects on its own,
+        // but not every provider does, and a chip that still reads the old network
+        // after a successful switch is worse than one extra read.
+        await reconnect();
+      } catch (e) {
+        const code = (e as { code?: number }).code;
+        setError(
+          code === 4001 ? t('common.switchRejected') : e instanceof Error ? e.message : String(e),
+        );
+      }
+    },
+    [reconnect, t],
+  );
+
+  const switchChain = useCallback(() => switchTo(ARC_TESTNET_CHAIN_ID), [switchTo]);
 
   // On mount: detect the wallet (deferred so an injected test provider registers
   // first) and silently reconnect if the user was connected before the reload.
@@ -185,6 +205,7 @@ export function useSession(): SessionState {
     connect,
     disconnect,
     switchChain,
+    switchTo,
     refreshBalance,
   };
 }

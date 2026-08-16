@@ -13,7 +13,7 @@ import {
   spendableAfterGas,
   usdc,
 } from '@ctrl-arcz/sdk';
-import type { Session } from '@ctrl-arcz/demo-kit';
+import { supportsChain, type Session } from '@ctrl-arcz/demo-kit';
 import {
   AmountField,
   Button,
@@ -23,6 +23,7 @@ import {
   CostBlock,
   Field,
   Input,
+  NeedsChain,
   Select,
   Skeleton,
   Stepper,
@@ -70,10 +71,12 @@ export function SendTab({
   session,
   balance,
   onSent,
+  onSwitchChain,
 }: {
   session: Session;
   balance: bigint | null;
   onSent: () => void;
+  onSwitchChain: (chainId: number) => Promise<void>;
 }) {
   const toast = useToast();
   const t = useT();
@@ -117,8 +120,10 @@ export function SendTab({
   // `gate.armed` carries the firewall's whole opinion, including the wait for a
   // verdict that is still forming. What is left here is this screen's own: a
   // valid recipient who is not you, an amount, and not already sending.
+  const onSupportedChain = supportsChain(session.chainId, 'protectedSend');
+
   const canSend =
-    session.onArc && isAddress(to) && !isSelf && amountValue > 0n && !busy && gate.armed;
+    onSupportedChain && isAddress(to) && !isSelf && amountValue > 0n && !busy && gate.armed;
 
   const steps: Step[] = [t('send.stepConfig'), t('send.stepApprove'), t('send.stepLock')].map(
     (label, i) => ({ label, status: step > i ? 'done' : step === i ? 'active' : 'pending' }),
@@ -151,7 +156,7 @@ export function SendTab({
     if (amountValue <= 0n) return setError(t('send.invalidAmount'));
     // `gate.refused` is the block the user has not overridden. A block they have
     // looked at and accepted is not a reason to stop here; the SDK still decides.
-    if (gate.refused || investigating || !session.onArc) return;
+    if (gate.refused || investigating || !onSupportedChain) return;
 
     setBusy(true);
     setStep(0);
@@ -290,6 +295,10 @@ export function SendTab({
 
   return (
     <Card>
+      {!onSupportedChain ? (
+        <NeedsChain feature="protectedSend" onSwitch={onSwitchChain} />
+      ) : (
+        <>
       <Field label={t('send.recipient')} error={addrError}>
         <Input
           mono
@@ -417,9 +426,7 @@ export function SendTab({
             ? t('send.sending')
             : gate.refused
               ? t('send.blocked')
-              : !session.onArc
-                ? t('send.switchFirst')
-                : investigating
+              : investigating
                   ? t('send.waitingAdvisory')
                   : t('send.button')}
         </Button>
@@ -428,6 +435,8 @@ export function SendTab({
         <div className="err-text" style={{ marginTop: 10 }}>
           {error}
         </div>
+      )}
+        </>
       )}
     </Card>
   );

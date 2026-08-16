@@ -536,6 +536,36 @@
 .select-trigger--full {
   width: 100%;
 }
+/* Header variant: sized to the 38px icon buttons it sits beside, and quieter than
+   a form control so the wordmark stays the loudest thing in the bar. */
+.select-trigger--chip {
+  min-height: 38px;
+  gap: var(--sp-1);
+  padding: 0 var(--sp-2) 0 var(--sp-3);
+  background: var(--surface-1);
+  border-color: var(--border-subtle);
+  font-size: var(--fs-sm);
+  color: var(--text-mid);
+  max-width: 190px;
+}
+@media (hover: hover) {
+  .select-trigger--chip:hover {
+    background: var(--surface-2);
+    color: var(--text-hi);
+  }
+}
+/* Below 480px the name goes and the logo carries it. A network name is up to 17
+   characters ("Ethereum Sepolia"), and on a 360px screen that pushed the wordmark
+   out of the header. The full name is still one tap away, and the aria-label
+   carries it for anyone not reading the logo. */
+@media (max-width: 480px) {
+  .select-trigger--chip {
+    padding: 0 var(--sp-2);
+  }
+  .select-trigger--chip .select-trigger__text {
+    display: none;
+  }
+}
 @media (hover: hover) {
   .select-trigger:hover {
     border-color: var(--text-lo);
@@ -981,9 +1011,15 @@
   flex: 1 1 220px;
   min-width: 180px;
 }
+/* Same basis as the rule above, which this one used to cancel.
+   `.hist-controls > :first-child` and `.hist-controls .searchfield` have equal
+   specificity, so this one won and reset the flex basis to 0 with no floor. The
+   search box then shrank to whatever was left after the two selects: 65px, with a
+   15px input, measured at 390px. Restating the floor here is what makes the wrap
+   above actually happen. */
 .hist-controls .searchfield {
-  flex: 1;
-  min-width: 0;
+  flex: 1 1 220px;
+  min-width: 180px;
 }
 .hist-controls .select-trigger {
   min-height: 40px;
@@ -2027,6 +2063,31 @@
 .banner--warn > svg {
   color: var(--warn);
   flex-shrink: 0;
+}
+
+/* "This screen works on Arc" ---------------------------------------------- */
+/* Same shape as .banner--warn, but it stands in for a form rather than sitting
+   above one, so it gets the vertical room a card body would have had and wraps
+   instead of squeezing the button on a narrow screen. */
+.needschain {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+  border-radius: var(--r-md);
+  background: var(--warn-soft);
+  border: 1px solid var(--warn-border);
+  color: var(--text-hi);
+  font-size: var(--fs-sm);
+}
+.needschain > svg {
+  color: var(--warn);
+  flex-shrink: 0;
+}
+.needschain__text {
+  flex: 1 1 12rem;
+  min-width: 0;
 }
 
 /* Language button --------------------------------------------------------- */

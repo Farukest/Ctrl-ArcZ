@@ -314,6 +314,9 @@ export function Select({
   noResultsText,
   placeholder,
   id,
+  variant = 'field',
+  align = 'start',
+  'data-testid': testId,
 }: {
   value: string;
   options: SelectOption[];
@@ -324,6 +327,15 @@ export function Select({
   searchable?: boolean;
   searchPlaceholder?: string;
   noResultsText?: string;
+  /**
+   * `field` is the form control. `chip` is the same control sized to sit in a row
+   * of 38px header buttons: shorter, no chevron gap to spare, and it drops its
+   * label under 480px so a long network name cannot push the wordmark off screen.
+   */
+  variant?: 'field' | 'chip';
+  /** Which edge of the trigger the panel hangs from. See {@link AnchoredLayer}. */
+  align?: 'start' | 'center' | 'end';
+  'data-testid'?: string;
   /** What the trigger says before anything is chosen. Without it an unset select is
    *  an empty box, which reads as broken rather than as waiting. */
   placeholder?: string;
@@ -348,12 +360,19 @@ export function Select({
         ref={anchor}
         id={id}
         type="button"
-        className={['select-trigger', full && 'select-trigger--full'].filter(Boolean).join(' ')}
+        className={[
+          'select-trigger',
+          variant === 'chip' && 'select-trigger--chip',
+          full && 'select-trigger--full',
+        ]
+          .filter(Boolean)
+          .join(' ')}
         onClick={() => (open ? close() : setOpen(true))}
         disabled={disabled}
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-label={ariaLabel}
+        data-testid={testId}
       >
         <span className="select-trigger__value">
           {current?.icon}
@@ -367,7 +386,14 @@ export function Select({
         </span>
         <IconChevron className={open ? 'select-trigger__chev is-open' : 'select-trigger__chev'} />
       </button>
-      <AnchoredLayer anchorRef={anchor} open={open} onClose={close} label={ariaLabel}>
+      <AnchoredLayer
+        anchorRef={anchor}
+        open={open}
+        onClose={close}
+        label={ariaLabel}
+        align={align}
+        cap={variant === 'chip' ? 380 : undefined}
+      >
         {searchable && (
           <div className="menu__search">
             <IconSearch className="menu__search-icon" width={15} height={15} />
@@ -423,6 +449,7 @@ function AnchoredLayer({
   onClose,
   label,
   align = 'start',
+  cap,
   children,
 }: {
   anchorRef: React.RefObject<HTMLElement>;
@@ -436,9 +463,14 @@ function AnchoredLayer({
    * control it replaces. `center` is right for a round info dot, which is 24px
    * wide against a 280px panel -- hanging that panel off the dot's left edge puts
    * it wherever the dot happens to sit, which on a right-hand dot means mostly off
-   * the screen.
+   * the screen. `end` is right for a control parked at the right edge of a header:
+   * the viewport clamp below only right-aligns the panel when the trigger is near
+   * the window edge, and the header sits inside a centred max-width column, so on
+   * a wide screen a `start` panel would hang out past the column instead.
    */
-  align?: 'start' | 'center';
+  align?: 'start' | 'center' | 'end';
+  /** Upper bound on the panel height, on top of the room-available cap. */
+  cap?: number | undefined;
   children: ReactNode;
 }) {
   const isMobile = useIsMobile();
@@ -457,7 +489,12 @@ function AnchoredLayer({
     // keep it on screen let it hang 80px past the right edge and the text was cut
     // off. `minWidth` below never exceeds the trigger, so this cannot oscillate.
     const width = Math.max(panelRef.current?.offsetWidth ?? 0, r.width, 200);
-    const desired = align === 'center' ? r.left + r.width / 2 - width / 2 : r.left;
+    const desired =
+      align === 'center'
+        ? r.left + r.width / 2 - width / 2
+        : align === 'end'
+          ? r.right - width
+          : r.left;
     const left = Math.min(Math.max(8, desired), window.innerWidth - width - 8);
     const below = window.innerHeight - r.bottom;
     const above = r.top;
@@ -465,13 +502,19 @@ function AnchoredLayer({
     // Cap the menu to the space available in the chosen direction so a long list
     // (e.g. all 11 bridge chains) scrolls inside the menu instead of running off
     // the bottom (or top) of the screen where it cannot be reached.
-    const maxHeight = Math.max(160, (openUp ? above : below) - 14);
+    //
+    // `cap` narrows that further for menus that are not the page's main control.
+    // Twenty networks against a 900px viewport filled the screen edge to edge from
+    // a 38px chip, which reads as a takeover rather than a menu. The list still
+    // holds every network; it scrolls, and the search box is right above it.
+    const room = Math.max(160, (openUp ? above : below) - 14);
+    const maxHeight = cap ? Math.min(room, cap) : room;
     setStyle(
       openUp
         ? { bottom: window.innerHeight - r.top + 6, left, minWidth: r.width, maxHeight }
         : { top: r.bottom + 6, left, minWidth: r.width, maxHeight },
     );
-  }, [isMobile, anchorRef, onClose, align]);
+  }, [isMobile, anchorRef, onClose, align, cap]);
 
   useLayoutEffect(() => {
     if (open) reposition();

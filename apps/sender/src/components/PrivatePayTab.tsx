@@ -12,7 +12,7 @@ import {
   usdc,
   PAY_GAS_LIMIT,
 } from '@ctrl-arcz/sdk';
-import { type Session } from '@ctrl-arcz/demo-kit';
+import { supportsChain, type Session } from '@ctrl-arcz/demo-kit';
 import {
   AmountField,
   Button,
@@ -21,6 +21,7 @@ import {
   CostBlock,
   Field,
   Input,
+  NeedsChain,
   Stepper,
   parseAmount,
   IconLock,
@@ -59,9 +60,11 @@ function randomSalt(): Hex {
 export function PrivatePayTab({
   session,
   balance,
+  onSwitchChain,
 }: {
   session: Session;
   balance: bigint | null;
+  onSwitchChain: (chainId: number) => Promise<void>;
 }) {
   const t = useT();
   const toast = useToast();
@@ -103,7 +106,16 @@ export function PrivatePayTab({
    */
   const gate = useRecipientGate(session, merchant);
 
+  /**
+   * The contracts and the co-signer both live on one chain, and `session.clients`
+   * is pinned to it. Without this the form armed on any network and the payment
+   * ran against Arc anyway, which is a transaction the user did not ask for from
+   * the account they were looking at.
+   */
+  const onSupportedChain = supportsChain(session.chainId, 'privatePay');
+
   const canPay =
+    onSupportedChain &&
     validMerchant &&
     amountValue > 0 &&
     gate.armed &&
@@ -217,6 +229,10 @@ export function PrivatePayTab({
         data-testid="privatepay-tab"
       >
         <div className="formstack">
+          {!onSupportedChain ? (
+            <NeedsChain feature="privatePay" onSwitch={onSwitchChain} />
+          ) : (
+            <>
           <Field
             label={t('ppay.merchant')}
             error={merchant.length > 0 && !validMerchant ? t('send.invalidAddress') : null}
@@ -273,6 +289,8 @@ export function PrivatePayTab({
           </Button>
 
           {phase !== 'idle' && <Stepper steps={steps} />}
+            </>
+          )}
         </div>
       </Card>
 

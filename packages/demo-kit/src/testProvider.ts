@@ -63,8 +63,14 @@ export function makeTestProvider(
             err.code = 4001;
             throw err;
           }
-          chainIdHex = arcHex; // honour the switch → move to Arc
-          emit('chainChanged', arcHex);
+          // Honour the chain that was actually asked for. This used to always land
+          // on Arc, which was true when the only switch in the app was "go back to
+          // Arc"; with a network control in the header a test has to be able to put
+          // the fake wallet somewhere else, or "the user is on Base" is a state no
+          // test can reach.
+          const asked = (params?.[0] as { chainId?: string } | undefined)?.chainId;
+          chainIdHex = typeof asked === 'string' && /^0x[0-9a-fA-F]+$/.test(asked) ? asked : arcHex;
+          emit('chainChanged', chainIdHex);
           return null;
         }
         case 'wallet_addEthereumChain':

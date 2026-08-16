@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import QRCode from 'qrcode';
 import { formatUnits, type Hex } from 'viem';
-import { getPublicClient, type Session } from '@ctrl-arcz/demo-kit';
+import { getPublicClient, supportsChain, type Session } from '@ctrl-arcz/demo-kit';
 import {
   Button,
   Card,
   Field,
   Input,
+  NeedsChain,
   useSubmitGuard,
   useT,
   useToast,
@@ -77,14 +78,18 @@ export function ReceiveTab({
   reload,
   balance,
   onClaimed,
+  onSwitchChain,
 }: {
   session: Session;
   pending: PendingClaim[] | null;
   reload: () => Promise<void>;
   balance: string;
   onClaimed: () => Promise<void> | void;
+  onSwitchChain: (chainId: number) => Promise<void>;
 }) {
   const t = useT();
+  // The claim, the cancel and the refund are all one contract on one chain.
+  const onSupportedChain = supportsChain(session.chainId, 'receive');
   const toast = useToast();
   const guard = useSubmitGuard();
 
@@ -285,6 +290,10 @@ export function ReceiveTab({
 
       {/* Claim a protected transfer sent to you */}
       <Card title={t('claim.title')}>
+        {!onSupportedChain ? (
+          <NeedsChain feature="receive" onSwitch={onSwitchChain} />
+        ) : (
+          <>
         <div>
           {/* The scan behind a code can take the better part of a minute, and a
               screen that says nothing for that long reads as a screen that did
@@ -334,7 +343,7 @@ export function ReceiveTab({
           <Button
             onClick={() => void guard(() => handleClaim(false))}
             loading={claiming === 'own'}
-            disabled={busy || !session.onArc || !matched || expired}
+            disabled={busy || !matched || expired}
             data-testid="claim-button"
           >
             {t('claim.claimOwnGas')}
@@ -344,13 +353,15 @@ export function ReceiveTab({
               variant="ghost"
               onClick={() => void guard(() => handleClaim(true))}
               loading={claiming === 'gasless'}
-              disabled={busy || !session.onArc || !matched || expired}
+              disabled={busy || !matched || expired}
               data-testid="gasless-claim-button"
             >
               {t('claim.claimGasless')}
             </Button>
           )}
         </div>
+          </>
+        )}
       </Card>
 
       {/* Everything ever sent to this wallet, with what is still waiting as one
