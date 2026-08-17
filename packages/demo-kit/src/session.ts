@@ -327,6 +327,24 @@ export async function switchWalletChain(chainId: number, label: string): Promise
   }
 }
 
+/**
+ * Move the wallet to a chain, whichever chain it is.
+ *
+ * Arc goes through `ensureArcChain`, which may add the network, because we operate
+ * its endpoints. Every other chain must already be in the wallet: adding one means
+ * naming an RPC the user then trusts with everything they do there, and that is not
+ * a choice to make on their behalf.
+ *
+ * That split existed twice -- once in `useSession`, once as a bare
+ * `switchWalletChain` call in each screen that offered a switch, which is why
+ * "switch to Arc" from a bridge card could not add the network while the same
+ * button in the header could. One function, so every switch behaves the same.
+ */
+export async function switchWalletTo(chainId: number, label?: string): Promise<void> {
+  if (chainId === ARC_TESTNET_CHAIN_ID) await switchToArc();
+  else await switchWalletChain(chainId, label ?? `chain ${chainId}`);
+}
+
 /** Subscribes to wallet account/chain changes. Returns an unsubscribe function. */
 export function watchWallet(onChange: () => void): () => void {
   const provider = (globalThis as { ethereum?: EIP1193Provider }).ethereum;

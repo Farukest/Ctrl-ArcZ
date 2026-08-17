@@ -1,16 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
-import { erc20Abi, formatUnits, type Address } from 'viem';
-import { ADDRESSES, ARC_TESTNET_CHAIN_ID } from '@ctrl-arcz/sdk';
+import { formatUnits, type Address } from 'viem';
+import { ARC_TESTNET_CHAIN_ID, type CctpChainName } from '@ctrl-arcz/sdk';
 import { useT } from './i18n/context.js';
-import {
-  getPublicClient,
-  hasWallet,
-  injectedSession,
-  switchToArc,
-  switchWalletChain,
-  watchWallet,
-  type Session,
-} from './session.js';
+import { hasWallet, injectedSession, switchWalletTo, watchWallet, type Session } from './session.js';
+import { readWalletUsdc } from './walletUsdc.js';
 
 export interface SessionState {
   session: Session | null;
@@ -23,6 +16,24 @@ export interface SessionState {
    * display format. Both come from the one read, so they cannot disagree.
    */
   balanceRaw: bigint | null;
+  /**
+   * The chain that balance is on, which is the chain the wallet is on.
+   *
+   * Undefined means the wallet is on a network we have no USDC address for, so
+   * there is no figure to wait for. The bar renders the two differently: a balance
+   * still being read shimmers, one that is never coming holds still.
+   */
+  balanceChain: CctpChainName | undefined;
+  /**
+   * Why `balanceRaw` is null, when it is.
+   *
+   * Null meant two different things and the bar could only render one of them. It
+   * is "the first read has not landed" for the moment after connecting, and "there
+   * is nothing to land" on a chain with no USDC entry, or after a read that failed.
+   * Shown the same way, the second became a placeholder shimmering forever for a
+   * figure that was never coming.
+   */
+  balanceMissing: 'loading' | 'unavailable';
   connecting: boolean;
   /** True during the silent reconnect on first load — show a placeholder, not the
    *  Connect prompt, so a remembered wallet never flashes "connect" before it
@@ -79,6 +90,8 @@ export function useSession(): SessionState {
   const [session, setSession] = useState<Session | null>(null);
   const [balance, setBalance] = useState('0');
   const [balanceRaw, setBalanceRaw] = useState<bigint | null>(null);
+  const [balanceChain, setBalanceChain] = useState<CctpChainName | undefined>(undefined);
+  const [balanceMissing, setBalanceMissing] = useState<'loading' | 'unavailable'>('loading');
   const [connecting, setConnecting] = useState(false);
   // Start "reconnecting" synchronously when a prior connection is remembered, so
   // the very first render already knows to show a placeholder (no connect flash).
@@ -87,16 +100,30 @@ export function useSession(): SessionState {
   const [walletDetected, setWalletDetected] = useState(false);
   const t = useT();
 
+  /**
+   * The balance, on whichever network the wallet is on.
+   *
+   * It used to name Arc's USDC and use Arc's RPC unconditionally, so a wallet on
+   * Ethereum Sepolia was shown an Arc figure in the largest number on the page,
+   * directly beneath a header chip that correctly said Ethereum Sepolia. Two
+   * controls, one wallet, two different answers about where it was.
+   *
+   * A chain with no USDC entry leaves both figures null rather than zero. Nothing
+   * was read, so nothing is claimed.
+   */
   const refreshBalance = useCallback(async () => {
     if (!session) return;
-    const raw = await getPublicClient().readContract({
-      address: ADDRESSES.USDC,
-      abi: erc20Abi,
-      functionName: 'balanceOf',
-      args: [session.address as Address],
-    });
-    setBalance(formatUnits(raw, 6));
+    const { chain, balance: raw } = await readWalletUsdc(
+      session.chainId,
+      session.address as Address,
+    );
+    setBalanceChain(chain);
     setBalanceRaw(raw);
+    setBalance(raw === null ? '0' : formatUnits(raw, 6));
+    // A read that came back empty is a read that happened. Leaving this on
+    // `loading` is what kept the placeholder moving on a chain whose USDC could
+    // not be reached.
+    setBalanceMissing(raw === null ? 'unavailable' : 'loading');
   }, [session]);
 
   // Silent reconnect: no prompt. Used on mount (reload persistence) and on
@@ -141,8 +168,7 @@ export function useSession(): SessionState {
     async (chainId: number, label?: string) => {
       setError(null);
       try {
-        if (chainId === ARC_TESTNET_CHAIN_ID) await switchToArc();
-        else await switchWalletChain(chainId, label ?? `chain ${chainId}`);
+        await switchWalletTo(chainId, label);
         // The wallet emits `chainChanged` and `watchWallet` reconnects on its own,
         // but not every provider does, and a chip that still reads the old network
         // after a successful switch is worse than one extra read.
@@ -179,18 +205,26 @@ export function useSession(): SessionState {
   }, [session, reconnect]);
 
   // Forget the old number before asking for the new one. A different wallet has a
-  // different balance, and holding the previous one on screen until the read lands
-  // shows one account's money under another account's address. Null means unknown,
-  // which is what every consumer renders as a placeholder rather than as zero.
+  // different balance, and so does a different chain: both were true of the figure
+  // on screen, and holding it until the next read lands shows one account's money
+  // under another account's address, or one network's under another network's name.
+  // Null means unknown, which every consumer renders as a placeholder, not as zero.
   useEffect(() => {
     setBalance('0');
     setBalanceRaw(null);
-  }, [session?.address]);
+    setBalanceChain(undefined);
+    setBalanceMissing('loading');
+  }, [session?.address, session?.chainId]);
 
   useEffect(() => {
     void refreshBalance();
     if (!session) return;
-    const timer = setInterval(() => void refreshBalance(), 10_000);
+    // Slower off Arc. Arc is read through our own RPCs and costs the wallet
+    // nothing; every other chain is reachable only through the wallet's provider,
+    // and MetaMask rate-limits a site by how many requests it makes there -- a
+    // budget the transaction being signed needs more than this figure does.
+    const every = session.chainId === ARC_TESTNET_CHAIN_ID ? 10_000 : 20_000;
+    const timer = setInterval(() => void refreshBalance(), every);
     return () => clearInterval(timer);
   }, [session, refreshBalance]);
 
@@ -198,6 +232,8 @@ export function useSession(): SessionState {
     session,
     balance,
     balanceRaw,
+    balanceChain,
+    balanceMissing,
     connecting,
     reconnecting,
     error,

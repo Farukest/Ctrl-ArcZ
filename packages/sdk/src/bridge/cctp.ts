@@ -154,6 +154,28 @@ export function chainLabel(name: CctpChainName): string {
   return name.replace(/_/g, ' ');
 }
 
+/** Built once from the table above, so the two can never list different ids. */
+const CHAIN_ID_TO_NAME: ReadonlyMap<number, CctpChainName> = new Map(
+  (Object.keys(CCTP_CHAINS) as CctpChainName[]).map((name) => [CCTP_CHAINS[name].chainId, name]),
+);
+
+/**
+ * Which of these chains a wallet reporting `chainId` is standing on.
+ *
+ * The inverse of the table, and the question every chain-aware control on a screen
+ * actually asks: the wallet answers `eth_chainId` with a number, and everything
+ * else in this codebase is keyed by name. Written out here rather than as a loop at
+ * each call site, because a control that gets this wrong does not fail -- it shows
+ * a different network's balance under the right label.
+ *
+ * Undefined for a chain Circle does not serve, which is a real state: the wallet
+ * can be on any network at all, and "we have no entry for it" is the honest answer
+ * rather than falling back to Arc.
+ */
+export function cctpChainByChainId(chainId: number | undefined): CctpChainName | undefined {
+  return chainId === undefined ? undefined : CHAIN_ID_TO_NAME.get(chainId);
+}
+
 /**
  * Block explorers, read out of viem's own chain registry rather than typed from
  * memory. They are inlined instead of imported because reaching them needs

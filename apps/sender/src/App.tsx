@@ -123,11 +123,7 @@ export function App() {
                   <ActivityTab session={state.session} onChange={state.refreshBalance} />
                 )}
                 {tab === 'subscriptions' && (
-                  <SubscriptionsTab
-                    session={state.session}
-                    balance={state.balanceRaw}
-                    onSwitchChain={state.switchTo}
-                  />
+                  <SubscriptionsTab session={state.session} onSwitchChain={state.switchTo} />
                 )}
                 {tab === 'bridge' && <BridgeTab session={state.session} />}
               </>

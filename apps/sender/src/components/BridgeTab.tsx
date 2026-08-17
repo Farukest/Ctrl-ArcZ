@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Session } from '@ctrl-arcz/demo-kit';
-import { erc20Abi, isAddress, parseUnits, type Address } from 'viem';
+import { isAddress, parseUnits, type Address } from 'viem';
 import {
   bridgeFromWallet,
   chainLabel,
@@ -26,7 +26,13 @@ import {
   type GatewayChain,
   type GatewayStep,
 } from '@ctrl-arcz/sdk';
-import { bridgeClients, getPublicClient, switchWalletChain } from '@ctrl-arcz/demo-kit';
+import {
+  bridgeClients,
+  destinationChain,
+  readUsdcOn,
+  switchWalletTo,
+  useWalletChain,
+} from '@ctrl-arcz/demo-kit';
 import { knownBoxes } from '../lib/useSubscriptions.js';
 import {
   bridgeChainLabel,
@@ -97,8 +103,6 @@ function waitLabel(chain: GatewayChain | undefined): string {
   return secs < 60 ? `${secs}s` : `${Math.round(secs / 60)}m`;
 }
 
-const ARC_CHAIN_ID = CCTP_CHAINS.Arc_Testnet.chainId;
-
 /**
  * What a deposit leaves behind for its own gas, on chains that charge it in USDC.
  *
@@ -108,40 +112,6 @@ const ARC_CHAIN_ID = CCTP_CHAINS.Arc_Testnet.chainId;
  * one outcome a Max button must never have.
  */
 const DEPOSIT_GAS_RESERVE = 10_000n;
-
-/**
- * USDC the wallet holds on a chain, when it can be read at all.
- *
- * Arc has its own RPC in this app. Every other chain is reachable only through the
- * wallet's own provider, which answers for the network the wallet is currently on:
- * asking it about Base Sepolia while it sits on Arc runs the call against Arc,
- * where that token address is not a token, and answers nothing useful.
- *
- * Null is "cannot be read from here", and the cards show it as a dash. A zero would
- * be a claim about the balance, and this is not one.
- */
-async function readUsdcOn(
-  chain: CctpChainName,
-  connectedChainId: number,
-  address: Address,
-): Promise<bigint | null> {
-  const c = CCTP_CHAINS[chain];
-  if (c.chainId !== ARC_CHAIN_ID && connectedChainId !== c.chainId) return null;
-  try {
-    const client =
-      c.chainId === ARC_CHAIN_ID
-        ? getPublicClient()
-        : bridgeClients(c.chainId, address).publicClient;
-    return (await client.readContract({
-      address: c.usdc as Address,
-      abi: erc20Abi,
-      functionName: 'balanceOf',
-      args: [address],
-    })) as bigint;
-  } catch {
-    return null;
-  }
-}
 
 /** Same idea for Gateway, whose four rows are deposit, sign, attestation, mint. */
 const GW_STEP_TO_UI: Record<GatewayStep, string | undefined> = {
@@ -210,10 +180,65 @@ export function BridgeTab({ session }: { session: Session }) {
   const toast = useToast();
   const guard = useSubmitGuard();
   const [engine, setEngine] = useState<BridgeEngine>('cctp');
-  const [from, setFrom] = useState<CctpChainName>('Arc_Testnet');
-  const [to, setTo] = useState<CctpChainName>('Base_Sepolia');
+  /**
+   * The destination the user picked, or null while it is still the default.
+   *
+   * Null is not "no destination": it is "nobody has said", which lets the rule in
+   * `destinationChain` keep answering as the source moves. Storing the derived
+   * chain instead would freeze the first answer, so a bridge that opened on Arc to
+   * Base and then had its source changed to Arc would sit on a route from a chain
+   * to itself.
+   */
+  const [toChoice, setToChoice] = useState<CctpChainName | null>(null);
   /** Set while the wallet is being asked to move to the source chain. */
   const [switching, setSwitching] = useState(false);
+
+  /** Every chain this engine can serve. Gateway's list is the shorter one. */
+  const engineChains: readonly CctpChainName[] =
+    engine === 'gateway' ? GATEWAY_CHAIN_NAMES : (Object.keys(CCTP_CHAINS) as CctpChainName[]);
+
+  // Prefer the demo-kit label where one exists (it carries the brand spelling);
+  // fall back to the SDK's, so a newly added chain still reads properly.
+  const labelFor = (id: string) =>
+    bridgeChainLabel(id) === id ? chainLabel(id as CctpChainName) : bridgeChainLabel(id);
+
+  /**
+   * The source chain and the wallet, on the same network in both directions.
+   *
+   * This screen opened on a hardcoded Arc regardless of where the wallet was, so a
+   * wallet connected to Ethereum Sepolia met a form offering to burn USDC on Arc,
+   * showed Arc's balance, and explained underneath that the wallet would have to
+   * move first. Every fact needed to open on the right chain was already on screen,
+   * in the header chip.
+   *
+   * Now the wallet's network is where this starts, and picking a different one here
+   * moves the wallet: the source chain is where the burn or the deposit is signed,
+   * so choosing it and then being asked to confirm the same choice on a second
+   * button was one step too many. The button below stays for the case that step
+   * exists to handle -- a switch the user declines.
+   */
+  const source = useWalletChain<CctpChainName>({
+    options: engineChains,
+    chainIdOf: (name) => CCTP_CHAINS[name].chainId,
+    walletChainId: session.chainId,
+    fallback: 'Arc_Testnet',
+    switchWallet: (chainId, name) =>
+      switchWalletTo(chainId, labelFor(name)).catch((e: unknown) => {
+        toast.push(e instanceof Error ? e.message : String(e), 'error');
+      }),
+    // Everything read for the old chain describes the old chain, whether it changed
+    // here or in MetaMask.
+    onChange: () => forgetSourceReads(),
+  });
+  const from = source.value;
+  /**
+   * The other end, which is the one control here that does not follow the wallet.
+   *
+   * Nothing is signed at the destination, so there is nothing for the wallet to
+   * follow. It defaults to Arc, because bringing money to Arc is what this app is
+   * for, and steps aside when the source is already Arc.
+   */
+  const to = destinationChain(engineChains, from, toChoice, 'Arc_Testnet');
   /** Which half of the bridge records the history is showing. */
   const [histKind, setHistKind] = useState<'bridge' | 'subs'>('bridge');
   /**
@@ -256,6 +281,15 @@ export function BridgeTab({ session }: { session: Session }) {
   /** USDC in the wallet on the source chain, so the deposit box can say what
    *  there is to deposit. `null` while unread. */
   const [walletOnChain, setWalletOnChain] = useState<bigint | null>(null);
+  /**
+   * Whether the wallet reads above have been attempted yet.
+   *
+   * `walletOnChain` is null both before a read and after one that could not be
+   * made, and the two want different placeholders: a shimmer says a number is
+   * coming, which is true of the first and a lie about the second. Off the source
+   * chain, or on a chain whose RPC did not answer, nothing is on its way.
+   */
+  const [walletRead, setWalletRead] = useState(false);
   /** The same, on the destination, for the card that says what arrives there. */
   const [toBalance, setToBalance] = useState<bigint | null>(null);
   /**
@@ -383,22 +417,14 @@ export function BridgeTab({ session }: { session: Session }) {
     // clickable in a state where `run` could only return without doing anything.
     (engine !== 'gateway' || (!!gwSource && isGatewayChain(to)));
 
-  // Prefer the demo-kit label where one exists (it carries the brand spelling);
-  // fall back to the SDK's, so a newly added chain still reads properly.
-  const labelFor = (id: string) =>
-    bridgeChainLabel(id) === id ? chainLabel(id as CctpChainName) : bridgeChainLabel(id);
   const fromLabel = labelFor(from);
   const toLabel = labelFor(to);
 
-  const chainOptions = (
-    engine === 'gateway'
-      ? GATEWAY_CHAIN_NAMES.map((id) => ({ id, label: labelFor(id) }))
-      : (Object.keys(CCTP_CHAINS) as CctpChainName[]).map((id) => ({ id, label: labelFor(id) }))
-  ).map((c) => ({
-    value: c.id,
-    label: c.label,
-    text: c.label,
-    icon: <ChainLogo id={c.id} size={20} />,
+  const chainOptions = engineChains.map((id) => ({
+    value: id,
+    label: labelFor(id),
+    text: labelFor(id),
+    icon: <ChainLogo id={id} size={20} />,
   }));
 
   /** A fee larger than the transfer is not a rounding detail, it is the reason to
@@ -445,23 +471,16 @@ export function BridgeTab({ session }: { session: Session }) {
     else setDepositAmount(fix.display);
   }
 
-  // Gateway supports fewer chains than CCTP; when switching to it, snap any
-  // now-unsupported selection back to a valid default so the pickers never show
-  // an out-of-list value.
-  const changeEngine = (e: BridgeEngine) => {
-    setEngine(e);
-    if (e === 'gateway') {
-      // Snapping the source is a source change like any other, and the balances,
-      // the ceiling and any typed deposit are all about the chain being left. Left
-      // in place they describe Avalanche while the screen says Arc, and the refusal
-      // that guards the Send button reads them.
-      if (!isGatewayChain(from)) {
-        setFrom('Arc_Testnet');
-        forgetSourceReads();
-      }
-      if (!isGatewayChain(to)) setTo('Base_Sepolia');
-    }
-  };
+  /**
+   * Gateway serves fewer chains than CCTP, and the pickers used to be snapped back
+   * by hand here whenever the engine changed.
+   *
+   * Nothing to do now. Both ends derive from the engine's own list: the source
+   * binding re-answers when that list changes, invalidating what it read for the
+   * chain being left, and the destination rule does the same. The snapping code
+   * that used to live here is the thing that forgot one of the two.
+   */
+  const changeEngine = (e: BridgeEngine) => setEngine(e);
 
   /**
    * Read the Gateway balance and what a spend of this size would cost.
@@ -522,6 +541,7 @@ export function BridgeTab({ session }: { session: Session }) {
       if (!live) return;
       setWalletOnChain(a);
       setToBalance(b);
+      setWalletRead(true);
     };
     void read();
     const timer = setInterval(() => void read(), 20000);
@@ -549,30 +569,34 @@ export function BridgeTab({ session }: { session: Session }) {
     setGwOnSource(null);
     setGwCeiling(null);
     setWalletOnChain(null);
+    setWalletRead(false);
     setGwPending(0n);
     setDepositAmount('');
   }
 
-  /** The source chain, from whichever picker asked. */
+  /**
+   * The source chain, from whichever picker asked: the From card, the funding box,
+   * or the fix button under a refusal. All three go through the binding, so all
+   * three also take the wallet with them.
+   */
   function selectSource(chain: CctpChainName) {
-    if (chain === from) return;
-    setFrom(chain);
-    forgetSourceReads();
+    source.select(chain);
   }
 
   /** The destination. Cheaper to invalidate: only the quote depends on it, but it
    *  does depend on it, and a fee quoted for the previous destination is wrong. */
   function selectDest(chain: CctpChainName) {
     if (chain === to) return;
-    setTo(chain);
+    setToChoice(chain);
     setGwCeiling(null);
   }
 
   function swapRoute() {
     if (from === to) return;
-    setFrom(to);
-    setTo(from);
-    forgetSourceReads();
+    // The old source becomes an explicit destination, so the default rule stops
+    // answering for it -- the user has now said where this ends.
+    setToChoice(from);
+    selectSource(to);
   }
 
   const activeSteps = stepsForEngine(engine);
@@ -1192,7 +1216,7 @@ export function BridgeTab({ session }: { session: Session }) {
             pending={gwPending}
             wait={t('bridge.gwDepositWait', { chain: fromLabel, wait: waitLabel(gwSource) })}
             format={usdc}
-            busy={depositing || switching}
+            busy={depositing || switching || source.switching}
             onDeposit={() =>
               void (async () => {
                 // Being on the wrong network is a step, not a refusal: move the
@@ -1201,7 +1225,7 @@ export function BridgeTab({ session }: { session: Session }) {
                 if (!walletOnDepositChain && gwSource) {
                   setSwitching(true);
                   try {
-                    await switchWalletChain(CCTP_CHAINS[gwSource].chainId, fromLabel);
+                    await switchWalletTo(CCTP_CHAINS[gwSource].chainId, fromLabel);
                   } catch (e) {
                     toast.push(e instanceof Error ? e.message : String(e), 'error');
                     return;
@@ -1248,6 +1272,13 @@ export function BridgeTab({ session }: { session: Session }) {
               // what tapping it fills in are allowed to differ; what the label says
               // and what it is are not.
               balance={spendable}
+              // Gateway's figure comes from Circle and always arrives; the wallet's
+              // is a chain read that may have nothing to report.
+              balanceMissing={
+                engine === 'gateway' || !walletRead || walletOnChain !== null
+                  ? 'loading'
+                  : 'unavailable'
+              }
               balanceLabel={engine === 'gateway' ? t('bridge.gwBalanceLabel') : t('bridge.balance')}
               onMax={fillPercent}
               percents={[0.25, 0.5]}
@@ -1410,13 +1441,13 @@ export function BridgeTab({ session }: { session: Session }) {
           {!walletOnSource && cctpSource ? (
             <Button
               full
-              disabled={switching}
+              disabled={switching || source.switching}
               data-testid="bridge-switch"
               onClick={() =>
                 void (async () => {
                   setSwitching(true);
                   try {
-                    await switchWalletChain(cctpSource.chainId, fromLabel);
+                    await switchWalletTo(cctpSource.chainId, fromLabel);
                   } catch (e) {
                     toast.push(e instanceof Error ? e.message : String(e), 'error');
                   } finally {

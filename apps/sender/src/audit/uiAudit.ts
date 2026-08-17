@@ -11,7 +11,9 @@
  * Nothing here mutates the page except the theme, which it puts back.
  */
 
-export type Severity = 'high' | 'medium';
+/** `low` is for things a standard exempts but a person might still trip over,
+ *  chiefly the deliberately dimmed text of a disabled control. */
+export type Severity = 'high' | 'medium' | 'low';
 
 export interface Finding {
   rule: string;
@@ -225,13 +227,28 @@ export function audit(): { url: string; theme: string; width: number; findings: 
       const size = parseFloat(s.fontSize);
       const large = size >= 18.66 || (size >= 14 && parseInt(s.fontWeight, 10) >= 700);
       const floor = large ? 3 : 4.5;
+      /**
+       * A disabled control is dimmed on purpose, and that dimming is how it says so.
+       *
+       * WCAG 1.4.3 exempts inactive components from the contrast minimum for exactly
+       * this reason: raising a disabled label to 4.5 makes it indistinguishable from
+       * the ones that can be pressed. Reported anyway, at the bottom severity, because
+       * "no requirement" is not "unreadable is fine" -- a label nobody can make out is
+       * still a bad label. What this stops is a screen being called a failure for
+       * greying something out correctly.
+       */
+      const inactive =
+        (el as HTMLButtonElement).disabled === true ||
+        el.getAttribute('aria-disabled') === 'true' ||
+        el.closest('[disabled], [aria-disabled="true"]') !== null;
       if (c !== null && c < floor) {
-        add('text-contrast', c < floor - 1.2 ? 'high' : 'medium', el, {
+        add('text-contrast', inactive ? 'low' : c < floor - 1.2 ? 'high' : 'medium', el, {
           text: text(el),
           contrast: c,
           needs: floor,
           color: s.color,
           on: bg,
+          ...(inactive ? { inactive: true } : {}),
         });
       }
     });

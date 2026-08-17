@@ -36,8 +36,50 @@ Ağ kontrolü header'a taşındı ve Private Pay EURC ile de ödenebiliyor.
   bir benzer-kontrat verilir. Kayıttaki her satırın adresi, sembolü ve ondalığı
   zincirden okunarak yazıldı.
 
+- **Zincir seçen her kontrol cüzdana bağlandı, iki yönlü.** `useWalletChain`
+  tek bir yerde: cüzdanın ağı değişince kontrol oraya geçiyor (MetaMask'ten
+  yapılan değişiklik dahil, `chainChanged` -> `session.chainId` -> kontrol), ve
+  kontrolde başka bir ağ seçilince cüzdan oraya taşınıyor, çünkü işlem orada
+  imzalanacak. Değişim hangi yönden gelirse gelsin eski ağ için okunmuş bakiye,
+  ücret ve kota temizleniyor. Kural saf iki fonksiyonda (`chainForWallet`,
+  `destinationChain`) ve testli.
+- **Köprünün "To" ucu bilerek bağlı değil.** Orada bir şey imzalanmıyor, dolayısıyla
+  cüzdanın takip edeceği bir şey yok. Varsayılanı Arc, çünkü bu uygulamanın bütün
+  kontratları orada; kaynak zaten Arc'sa kenara çekiliyor, aynı zincirden aynı
+  zincire rota köprü değil. Kullanıcı elle seçerse o seçim, imkânsız hale gelene
+  kadar geçerli.
+
 ### Düzeltildi
 
+- **Zincire göre kurulması gereken hiçbir alan kurulmuyordu.** Köprünün From'u,
+  Gateway fonlama kutusunun kaynağı ve header'ın bakiyesi cüzdanın ağına hiç
+  bakmıyordu: hepsi sabit Arc ile açılıyordu. Ethereum Sepolia'daki bir cüzdan,
+  header'da doğru ağı yazan bir chip'in hemen altında Arc'ın bakiyesini sayfanın
+  en büyük rakamı olarak görüyor, Arc'ta USDC yakmayı öneren bir form buluyor ve
+  altındaki notta cüzdanının başka ağda olduğunu okuyordu. Doğru açılmak için
+  gereken bilgi zaten ekrandaydı.
+- **Cüzdan bakiyesi hep Arc'tan okunuyordu.** `refreshBalance` sabit Arc USDC
+  adresini sabit Arc RPC'siyle soruyordu. Artık cüzdanın bulunduğu ağın USDC'si
+  okunuyor; girdisi olmayan bir ağda rakam sıfırlanmıyor, "okunamadı" olarak
+  duruyor. Arc dışında yoklama 20 saniyeye çekildi: oradaki okuma cüzdanın
+  sağlayıcısından geçiyor ve MetaMask siteyi istek sayısına göre kısıtlıyor.
+- **Abonelikte cüzdan bakiyesi yanlış RPC'den okunuyordu.** Seçilen zincirin USDC
+  adresi soruluyordu ama her zaman Arc'ın RPC'sine; Arc dışında bu, hiçbir zincire
+  ait olmayan bir rakamdı. Köprünün doğru yapan kopyası ortak `readUsdcOn`a alındı.
+- **"Per pull" yanındaki bakiye bu aboneliği ödemiyordu.** Gösterilen rakam
+  cüzdanın Arc'taki USDC'siydi; kutuyu Circle, Gateway bakiyesinden fonluyor.
+  173 USDC'lik cüzdan, sıfır Gateway bakiyesinin yanında, formun birazdan
+  reddedeceği bir aboneliği karşılayabileceğini söylüyordu. Rakam kaldırıldı;
+  ödeyen bakiye hemen üstteki fonlama kutusunda, ekleme kontrolüyle birlikte
+  duruyor.
+- **Gelmeyecek bir rakam için parlayan yer tutucular.** `null` hem "daha okunmadı"
+  hem "okunamıyor" demekti. Ayrıldı: okuma denendiyse ve cevap yoksa yer tutucu
+  duruyor, parlamıyor.
+- **Denetim aracı devre dışı kontrolleri hata sayıyordu.** WCAG 1.4.3 etkisiz
+  bileşenleri kontrast tabanından muaf tutuyor, ve bir yüzde çipini soluklaştırmak
+  onun basılamadığını söyleme biçimi. Artık `low` olarak, `inactive` işaretiyle
+  raporlanıyor: görünmez olmuyor ama doğru davranan bir ekranı hata gibi
+  göstermiyor.
 - **Kutuyu fonlama ayağı Arc'a özgüydü.** `settlePrivatePaymentBatched` kutuyu
   `aggregate3Value` içinde native değer göndererek fonluyordu; Arc'ta native zaten
   USDC olduğu için USDC'de doğru, başka tokende yanlış. 0.5 EURC ödemesi kutuya

@@ -8,8 +8,18 @@ export {
   localSigner,
   bridgeClients,
   switchWalletChain,
+  switchWalletTo,
   type Session,
 } from './session.js';
+export { readUsdcOn, readWalletUsdc } from './walletUsdc.js';
+export {
+  useWalletChain,
+  chainForWallet,
+  destinationChain,
+  walletChainName,
+  type ChainOptionSet,
+  type WalletChainBinding,
+} from './chainBinding.js';
 export { useSession, type SessionState } from './useSession.js';
 export { makeTestProvider, installTestProvider } from './testProvider.js';
 // Browser-safe CCTP constants/types only. The server-only bridgeUsdc,

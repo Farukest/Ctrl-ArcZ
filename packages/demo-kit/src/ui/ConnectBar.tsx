@@ -16,7 +16,16 @@ import { IconWallet } from './icons.js';
  */
 export function ConnectBar({ state }: { state: SessionState }) {
   const t = useT();
-  const { session, balance, balanceRaw, connecting, reconnecting, error, walletDetected } = state;
+  const {
+    session,
+    balance,
+    balanceRaw,
+    balanceMissing,
+    connecting,
+    reconnecting,
+    error,
+    walletDetected,
+  } = state;
   // `balance` is a formatted string that starts at "0", so between connecting and
   // the first balanceOf landing the bar stated, in the largest number on the page,
   // that a funded wallet was empty. `balanceRaw` is null until something is
@@ -45,7 +54,11 @@ export function ConnectBar({ state }: { state: SessionState }) {
                     {Number(balance).toLocaleString(undefined, { maximumFractionDigits: 4 })}
                   </span>
                 ) : (
-                  <Skeleton width={76} height={18} />
+                  // Still, not shimmering, once the read has been attempted and
+                  // answered nothing: a network with no USDC entry, or one whose
+                  // RPC did not reply. A shimmer is a promise that a number is
+                  // coming, and in both of those it never is.
+                  <Skeleton width={76} height={18} still={balanceMissing === 'unavailable'} />
                 )}
                 <span className="connectbar__unit">USDC</span>
               </div>
