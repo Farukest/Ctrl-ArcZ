@@ -37,19 +37,12 @@ describe('supportsChain', () => {
     }
   });
 
-  /**
-   * Subscriptions need the relayer, and the relayer is only offered where it has
-   * been run. Two of the four new chains refuse a relayed deploy for reasons that
-   * are recorded and not yet understood, so the screen does not offer the feature
-   * there. This test exists so that widening the list is a deliberate act with a
-   * passing live run behind it.
-   */
-  it('offers subscriptions only where the relayer has been proven', () => {
-    expect(supportsChain(ARC_TESTNET_CHAIN_ID, 'subscriptions')).toBe(true);
-    expect(supportsChain(CCTP_CHAINS.Ethereum_Sepolia.chainId, 'subscriptions')).toBe(true);
-    expect(supportsChain(CCTP_CHAINS.Arbitrum_Sepolia.chainId, 'subscriptions')).toBe(true);
-    expect(supportsChain(CCTP_CHAINS.Base_Sepolia.chainId, 'subscriptions')).toBe(false);
-    expect(supportsChain(CCTP_CHAINS.Avalanche_Fuji.chainId, 'subscriptions')).toBe(false);
+  /** Subscriptions need the relayer, and the relayer now runs on every deployed
+   *  chain -- proved by deploying a real box and co-signing for it on each. */
+  it('offers subscriptions on every deployed chain', () => {
+    for (const chainId of deployedChainIds()) {
+      expect(supportsChain(chainId, 'subscriptions'), String(chainId)).toBe(true);
+    }
   });
 
   /** Arc is the one chain that does this without a contract of ours in the middle. */

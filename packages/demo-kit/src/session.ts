@@ -6,6 +6,7 @@ import {
   http,
   type Address,
   type EIP1193Provider,
+  type Hex,
   type PublicClient,
   type Transport,
   type WalletClient,
@@ -185,29 +186,51 @@ const MAX_SENSIBLE_GAS = 15_000_000n;
  * for exceeding its own 32M block limit. It is the chain, not the client -- `cast
  * send` fails identically and succeeds the moment a limit is passed by hand.
  *
- * Applied by overriding `prepareTransactionRequest` rather than by filtering the
- * RPC response, which is where this was tried first and did not work: on the same
- * client, a direct `eth_estimateGas` came back clamped at 15,000,000 while the
- * prepared transaction still carried 1,482,259,570,496,032. viem fills the gas
- * somewhere other than that one call, so the clamp belongs where the number is
- * finally decided. `getAction` looks an action up on the client before falling
- * back to its own, so an extension here covers `writeContract` and
- * `sendTransaction` alike.
- *
  * Clamping high costs nothing: a transaction is charged for gas used, not gas
  * offered, and the node's own metering still stops a call that really does need
  * more.
  */
-function withSaneGas(client: WalletClient): WalletClient {
-  type Prepare = (args: unknown) => Promise<{ gas?: bigint }>;
+function withSaneGas(client: WalletClient, reader: PublicClient): WalletClient {
+  const clamp = (gas: bigint) => (gas > MAX_SENSIBLE_GAS ? MAX_SENSIBLE_GAS : gas);
+
+  /**
+   * On `writeContract` and `sendTransaction`, not on `prepareTransactionRequest`.
+   *
+   * The clamp was on the latter first, and it demonstrably worked when called
+   * directly -- the same client returned 15,000,000 for a prepared request while
+   * `writeContract` on the very next line still sent 1.48e15. viem does not route
+   * a contract write through the client's own `prepareTransactionRequest`, so an
+   * override there is real, correct and never consulted. These two are the calls
+   * this codebase actually makes.
+   */
   return (client as unknown as { extend: (fn: (c: unknown) => unknown) => unknown }).extend(
     (c) => ({
-      async prepareTransactionRequest(args: unknown) {
-        const base = (c as { prepareTransactionRequest: Prepare }).prepareTransactionRequest;
-        const prepared = await base(args);
-        return prepared.gas != null && prepared.gas > MAX_SENSIBLE_GAS
-          ? { ...prepared, gas: MAX_SENSIBLE_GAS }
-          : prepared;
+      async writeContract(args: Record<string, unknown>) {
+        const base = (c as { writeContract: (a: unknown) => Promise<Hex> }).writeContract;
+        if (args.gas != null) return base(args);
+        const gas = await reader
+          .estimateContractGas({
+            account: client.account!,
+            address: args.address as Address,
+            abi: args.abi as never,
+            functionName: args.functionName as never,
+            args: args.args as never,
+          })
+          .catch(() => MAX_SENSIBLE_GAS);
+        return base({ ...args, gas: clamp(gas) });
+      },
+      async sendTransaction(args: Record<string, unknown>) {
+        const base = (c as { sendTransaction: (a: unknown) => Promise<Hex> }).sendTransaction;
+        if (args.gas != null) return base(args);
+        const gas = await reader
+          .estimateGas({
+            account: client.account!,
+            to: args.to as Address,
+            value: args.value as bigint | undefined,
+            data: args.data as Hex | undefined,
+          })
+          .catch(() => MAX_SENSIBLE_GAS);
+        return base({ ...args, gas: clamp(gas) });
       },
     }),
   ) as WalletClient;
@@ -249,14 +272,16 @@ export function signerFor(chainId: number, privateKey: `0x${string}`): ClientPai
     deployment.rpcUrls.map((u) => http(u, { retryCount: 2, timeout: 20_000 })),
     { retryCount: 1 },
   );
+  // No `chain` on the read client: the transport already dials this chain's
+  // endpoints, and viem's typing for a hand-built definition fights the
+  // `PublicClient` shape for no gain. Only the wallet client needs the id, to
+  // tag what it signs.
+  const publicClient = createPublicClient({ transport, pollingInterval: 4000 }) as PublicClient;
   return {
-    // No `chain` on the read client: the transport already dials this chain's
-    // endpoints, and viem's typing for a hand-built definition fights the
-    // `PublicClient` shape for no gain. Only the wallet client needs the id, to
-    // tag what it signs.
-    publicClient: createPublicClient({ transport, pollingInterval: 4000 }) as PublicClient,
+    publicClient,
     walletClient: withSaneGas(
       createWalletClient({ account, chain: chain as never, transport }) as WalletClient,
+      publicClient,
     ),
   };
 }
