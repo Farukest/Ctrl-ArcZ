@@ -22,6 +22,7 @@ import {
   Field,
   Input,
   NeedsChain,
+  Skeleton,
   Stepper,
   TokenPicker,
   parseAmount,
@@ -319,16 +320,26 @@ export function PrivatePayTab({
           )}
 
           {/* This screen said nothing at all about cost until the money had moved,
-              and it is the one that spends the most on gas. */}
-          {reserve != null && (
-            <CostBlock
+              and it is the one that spends the most on gas.
+
+              Rendered from the first frame rather than once the reserve arrives.
+              Gated on `reserve != null` the block dropped in 50 to 150ms after the
+              tab was opened and grew the card from 366px to 506px, every single
+              time Private was selected: measured three runs out of three. The two
+              figures that wait on the reserve get a placeholder; the amount is
+              typed on this screen and is known immediately, so it does not. */}
+          <CostBlock
               testId="ppay-cost"
               lines={[
                 {
                   label: t('cost.amount'),
                   value: `${usdc(amountAmt, token.decimals)} ${token.symbol}`,
                 },
-                { label: t('cost.networkMax'), value: `${usdc(reserve)} USDC` },
+                {
+                  label: t('cost.networkMax'),
+                  value:
+                    reserve == null ? <Skeleton width={72} height={23} /> : `${usdc(reserve)} USDC`,
+                },
               ]}
               /*
                * Two currencies do not add up, and a total that pretends otherwise
@@ -338,13 +349,17 @@ export function PrivatePayTab({
                */
               total={{
                 label: t('cost.youPay'),
-                value: payingInGas
-                  ? `${usdc(amountAmt + reserve, token.decimals)} ${token.symbol}`
-                  : `${usdc(amountAmt, token.decimals)} ${token.symbol} + ${usdc(reserve)} USDC`,
+                value:
+                  reserve == null ? (
+                    <Skeleton width={86} height={26} />
+                  ) : payingInGas ? (
+                    `${usdc(amountAmt + reserve, token.decimals)} ${token.symbol}`
+                  ) : (
+                    `${usdc(amountAmt, token.decimals)} ${token.symbol} + ${usdc(reserve)} USDC`
+                  ),
                 testId: 'ppay-youpay',
               }}
             />
-          )}
 
           <Button
             onClick={() => void guard(run)}

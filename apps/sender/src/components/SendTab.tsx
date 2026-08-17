@@ -378,21 +378,28 @@ export function SendTab({
           about half a second in, pushing the window picker and the send button down
           the screen: measured, the card grew 446px to 588px. The two figures that
           depend on the reserve wait on a placeholder instead; the amount, which is
-          typed on this screen and known immediately, does not. */}
+          typed on this screen and known immediately, does not.
+
+          The placeholder heights are the line-heights of the values they stand in
+          for, measured: 23px for a row, 26px for the total. They were 14 and 16,
+          which is what a placeholder looks like if you pick a number that seems
+          about right, and the card still grew 9px when the reserve landed. A
+          placeholder that is not the size of the thing it replaces is a smaller
+          version of the jump it was added to prevent. */}
       <CostBlock
         testId="send-cost"
         lines={[
           { label: t('cost.amount'), value: `${usdc(amountValue)} USDC`, testId: 'send-cost-amount' },
           {
             label: t('cost.networkMax'),
-            value: reserve == null ? <Skeleton width={72} height={14} /> : `${usdc(reserve)} USDC`,
+            value: reserve == null ? <Skeleton width={72} height={23} /> : `${usdc(reserve)} USDC`,
           },
         ]}
         total={{
           label: t('cost.youPay'),
           value:
             reserve == null ? (
-              <Skeleton width={86} height={16} />
+              <Skeleton width={86} height={26} />
             ) : (
               `${usdc(amountValue + reserve)} USDC`
             ),
