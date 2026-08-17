@@ -3,6 +3,7 @@ import { createPublicClient, erc20Abi, fallback, http, isAddress, type Address, 
 import { privateKeyToAccount } from 'viem/accounts';
 import {
   ADDRESSES,
+  ARC_TOKENS,
   BlockscoutDataProvider,
   CachingDataProvider,
   CTRL_ARCZ_ADDRESS,
@@ -13,6 +14,7 @@ import {
   buildDossier,
   check,
   type EphemeralPolicy,
+  type TokenInfo,
 } from '@ctrl-arcz/sdk';
 import { investigate, investigatorEnabled } from '@ctrl-arcz/demo-kit/investigator';
 import {
@@ -192,7 +194,42 @@ export async function gaslessPost(req: IncomingMessage, res: ServerResponse): Pr
 // deploys a clone bound to a hash of the stealth address, and `announce` emits an
 // event. The relayer spends gas, so both are signed and quota-limited.
 
-const MAX_POLICY_AMOUNT = 1_000_000_000n; // 1000 USDC in base units, testnet ceiling
+/**
+ * Tokens this relayer will deploy a box for.
+ *
+ * A set of server-side constants, never anything the caller supplies. The
+ * property that matters is not "the token is USDC", it is that the relayer can
+ * only ever be talked into signing a call the operator chose; a fixed list keeps
+ * that exactly as a single pinned address did.
+ *
+ * Resolved from the registry rather than written out again, so the addresses and
+ * the decimals below cannot drift from the ones the apps send.
+ */
+const RELAYABLE_TOKENS: readonly TokenInfo[] = ARC_TOKENS.filter(
+  (t) => t.symbol === 'USDC' || t.symbol === 'EURC',
+);
+
+function relayableToken(v: unknown): TokenInfo {
+  const wanted = addr(v, 'token').toLowerCase();
+  const found = RELAYABLE_TOKENS.find((t) => t.address.toLowerCase() === wanted);
+  if (!found) {
+    throw new HttpError(
+      400,
+      `only ${RELAYABLE_TOKENS.map((t) => t.symbol).join(' and ')} boxes are relayed`,
+    );
+  }
+  return found;
+}
+
+/**
+ * The testnet ceiling, in whole tokens rather than in base units.
+ *
+ * It used to be `1_000_000_000n` with a comment saying "1000 USDC", which is the
+ * same thing only while every token has six decimals. Written this way the limit
+ * means a thousand of whatever is being sent, on a token with eight decimals as
+ * much as on one with six, and nobody has to remember to re-derive it.
+ */
+const MAX_POLICY_TOKENS = 1000n;
 const MAX_EXPIRY_SECONDS = 400 * 24 * 60 * 60; // just over a year out
 
 function addr(v: unknown, what: string): Address {
@@ -200,10 +237,11 @@ function addr(v: unknown, what: string): Address {
   return v as Address;
 }
 
-function amount(v: unknown, what: string): bigint {
+function amount(v: unknown, what: string, token: TokenInfo): bigint {
   if (typeof v !== 'string' || !/^\d{1,30}$/.test(v)) throw new HttpError(400, `invalid ${what}`);
   const n = BigInt(v);
-  if (n > MAX_POLICY_AMOUNT) throw new HttpError(400, `${what} above the demo ceiling`);
+  const ceiling = MAX_POLICY_TOKENS * 10n ** BigInt(token.decimals);
+  if (n > ceiling) throw new HttpError(400, `${what} above the demo ceiling`);
   return n;
 }
 
@@ -217,20 +255,18 @@ function seconds(v: unknown, what: string, max: number): number {
 /**
  * Rebuild the policy from named fields rather than accepting calldata. The relayer
  * signs whatever this produces, so it must never be able to produce a call the
- * operator did not intend: the token is pinned to USDC and the cosigner to this
- * server's own co-signer, which means the relayer can only ever deploy boxes that
- * The Machine still governs.
+ * operator did not intend: the token has to be one of this server's own, and the
+ * cosigner has to be this server's own co-signer, which means the relayer can only
+ * ever deploy boxes that The Machine still governs.
  */
-function parsePolicy(body: unknown): { salt: Hex; policy: EphemeralPolicy } {
+export function parsePolicy(body: unknown): { salt: Hex; policy: EphemeralPolicy } {
   const { salt, policy } = (body ?? {}) as { salt?: unknown; policy?: unknown };
   if (typeof salt !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(salt)) {
     throw new HttpError(400, 'invalid salt');
   }
   const p = (policy ?? {}) as Record<string, unknown>;
 
-  if (addr(p.token, 'token').toLowerCase() !== (ADDRESSES.USDC as string).toLowerCase()) {
-    throw new HttpError(400, 'only USDC boxes are relayed');
-  }
+  const token = relayableToken(p.token);
   if (!env.cosignerPk) throw new HttpError(400, 'no co-signer key configured');
   const expected = cosignerAddress(env.cosignerPk);
   if (addr(p.cosigner, 'cosigner').toLowerCase() !== expected.toLowerCase()) {
@@ -245,13 +281,17 @@ function parsePolicy(body: unknown): { salt: Hex; policy: EphemeralPolicy } {
   return {
     salt: salt as Hex,
     policy: {
-      token: ADDRESSES.USDC as Address,
+      // The matched entry, not the string that was sent. Comparing and then
+      // writing back the caller's value would make the check advisory: two
+      // addresses that compare equal case-insensitively are still two strings,
+      // and only one of them came from us.
+      token: token.address,
       owner: addr(p.owner, 'owner'),
       cosigner: expected,
       vault: addr(p.vault, 'vault'),
       target: addr(p.target, 'target'),
-      maxAmount: amount(p.maxAmount, 'maxAmount'),
-      perPullMax: amount(p.perPullMax ?? '0', 'perPullMax'),
+      maxAmount: amount(p.maxAmount, 'maxAmount', token),
+      perPullMax: amount(p.perPullMax ?? '0', 'perPullMax', token),
       expiry,
       interval: seconds(p.interval, 'interval', MAX_EXPIRY_SECONDS),
       mode: p.mode,

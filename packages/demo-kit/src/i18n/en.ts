@@ -263,6 +263,7 @@ export const en = {
   'bridge.info.cctpTitle': 'CCTP',
   'bridge.info.cctpBody':
     'Best for a one-off transfer. Your USDC arrives on the other chain in about a minute.',
+  'bridge.info.usdcOnly': 'Both carry USDC only, so there is nothing to choose here.',
   'bridge.info.gatewayTitle': 'Gateway',
   'bridge.info.gatewayBody':
     'Best if you send often. Fund a balance once, then each transfer lands in about a second.',

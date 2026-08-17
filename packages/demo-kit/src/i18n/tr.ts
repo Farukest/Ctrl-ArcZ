@@ -235,6 +235,7 @@ export const tr: Record<TranslationKey, string> = {
   'bridge.info.cctpTitle': 'CCTP',
   'bridge.info.cctpBody':
     'Tek seferlik transfer için ideal. USDC diğer zincire yaklaşık bir dakikada ulaşır.',
+  'bridge.info.usdcOnly': 'İkisi de yalnız USDC taşıyor, o yüzden burada seçilecek bir şey yok.',
   'bridge.info.gatewayTitle': 'Gateway',
   'bridge.info.gatewayBody':
     'Sık gönderiyorsan ideal. Bakiyeyi bir kez yükle, sonra her transfer yaklaşık bir saniyede ulaşır.',

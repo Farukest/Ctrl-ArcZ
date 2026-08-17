@@ -1162,6 +1162,11 @@ export function BridgeTab({ session }: { session: Session }) {
               <span className="infopop__k">{t('bridge.info.gatewayTitle')}</span>
               <p>{t('bridge.info.gatewayBody')}</p>
             </div>
+            {/* Why there is no token picker here, in the place someone would look
+                for one. Not a row on the screen: an absent control does not need
+                a line of its own explaining itself to everybody who was not
+                looking for it. */}
+            <p className="infopop__note">{t('bridge.info.usdcOnly')}</p>
           </InfoPopover>
         </div>
 

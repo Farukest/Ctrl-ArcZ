@@ -986,6 +986,15 @@
   padding-top: var(--sp-3);
   border-top: 1px solid var(--border-subtle);
 }
+/* A closing remark about the whole popover rather than another labelled item, so
+   it does not read as a third thing of the same kind as the two above it. */
+.infopop__note {
+  margin-top: var(--sp-3);
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--border-subtle);
+  color: var(--text-mid);
+  font-size: var(--fs-sm);
+}
 .infopop__k {
   display: inline-flex;
   align-items: center;
