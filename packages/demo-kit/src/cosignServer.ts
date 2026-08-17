@@ -19,9 +19,10 @@ import {
   cosignAuthMessage,
   arcTestnet,
   ARC_TESTNET_CHAIN_ID,
+  BlockscoutDataProvider,
+  CachingDataProvider,
   deploymentFor,
   RPC_URLS,
-  CTRL_ARCZ_ADDRESS,
   spendPolicyFactoryAbi,
   ACTION_PAY,
   ACTION_PULL,
@@ -221,6 +222,23 @@ function clientFor(chainId: number): PublicClient {
 }
 
 /**
+ * The explorer-backed history source for a chain, cached.
+ *
+ * Shared across requests on purpose: the indexer walk for a sender's history is
+ * the slow part, and a fresh provider per request would repeat it every time.
+ */
+const providers = new Map<number, CachingDataProvider>();
+function providerFor(chainId: number): CachingDataProvider {
+  const cached = providers.get(chainId);
+  if (cached) return cached;
+  const provider = new CachingDataProvider(new BlockscoutDataProvider({ chainId }), {
+    ttlMs: 60_000,
+  });
+  providers.set(chainId, provider);
+  return provider;
+}
+
+/**
  * The chain a request is about.
  *
  * Defaulting to Arc rather than rejecting an absent field keeps the Android and
@@ -238,8 +256,30 @@ function chainOf(body: CosignBody): number {
 // Dedicated indexer: backfills the sender->verified-recipients map once, then polls
 // incrementally, so the firewall never does a from-deploy-block getLogs scan on a
 // cosign request (that scan was the ~220s cold-start / 504 bottleneck).
-const recipientIndex = new VerifiedRecipientIndex(publicClient, CTRL_ARCZ_ADDRESS);
-void recipientIndex.start();
+/**
+ * One index per chain, built the first time that chain is asked about.
+ *
+ * These were single module-level instances pinned to Arc, which is the same class
+ * of bug the addresses were: on a second deployment they answer confidently about
+ * the wrong network. A sender's verified recipients on Base are not their verified
+ * recipients on Arc, and treating one as the other is what the lookalike rule
+ * exists to prevent.
+ *
+ * Lazy rather than started for every chain at boot: each one backfills from its
+ * deploy block, and paying for five backfills to serve one is how a server takes
+ * two minutes to answer its first request.
+ */
+const recipientIndexes = new Map<number, VerifiedRecipientIndex>();
+function recipientIndexFor(chainId: number): VerifiedRecipientIndex {
+  const cached = recipientIndexes.get(chainId);
+  if (cached) return cached;
+  const deployment = deploymentFor(chainId);
+  if (!deployment) throw new Error(`invalid chainId ${chainId}`);
+  const index = new VerifiedRecipientIndex(clientFor(chainId), deployment.ctrlArcZ);
+  recipientIndexes.set(chainId, index);
+  void index.start();
+  return index;
+}
 
 /**
  * The sender's verified recipients, from the index the co-signer already keeps
@@ -251,16 +291,33 @@ void recipientIndex.start();
  * before that. This index backfills from the deploy block once and then follows
  * the chain, so `complete` means complete.
  */
-export function verifiedRecipients(sender: Address): { recipients: Address[]; complete: boolean } {
-  return { recipients: recipientIndex.recipientsOf(sender), complete: recipientIndex.isReady() };
+export function verifiedRecipients(
+  sender: Address,
+  chainId: number = ARC_TESTNET_CHAIN_ID,
+): { recipients: Address[]; complete: boolean } {
+  const index = recipientIndexFor(chainId);
+  return { recipients: index.recipientsOf(sender), complete: index.isReady() };
 }
 
 // The same treatment for stealth announcements. The announcer is one global
 // registry with no on-chain owner tag, so a browser looking for its own boxes had
 // to read all 2.19 million blocks of it -- 219 chunked requests -- on every visit,
 // and that span grows by about 168,000 blocks a day.
-const announcementIndex = new AnnouncementIndex(publicClient);
-void announcementIndex.start();
+const announcementIndexes = new Map<number, AnnouncementIndex>();
+function announcementIndexFor(chainId: number): AnnouncementIndex {
+  const cached = announcementIndexes.get(chainId);
+  if (cached) return cached;
+  const deployment = deploymentFor(chainId);
+  if (!deployment) throw new Error(`invalid chainId ${chainId}`);
+  const index = new AnnouncementIndex(
+    clientFor(chainId),
+    deployment.stealthAnnouncer,
+    deployment.stealthAnnouncerDeployBlock,
+  );
+  announcementIndexes.set(chainId, index);
+  void index.start();
+  return index;
+}
 
 /**
  * Every stealth announcement at or after `fromBlock`, with the head they are
@@ -272,8 +329,11 @@ void announcementIndex.start();
  * matching itself against this list. Accepting a viewing key here would be simpler
  * and would give away the exact thing stealth addresses exist to protect.
  */
-export function announcements(fromBlock = 0n): ReturnType<AnnouncementIndex['since']> {
-  return announcementIndex.since(fromBlock);
+export function announcements(
+  fromBlock = 0n,
+  chainId: number = ARC_TESTNET_CHAIN_ID,
+): ReturnType<AnnouncementIndex['since']> {
+  return announcementIndexFor(chainId).since(fromBlock);
 }
 
 /**
@@ -302,10 +362,33 @@ const verdictCache = new Map<string, { verdict: RiskVerdict; exp: number }>();
   for (const [k, v] of verdictCache) if (v.exp <= now) verdictCache.delete(k);
 }, VERDICT_TTL_MS) as unknown as { unref?: () => void }).unref?.();
 
-async function riskCheck(owner: Address, target: Address): Promise<RiskVerdict | null> {
-  const key = `${owner.toLowerCase()}:${target.toLowerCase()}`;
+/**
+ * The firewall, on the chain the payment is happening on.
+ *
+ * Everything it reads is chain-specific and none of it was: the recipient's
+ * transaction history, the sender's verified recipients, and the CtrlArcZ whose
+ * events those come from. Run against Arc for a payment on Base it answers a
+ * different question confidently -- an unknown Base address looks like a stranger
+ * because Arc has never seen it, and an address with Arc history reads as trusted
+ * on a chain where it has done nothing.
+ *
+ * Cached per chain as well as per pair, for the same reason.
+ */
+async function riskCheck(
+  owner: Address,
+  target: Address,
+  chainId: number,
+): Promise<RiskVerdict | null> {
+  const key = `${chainId}:${owner.toLowerCase()}:${target.toLowerCase()}`;
   const hit = verdictCache.get(key);
   if (hit && hit.exp > Date.now()) return hit.verdict;
+  const deployment = deploymentFor(chainId);
+  // No history source, no judgement. Returning null is a fail-closed veto, which
+  // is the honest outcome: the co-signer cannot vouch for a recipient it cannot
+  // look up. `chainSupport` keeps such a chain out of the firewall-gated screens
+  // so the user is told before they fill in a form, not after.
+  if (!deployment?.explorerApi) return null;
+  const recipientIndex = recipientIndexFor(chainId);
   try {
     // Once the indexer has backfilled, feed its list so check() does zero on-chain
     // scanning. While it is still backfilling (server just started), fall back to a
@@ -314,8 +397,9 @@ async function riskCheck(owner: Address, target: Address): Promise<RiskVerdict |
       ? { verifiedRecipients: recipientIndex.recipientsOf(owner) }
       : { verifiedRecipientsLookbackBlocks: 200_000 };
     const report = await check(owner, target, {
-      client: publicClient,
-      contractAddress: CTRL_ARCZ_ADDRESS,
+      client: clientFor(chainId),
+      contractAddress: deployment.ctrlArcZ,
+      provider: providerFor(chainId),
       ...scanOpts,
     });
     const verdict: RiskVerdict = {
@@ -447,7 +531,13 @@ async function signCounterfactual(
 export async function cosign(
   params: { privateKey: Hex; body: CosignBody },
 ): Promise<AuthorizeResult | PrecheckResult> {
-  const machine = new LocalCoSigner(params.privateKey, { riskCheck });
+  // The co-signer judges on the chain the request names. Bound here rather than
+  // threaded through `LocalCoSigner`, whose interface is (owner, target) by
+  // design: it should not have to know about chains to ask "is this safe".
+  const chainId = chainOf(params.body);
+  const machine = new LocalCoSigner(params.privateKey, {
+    riskCheck: (owner, target) => riskCheck(owner, target, chainId),
+  });
 
   // F3: authenticate the payer before doing anything with their `owner` scope.
   //

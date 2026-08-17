@@ -31,11 +31,19 @@ export const en = {
   'common.close': 'Close',
   'common.viewOnArcScan': 'View on ArcScan',
   'common.connectPrompt': 'Connect your wallet to continue.',
-  'common.switchToArc': 'Switch to Arc',
-  'chain.needs.protectedSend': 'Protected sends happen on Arc Testnet.',
-  'chain.needs.receive': 'Claiming happens on Arc Testnet.',
-  'chain.needs.privatePay': 'Private payments happen on Arc Testnet.',
-  'chain.needs.subscriptions': 'Charging and cancelling happen on Arc Testnet. Creating one works from any network.',
+  // Named for the chain being offered rather than fixed to Arc: it is no longer
+  // the only one, and a button that says "Switch to Arc" while offering Base is a
+  // button that lies about what pressing it does.
+  'common.switchTo': 'Switch to {chain}',
+  // These say what is true of the network the wallet is on, not where the feature
+  // "happens". Every one of them used to read "... happens on Arc Testnet", which
+  // was the whole truth with one deployment and became false with five: protected
+  // sends happen on four chains, and a user on Avalanche Fuji told they must go to
+  // Arc is being given a reason that is not the reason.
+  'chain.needs.protectedSend': 'Protected sends are not available on {chain}.',
+  'chain.needs.receive': 'Claiming is not available on {chain}.',
+  'chain.needs.privatePay': 'Private payments are not available on {chain}.',
+  'chain.needs.subscriptions': 'Subscriptions are not available on {chain}.',
   'ppay.gasShort': 'Sending {symbol} still costs USDC for gas, and this wallet does not have enough.',
   'token.restricted.allowlist': 'Needs an allowlist',
   'token.choose': 'Choose a token',

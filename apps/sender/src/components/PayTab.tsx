@@ -15,6 +15,7 @@ type PayMode = 'standard' | 'private';
 export function PayTab({
   session,
   balance,
+  balanceMissing,
   onSent,
   onSwitchChain,
 }: {
@@ -22,6 +23,9 @@ export function PayTab({
   /** Spendable USDC on Arc, in subunits. Passed down rather than read again: two
    *  reads of one balance is two answers, and the header already has it. */
   balance: bigint | null;
+  /** Why the balance is missing, when it is. Passed down so an unreadable
+   *  balance holds still instead of shimmering for a number that is not coming. */
+  balanceMissing: 'loading' | 'unavailable';
   onSent: () => void;
   onSwitchChain: (chainId: number) => Promise<void>;
 }) {
@@ -42,6 +46,7 @@ export function PayTab({
       </div>
       {pay === 'standard' ? (
         <SendTab
+          balanceMissing={balanceMissing}
           session={session}
           balance={balance}
           onSent={onSent}

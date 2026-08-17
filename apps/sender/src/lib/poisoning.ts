@@ -24,8 +24,9 @@ const FALLBACK = import.meta.env.VITE_DEMO_RECEIVER as Address | undefined;
  */
 export async function craftLookalikeOfKnownRecipient(
   sender: Address,
+  chainId: number,
 ): Promise<{ real: Address; fake: Address } | null> {
-  const { recipients } = await verifiedRecipients(sender);
+  const { recipients } = await verifiedRecipients(sender, chainId);
   const real = recipients[recipients.length - 1] ?? FALLBACK ?? null;
   if (!real) return null;
   return { real, fake: craftLookalike(real) };

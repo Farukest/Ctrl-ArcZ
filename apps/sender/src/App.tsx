@@ -115,6 +115,7 @@ export function App() {
                   <PayTab
                     session={state.session}
                     balance={state.balanceRaw}
+                    balanceMissing={state.balanceMissing}
                     onSent={state.refreshBalance}
                     onSwitchChain={state.switchTo}
                   />

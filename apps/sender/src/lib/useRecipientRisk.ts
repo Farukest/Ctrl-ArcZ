@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { isAddress, type Address } from 'viem';
 import { check, shouldBlockSend, type RiskReport } from '@ctrl-arcz/sdk';
-import { getPublicClient, type Session } from '@ctrl-arcz/demo-kit';
+import type { Session } from '@ctrl-arcz/demo-kit';
+import { ctrlArcZFor, readClientFor } from './chainRead.js';
 import { isArmed } from '@ctrl-arcz/demo-kit/ui';
-import { riskProvider, clearRiskCache } from './riskProvider.js';
+import { canJudgeRecipients, riskProvider, clearRiskCache } from './riskProvider.js';
 import { verifiedRecipients, clearVerifiedRecipients } from './verifiedRecipients.js';
 import { investigate, effectiveLevel, advisoryOf, type Advisory, type Investigation } from './investigate.js';
 import { config } from './riskConfig.js';
@@ -57,18 +58,24 @@ let warmedFor: string | null = null;
  */
 function warmFor(session: Session): void {
   const sender = session.address as Address;
-  if (warmedFor === sender.toLowerCase()) return;
-  warmedFor = sender.toLowerCase();
+  // Nothing to warm where there is no history source. Asking anyway threw out of
+  // an effect and took the whole app down to a blank page -- on a chain where the
+  // screen was already correctly refusing to show the form, so the crash was the
+  // only thing the user saw.
+  if (!canJudgeRecipients(session.chainId)) return;
+  const key = `${session.chainId}:${sender.toLowerCase()}`;
+  if (warmedFor === key) return;
+  warmedFor = key;
   clearRiskCache();
   clearVerifiedRecipients();
-  void riskProvider()
+  void riskProvider(session.chainId)
     .getOutgoingCounterparties(sender)
     .catch(() => {
       // A failure must not be remembered as "warm": the next check has to try
       // again, and `check` fails closed while it cannot.
-      if (warmedFor === sender.toLowerCase()) warmedFor = null;
+      if (warmedFor === key) warmedFor = null;
     });
-  void verifiedRecipients(sender);
+  void verifiedRecipients(sender, session.chainId);
 }
 
 export interface RecipientRisk {
@@ -133,16 +140,26 @@ export function useRecipientRisk(session: Session, to: string): RecipientRisk {
         setChecking(false);
         return;
       }
+      // No history source on this chain, so there is no verdict to reach. The
+      // screen has already refused the form; this keeps the hook from throwing
+      // underneath it.
+      if (!canJudgeRecipients(session.chainId)) {
+        setReport(null);
+        setInvestigation(null);
+        setChecking(false);
+        return;
+      }
       setChecking(true);
       setInvestigation(null);
       setInvestigating(false);
       // The verified set comes from the server's index, which has no block
       // window. Passing it in means `check` does no log scanning at all.
-      verifiedRecipients(session.address as Address)
+      verifiedRecipients(session.address as Address, session.chainId)
         .then(({ recipients, complete }) =>
           check(session.address as Address, target as Address, {
-            client: getPublicClient(),
-            provider: riskProvider(),
+            client: readClientFor(session),
+            provider: riskProvider(session.chainId),
+            contractAddress: ctrlArcZFor(session),
             /**
              * Only hand over the index when it is actually complete.
              *

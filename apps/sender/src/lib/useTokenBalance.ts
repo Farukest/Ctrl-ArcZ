@@ -23,8 +23,21 @@ export function useTokenBalances(
   session: Session,
   usdcBalance: bigint | null,
   tokens: readonly TokenInfo[] = tokensFor(session.chainId),
-): { balances: Partial<Record<string, bigint>>; refresh: () => Promise<void> } {
+): {
+  balances: Partial<Record<string, bigint>>;
+  /**
+   * Whether a read has been attempted since the wallet or chain last changed.
+   *
+   * A missing balance means two different things and the screen renders them
+   * differently: before the first read it is on its way, after one it is not
+   * coming. Without this the amount field shimmered forever on any chain whose
+   * token could not be reached -- a promise the app could never keep.
+   */
+  attempted: boolean;
+  refresh: () => Promise<void>;
+} {
   const [read, setRead] = useState<Partial<Record<string, bigint>>>({});
+  const [attempted, setAttempted] = useState(false);
   const isUsdc = (t: TokenInfo) =>
     t.address.toLowerCase() === (ADDRESSES.USDC as string).toLowerCase();
   const others = tokens.filter((t) => !isUsdc(t));
@@ -57,13 +70,15 @@ export function useTokenBalances(
       for (const r of results) if (r) next[r[0]] = r[1];
       return next;
     });
+    setAttempted(true);
   }, [key, tokens, session.address]);
 
   // A different wallet has different balances, so the previous account's numbers
   // are wrong the instant the address changes, not once the new read lands.
   useEffect(() => {
     setRead({});
-  }, [session.address]);
+    setAttempted(false);
+  }, [session.address, session.chainId]);
 
   useEffect(() => {
     if (!key) return;
@@ -76,5 +91,5 @@ export function useTokenBalances(
   for (const t of tokens) {
     if (isUsdc(t) && usdcBalance !== null) balances[t.symbol] = usdcBalance;
   }
-  return { balances, refresh };
+  return { balances, attempted, refresh };
 }

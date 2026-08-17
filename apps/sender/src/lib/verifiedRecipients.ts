@@ -20,16 +20,21 @@ let cache: { sender: string; recipients: Address[]; complete: boolean } | null =
 
 export async function verifiedRecipients(
   sender: Address,
+  chainId: number,
 ): Promise<{ recipients: Address[]; complete: boolean }> {
-  if (cache && cache.sender === sender.toLowerCase()) {
+  // Keyed by chain as well as sender. The same address has a different set of
+  // people it has paid on every network, and serving one for the other is what
+  // the lookalike rule compares against -- it would call a stranger familiar.
+  const key = `${chainId}:${sender.toLowerCase()}`;
+  if (cache && cache.sender === key) {
     return { recipients: cache.recipients, complete: cache.complete };
   }
   try {
-    const res = await fetch(`/api/verified-recipients?sender=${sender}`);
+    const res = await fetch(`/api/verified-recipients?sender=${sender}&chainId=${chainId}`);
     if (!res.ok) return { recipients: [], complete: false };
     const body = (await res.json()) as { recipients?: Address[]; complete?: boolean };
     const value = {
-      sender: sender.toLowerCase(),
+      sender: key,
       recipients: body.recipients ?? [],
       complete: Boolean(body.complete),
     };

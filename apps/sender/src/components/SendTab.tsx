@@ -13,7 +13,7 @@ import {
   spendableAfterGas,
   usdc,
 } from '@ctrl-arcz/sdk';
-import { supportsChain, type Session } from '@ctrl-arcz/demo-kit';
+import { supportsChain, walletChainName, type Session } from '@ctrl-arcz/demo-kit';
 import {
   AmountField,
   Button,
@@ -70,11 +70,14 @@ interface SentInfo {
 export function SendTab({
   session,
   balance,
+  balanceMissing,
   onSent,
   onSwitchChain,
 }: {
   session: Session;
   balance: bigint | null;
+  /** Why `balance` is null, when it is. Straight from the session. */
+  balanceMissing: 'loading' | 'unavailable';
   onSent: () => void;
   onSwitchChain: (chainId: number) => Promise<void>;
 }) {
@@ -121,6 +124,9 @@ export function SendTab({
   // verdict that is still forming. What is left here is this screen's own: a
   // valid recipient who is not you, an amount, and not already sending.
   const onSupportedChain = supportsChain(session.chainId, 'protectedSend');
+  /** The wallet's chain, for the amount pill's logo. Undefined on a network we
+   *  have no entry for, where the pill shows the symbol and no mark. */
+  const chainName = walletChainName(session.chainId);
 
   const canSend =
     onSupportedChain && isAddress(to) && !isSelf && amountValue > 0n && !busy && gate.armed;
@@ -138,7 +144,10 @@ export function SendTab({
   async function craftPoisoned() {
     setCrafting(true);
     try {
-      const crafted = await craftLookalikeOfKnownRecipient(session.address as Address);
+      const crafted = await craftLookalikeOfKnownRecipient(
+        session.address as Address,
+        session.chainId,
+      );
       if (!crafted) {
         toast.push(t('demo.noHistory'), 'error');
         return;
@@ -296,7 +305,7 @@ export function SendTab({
   return (
     <Card>
       {!onSupportedChain ? (
-        <NeedsChain feature="protectedSend" onSwitch={onSwitchChain} />
+        <NeedsChain feature="protectedSend" onSwitch={onSwitchChain} chainId={session.chainId} />
       ) : (
         <>
       <Field label={t('send.recipient')} error={addrError}>
@@ -361,8 +370,14 @@ export function SendTab({
         <AmountField
           value={amount}
           onChange={setAmount}
-          chain="Arc_Testnet"
+          // The wallet's chain, so the pill's logo names the network the money is
+          // actually on. Hardcoding Arc here put Arc's mark beside a Base balance.
+          {...(chainName ? { chain: chainName } : {})}
           balance={balance}
+          // Held still rather than shimmering when the balance could not be read.
+          // A shimmer promises a number is coming; on a chain whose USDC we cannot
+          // reach, it never is.
+          balanceMissing={balanceMissing}
           onMax={(f) => spendable != null && setAmount(percentOf(spendable, f))}
           {...(mode === 'plain' ? { hint: t('send.plainHint') } : {})}
           boxed

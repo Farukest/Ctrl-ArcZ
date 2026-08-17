@@ -33,8 +33,26 @@ export type ChainFeature =
  *
  * `null` means the deployment is the whole requirement.
  */
+/**
+ * Whether the recipient firewall can work here.
+ *
+ * It judges an address by its transaction history, which it reads from a
+ * Blockscout instance. Where there is none the rules fail closed and every payment
+ * is vetoed -- correctly, because a co-signer cannot vouch for a recipient it
+ * cannot look up. Better to say so before the form is filled in.
+ *
+ * Avalanche Fuji is the case: Snowtrace, Avascan and Snowscan all serve it and
+ * none of them is Blockscout, and Blockscout's own chain directory lists no
+ * instance for it. Wiring an Etherscan-shaped API would be a second provider, not
+ * a config line, and is not worth it for a demo chain.
+ */
+const hasFirewall = (chainId: number) => deploymentFor(chainId)?.explorerApi !== undefined;
+
 const ALSO_NEEDS: Record<ChainFeature, ((chainId: number) => boolean) | null> = {
-  protectedSend: null,
+  /** Every send goes through the recipient firewall before it is signed. */
+  protectedSend: hasFirewall,
+  /** Claiming judges nobody: the money is already sent and the claimant is the
+   *  one being paid. No history needed, so this works wherever the contract is. */
   receive: null,
   /**
    * One-transaction Private Pay funds the box inside the same call that creates and
@@ -51,7 +69,8 @@ const ALSO_NEEDS: Record<ChainFeature, ((chainId: number) => boolean) | null> = 
    * a chain deployed without a router correctly answers no.
    */
   privatePay: (chainId) =>
-    chainId === ARC_TESTNET_CHAIN_ID || deploymentFor(chainId)?.privatePayRouter !== undefined,
+    hasFirewall(chainId) &&
+    (chainId === ARC_TESTNET_CHAIN_ID || deploymentFor(chainId)?.privatePayRouter !== undefined),
   /**
    * A subscription box is deployed and announced by the relayer, which needs
    * nothing this registry does not already answer: a factory, an announcer, and
@@ -63,7 +82,7 @@ const ALSO_NEEDS: Record<ChainFeature, ((chainId: number) => boolean) | null> = 
    * fixed, and `testnet.services.test.ts` deploys a real box and co-signs for it on
    * every chain here, so there is nothing left to gate on.
    */
-  subscriptions: null,
+  subscriptions: hasFirewall,
 };
 
 /**

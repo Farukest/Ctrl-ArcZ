@@ -291,7 +291,7 @@ export function ReceiveTab({
       {/* Claim a protected transfer sent to you */}
       <Card title={t('claim.title')}>
         {!onSupportedChain ? (
-          <NeedsChain feature="receive" onSwitch={onSwitchChain} />
+          <NeedsChain feature="receive" onSwitch={onSwitchChain} chainId={session.chainId} />
         ) : (
           <>
         <div>

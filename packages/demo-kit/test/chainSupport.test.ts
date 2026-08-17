@@ -29,19 +29,43 @@ describe('supportsChain', () => {
   it('gates Private Pay on a funding route, not on a deployment', () => {
     for (const chainId of deployedChainIds()) {
       const d = deploymentFor(chainId)!;
-      expect(supportsChain(chainId, 'protectedSend')).toBe(true);
-      expect(supportsChain(chainId, 'receive')).toBe(true);
+      // Claiming judges nobody, so it needs the contract and nothing else.
+      expect(supportsChain(chainId, 'receive'), `${d.chain} receive`).toBe(true);
 
       const routed = chainId === ARC_TESTNET_CHAIN_ID || d.privatePayRouter !== undefined;
-      expect(supportsChain(chainId, 'privatePay'), `${d.chain} privatePay`).toBe(routed);
+      const judged = d.explorerApi !== undefined;
+      expect(supportsChain(chainId, 'privatePay'), `${d.chain} privatePay`).toBe(routed && judged);
     }
+  });
+
+  /**
+   * Everything that puts the co-signer's name on a payment needs a recipient
+   * history to judge, and a chain without one fails closed on every attempt. The
+   * screen has to say that before the form is filled in, not after.
+   */
+  it('gates the firewall-judged features on having a history source', () => {
+    for (const chainId of deployedChainIds()) {
+      const d = deploymentFor(chainId)!;
+      const judged = d.explorerApi !== undefined;
+      for (const feature of ['protectedSend', 'subscriptions'] as const) {
+        expect(supportsChain(chainId, feature), `${d.chain} ${feature}`).toBe(judged);
+      }
+    }
+    // Fuji is the chain that has the contracts and no Blockscout.
+    const fuji = CCTP_CHAINS.Avalanche_Fuji.chainId;
+    expect(deploymentFor(fuji)?.explorerApi).toBeUndefined();
+    expect(supportsChain(fuji, 'receive')).toBe(true);
+    expect(supportsChain(fuji, 'privatePay')).toBe(false);
+    expect(supportsChain(fuji, 'subscriptions')).toBe(false);
+    expect(supportsChain(fuji, 'protectedSend')).toBe(false);
   });
 
   /** Subscriptions need the relayer, and the relayer now runs on every deployed
    *  chain -- proved by deploying a real box and co-signing for it on each. */
-  it('offers subscriptions on every deployed chain', () => {
+  it('offers subscriptions wherever the relayer runs and a history can be read', () => {
     for (const chainId of deployedChainIds()) {
-      expect(supportsChain(chainId, 'subscriptions'), String(chainId)).toBe(true);
+      const expected = deploymentFor(chainId)?.explorerApi !== undefined;
+      expect(supportsChain(chainId, 'subscriptions'), String(chainId)).toBe(expected);
     }
   });
 

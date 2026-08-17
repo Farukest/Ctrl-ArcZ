@@ -1,12 +1,20 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { createPublicClient, erc20Abi, fallback, http, isAddress, type Address, type Hex } from 'viem';
+import {
+  createPublicClient,
+  erc20Abi,
+  fallback,
+  http,
+  isAddress,
+  type Address,
+  type Hex,
+  type PublicClient,
+} from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import {
   ADDRESSES,
   ARC_TESTNET_CHAIN_ID,
   BlockscoutDataProvider,
   CachingDataProvider,
-  CTRL_ARCZ_ADDRESS,
   MODE_PUSH,
   MODE_PULL,
   RPC_URLS,
@@ -50,14 +58,50 @@ const VERIFIED_LOOKBACK_BLOCKS = 200_000;
 
 /** A read client for the firewall and the dossier, on the same ranked RPC list
  *  the rest of the app uses so one rate-limited endpoint cannot stall it. */
-const riskClient = createPublicClient({
+const arcRiskClient = createPublicClient({
   chain: arcTestnet,
   transport: fallback(RPC_URLS.map((u) => http(u, { retryCount: 1 }))),
 });
 
-/** Shared across requests: the indexer walk for a sender's history is the slow
- *  part, and a fresh provider per request would repeat it every time. */
-const riskProvider = new CachingDataProvider(new BlockscoutDataProvider(), { ttlMs: 60_000 });
+/**
+ * A read client for the chain being asked about.
+ *
+ * Arc keeps the client above, which carries its ranked endpoint list. Everything
+ * else is built from the registry and cached, because a fresh client per request
+ * opens a fresh connection pool per request.
+ */
+const riskClients = new Map<number, PublicClient>();
+function riskClientFor(chainId: number): PublicClient {
+  if (chainId === ARC_TESTNET_CHAIN_ID) return arcRiskClient;
+  const cached = riskClients.get(chainId);
+  if (cached) return cached;
+  const deployment = deploymentFor(chainId);
+  if (!deployment) throw new HttpError(400, 'invalid chainId');
+  const client = createPublicClient({
+    transport: fallback(deployment.rpcUrls.map((u) => http(u, { retryCount: 1 }))),
+  }) as PublicClient;
+  riskClients.set(chainId, client);
+  return client;
+}
+
+/**
+ * The history source for a chain, shared across requests.
+ *
+ * The indexer walk for a sender's history is the slow part, and a fresh provider
+ * per request would repeat it every time. Per chain, because a recipient's history
+ * on Base is not their history on Arc -- reading the wrong one does not fail, it
+ * answers a different question and the firewall believes it.
+ */
+const riskProviders = new Map<number, CachingDataProvider>();
+function riskProviderFor(chainId: number): CachingDataProvider {
+  const cached = riskProviders.get(chainId);
+  if (cached) return cached;
+  const provider = new CachingDataProvider(new BlockscoutDataProvider({ chainId }), {
+    ttlMs: 60_000,
+  });
+  riskProviders.set(chainId, provider);
+  return provider;
+}
 
 // --- co-signer ("The Machine") ---
 
@@ -84,7 +128,9 @@ export async function verifiedRecipientsGet(req: IncomingMessage, res: ServerRes
   const url = new URL(req.url ?? '', 'http://localhost');
   const sender = url.searchParams.get('sender');
   if (!sender || !isAddress(sender)) throw new HttpError(400, 'invalid sender');
-  json(res, 200, verifiedRecipients(sender as Address));
+  const chainRaw = url.searchParams.get('chainId');
+  if (chainRaw !== null && !/^\d{1,20}$/.test(chainRaw)) throw new HttpError(400, 'invalid chainId');
+  json(res, 200, verifiedRecipients(sender as Address, chainOf(chainRaw ? Number(chainRaw) : undefined)));
 }
 
 /**
@@ -110,7 +156,13 @@ export async function announcementsGet(req: IncomingMessage, res: ServerResponse
   // A bad cursor must not be read as "give me everything from zero" silently, and
   // must not throw either: reject it so a client bug is visible.
   if (raw !== null && !/^\d{1,20}$/.test(raw)) throw new HttpError(400, 'invalid fromBlock');
-  json(res, 200, announcements(raw ? BigInt(raw) : 0n));
+  const chainRaw = url.searchParams.get('chainId');
+  if (chainRaw !== null && !/^\d{1,20}$/.test(chainRaw)) throw new HttpError(400, 'invalid chainId');
+  json(
+    res,
+    200,
+    announcements(raw ? BigInt(raw) : 0n, chainOf(chainRaw ? Number(chainRaw) : undefined)),
+  );
 }
 
 /**
@@ -129,7 +181,7 @@ export async function announcementsGet(req: IncomingMessage, res: ServerResponse
 export async function healthGet(_req: IncomingMessage, res: ServerResponse): Promise<void> {
   if (!env.relayerPk) return json(res, 200, { ok: true, relayer: null });
   const address = privateKeyToAccount(env.relayerPk).address;
-  const usdc = await riskClient
+  const usdc = await arcRiskClient
     .readContract({
       address: ADDRESSES.USDC as Address,
       abi: erc20Abi,
@@ -432,10 +484,20 @@ export async function investigatePost(req: IncomingMessage, res: ServerResponse)
   // The per-IP window in `http.ts` covers a single abuser; `takeInvestigatorBudget`
   // bounds the operator's model spend however many addresses or IPs show up.
   const raw = await readRaw(req);
-  const { target, sender: claimedSender } = parseBody(raw) as {
+  const { target, sender: claimedSender, chainId: rawChainId } = parseBody(raw) as {
     target?: unknown;
     sender?: unknown;
+    chainId?: unknown;
   };
+  const chainId = chainOf(rawChainId);
+  const deployment = deploymentFor(chainId)!;
+  // No explorer here, so there is no history to judge on. Said plainly rather than
+  // answered with an empty report that would read as "this address has never done
+  // anything" -- which is the exact signal the firewall treats as suspicious, and
+  // would be a verdict about our own missing data rather than about the recipient.
+  if (!deployment.explorerApi) {
+    throw new HttpError(400, `no transaction history source for chain ${chainId}`);
+  }
   // The sender is claimed rather than proven, and that is fine here: everything
   // read about it is already public on the explorer, and nothing is spent on its
   // behalf. It never authorises anything -- it only selects whose history the
@@ -444,9 +506,9 @@ export async function investigatePost(req: IncomingMessage, res: ServerResponse)
   const targetAddress = addr(target, 'target');
 
   const report = await check(sender, targetAddress, {
-    client: riskClient,
-    provider: riskProvider,
-    contractAddress: CTRL_ARCZ_ADDRESS,
+    client: riskClientFor(chainId),
+    provider: riskProviderFor(chainId),
+    contractAddress: deployment.ctrlArcZ,
     verifiedRecipientsLookbackBlocks: VERIFIED_LOOKBACK_BLOCKS,
   });
 
@@ -458,9 +520,9 @@ export async function investigatePost(req: IncomingMessage, res: ServerResponse)
   }
 
   const dossier = await buildDossier(report, {
-    publicClient: riskClient,
-    provider: riskProvider,
-    usdcAddress: ADDRESSES.USDC as Address,
+    publicClient: riskClientFor(chainId),
+    provider: riskProviderFor(chainId),
+    usdcAddress: deployment.usdc,
   });
   const advisory = await investigate(env.anthropicApiKey, dossier);
 

@@ -1,10 +1,25 @@
 import type { Hex } from 'viem';
 import {
+  ARC_TESTNET_CHAIN_ID,
+  deploymentFor,
   explorerAnnouncements,
-  STEALTH_ANNOUNCER_ADDRESS,
   type RawAnnouncement,
 } from '@ctrl-arcz/sdk';
-import { getPublicClient } from '@ctrl-arcz/demo-kit';
+import { bridgeClients, getPublicClient } from '@ctrl-arcz/demo-kit';
+
+/**
+ * A read client for one chain, without a session to hand.
+ *
+ * This module is called from a hook that has the chain id but not the wallet, and
+ * the only use is `getBlockNumber`, which needs no account. Arc goes through our
+ * own RPCs; elsewhere the wallet's provider answers for the chain it is on.
+ */
+function readClientForChain(chainId: number) {
+  return chainId === ARC_TESTNET_CHAIN_ID
+    ? getPublicClient()
+    : bridgeClients(chainId, '0x0000000000000000000000000000000000000000').publicClient;
+}
+
 
 /**
  * Every stealth announcement, without reading the chain window by window.
@@ -61,12 +76,21 @@ interface Wire {
  * and the list is cheap to refetch; see `useSubscriptions` for why the recognised
  * boxes specifically must not reach browser storage.
  */
-let cache: { entries: RawAnnouncement[]; head: bigint } | null = null;
+/**
+ * Per chain. The announcer is a different contract on each, so one cursor and one
+ * list across all of them would hand a wallet another network's boxes -- which it
+ * would then fail to recognise, or worse, recognise by coincidence of key reuse.
+ */
+const caches = new Map<number, { entries: RawAnnouncement[]; head: bigint }>();
 
-export async function fetchAnnouncements(): Promise<AnnouncementFeed> {
-  const own = await fetchFromIndex();
+export async function fetchAnnouncements(chainId: number): Promise<AnnouncementFeed> {
+  // Nothing is announced on a chain we have no announcer on. Asking anyway meant a
+  // request the server had to refuse, twice per visit, logged as a console error on
+  // a screen that was already telling the user the feature is unavailable here.
+  if (!deploymentFor(chainId)) return { announcements: [], complete: true };
+  const own = await fetchFromIndex(chainId);
   if (own.complete) return own;
-  return fetchFromExplorer();
+  return fetchFromExplorer(chainId);
 }
 
 /**
@@ -77,25 +101,37 @@ export async function fetchAnnouncements(): Promise<AnnouncementFeed> {
  * other source never covered. The explorer returns everything anyway, so there is
  * nothing to save.
  */
-async function fetchFromExplorer(): Promise<AnnouncementFeed> {
+async function fetchFromExplorer(chainId: number): Promise<AnnouncementFeed> {
+  const cache = caches.get(chainId);
+  const deployment = deploymentFor(chainId);
+  // No explorer on this chain, so this fallback has nothing to fall back to.
+  // Incomplete is the honest answer and the caller already handles it by reading
+  // the chain itself.
+  if (!deployment?.explorerApi) {
+    return { announcements: cache?.entries ?? [], complete: false };
+  }
   try {
-    const head = await getPublicClient().getBlockNumber();
+    const head = await readClientForChain(chainId).getBlockNumber();
     const { announcements, complete } = await explorerAnnouncements(
-      STEALTH_ANNOUNCER_ADDRESS,
+      deployment.stealthAnnouncer,
       head,
+      { apiUrl: deployment.explorerApi },
     );
     if (!complete) return { announcements: cache?.entries ?? [], complete: false };
     return { announcements, complete: true };
   } catch {
-    return { announcements: cache?.entries ?? [], complete: false };
+    return { announcements: caches.get(chainId)?.entries ?? [], complete: false };
   }
 }
 
-async function fetchFromIndex(): Promise<AnnouncementFeed> {
+async function fetchFromIndex(chainId: number): Promise<AnnouncementFeed> {
+  const cache = caches.get(chainId);
   try {
     // Ask only for what is new. On a revisit that is almost always nothing.
     const from = cache ? cache.head + 1n : 0n;
-    const res = await fetch(`/api/announcements?fromBlock=${from.toString()}`);
+    const res = await fetch(
+      `/api/announcements?fromBlock=${from.toString()}&chainId=${chainId}`,
+    );
     if (!res.ok) return { announcements: cache?.entries ?? [], complete: false };
     const body = (await res.json()) as {
       announcements?: Wire[];
@@ -118,7 +154,7 @@ async function fetchFromIndex(): Promise<AnnouncementFeed> {
     const entries = [...(cache?.entries ?? []), ...fresh];
     // Advance the cursor only alongside the entries it covers, so a dropped
     // response can never leave a block range that is never asked for again.
-    if (body.head) cache = { entries, head: BigInt(body.head) };
+    if (body.head) caches.set(chainId, { entries, head: BigInt(body.head) });
     return { announcements: entries, complete: true };
   } catch {
     return { announcements: cache?.entries ?? [], complete: false };
@@ -128,5 +164,5 @@ async function fetchFromIndex(): Promise<AnnouncementFeed> {
 /** Forget the list. Nothing here is wallet-specific, so this is only for tests
  *  and for a hard reset. */
 export function clearAnnouncements(): void {
-  cache = null;
+  caches.clear();
 }

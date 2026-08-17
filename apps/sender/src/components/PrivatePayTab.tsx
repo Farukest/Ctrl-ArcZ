@@ -79,7 +79,7 @@ export function PrivatePayTab({
   const [merchant, setMerchant] = useState('');
   const [amount, setAmount] = useState('0.02');
   const { token, setToken } = useToken(session.address, session.chainId);
-  const { balances } = useTokenBalances(session, balance);
+  const { balances, attempted } = useTokenBalances(session, balance);
   const tokenBalance = balances[token.symbol] ?? null;
   const [phase, setPhase] = useState<Phase>('idle');
   const [success, setSuccess] = useState<Success | null>(null);
@@ -262,7 +262,7 @@ export function PrivatePayTab({
       >
         <div className="formstack">
           {!onSupportedChain ? (
-            <NeedsChain feature="privatePay" onSwitch={onSwitchChain} />
+            <NeedsChain feature="privatePay" onSwitch={onSwitchChain} chainId={session.chainId} />
           ) : (
             <>
           <Field
@@ -288,6 +288,10 @@ export function PrivatePayTab({
             value={amount}
             onChange={setAmount}
             balance={tokenBalance}
+            // Still, not shimmering, once a read has come back with nothing. On a
+            // chain whose token this app cannot reach there is no figure on its
+            // way, and a shimmer would promise one forever.
+            balanceMissing={attempted ? 'unavailable' : 'loading'}
             decimals={token.decimals}
             symbol={token.symbol}
             tokenSlot={

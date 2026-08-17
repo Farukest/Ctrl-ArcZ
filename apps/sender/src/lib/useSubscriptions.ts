@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { erc20Abi, type Address, type Hex } from 'viem';
-import { getPublicClient, type Session } from '@ctrl-arcz/demo-kit';
+import type { Session } from '@ctrl-arcz/demo-kit';
+import { readClientFor } from './chainRead.js';
 import {
   ADDRESSES,
   SPEND_POLICY_FACTORY_ADDRESS,
-  STEALTH_ANNOUNCER_ADDRESS,
+  deploymentFor,
   STEALTH_ANNOUNCER_DEPLOY_BLOCK,
   spendPolicyFactoryAbi,
   ownerHash as toOwnerHash,
@@ -81,6 +82,26 @@ const scanned = new Map<
  * A box created in this session is in here immediately, because `track` writes it
  * before the money moves.
  */
+/**
+ * The announcer on the wallet's chain, and the block to scan it from.
+ *
+ * These were Arc's module constants, so the fallback scan read Arc's announcer
+ * whatever network the wallet was on -- and quietly listed Arc's boxes as if they
+ * were the user's boxes here. The screen would have looked right and been wrong,
+ * which is the worst way for this to fail.
+ */
+function announcerOn(session: Session): Address {
+  const deployment = deploymentFor(session.chainId);
+  if (!deployment) throw new Error(`no deployment on chain ${session.chainId}`);
+  return deployment.stealthAnnouncer;
+}
+
+function announcerBlockOn(session: Session): bigint {
+  const deployment = deploymentFor(session.chainId);
+  if (!deployment) throw new Error(`no deployment on chain ${session.chainId}`);
+  return deployment.stealthAnnouncerDeployBlock;
+}
+
 export function knownBoxes(address: string | undefined): {
   boxes: Set<string>;
   names: Map<string, string>;
@@ -203,7 +224,7 @@ export function useSubscriptions(session: Session | null): {
       setSubs(null);
       return;
     }
-    const client = getPublicClient();
+    const client = readClientFor(session);
     const now = Math.floor(Date.now() / 1000);
     const built = await Promise.all(
       [...accounts.current.entries()].map(async ([addrLc, meta]) => {
@@ -282,14 +303,14 @@ export function useSubscriptions(session: Session | null): {
       // The server's index, then recognition here. The list is the same for
       // everyone; only this browser holds the viewing key that says which of it is
       // ours, which is why the endpoint takes no address and learns nothing.
-      const feed = await fetchAnnouncements();
+      const feed = await fetchAnnouncements(session.chainId);
       const found = feed.complete
         ? recognizeAnnouncements(keys, feed.announcements)
         : // Index unavailable or still backfilling. Read the chain rather than
           // trust a partial list: a missing announcement is a missing subscription,
           // and on this screen that is indistinguishable from having none.
-          await discoverStealthBoxes(getPublicClient(), STEALTH_ANNOUNCER_ADDRESS, keys, {
-            fromBlock: seen ? seen.cursor : STEALTH_ANNOUNCER_DEPLOY_BLOCK,
+          await discoverStealthBoxes(readClientFor(session), announcerOn(session), keys, {
+            fromBlock: seen ? seen.cursor : announcerBlockOn(session),
           });
 
       scanned.set(cacheKey, {
@@ -330,7 +351,7 @@ export function useSubscriptions(session: Session | null): {
   // delays showing the user's (stealth) subscriptions.
   const discoverLegacy = useCallback(async () => {
     if (!session) return;
-    const client = getPublicClient();
+    const client = readClientFor(session);
     const mine = toOwnerHash(session.address as Address).toLowerCase();
     const remember = (account?: Address, salt?: Hex) => {
       const a = account?.toLowerCase();

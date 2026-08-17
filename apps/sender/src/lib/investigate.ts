@@ -46,7 +46,10 @@ export async function investigate(session: Session, target: Address): Promise<In
     const res = await fetch('/api/investigate', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ sender: session.address, target }),
+      // The chain decides whose history is read. Without it the server judges the
+      // recipient by their Arc activity, which on any other network is a confident
+      // answer to a different question.
+      body: JSON.stringify({ sender: session.address, target, chainId: session.chainId }),
     });
     if (!res.ok) return { status: 'unavailable' };
     const body = (await res.json()) as { advisory?: Advisory | null };
