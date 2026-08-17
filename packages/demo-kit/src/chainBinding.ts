@@ -183,9 +183,12 @@ export function useWalletChain<T extends string>({
   // `watchWallet` turns MetaMask's `chainChanged` into a new `session.chainId`,
   // which lands here, and every control bound this way follows in the same tick.
   useEffect(() => {
-    move(chainForWallet({ options, chainIdOf: chainId.current }, walletChainId, shown.current, fallback));
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- optionKey stands in
-    // for `options`, whose identity changes every render.
+    move(
+      chainForWallet({ options, chainIdOf: chainId.current }, walletChainId, shown.current, fallback),
+    );
+    // `optionKey` rather than `options`: the array is rebuilt every render, so a
+    // dependency on its identity would re-run this forever. Its contents are what
+    // this actually depends on, and that is what the key holds.
   }, [walletChainId, optionKey, fallback, move]);
 
   const select = useCallback(
