@@ -29,6 +29,10 @@ export const tr: Record<TranslationKey, string> = {
   'chain.needs.receive': 'Claim işlemi Arc Testnet’te yapılır.',
   'chain.needs.privatePay': 'Gizli ödeme Arc Testnet’te yapılır.',
   'chain.needs.subscriptions': 'Çekim ve iptal Arc Testnet’te yapılır. Abonelik kurmak her ağdan çalışır.',
+  'ppay.gasShort': '{symbol} göndermek için de gaz USDC’den gidiyor ve bu cüzdanda yeterli USDC yok.',
+  'token.label': 'Token',
+  'token.search': 'İsim veya adrese göre ara',
+  'token.none': 'Eşleşen token yok',
   'common.network': 'Ağ',
   'common.networkSearch': 'Ağ ara',
   'common.networkNone': 'Eşleşen ağ yok',
@@ -198,7 +202,6 @@ export const tr: Record<TranslationKey, string> = {
     'The Machine (enclave ortak imzacısı) her ödemeyi denetler; drainer veya lookalike adresi göndermeden önce veto eder.',
   'ppay.point3': 'Harcanmayan ne varsa yalnızca kasana döner, başka hiçbir yere gidemez.',
   'ppay.merchant': 'Satıcı adresi',
-  'ppay.amount': 'Tutar (USDC)',
   'ppay.button': 'Özel öde',
   'ppay.step.create': 'Özel adres oluştur',
   'ppay.step.fund': 'Besle',
@@ -210,7 +213,7 @@ export const tr: Record<TranslationKey, string> = {
   'ppay.vetoBody':
     'Ortak imzacı imzasını vermedi; ödeme uyarıyla geçiştirilmedi, fiilen imkânsız oldu. Hiç para hareket etmedi.',
   'ppay.successTitle': 'Özel olarak ödendi',
-  'ppay.successBody': '{amount} USDC, temiz ve tek kullanımlık bir adresten satıcıya ulaştı.',
+  'ppay.successBody': '{amount} {symbol}, temiz ve tek kullanımlık bir adresten satıcıya ulaştı.',
   'ppay.merchantSees': 'Satıcının gördüğü',
   'ppay.txn': 'İşlem',
   'ppay.successNote':

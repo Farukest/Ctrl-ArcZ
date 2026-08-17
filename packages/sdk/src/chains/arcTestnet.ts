@@ -106,6 +106,115 @@ export const ADDRESSES = {
 /** Decimals of the USDC ERC-20 interface. Always cross-checked against `decimals()` at runtime. */
 export const USDC_DECIMALS = 6 as const;
 
+/**
+ * The tokens this app will move on Arc Testnet.
+ *
+ * Every field was read off the chain, not copied from a table: `symbol()` and
+ * `decimals()` were called on each address against the public RPC. That is the
+ * same discipline `CCTP_CHAINS` documents and for the same reason -- a wrong
+ * token address does not fail loudly, it moves real value into a contract that is
+ * not the token.
+ *
+ * `searchNames` is ours, not the chain's. `name()` on both of these returns the
+ * symbol again ("USDC", "EURC"), so there is no long name to show; these exist so
+ * that typing "euro" or "dollar" finds the right row.
+ *
+ * USYC is deliberately absent. It is permissioned -- transfers are restricted to
+ * an allowlist of institutions outside the US, minted through a Teller -- so
+ * offering it here would put a token in the picker that most holders of this app
+ * cannot send, and the failure would arrive as a revert.
+ */
+export interface TokenInfo {
+  symbol: string;
+  address: `0x${string}`;
+  /** Base units per whole token. Never assume 6; see `verifyToken`. */
+  decimals: number;
+  /** Extra words the picker's search should match. Ours, not the contract's. */
+  searchNames: readonly string[];
+}
+
+export const ARC_TOKENS = [
+  {
+    symbol: 'USDC',
+    address: ADDRESSES.USDC,
+    decimals: 6,
+    searchNames: ['usd coin', 'dollar', 'usd'],
+  },
+  {
+    symbol: 'EURC',
+    address: ADDRESSES.EURC,
+    decimals: 6,
+    searchNames: ['euro coin', 'euro', 'eur'],
+  },
+] as const satisfies readonly TokenInfo[];
+
+export type ArcTokenSymbol = (typeof ARC_TOKENS)[number]['symbol'];
+
+/** The default everywhere an amount is entered. Gas on Arc is USDC, so it is also
+ *  the only token a wallet is guaranteed to need. */
+export const DEFAULT_TOKEN: TokenInfo = ARC_TOKENS[0];
+
+export function tokenByAddress(address: string): TokenInfo | undefined {
+  const a = address.toLowerCase();
+  return ARC_TOKENS.find((t) => t.address.toLowerCase() === a);
+}
+
+export function tokenBySymbol(symbol: string): TokenInfo | undefined {
+  const s = symbol.toLowerCase();
+  return ARC_TOKENS.find((t) => t.symbol.toLowerCase() === s);
+}
+
+/**
+ * Does the chain agree with the row above?
+ *
+ * The registry is what the amount maths uses, so being wrong about `decimals` is
+ * being wrong about how much money is moving by a factor of a hundred or more.
+ * This is the check that turns that from a silent error into a refusal, and it is
+ * why the caller should treat a mismatch as "do not offer this token" rather than
+ * as a warning to log.
+ *
+ * Returns the reason rather than throwing: a picker that cannot reach the RPC
+ * should say so, not fall over.
+ */
+export async function verifyToken(
+  read: (address: `0x${string}`, selector: `0x${string}`) => Promise<string>,
+  token: TokenInfo,
+): Promise<{ ok: true } | { ok: false; reason: string }> {
+  try {
+    const [symbolHex, decimalsHex] = await Promise.all([
+      read(token.address, '0x95d89b41'), // symbol()
+      read(token.address, '0x313ce567'), // decimals()
+    ]);
+    const decimals = Number(BigInt(decimalsHex));
+    if (decimals !== token.decimals) {
+      return {
+        ok: false,
+        reason: `${token.symbol} at ${token.address} reports ${decimals} decimals, not ${token.decimals}.`,
+      };
+    }
+    if (!decodeStringReturn(symbolHex).startsWith(token.symbol)) {
+      return {
+        ok: false,
+        reason: `${token.address} does not call itself ${token.symbol}.`,
+      };
+    }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, reason: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+/** ABI-decode a `string` return value. Enough for `symbol()`; not a general decoder. */
+function decodeStringReturn(hex: string): string {
+  const body = hex.startsWith('0x') ? hex.slice(2) : hex;
+  if (body.length < 128) return '';
+  const length = Number(BigInt(`0x${body.slice(64, 128)}`));
+  const bytes = body.slice(128, 128 + length * 2);
+  let out = '';
+  for (let i = 0; i < bytes.length; i += 2) out += String.fromCharCode(parseInt(bytes.slice(i, i + 2), 16));
+  return out;
+}
+
 /** CCTP domain id for Arc. Source: contract-addresses.md */
 export const ARC_CCTP_DOMAIN = 26 as const;
 

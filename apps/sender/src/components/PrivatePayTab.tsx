@@ -12,7 +12,7 @@ import {
   usdc,
   PAY_GAS_LIMIT,
 } from '@ctrl-arcz/sdk';
-import { supportsChain, type Session } from '@ctrl-arcz/demo-kit';
+import { supportsChain, useToken, type Session } from '@ctrl-arcz/demo-kit';
 import {
   AmountField,
   Button,
@@ -23,6 +23,7 @@ import {
   Input,
   NeedsChain,
   Stepper,
+  TokenPicker,
   parseAmount,
   IconLock,
   IconExternal,
@@ -32,6 +33,7 @@ import {
   type Step,
 } from '@ctrl-arcz/demo-kit/ui';
 import { useRecipientGate } from '../lib/useRecipientGate.js';
+import { useTokenBalances } from '../lib/useTokenBalance.js';
 import { useGasReserve } from '../lib/useGasReserve.js';
 import { RiskGate } from './RiskGate.js';
 
@@ -43,6 +45,10 @@ type Phase = 'idle' | 'creating' | 'funding' | 'machine' | 'paying' | 'done' | '
 interface Success {
   ephemeral: Address;
   amount: string;
+  /** Recorded with the payment, not read from the picker: the picker can be
+   *  changed while this card is still on screen, and a receipt that renames the
+   *  currency of a settled payment is worse than no receipt. */
+  symbol: string;
   merchant: Address;
   txHash: Hex;
 }
@@ -71,6 +77,9 @@ export function PrivatePayTab({
   const guard = useSubmitGuard();
   const [merchant, setMerchant] = useState('');
   const [amount, setAmount] = useState('0.02');
+  const { token, setToken } = useToken(session.address);
+  const { balances } = useTokenBalances(session, balance);
+  const tokenBalance = balances[token.symbol] ?? null;
   const [phase, setPhase] = useState<Phase>('idle');
   const [success, setSuccess] = useState<Success | null>(null);
   const [veto, setVeto] = useState<Veto | null>(null);
@@ -86,11 +95,26 @@ export function PrivatePayTab({
    * before the transaction that pays it out, is the one failure with nowhere to go.
    */
   const reserve = useGasReserve(PAY_GAS_LIMIT);
-  const spendable =
-    balance == null || reserve == null ? null : spendableAfterGas(balance, reserve);
+  const payingInGas = token.address.toLowerCase() === (USDC as string).toLowerCase();
+  /**
+   * What can be sent, which is not the same question as what is held.
+   *
+   * Gas on Arc is USDC whatever is being sent, so the two cases are different in
+   * kind rather than in degree. Paying in USDC, the fee comes out of the same
+   * balance and has to be held back from the Max. Paying in anything else, the
+   * fee comes out of a balance this figure is not about, and subtracting it from
+   * the amount would hold back EURC to pay a bill denominated in USDC.
+   */
+  const spendable = payingInGas
+    ? tokenBalance == null || reserve == null
+      ? null
+      : spendableAfterGas(tokenBalance, reserve)
+    : tokenBalance;
+  /** Enough USDC to actually send it, whatever `it` is denominated in. */
+  const gasShort = !payingInGas && balance != null && reserve != null && balance < reserve;
   // The same parser the field uses, so the block can never total a figure the form
   // would not accept.
-  const amountAmt = parseAmount(amount) ?? 0n;
+  const amountAmt = parseAmount(amount, token.decimals) ?? 0n;
 
   /**
    * The same firewall the send screen runs, on the same address, before anything
@@ -116,6 +140,7 @@ export function PrivatePayTab({
 
   const canPay =
     onSupportedChain &&
+    !gasShort &&
     validMerchant &&
     amountValue > 0 &&
     gate.armed &&
@@ -146,7 +171,7 @@ export function PrivatePayTab({
     const clients = session.clients;
     const owner = session.address as Address;
     const to = merchant as Address;
-    const amt = parseUnits(amount, 6);
+    const amt = parseUnits(amount, token.decimals);
 
     const showVeto = (reason: string, riskReasons?: string[]) => {
       setPhase('vetoed');
@@ -177,7 +202,7 @@ export function PrivatePayTab({
         SPEND_POLICY_FACTORY_ADDRESS,
         salt,
         {
-          token: USDC,
+          token: token.address,
           owner,
           cosigner: cosignerAddress,
           vault: owner, // sweeps return to the payer's own wallet
@@ -192,7 +217,13 @@ export function PrivatePayTab({
       );
       if (!outcome.ok) return showVeto(outcome.reason, outcome.riskReasons);
 
-      setSuccess({ ephemeral: outcome.result.account, amount, merchant: to, txHash: outcome.result.txHash });
+      setSuccess({
+        ephemeral: outcome.result.account,
+        amount,
+        symbol: token.symbol,
+        merchant: to,
+        txHash: outcome.result.txHash,
+      });
       setPhase('done');
       toast.push(t('ppay.doneToast'), 'success');
     } catch (e) {
@@ -255,12 +286,37 @@ export function PrivatePayTab({
           <AmountField
             value={amount}
             onChange={setAmount}
-            chain="Arc_Testnet"
-            balance={balance}
-            onMax={(f) => spendable != null && setAmount(percentOf(spendable, f))}
+            balance={tokenBalance}
+            decimals={token.decimals}
+            symbol={token.symbol}
+            tokenSlot={
+              <TokenPicker
+                value={token}
+                onChange={(next) => {
+                  setToken(next);
+                  // The typed figure was in the old token's decimals and meant a
+                  // different amount of money. Carrying it over would leave a
+                  // number on screen that nobody chose.
+                  setAmount('');
+                }}
+                balances={balances}
+                data-testid="ppay-token"
+              />
+            }
+            onMax={(f) =>
+              spendable != null && setAmount(percentOf(spendable, f, token.decimals))
+            }
             boxed
             data-testid="ppay-amount"
           />
+
+          {/* Gas is USDC here whatever is being sent, so running out of it stops a
+              EURC payment with a message about a balance the form is not showing. */}
+          {gasShort && (
+            <p className="field__error" role="alert" data-testid="ppay-gas-short">
+              {t('ppay.gasShort', { symbol: token.symbol })}
+            </p>
+          )}
 
           {/* This screen said nothing at all about cost until the money had moved,
               and it is the one that spends the most on gas. */}
@@ -268,12 +324,23 @@ export function PrivatePayTab({
             <CostBlock
               testId="ppay-cost"
               lines={[
-                { label: t('cost.amount'), value: `${usdc(amountAmt)} USDC` },
+                {
+                  label: t('cost.amount'),
+                  value: `${usdc(amountAmt, token.decimals)} ${token.symbol}`,
+                },
                 { label: t('cost.networkMax'), value: `${usdc(reserve)} USDC` },
               ]}
+              /*
+               * Two currencies do not add up, and a total that pretends otherwise
+               * is the worst line on the screen: paying 5 EURC with a 0.05 USDC
+               * fee is not 5.05 of anything. Summed when the fee comes out of the
+               * same balance, listed side by side when it does not.
+               */
               total={{
                 label: t('cost.youPay'),
-                value: `${usdc(amountAmt + reserve)} USDC`,
+                value: payingInGas
+                  ? `${usdc(amountAmt + reserve, token.decimals)} ${token.symbol}`
+                  : `${usdc(amountAmt, token.decimals)} ${token.symbol} + ${usdc(reserve)} USDC`,
                 testId: 'ppay-youpay',
               }}
             />
@@ -322,7 +389,7 @@ export function PrivatePayTab({
               {t('ppay.successTitle')}
             </h2>
           </div>
-          <p className="muted">{t('ppay.successBody', { amount: success.amount })}</p>
+          <p className="muted">{t('ppay.successBody', { amount: success.amount, symbol: success.symbol })}</p>
 
           <div style={{ marginTop: 16 }}>
             <div className="field__label">{t('ppay.merchantSees')}</div>

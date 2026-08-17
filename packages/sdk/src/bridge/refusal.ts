@@ -28,11 +28,12 @@ export interface Refusal {
 }
 
 /** USDC subunits as a plain decimal string, trimmed, for a sentence. */
-export function usdc(subunits: bigint): string {
+export function usdc(subunits: bigint, decimals = 6): string {
+  const unit = 10n ** BigInt(decimals);
   const neg = subunits < 0n;
   const v = neg ? -subunits : subunits;
-  const whole = v / 1_000_000n;
-  const frac = (v % 1_000_000n).toString().padStart(6, '0').replace(/0+$/, '');
+  const whole = v / unit;
+  const frac = (v % unit).toString().padStart(decimals, '0').replace(/0+$/, '');
   return `${neg ? '-' : ''}${whole}${frac ? `.${frac}` : ''}`;
 }
 
@@ -214,8 +215,8 @@ export function cctpShortfall(params: {
  * refused. Truncated rather than rounded, because rounding up produces a figure a
  * hair above what is affordable.
  */
-export function percentOf(maxSpendable: bigint, fraction: number): string {
+export function percentOf(maxSpendable: bigint, fraction: number, decimals = 6): string {
   if (maxSpendable <= 0n || fraction <= 0) return '';
   const scaled = (maxSpendable * BigInt(Math.round(fraction * 10_000))) / 10_000n;
-  return usdc(scaled);
+  return usdc(scaled, decimals);
 }

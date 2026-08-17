@@ -712,14 +712,21 @@
 .menu__item.is-selected {
   color: var(--accent-text);
 }
+/* Grows into the free space so a row whose content has two ends -- a token and
+   its balance -- can put them at opposite edges. The row is `space-between` with
+   the tick on the right, so for every other menu this changes nothing: the label
+   already sat left, and the text stays clipped rather than wrapping. */
 .menu__item-label {
   display: inline-flex;
   align-items: center;
   gap: var(--sp-3);
+  flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
 }
 .menu__item-text {
+  flex: 1 1 auto;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -739,6 +746,31 @@
 }
 .menu__search-icon {
   color: var(--text-lo);
+  flex-shrink: 0;
+}
+/* Token row: symbol on the left, balance right-aligned so a column of them reads
+   as a column of numbers rather than as text that happens to end in digits. */
+.tokenrow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  width: 100%;
+  min-width: 0;
+}
+.tokenrow__bal {
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  color: var(--text-mid);
+  white-space: nowrap;
+}
+
+/* The clear button sits inside the search row, which is already a flex line with
+   its own padding, so it is positioned in the flow rather than absolutely like
+   the one inside a bordered input. */
+.menu__search-clear {
+  position: static;
+  transform: none;
   flex-shrink: 0;
 }
 .menu__search-input {

@@ -36,6 +36,53 @@ const multicall3Abi = [
   },
 ] as const;
 
+
+/**
+ * Arc's sender-preserving batcher, for funding a box in a token that is not the
+ * native asset.
+ *
+ * `Multicall3From` routes each subcall through the `CallFrom` precompile, so an
+ * ERC-20 `transfer` inside the batch runs as the payer rather than as the
+ * batching contract. That is what makes funding possible without an approval:
+ * ordinary Multicall3 would have to `transferFrom`, which needs an allowance the
+ * payer does not have and a transaction to grant it.
+ *
+ * It deliberately has no `aggregate3Value`. Per Arc's docs, `CallFrom` does not
+ * forward value, so the native path and this one cannot be the same call: the
+ * native path needs value routing and this one needs sender preservation, and no
+ * single entry point offers both.
+ *
+ * Source: docs-arc/arc/concepts/batched-transactions.md
+ */
+const multicall3FromAbi = [
+  {
+    type: 'function',
+    name: 'aggregate3',
+    stateMutability: 'payable',
+    inputs: [
+      {
+        name: 'calls',
+        type: 'tuple[]',
+        components: [
+          { name: 'target', type: 'address' },
+          { name: 'allowFailure', type: 'bool' },
+          { name: 'callData', type: 'bytes' },
+        ],
+      },
+    ],
+    outputs: [
+      {
+        name: 'returnData',
+        type: 'tuple[]',
+        components: [
+          { name: 'success', type: 'bool' },
+          { name: 'returnData', type: 'bytes' },
+        ],
+      },
+    ],
+  },
+] as const;
+
 /** 6-dec ERC-20 USDC amount -> 18-dec native value, for a funding send on Arc. */
 const toNativeValue = (amount6: bigint): bigint => amount6 * 10n ** 12n;
 
@@ -527,24 +574,65 @@ export async function settlePrivatePaymentBatched(
     functionName: 'pay',
     args: [amount, auth.signature],
   });
-  const value = toNativeValue(amount);
+  /**
+   * How the box gets the money, which is not the same question for every token.
+   *
+   * On Arc the native asset *is* USDC, so a USDC box is funded by sending value
+   * to its `receive()`, and that needs Multicall3's value-routing aggregate.
+   * Every other token is an ordinary ERC-20 that has to be `transfer`ed, and a
+   * transfer inside a batch has to come from the payer or it moves the batching
+   * contract's balance -- which is zero. Arc's `Multicall3From` preserves the
+   * sender for exactly this, and per its docs has no `aggregate3Value` because
+   * `CallFrom` does not forward value.
+   *
+   * So the two paths cannot be merged: one needs value routing, the other needs
+   * sender preservation, and no single entry point offers both.
+   *
+   * Found by paying a merchant 0.5 EURC: the batch funded the box with 0.5 of
+   * the native asset and then asked it to pay out EURC it did not hold, and the
+   * whole transaction reverted with `Multicall3: call failed`.
+   */
+  const isNative = policy.token.toLowerCase() === (ADDRESSES.USDC as string).toLowerCase();
 
   ctx.onPhase?.('submitting');
-  const txHash = await clients.walletClient.writeContract({
-    address: ADDRESSES.MULTICALL3 as Address,
-    abi: multicall3Abi,
-    functionName: 'aggregate3Value',
-    args: [
-      [
-        { target: factory, allowFailure: false, value: 0n, callData: createData },
-        { target: box, allowFailure: false, value, callData: '0x' as Hex },
-        { target: box, allowFailure: false, value: 0n, callData: payData },
-      ],
-    ],
-    value,
-    account: sender,
-    chain: clients.walletClient.chain ?? null,
-  });
+  const txHash = isNative
+    ? await clients.walletClient.writeContract({
+        address: ADDRESSES.MULTICALL3 as Address,
+        abi: multicall3Abi,
+        functionName: 'aggregate3Value',
+        args: [
+          [
+            { target: factory, allowFailure: false, value: 0n, callData: createData },
+            { target: box, allowFailure: false, value: toNativeValue(amount), callData: '0x' as Hex },
+            { target: box, allowFailure: false, value: 0n, callData: payData },
+          ],
+        ],
+        value: toNativeValue(amount),
+        account: sender,
+        chain: clients.walletClient.chain ?? null,
+      })
+    : await clients.walletClient.writeContract({
+        address: ADDRESSES.MULTICALL3_FROM as Address,
+        abi: multicall3FromAbi,
+        functionName: 'aggregate3',
+        args: [
+          [
+            { target: factory, allowFailure: false, callData: createData },
+            {
+              target: policy.token,
+              allowFailure: false,
+              callData: encodeFunctionData({
+                abi: erc20Abi,
+                functionName: 'transfer',
+                args: [box, amount],
+              }),
+            },
+            { target: box, allowFailure: false, callData: payData },
+          ],
+        ],
+        account: sender,
+        chain: clients.walletClient.chain ?? null,
+      });
   await clients.publicClient.waitForTransactionReceipt({ hash: txHash });
   return { ok: true, result: { account: box, txHash } };
 }

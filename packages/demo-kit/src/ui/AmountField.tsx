@@ -22,12 +22,12 @@ import { fiat, formatAmount, sanitizeAmount } from './amount.js';
 export interface AmountFieldProps {
   value: string;
   onChange: (next: string) => void;
-  /** Field label. Just "Amount": the pill on the right already says USDC. */
+  /** Field label. Just "Amount": the pill on the right already names the token. */
   label?: ReactNode;
   /** Chain whose logo rides in the token pill, so the amount names its network. */
   chain?: string;
-  /** Spendable balance in USDC subunits. Never zero when unknown: a zero is a claim
-   *  about the balance and an unread balance is not one. */
+  /** Balance in the token's own subunits. Never zero when unknown: a zero is a
+   *  claim about the balance and an unread balance is not one. */
   balance?: bigint | null;
   /**
    * Why the balance is missing, when it is.
@@ -67,6 +67,24 @@ export interface AmountFieldProps {
    * a box in a box.
    */
   boxed?: boolean;
+  /**
+   * Base units per whole token, for the input filter.
+   *
+   * Defaults to six because that is USDC and every screen here started as a USDC
+   * screen. It is a prop rather than a constant because a seventh decimal is a
+   * rejected payment on a six-decimal token and a perfectly ordinary one on an
+   * eight-decimal token, and the field is the only place that rule lives.
+   */
+  decimals?: number;
+  /** What the pill says when there is nothing to pick. */
+  symbol?: string;
+  /**
+   * A control in place of the static pill, for screens where the token is a
+   * choice. The pill's job is to name the asset; when the asset can change, the
+   * thing that names it should also be the thing that changes it, rather than a
+   * separate select somewhere else on the form.
+   */
+  tokenSlot?: ReactNode;
   'data-testid'?: string;
 }
 
@@ -85,10 +103,21 @@ export function AmountField({
   error,
   hint,
   boxed = false,
+  decimals = 6,
+  symbol = 'USDC',
+  tokenSlot,
   'data-testid': testId,
 }: AmountFieldProps) {
   const t = useT();
   const canFill = onMax != null && balance != null && balance > 0n;
+  /**
+   * The dollar line is only true for a dollar token. `fiat` prints "$1.00" for
+   * one unit, which is the whole point of it for USDC and a wrong exchange rate
+   * for anything else. We do not carry a rate, so for other tokens the line is
+   * omitted rather than guessed: no number is better than a made-up one next to
+   * an amount someone is about to send.
+   */
+  const showsFiat = symbol === 'USDC';
 
   return (
     <div
@@ -114,7 +143,7 @@ export function AmountField({
               {balance == null ? (
                 <Skeleton width={74} height={13} still={balanceMissing === 'unavailable'} />
               ) : (
-                `${formatAmount(balance)} USDC`
+                `${formatAmount(balance, decimals)} ${symbol}`
               )}
             </output>
           </button>
@@ -130,7 +159,7 @@ export function AmountField({
             value={value}
             // Filtered here and nowhere else, so no screen can hold a value the
             // others would refuse.
-            onChange={(e) => onChange(sanitizeAmount(e.target.value))}
+            onChange={(e) => onChange(sanitizeAmount(e.target.value, decimals))}
             inputMode="decimal"
             placeholder="0"
             aria-invalid={invalid || undefined}
@@ -138,14 +167,16 @@ export function AmountField({
             data-testid={testId ? `${testId}-input` : undefined}
           />
         )}
-        <span className="usdcpill">
-          {chain && <ChainLogo id={chain} size={20} />}
-          USDC
-        </span>
+        {tokenSlot ?? (
+          <span className="usdcpill">
+            {chain && <ChainLogo id={chain} size={20} />}
+            {symbol}
+          </span>
+        )}
       </div>
 
       <div className="amountf__foot">
-        <span className="amountf__fiat">{fiat(value)}</span>
+        <span className="amountf__fiat">{showsFiat ? fiat(value) : ''}</span>
         {percents && percents.length > 0 && (
           <span className="amountf__pcts">
             {percents.map((f) => (

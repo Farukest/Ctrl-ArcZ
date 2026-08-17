@@ -292,6 +292,14 @@ export function Input({ mono, invalid, sm, className, onClear, ...rest }: InputP
 export interface SelectOption {
   value: string;
   label: ReactNode;
+  /**
+   * What the closed control shows, when that differs from the row.
+   *
+   * A row can afford more than a trigger: the token picker puts the balance
+   * beside the symbol in the list, and the trigger is a chip next to an amount
+   * field where a second number would be read as part of the amount.
+   */
+  triggerLabel?: ReactNode;
   /** Optional leading icon, shown in both the trigger and the menu row. */
   icon?: ReactNode;
   /** Plain text used for search filtering (falls back to a string label). */
@@ -341,9 +349,11 @@ export function Select({
   placeholder?: string;
   id?: string;
 }) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const anchor = useRef<HTMLButtonElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
   const current = options.find((o) => o.value === value);
 
   const q = query.trim().toLowerCase();
@@ -381,7 +391,7 @@ export function Select({
               current ? 'select-trigger__text' : 'select-trigger__text select-trigger__text--ph'
             }
           >
-            {current?.label ?? placeholder ?? ''}
+            {current ? (current.triggerLabel ?? current.label) : (placeholder ?? '')}
           </span>
         </span>
         <IconChevron className={open ? 'select-trigger__chev is-open' : 'select-trigger__chev'} />
@@ -398,6 +408,7 @@ export function Select({
           <div className="menu__search">
             <IconSearch className="menu__search-icon" width={15} height={15} />
             <input
+              ref={searchRef}
               className="menu__search-input"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
@@ -405,6 +416,27 @@ export function Select({
               aria-label={searchPlaceholder ?? ariaLabel}
               autoComplete="off"
             />
+            {/* The same affordance the address fields have. A search that has
+                filtered a long list down to nothing is exactly where someone wants
+                to start over, and selecting the text to delete it is the slow way
+                to do that on a phone. Same behaviour too: the caret goes back to
+                the box, so the next thing typed lands in the field just emptied. */}
+            {query !== '' && (
+              <button
+                type="button"
+                className="inputwrap__clear menu__search-clear"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  setQuery('');
+                  searchRef.current?.focus();
+                }}
+                aria-label={t('common.clear')}
+                title={t('common.clear')}
+                data-testid="menu-search-clear"
+              >
+                <IconClose width={14} height={14} />
+              </button>
+            )}
           </div>
         )}
         <div className="menu__list">

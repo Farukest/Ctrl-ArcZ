@@ -36,6 +36,10 @@ export const en = {
   'chain.needs.receive': 'Claiming happens on Arc Testnet.',
   'chain.needs.privatePay': 'Private payments happen on Arc Testnet.',
   'chain.needs.subscriptions': 'Charging and cancelling happen on Arc Testnet. Creating one works from any network.',
+  'ppay.gasShort': 'Sending {symbol} still costs USDC for gas, and this wallet does not have enough.',
+  'token.label': 'Token',
+  'token.search': 'Search by name or address',
+  'token.none': 'No matching token',
   'common.network': 'Network',
   'common.networkSearch': 'Search networks',
   'common.networkNone': 'No matching network',
@@ -226,7 +230,6 @@ export const en = {
     'The Machine (an enclave co-signer) checks every payment and vetoes a drainer or lookalike before it can send.',
   'ppay.point3': 'Anything unspent can only ever return to your vault, never anywhere else.',
   'ppay.merchant': 'Merchant address',
-  'ppay.amount': 'Amount (USDC)',
   'ppay.button': 'Pay privately',
   'ppay.step.create': 'Create private address',
   'ppay.step.fund': 'Fund it',
@@ -238,7 +241,7 @@ export const en = {
   'ppay.vetoBody':
     'The co-signer withheld its signature, so the payment was impossible, not merely warned against. No funds moved.',
   'ppay.successTitle': 'Paid privately',
-  'ppay.successBody': '{amount} USDC reached the merchant from a clean, single-use address.',
+  'ppay.successBody': '{amount} {symbol} reached the merchant from a clean, single-use address.',
   'ppay.merchantSees': 'What the merchant sees',
   'ppay.txn': 'Transaction',
   'ppay.successNote':

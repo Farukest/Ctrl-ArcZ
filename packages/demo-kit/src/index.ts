@@ -32,6 +32,7 @@ export {
   type BridgeOutcome,
 } from './bridgeChains.js';
 export { supportsChain, preferredChainFor, type ChainFeature } from './chainSupport.js';
+export { useToken } from './useToken.js';
 export {
   DEPOSIT_STEPS,
   stepsForEngine,
