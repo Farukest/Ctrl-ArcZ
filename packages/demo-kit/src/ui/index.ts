@@ -32,6 +32,7 @@ export { TopBar } from './TopBar.js';
 export { NetworkMenu } from './NetworkMenu.js';
 export { NeedsChain } from './NeedsChain.js';
 export { TokenPicker } from './TokenPicker.js';
+export { TokenLogo } from './TokenLogo.js';
 export { LogoWordmark } from './Logo.js';
 export { TextType, type TextTypeProps } from './TextType.js';
 export { ThemeProvider, useTheme, type Theme } from './theme.js';

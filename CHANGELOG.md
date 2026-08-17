@@ -8,6 +8,22 @@ Ağ kontrolü header'a taşındı ve Private Pay EURC ile de ödenebiliyor.
 
 ### Eklendi
 
+- **Token seçici artık bir modül ve liste ağa göre.** Kayıt zincir anahtarlı
+  (`TOKENS_BY_CHAIN`), çünkü aynı sembol her ağda başka bir kontrat; düz bir liste
+  ikinci ağ geldiği gün yanlış olur. Adres doğrulanmamış bir zincirde seçici hiçbir
+  şey önermiyor, doğrusu da bu. Satırda marka rengiyle çizilmiş bir işaret, sembol,
+  altında tam isim ve sağda bakiye var; bakiyenin yanına sembol tekrar yazılmıyor,
+  satır zaten iki kez söylüyor. Marka işareti dosya olarak eklenirse
+  `ui/token-logos/<SEMBOL>.svg` otomatik kullanılıyor; çizilen işaretin glifi zeminin
+  taşıyabildiği renge göre siyah ya da beyaz seçiliyor.
+- **cirBTC eklendi, sekiz ondalıklı.** Adres Android'in kaydındakiyle aynı ama
+  güvenilerek değil doğrulanarak: `symbol()` cirBTC, `name()` "Circle Wrapped
+  Bitcoin", `decimals()` 8. Bu kontrol formalite değil; ArcScan'de "cirBTC" araması
+  sembole cevap veren sekiz kontrat döndürüyor, üçünün adı Mock ya da Demo.
+  Zincirde doğrulandı: 0.00012345 cirBTC ödemesi (`0x4f0da1e6`), ham 12345 birim.
+- **USYC listede, ama seçilemez.** İzinli bir token; gizlenirse "uygulama bunu
+  bilmiyor mu" sorusu doğuyor, bakiyesinin yerinde "Allowlist gerekiyor" yazan
+  soluk bir satır ise cevabı işlem gitmeden önce veriyor.
 - **Ağ seçici header'da.** Cüzdanın hangi ağda olduğunu her an yazıyor ve
   değiştiriyor. Liste `CCTP_CHAINS`ten türüyor. Tanımadığımız bir ağda numarasını
   yazıyor ve logo uydurmuyor. Arc dışına geçiş yalnız cüzdana soruluyor; Arc'ın
@@ -17,10 +33,8 @@ Ağ kontrolü header'a taşındı ve Private Pay EURC ile de ödenebiliyor.
 - **Private Pay'de token seçimi**, paylaşılan `Select` üzerine. Arama sembol, isim
   ve kontrat adresiyle çalışıyor. Listede olmayan adres "token yok" döner; adresle
   token ekleme akışı bilerek yok, çünkü her adresi kabul eden bir seçiciye er geç
-  bir benzer-kontrat verilir.
-- **`ARC_TOKENS` kaydı** (USDC, EURC). İki satır da zincirden `symbol()` ve
-  `decimals()` okunarak yazıldı. USYC listede yok: izinli bir token, seçilince
-  çoğu kişide revert olarak dönerdi.
+  bir benzer-kontrat verilir. Kayıttaki her satırın adresi, sembolü ve ondalığı
+  zincirden okunarak yazıldı.
 
 ### Düzeltildi
 
@@ -45,6 +59,14 @@ Ağ kontrolü header'a taşındı ve Private Pay EURC ile de ödenebiliyor.
   bir kural onu iptal ediyordu.
 - **480px altında ağ chip'i etiketini gizleyince** ekran okuyucuya yalnız "Ağ"
   kalıyordu; `aria-label` artık ağın adını taşıyor.
+- **Menülerin arama kutusu 20px yüksekliğindeydi**, WCAG 2.5.8'in 24px tabanının
+  altında, ve aranabilir her menüde parmağın ilk gittiği yer orası.
+- **Denetim aracının kendi yanlış pozitifleri.** Açık bir menü varken arkasındaki
+  her kontrol "dokunulamıyor" diye işaretleniyordu (ağ menüsünde 19 bulgu, hepsi
+  örtünün doğru davranışı), kaydırılan bir listenin görünmeyen satırları da öyle.
+  Artık yalnız en üstteki katman ve yalnız kendi kabının içinde tamamen görünen
+  hedefler ölçülüyor. Marka işaretleri de tema kuralından muaf: bir token rozetinin
+  temayla renk değiştirmesi düzeltilecek bir kusur değil, başka bir token demek.
 - **Ondalık ve para birimi varsayımları.** Tutar, bakiye ve Max artık tokenin
   kendi ondalığını kullanıyor. Gaz Arc'ta USDC olduğu için EURC tutarından
   düşülmüyor ve maliyet bloğu iki para birimini toplamıyor ("0.5 EURC + 0.05

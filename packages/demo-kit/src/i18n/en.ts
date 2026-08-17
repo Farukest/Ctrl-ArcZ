@@ -37,6 +37,8 @@ export const en = {
   'chain.needs.privatePay': 'Private payments happen on Arc Testnet.',
   'chain.needs.subscriptions': 'Charging and cancelling happen on Arc Testnet. Creating one works from any network.',
   'ppay.gasShort': 'Sending {symbol} still costs USDC for gas, and this wallet does not have enough.',
+  'token.restricted.allowlist': 'Needs an allowlist',
+  'token.choose': 'Choose a token',
   'token.label': 'Token',
   'token.search': 'Search by name or address',
   'token.none': 'No matching token',

@@ -2,6 +2,10 @@ import { describe, it, expect } from 'vitest';
 import {
   ADDRESSES,
   ARC_TOKENS,
+  tokensFor,
+  spendableTokensFor,
+  defaultTokenFor,
+  ARC_TESTNET_CHAIN_ID,
   DEFAULT_TOKEN,
   tokenByAddress,
   tokenBySymbol,
@@ -15,6 +19,9 @@ function encodeString(s: string): string {
   return `0x${(32).toString(16).padStart(64, '0')}${s.length.toString(16).padStart(64, '0')}${padded}`;
 }
 
+const USDC_T = ARC_TOKENS[0] as (typeof ARC_TOKENS)[number];
+const EURC = ARC_TOKENS[1] as (typeof ARC_TOKENS)[number];
+
 const word = (n: number) => `0x${n.toString(16).padStart(64, '0')}`;
 
 /** A chain that answers whatever the test says it answers. */
@@ -26,10 +33,12 @@ function chain(answers: Record<string, { symbol: string; decimals: number }>) {
   };
 }
 
-const honest = chain({
-  [ADDRESSES.USDC.toLowerCase()]: { symbol: 'USDC', decimals: 6 },
-  [ADDRESSES.EURC.toLowerCase()]: { symbol: 'EURC', decimals: 6 },
-});
+/** Answers exactly what each registry row claims, for every row there is. */
+const honest = chain(
+  Object.fromEntries(
+    ARC_TOKENS.map((t) => [t.address.toLowerCase(), { symbol: t.symbol, decimals: t.decimals }]),
+  ),
+);
 
 describe('the Arc token registry', () => {
   it('defaults to USDC, which is also what gas is paid in', () => {
@@ -37,8 +46,53 @@ describe('the Arc token registry', () => {
     expect(DEFAULT_TOKEN.address).toBe(ADDRESSES.USDC);
   });
 
-  it('does not list USYC, which is permissioned', () => {
-    expect(ARC_TOKENS.map((t) => t.symbol)).toEqual(['USDC', 'EURC']);
+  it('lists USYC, but not as something that can be picked', () => {
+    expect(ARC_TOKENS.map((t) => t.symbol)).toEqual(['USDC', 'EURC', 'cirBTC', 'USYC']);
+    expect(tokenBySymbol('USYC')?.restricted?.reason).toBe('allowlist');
+    expect(spendableTokensFor(ARC_TESTNET_CHAIN_ID).map((t) => t.symbol)).toEqual([
+      'USDC',
+      'EURC',
+      'cirBTC',
+    ]);
+  });
+
+  /**
+   * The one the amount maths cares about. Everything here used to be six, which is
+   * why "assume six" survived as long as it did; cirBTC is the token that makes a
+   * wrong assumption cost a hundred times the intended payment.
+   */
+  it('carries cirBTC at eight decimals, not six', () => {
+    expect(tokenBySymbol('cirBTC')?.decimals).toBe(8);
+  });
+
+  it('carries a name for every token, because a ticker is not a name', () => {
+    for (const t of ARC_TOKENS) expect(t.name.length).toBeGreaterThan(3);
+    expect(tokenBySymbol('cirBTC')?.name).toBe('Circle Wrapped BTC');
+  });
+});
+
+describe('tokens are per chain', () => {
+  it('answers for Arc', () => {
+    expect(tokensFor(ARC_TESTNET_CHAIN_ID).length).toBe(4);
+    expect(defaultTokenFor(ARC_TESTNET_CHAIN_ID)?.symbol).toBe('USDC');
+  });
+
+  /**
+   * Not an oversight and not an empty state to fill in later: we have verified no
+   * token addresses on these chains, and a symbol resolved against the wrong chain
+   * is a transfer to the wrong contract. Nothing is the honest answer.
+   */
+  it('offers nothing on a chain we have verified nothing for', () => {
+    expect(tokensFor(84532)).toEqual([]);
+    expect(tokensFor(1)).toEqual([]);
+    expect(tokensFor(undefined)).toEqual([]);
+    expect(defaultTokenFor(84532)).toBeUndefined();
+  });
+
+  it('scopes a lookup to the chain when it is given one', () => {
+    expect(tokenBySymbol('EURC', ARC_TESTNET_CHAIN_ID)?.address).toBe(ADDRESSES.EURC);
+    expect(tokenBySymbol('EURC', 84532)).toBeUndefined();
+    expect(tokenByAddress(ADDRESSES.EURC, 84532)).toBeUndefined();
   });
 
   it('looks a token up by address case-insensitively, since addresses arrive both ways', () => {
@@ -73,7 +127,7 @@ describe('verifyToken', () => {
    */
   it('refuses a token whose decimals disagree, and says both numbers', async () => {
     const lying = chain({ [ADDRESSES.EURC.toLowerCase()]: { symbol: 'EURC', decimals: 18 } });
-    const r = await verifyToken(lying, ARC_TOKENS[1]);
+    const r = await verifyToken(lying, EURC);
     expect(r.ok).toBe(false);
     if (!r.ok) {
       expect(r.reason).toContain('18');
@@ -83,7 +137,7 @@ describe('verifyToken', () => {
 
   it('refuses an address that calls itself something else', async () => {
     const impostor = chain({ [ADDRESSES.EURC.toLowerCase()]: { symbol: 'EURD', decimals: 6 } });
-    const r = await verifyToken(impostor, ARC_TOKENS[1]);
+    const r = await verifyToken(impostor, EURC);
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.reason).toContain('does not call itself EURC');
   });
@@ -93,7 +147,7 @@ describe('verifyToken', () => {
     const dead = async () => {
       throw new Error('request limit reached');
     };
-    const r = await verifyToken(dead, ARC_TOKENS[0]);
+    const r = await verifyToken(dead, USDC_T);
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.reason).toContain('request limit');
   });

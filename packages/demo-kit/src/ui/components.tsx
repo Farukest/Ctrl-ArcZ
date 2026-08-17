@@ -304,6 +304,14 @@ export interface SelectOption {
   icon?: ReactNode;
   /** Plain text used for search filtering (falls back to a string label). */
   text?: string;
+  /**
+   * Present but not choosable, with the reason in place of its trailing value.
+   *
+   * For an option that genuinely exists and genuinely cannot be picked. Leaving
+   * it out of the list makes the reader wonder whether the app knows about it;
+   * showing it greyed with "needs an allowlist" answers that before they ask.
+   */
+  disabled?: boolean;
 }
 
 function optionText(o: SelectOption): string {
@@ -449,7 +457,10 @@ export function Select({
               className={['menu__item', o.value === value && 'is-selected']
                 .filter(Boolean)
                 .join(' ')}
+              disabled={o.disabled ?? false}
+              aria-disabled={o.disabled ?? undefined}
               onClick={() => {
+                if (o.disabled) return;
                 onChange(o.value);
                 close();
               }}

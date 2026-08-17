@@ -750,19 +750,75 @@
 }
 /* Token row: symbol on the left, balance right-aligned so a column of them reads
    as a column of numbers rather than as text that happens to end in digits. */
+/* Token row: mark, then symbol over name, then the balance right-aligned, so a
+   column of them reads as a column of numbers rather than as text ending in
+   digits. Two lines because a ticker is not a name: "cirBTC" and "USYC" say
+   nothing to someone who has not met them. */
 .tokenrow {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: var(--sp-4);
   width: 100%;
   min-width: 0;
 }
-.tokenrow__bal {
+.tokenrow__id {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.tokenrow__sym {
+  font-weight: 600;
+  line-height: 1.25;
+}
+.tokenrow__name {
+  font-size: var(--fs-xs, 12px);
+  font-weight: 400;
+  color: var(--text-lo);
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tokenrow__right {
   font-family: var(--font-mono);
   font-size: var(--fs-sm);
   color: var(--text-mid);
   white-space: nowrap;
+}
+/* A token that exists and cannot be picked. Muted rather than hidden, and the
+   reason sits where its balance would have been. */
+.menu__item:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+.menu__item:disabled .tokenrow__right {
+  font-family: inherit;
+  font-size: var(--fs-xs, 12px);
+  color: var(--text-lo);
+}
+
+/* Token mark. `--drawn` is ours; an official SVG dropped into ./token-logos
+   renders instead and keeps only the outer sizing. */
+.tokenlogo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border-radius: 50%;
+  overflow: hidden;
+}
+.tokenlogo svg {
+  width: 100%;
+  height: 100%;
+}
+.tokenlogo--drawn {
+  /* `color` is set inline, picked against the tint so the glyph stays readable. */
+  font-weight: 600;
+  line-height: 1;
+  /* Keeps a light mark legible on a light card without a border on the dark one. */
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 12%);
 }
 
 /* The clear button sits inside the search row, which is already a flex line with
@@ -776,6 +832,10 @@
 .menu__search-input {
   flex: 1;
   min-width: 0;
+  /* The box a thumb has to land on, not just the line the text sits on. It was
+     20px tall, under WCAG 2.5.8's 24px floor, and it is the first thing a finger
+     reaches for in a searchable menu. Measured on the token picker at 294x20. */
+  min-height: 26px;
   border: 0;
   background: transparent;
   color: var(--text-hi);

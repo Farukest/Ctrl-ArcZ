@@ -78,7 +78,7 @@ export function PrivatePayTab({
   const guard = useSubmitGuard();
   const [merchant, setMerchant] = useState('');
   const [amount, setAmount] = useState('0.02');
-  const { token, setToken } = useToken(session.address);
+  const { token, setToken } = useToken(session.address, session.chainId);
   const { balances } = useTokenBalances(session, balance);
   const tokenBalance = balances[token.symbol] ?? null;
   const [phase, setPhase] = useState<Phase>('idle');
@@ -293,6 +293,7 @@ export function PrivatePayTab({
             tokenSlot={
               <TokenPicker
                 value={token}
+                chainId={session.chainId}
                 onChange={(next) => {
                   setToken(next);
                   // The typed figure was in the old token's decimals and meant a

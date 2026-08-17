@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { erc20Abi, type Address } from 'viem';
-import { ADDRESSES, ARC_TOKENS, type TokenInfo } from '@ctrl-arcz/sdk';
+import { ADDRESSES, tokensFor, type TokenInfo } from '@ctrl-arcz/sdk';
 import { getPublicClient, type Session } from '@ctrl-arcz/demo-kit';
 
 /**
@@ -22,7 +22,7 @@ import { getPublicClient, type Session } from '@ctrl-arcz/demo-kit';
 export function useTokenBalances(
   session: Session,
   usdcBalance: bigint | null,
-  tokens: readonly TokenInfo[] = ARC_TOKENS,
+  tokens: readonly TokenInfo[] = tokensFor(session.chainId),
 ): { balances: Partial<Record<string, bigint>>; refresh: () => Promise<void> } {
   const [read, setRead] = useState<Partial<Record<string, bigint>>>({});
   const isUsdc = (t: TokenInfo) =>

@@ -241,8 +241,48 @@ export function audit(): { url: string; theme: string; width: number; findings: 
     //    32px invisible ::after overlay is a perfectly good target, and a box
     //    measurement would fail it while a thumb would not.
     const HALF = 12;
+    /**
+     * An open menu or sheet covers the page, and a control under it is supposed
+     * not to answer a tap. Measuring anyway reported the whole screen as broken:
+     * 19 findings with the network menu open, every one of them a control the
+     * overlay was correctly intercepting. While a layer is open the only thing
+     * worth hit-testing is the layer itself.
+     *
+     * The *last* layer, not the first. Two menus can be open at once, and taking
+     * the first one made the audit measure the covered menu and report all of its
+     * rows as unreachable, which they were, correctly, because another menu was
+     * on top of them.
+     */
+    const layers = document.querySelectorAll('.layer');
+    const openLayer = layers.length ? layers[layers.length - 1] : null;
+
+    /**
+     * A row scrolled out of its own list is not an unreachable target.
+     *
+     * The viewport check below catches elements off the page; it says nothing
+     * about a menu that caps its height and scrolls, where rows past the fold sit
+     * at screen coordinates belonging to whatever is painted there instead. That
+     * reported 11 of the network menu's 20 rows as broken, all of them fine the
+     * moment they are scrolled to.
+     *
+     * The whole probe box has to be inside, not just the centre. A row straddling
+     * the fold has its middle in view and its edges past it, and judging that one
+     * is judging the scrollbar rather than the button.
+     */
+    const clippedByScroller = (el: Element, cx: number, cy: number, half: number): boolean => {
+      for (let p = el.parentElement; p; p = p.parentElement) {
+        const s = getComputedStyle(p);
+        if (!/(auto|scroll)/.test(s.overflowY + s.overflowX)) continue;
+        const r = p.getBoundingClientRect();
+        return (
+          cx - half < r.left || cx + half > r.right || cy - half < r.top || cy + half > r.bottom
+        );
+      }
+      return false;
+    };
     document.querySelectorAll('button, a[href], [role="tab"], input, select').forEach((el) => {
       if (!visible(el)) return;
+      if (openLayer && !openLayer.contains(el)) return;
       // A disabled control is supposed not to answer, and one scrolled out of the
       // viewport cannot be hit-tested at all. Neither is a finding.
       if ((el as HTMLButtonElement).disabled) return;
@@ -251,6 +291,7 @@ export function audit(): { url: string; theme: string; width: number; findings: 
       const cy = r.top + r.height / 2;
       if (cx - HALF < 0 || cy - HALF < 0 || cx + HALF >= innerWidth || cy + HALF >= innerHeight)
         return;
+      if (clippedByScroller(el, cx, cy, HALF)) return;
       const hits = (
         [
           [cx - HALF + 1, cy],
@@ -365,10 +406,22 @@ export function themeAudit(): StuckElement[] {
     const light = snap();
     root.dataset.theme = started;
 
+    /**
+     * A brand mark is supposed to be the same colour in both themes.
+     *
+     * USDC is that blue on a dark card and on a light one, and a token badge that
+     * changed colour with the theme would be a badge for a different token. The
+     * rule is about surfaces and text that forgot to follow the theme, and these
+     * are neither.
+     */
+    const isBrandMark = (el: Element) =>
+      el.closest('.tokenlogo, .chainlogo, .merchantlogo') !== null;
+
     const stuck: StuckElement[] = [];
     dark.forEach((d, i) => {
       const l = light[i];
       if (!l || d.el !== l.el || !d.visible || !d.paints) return;
+      if (isBrandMark(d.el)) return;
       if (d.bg === l.bg && d.fg === l.fg) {
         stuck.push({
           tag: d.el.tagName.toLowerCase(),

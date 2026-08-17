@@ -30,6 +30,8 @@ export const tr: Record<TranslationKey, string> = {
   'chain.needs.privatePay': 'Gizli ödeme Arc Testnet’te yapılır.',
   'chain.needs.subscriptions': 'Çekim ve iptal Arc Testnet’te yapılır. Abonelik kurmak her ağdan çalışır.',
   'ppay.gasShort': '{symbol} göndermek için de gaz USDC’den gidiyor ve bu cüzdanda yeterli USDC yok.',
+  'token.restricted.allowlist': 'Allowlist gerekiyor',
+  'token.choose': 'Token seç',
   'token.label': 'Token',
   'token.search': 'İsim veya adrese göre ara',
   'token.none': 'Eşleşen token yok',

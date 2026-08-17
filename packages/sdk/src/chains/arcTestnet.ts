@@ -107,61 +107,142 @@ export const ADDRESSES = {
 export const USDC_DECIMALS = 6 as const;
 
 /**
- * The tokens this app will move on Arc Testnet.
+ * One token, as this app needs to know it.
  *
- * Every field was read off the chain, not copied from a table: `symbol()` and
- * `decimals()` were called on each address against the public RPC. That is the
- * same discipline `CCTP_CHAINS` documents and for the same reason -- a wrong
- * token address does not fail loudly, it moves real value into a contract that is
- * not the token.
- *
- * `searchNames` is ours, not the chain's. `name()` on both of these returns the
- * symbol again ("USDC", "EURC"), so there is no long name to show; these exist so
- * that typing "euro" or "dollar" finds the right row.
- *
- * USYC is deliberately absent. It is permissioned -- transfers are restricted to
- * an allowlist of institutions outside the US, minted through a Teller -- so
- * offering it here would put a token in the picker that most holders of this app
- * cannot send, and the failure would arrive as a revert.
+ * `searchNames` is ours, not the chain's. `name()` on these returns the symbol
+ * again ("USDC", "EURC"), so there is no long name to show; these exist so that
+ * typing "euro" or "dollar" finds the right row.
  */
 export interface TokenInfo {
   symbol: string;
+  /**
+   * The name shown under the symbol. Ours, not the contract's: `name()` returns
+   * "USDC" and "EURC" on those two, which is the symbol again and tells a reader
+   * nothing. Worded to match the Android client so the same token reads the same
+   * on both.
+   */
+  name: string;
   address: `0x${string}`;
   /** Base units per whole token. Never assume 6; see `verifyToken`. */
   decimals: number;
   /** Extra words the picker's search should match. Ours, not the contract's. */
   searchNames: readonly string[];
+  /** Brand colour, for the mark drawn when no official asset is on disk. */
+  tint: string;
+  /**
+   * Set when this wallet cannot simply hold and send it.
+   *
+   * Listed rather than hidden, and not selectable. A token that exists on the
+   * chain and is missing from the picker reads as a gap in the app; the same
+   * token shown greyed with "needs an allowlist" answers the question instead of
+   * raising it, and it is the difference between a form that refuses early and a
+   * transfer that reverts.
+   */
+  restricted?: { reason: string };
 }
 
-export const ARC_TOKENS = [
-  {
-    symbol: 'USDC',
-    address: ADDRESSES.USDC,
-    decimals: 6,
-    searchNames: ['usd coin', 'dollar', 'usd'],
-  },
-  {
-    symbol: 'EURC',
-    address: ADDRESSES.EURC,
-    decimals: 6,
-    searchNames: ['euro coin', 'euro', 'eur'],
-  },
-] as const satisfies readonly TokenInfo[];
+/**
+ * Which tokens exist on which chain.
+ *
+ * Keyed by chain because that is what it depends on: the same symbol is a
+ * different contract on every network, and a flat list is a list that is wrong
+ * the moment a second chain has a deployment. Only Arc has entries today, and
+ * `tokensFor` returning nothing for anything else is the correct answer rather
+ * than a gap: we have verified no addresses there.
+ *
+ * Every address and decimal here was read off the chain, not copied from a table:
+ * `symbol()` and `decimals()` called against the public RPC. Same discipline as
+ * `CCTP_CHAINS`, same reason -- a wrong token address does not fail loudly, it
+ * moves value into something that is not the token.
+ */
+export const TOKENS_BY_CHAIN: Readonly<Record<number, readonly TokenInfo[]>> = {
+  [ARC_TESTNET_CHAIN_ID]: [
+    {
+      symbol: 'USDC',
+      name: 'USD Coin',
+      address: ADDRESSES.USDC,
+      decimals: 6,
+      searchNames: ['dollar', 'usd'],
+      tint: '#2775ca',
+    },
+    {
+      symbol: 'EURC',
+      name: 'Euro Coin',
+      address: ADDRESSES.EURC,
+      decimals: 6,
+      searchNames: ['euro', 'eur'],
+      tint: '#1a4fa0',
+    },
+    {
+      /*
+       * Eight decimals, and the reason the amount maths stopped assuming six.
+       *
+       * The address is the one the Android client uses, checked here rather than
+       * trusted: `symbol()` is cirBTC, `name()` is "Circle Wrapped Bitcoin",
+       * `decimals()` is 8. That check is not a formality. ArcScan's search for
+       * "cirBTC" returns eight contracts that answer to the symbol, three of them
+       * named Mock or Demo, and picking by name would have been picking one of
+       * those.
+       */
+      symbol: 'cirBTC',
+      name: 'Circle Wrapped BTC',
+      address: '0xf0C4a4CE82A5746AbAAd9425360Ab04fbBA432BF',
+      decimals: 8,
+      searchNames: ['bitcoin', 'btc', 'wrapped'],
+      tint: '#f2a33c',
+    },
+    {
+      // Yield-bearing, and not something a wallet can just be handed: Circle
+      // restricts it to allowlisted institutions outside the United States, minted
+      // and redeemed through a Teller. Shown so the answer to "where is USYC" is on
+      // the screen; disabled so the answer arrives before a transaction does.
+      // Source: docs-arc/arc/references/contract-addresses.md
+      symbol: 'USYC',
+      name: 'US Yield Coin',
+      address: '0xe9185F0c5F296Ed1797AaE4238D26CCaBEadb86C',
+      decimals: 6,
+      searchNames: ['yield', 'treasury', 'money market'],
+      tint: '#3f8f6b',
+      restricted: { reason: 'allowlist' },
+    },
+  ],
+};
 
-export type ArcTokenSymbol = (typeof ARC_TOKENS)[number]['symbol'];
+/** Tokens on `chainId`. Empty for a chain we have verified no addresses on. */
+export function tokensFor(chainId: number | undefined): readonly TokenInfo[] {
+  return chainId === undefined ? [] : (TOKENS_BY_CHAIN[chainId] ?? []);
+}
 
-/** The default everywhere an amount is entered. Gas on Arc is USDC, so it is also
- *  the only token a wallet is guaranteed to need. */
-export const DEFAULT_TOKEN: TokenInfo = ARC_TOKENS[0];
+/** The ones a wallet can actually pick. */
+export function spendableTokensFor(chainId: number | undefined): readonly TokenInfo[] {
+  return tokensFor(chainId).filter((t) => !t.restricted);
+}
 
-export function tokenByAddress(address: string): TokenInfo | undefined {
+/**
+ * What an amount field starts in on `chainId`.
+ *
+ * The first spendable entry, which on Arc is USDC, and deliberately so: gas there
+ * is USDC, so it is the one token a usable wallet necessarily holds.
+ */
+export function defaultTokenFor(chainId: number | undefined): TokenInfo | undefined {
+  return spendableTokensFor(chainId)[0];
+}
+
+/** Arc's list, for callers that are Arc-only by construction. */
+export const ARC_TOKENS: readonly TokenInfo[] = TOKENS_BY_CHAIN[ARC_TESTNET_CHAIN_ID] ?? [];
+
+export const DEFAULT_TOKEN: TokenInfo = ARC_TOKENS[0] as TokenInfo;
+
+export function tokenByAddress(address: string, chainId?: number): TokenInfo | undefined {
   const a = address.toLowerCase();
-  return ARC_TOKENS.find((t) => t.address.toLowerCase() === a);
+  const list = chainId === undefined ? ARC_TOKENS : tokensFor(chainId);
+  return list.find((t) => t.address.toLowerCase() === a);
 }
 
-export function tokenBySymbol(symbol: string): TokenInfo | undefined {
+export function tokenBySymbol(symbol: string, chainId?: number): TokenInfo | undefined {
   const s = symbol.toLowerCase();
-  return ARC_TOKENS.find((t) => t.symbol.toLowerCase() === s);
+  const list = chainId === undefined ? ARC_TOKENS : tokensFor(chainId);
+  return list.find((t) => t.symbol.toLowerCase() === s);
 }
 
 /**
