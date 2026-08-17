@@ -2629,6 +2629,8 @@ a.hstep__go:hover {
 .amountf__bal {
   flex: 0 0 auto;
   margin-left: auto;
+  user-select: none;
+  -webkit-user-select: none;
   display: inline-flex;
   align-items: baseline;
   gap: 6px;
@@ -2981,8 +2983,14 @@ a.hstep__go:hover {
   width: auto;
   padding: 0 16px;
 }
+/* Sized to its own text, like the identical control in AmountField.
+   `flex: 1 1 auto` made it fill the rest of the row: 301px of button around 199px
+   of text, so the hover state painted a 102px-wide empty block and the thing read
+   as a selected region rather than as a button around a number. It is the same
+   module in both places and it now behaves the same in both. */
 .gwfund__wallet {
-  flex: 1 1 auto;
+  flex: 0 0 auto;
+  margin-left: auto;
   min-width: 0;
   display: inline-flex;
   align-items: baseline;
@@ -2994,6 +3002,12 @@ a.hstep__go:hover {
   padding: 4px 7px;
   cursor: pointer;
   font: inherit;
+  /* A press should fill the field, not start a text selection. Dragging a couple
+     of pixels while clicking highlighted the label, which is the other half of
+     why this looked like selected text. */
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
 }
 .gwfund__wallet:hover:not(:disabled) {
   background: var(--surface-3);
