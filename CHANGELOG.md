@@ -2,6 +2,72 @@
 
 Bu proje [Keep a Changelog](https://keepachangelog.com/) biçimini izler.
 
+## Yayınlanmamış: 2026-08-17
+
+Ağ kontrolü header'a taşındı ve Private Pay EURC ile de ödenebiliyor.
+
+### Eklendi
+
+- **Ağ seçici header'da.** Cüzdanın hangi ağda olduğunu her an yazıyor ve
+  değiştiriyor. Liste `CCTP_CHAINS`ten türüyor. Tanımadığımız bir ağda numarasını
+  yazıyor ve logo uydurmuyor. Arc dışına geçiş yalnız cüzdana soruluyor; Arc'ın
+  ağ ekleme yolu duruyor çünkü onun uçlarını biz işletiyoruz, diğerleri için ağ
+  eklemek kullanıcının sonrasında her isteğinde güveneceği bir RPC'yi bizim
+  seçmemiz demek olurdu.
+- **Private Pay'de token seçimi**, paylaşılan `Select` üzerine. Arama sembol, isim
+  ve kontrat adresiyle çalışıyor. Listede olmayan adres "token yok" döner; adresle
+  token ekleme akışı bilerek yok, çünkü her adresi kabul eden bir seçiciye er geç
+  bir benzer-kontrat verilir.
+- **`ARC_TOKENS` kaydı** (USDC, EURC). İki satır da zincirden `symbol()` ve
+  `decimals()` okunarak yazıldı. USYC listede yok: izinli bir token, seçilince
+  çoğu kişide revert olarak dönerdi.
+
+### Düzeltildi
+
+- **Kutuyu fonlama ayağı Arc'a özgüydü.** `settlePrivatePaymentBatched` kutuyu
+  `aggregate3Value` içinde native değer göndererek fonluyordu; Arc'ta native zaten
+  USDC olduğu için USDC'de doğru, başka tokende yanlış. 0.5 EURC ödemesi kutuya
+  0.5 native gönderip sonra ondan EURC istiyordu ve batch "Multicall3: call
+  failed" ile dönüyordu. Artık token native değilse Arc'ın `Multicall3From`u
+  kullanılıyor: alt çağrıların `msg.sender`ı korunduğu için batch içindeki
+  `transfer` kullanıcının kendi adresinden gidiyor, approve gerekmiyor. İki yol
+  tek çağrıda birleşemiyor, çünkü `CallFrom` value taşımıyor ve bu yüzden
+  `Multicall3From`da `aggregate3Value` yok. Zincirde doğrulandı: 0.25 EURC
+  (`0xe2853be7`) ve 0.02 USDC (`0x6ae8c738`).
+- **Para ekranları yanlış ağda çalışıyordu.** `PrivatePayTab` ve
+  `SubscriptionsTab` `session.onArc`e hiç bakmıyordu: Base'deyken form dolunca
+  buton açılıyor ve ödeme yine Arc'a gidiyordu. Dördü de artık tek bir
+  `supportsChain` fonksiyonuna soruyor.
+- **Bir durum için iki uyarı vardı.** Yanlış ağdayken hem global bant hem ekran
+  içi engel çıkıyordu, iki ayrı "Arc'a geç" butonuyla. Bant kaldırıldı.
+- **Abonelik listesinin arama kutusu 390px'te 15px'e sıkışıyordu.** CSS'te
+  kutunun alt satıra inmesini sağlayan kural vardı ama aynı özgüllükteki ikinci
+  bir kural onu iptal ediyordu.
+- **480px altında ağ chip'i etiketini gizleyince** ekran okuyucuya yalnız "Ağ"
+  kalıyordu; `aria-label` artık ağın adını taşıyor.
+- **Ondalık ve para birimi varsayımları.** Tutar, bakiye ve Max artık tokenin
+  kendi ondalığını kullanıyor. Gaz Arc'ta USDC olduğu için EURC tutarından
+  düşülmüyor ve maliyet bloğu iki para birimini toplamıyor ("0.5 EURC + 0.05
+  USDC"). Kurunu bilmediğimiz tokende dolar satırı hiç basılmıyor.
+
+### Değişti
+
+- **Relayer artık bir token listesi kabul ediyor** (USDC, EURC), tek bir çivili
+  adres yerine. Liste sunucu tarafında sabit; policy'ye istemcinin gönderdiği
+  metin değil kayıttaki adres yazılıyor, yoksa karşılaştırma tavsiye niteliğinde
+  kalırdı. Cosigner çivisi aynen duruyor. Demo tavanı da "1000 tam token" oldu,
+  tokenin ondalığından türüyor; eskiden "1000 USDC" diye yorumlanmış sabit bir
+  taban-birim sayısıydı ve altı ondalıklı olmayan bir tokende başka bir şey
+  demek olurdu.
+
+### Bilinen sınırlar
+
+- **EURC aboneliği yok.** Kutunun bütçesi Circle Gateway mint'iyle geliyor,
+  Gateway ise yalnız USDC taşıyor. Cüzdandan doğrudan transferle fonlamak
+  çalışırdı ama kutunun stealth adresini zincirde ele veren çizgi tam olarak o
+  ve bu yüzden yedek yol olarak bırakılmadı. Yani engel relayer değil, fonlama
+  rayı.
+
 ## Yayınlanmamış: 2026-08-16
 
 Web arayüzünde ölçümle bulunmuş hatalar. Hepsi tarayıcıda sayıyla doğrulandı; denetim
