@@ -9,6 +9,7 @@ import {CtrlArcZ} from "../src/CtrlArcZ.sol";
 import {CodeClaimVerifier} from "../src/verifiers/CodeClaimVerifier.sol";
 import {SpendPolicyFactory} from "../src/SpendPolicyFactory.sol";
 import {StealthAnnouncer} from "../src/StealthAnnouncer.sol";
+import {PrivatePayRouter} from "../src/PrivatePayRouter.sol";
 import {IClaimVerifier} from "../src/interfaces/IClaimVerifier.sol";
 import {IPermit2} from "../src/interfaces/IPermit2.sol";
 
@@ -62,6 +63,10 @@ contract DeployChain is Script {
         CtrlArcZ arcz = new CtrlArcZ(IERC20(usdc), IClaimVerifier(address(verifier)), IPermit2(permit2));
         SpendPolicyFactory factory = new SpendPolicyFactory();
         StealthAnnouncer announcer = new StealthAnnouncer();
+        // The one-transaction Private Pay route. Arc does this through its CallFrom
+        // precompile and needs no router; every other chain needs this, or the flow
+        // becomes three separate wallet confirmations.
+        PrivatePayRouter router = new PrivatePayRouter(IPermit2(permit2));
 
         vm.stopBroadcast();
 
@@ -72,6 +77,7 @@ contract DeployChain is Script {
         console.log("SpendPolicyFactory:   ", address(factory));
         console.log("AccountImplementation:", factory.implementation());
         console.log("StealthAnnouncer:     ", address(announcer));
+        console.log("PrivatePayRouter:     ", address(router));
         console.log("deployBlock:          ", startBlock);
 
         // Only on a real broadcast. A dry run executes run() too, and would
@@ -95,6 +101,8 @@ contract DeployChain is Script {
             vm.toString(factory.implementation()),
             '",\n  "StealthAnnouncer": "',
             vm.toString(address(announcer)),
+            '",\n  "PrivatePayRouter": "',
+            vm.toString(address(router)),
             '"\n}\n'
         );
         vm.writeFile(string.concat("deployments/", slug, ".json"), out);

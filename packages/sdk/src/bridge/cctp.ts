@@ -218,6 +218,12 @@ export function chainExplorerTxUrl(chain: CctpChainName, txHash: string): string
   return base ? `${base}/tx/${txHash}` : undefined;
 }
 
+/** The explorer's own front page for a chain, or undefined where none is known.
+ *  Exposed so the deployment registry can point at one without restating it. */
+export function chainExplorerUrl(chain: CctpChainName): string | undefined {
+  return EXPLORERS[chain];
+}
+
 export type CctpChainName = keyof typeof CCTP_CHAINS;
 
 const tokenMessengerAbi = [

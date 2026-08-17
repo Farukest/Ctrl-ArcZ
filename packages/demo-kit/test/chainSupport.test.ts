@@ -17,24 +17,35 @@ describe('supportsChain', () => {
   /**
    * A deployment is necessary and it is not always sufficient.
    *
-   * Base Sepolia has the contracts, so protected send, receive and subscriptions
-   * work there. One-transaction Private Pay does not, and the reason is not a
-   * missing address: it funds the box inside the same call that creates and pays
-   * from it, which needs either Arc's native-is-USDC behaviour or its `CallFrom`
-   * precompile. Standard Multicall3 does not preserve `msg.sender`, so batching a
-   * `transfer` through it would move Multicall3's tokens rather than the payer's.
+   * One-transaction Private Pay funds the box inside the call that creates and pays
+   * from it, which needs a way to move the payer's tokens from inside a batch. Arc
+   * has its `CallFrom` precompile; everywhere else that is the `PrivatePayRouter`,
+   * pulling through Permit2. So the question this asks is not "is this Arc" but
+   * "does this chain have a route", and a chain deployed without a router has to
+   * answer no.
    *
-   * This test is here so that turning that on becomes a deliberate change with a
-   * funding route behind it, rather than something a new registry entry does by
-   * accident.
+   * The other three features need only the contracts.
    */
-  it('separates "deployed here" from "works here"', () => {
+  it('gates Private Pay on a funding route, not on a deployment', () => {
+    for (const chainId of deployedChainIds()) {
+      const d = deploymentFor(chainId)!;
+      expect(supportsChain(chainId, 'protectedSend')).toBe(true);
+      expect(supportsChain(chainId, 'receive')).toBe(true);
+      expect(supportsChain(chainId, 'subscriptions')).toBe(true);
+
+      const routed = chainId === ARC_TESTNET_CHAIN_ID || d.privatePayRouter !== undefined;
+      expect(supportsChain(chainId, 'privatePay'), `${d.chain} privatePay`).toBe(routed);
+    }
+  });
+
+  /** Arc is the one chain that does this without a contract of ours in the middle. */
+  it('needs no router on Arc, and one everywhere else', () => {
+    expect(deploymentFor(ARC_TESTNET_CHAIN_ID)?.privatePayRouter).toBeUndefined();
+    expect(supportsChain(ARC_TESTNET_CHAIN_ID, 'privatePay')).toBe(true);
+
     const base = CCTP_CHAINS.Base_Sepolia.chainId;
-    expect(deploymentFor(base)).toBeDefined();
-    expect(supportsChain(base, 'protectedSend')).toBe(true);
-    expect(supportsChain(base, 'receive')).toBe(true);
-    expect(supportsChain(base, 'subscriptions')).toBe(true);
-    expect(supportsChain(base, 'privatePay')).toBe(false);
+    expect(deploymentFor(base)?.privatePayRouter).toBeDefined();
+    expect(supportsChain(base, 'privatePay')).toBe(true);
   });
 
   it('refuses every chain with no deployment', () => {

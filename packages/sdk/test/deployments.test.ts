@@ -44,7 +44,10 @@ describe('deployment registry', () => {
       expect(d.ctrlArcZDeployBlock).toBeGreaterThan(0n);
       expect(d.stealthAnnouncerDeployBlock).toBeGreaterThan(0n);
       expect(d.maxLogRange).toBeGreaterThan(0n);
-      expect(d.explorerApi.startsWith('https://')).toBe(true);
+      // Optional, because not every chain has a Blockscout. When it is there it has
+      // to be a real base, because a wrong one is a firewall reading nothing and
+      // reporting a clean history.
+      if (d.explorerApi !== undefined) expect(d.explorerApi.startsWith('https://')).toBe(true);
     }
   });
 
@@ -57,22 +60,26 @@ describe('deployment registry', () => {
   });
 
   /**
-   * No address appears on two chains.
+   * Within one chain, no two roles share an address.
    *
-   * Deployed from the same account with the same nonces, two chains would produce
-   * identical addresses -- which is fine on its own and disastrous if a record is
-   * copied from one entry to another and nobody notices because the address "looks
-   * right". Distinctness is not the property that matters; having been written from
-   * each chain's own broadcast is, and this is how a copy-paste shows up.
+   * Deliberately not checked across chains. The same deployer at the same nonce
+   * produces the same address on every chain, so a collision between, say, Arc's
+   * verifier and Fuji's router is ordinary CREATE arithmetic rather than a
+   * copy-paste -- and one of those actually happened here. What catches a
+   * copy-paste is the per-chain check against that chain's own broadcast record
+   * below, not distinctness.
    */
-  it('does not repeat a contract address across chains', () => {
-    const seen = new Map<string, string>();
+  it('gives each role its own address within a chain', () => {
     for (const d of entries) {
-      for (const a of [d.ctrlArcZ, d.codeClaimVerifier, d.spendPolicyFactory, d.stealthAnnouncer]) {
-        const key = a.toLowerCase();
-        expect(seen.has(key), `${a} appears on both ${seen.get(key)} and ${d.chain}`).toBe(false);
-        seen.set(key, d.chain);
-      }
+      const roles = [
+        d.ctrlArcZ,
+        d.codeClaimVerifier,
+        d.spendPolicyFactory,
+        d.spendPolicyAccountImpl,
+        d.stealthAnnouncer,
+        ...(d.privatePayRouter ? [d.privatePayRouter] : []),
+      ].map((a) => a.toLowerCase());
+      expect(new Set(roles).size, `${d.chain} reuses an address across roles`).toBe(roles.length);
     }
   });
 
@@ -89,33 +96,40 @@ describe('deployment registry', () => {
   });
 
   /**
-   * Pinned against the file the broadcast wrote, not against numbers retyped here.
+   * Pinned against the file each broadcast wrote, not against numbers retyped here.
    *
-   * `deployments/base-sepolia.json` is the receipt. If the registry and the receipt
-   * ever disagree, one of them was edited by hand, and this says which.
+   * `deployments/<slug>.json` is the receipt. If the registry and a receipt ever
+   * disagree, one of them was edited by hand, and this says which chain.
    */
-  it('matches the broadcast record for Base Sepolia', () => {
-    const record = JSON.parse(
-      readFileSync(
-        fileURLToPath(new URL('../../contracts/deployments/base-sepolia.json', import.meta.url)),
-        'utf8',
-      ),
-    ) as Record<string, string | number>;
-    const d = deploymentFor(CCTP_CHAINS.Base_Sepolia.chainId);
-    expect(d).toBeDefined();
-    expect(d?.chainId).toBe(record.chainId);
-    expect(d?.usdc).toBe(record.USDC);
-    expect(d?.ctrlArcZ).toBe(record.CtrlArcZ);
-    expect(d?.codeClaimVerifier).toBe(record.CodeClaimVerifier);
-    expect(d?.spendPolicyFactory).toBe(record.SpendPolicyFactory);
-    expect(d?.spendPolicyAccountImpl).toBe(record.AccountImplementation);
-    expect(d?.stealthAnnouncer).toBe(record.StealthAnnouncer);
-    expect(d?.ctrlArcZDeployBlock).toBe(BigInt(record.deployBlock as number));
-    // Gas is a separate coin here. Getting this wrong makes Max leave a USDC
-    // reserve nobody owes, or spend one that is owed.
-    expect(d?.gasToken).toBe('native');
-    expect(d?.multicall3From).toBeUndefined();
-  });
+  it.each(['Base_Sepolia', 'Ethereum_Sepolia', 'Arbitrum_Sepolia', 'Avalanche_Fuji'] as const)(
+    'matches the broadcast record for %s',
+    (chain) => {
+      const slug = chain.toLowerCase().replace(/_/g, '-');
+      const record = JSON.parse(
+        readFileSync(
+          fileURLToPath(new URL(`../../contracts/deployments/${slug}.json`, import.meta.url)),
+          'utf8',
+        ),
+      ) as Record<string, string | number>;
+      const d = deploymentFor(CCTP_CHAINS[chain].chainId);
+      expect(d).toBeDefined();
+      expect(d?.chainId).toBe(record.chainId);
+      expect(d?.usdc).toBe(record.USDC);
+      expect(d?.ctrlArcZ).toBe(record.CtrlArcZ);
+      expect(d?.codeClaimVerifier).toBe(record.CodeClaimVerifier);
+      expect(d?.spendPolicyFactory).toBe(record.SpendPolicyFactory);
+      expect(d?.spendPolicyAccountImpl).toBe(record.AccountImplementation);
+      expect(d?.stealthAnnouncer).toBe(record.StealthAnnouncer);
+      expect(d?.privatePayRouter).toBe(record.PrivatePayRouter);
+      expect(d?.ctrlArcZDeployBlock).toBe(BigInt(record.deployBlock as number));
+      // Gas is a separate coin on all of these. Getting it wrong makes Max leave a
+      // USDC reserve nobody owes, or spend one that is owed.
+      expect(d?.gasToken).toBe('native');
+      // Arc's precompile-backed multicall exists nowhere else, and the router is
+      // what stands in for it.
+      expect(d?.multicall3From).toBeUndefined();
+    },
+  );
 
   it('lists exactly the chains it holds', () => {
     expect([...deployedChainIds()].sort()).toEqual(entries.map((d) => d.chainId).sort());

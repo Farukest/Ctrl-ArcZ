@@ -1,4 +1,4 @@
-import { CCTP_CHAINS, type CctpChainName } from '../bridge/cctp.js';
+import { CCTP_CHAINS, chainExplorerUrl, type CctpChainName } from '../bridge/cctp.js';
 import {
   ADDRESSES,
   ARC_TESTNET_CHAIN_ID,
@@ -77,18 +77,81 @@ export interface ChainDeployment {
   gasToken: 'usdc' | 'native';
 
   /**
+   * The one-transaction Private Pay route on a chain with no CallFrom precompile.
+   *
+   * Creates the box, pulls the payer's tokens into it through Permit2, and pays the
+   * merchant, atomically. Absent on Arc, which does the same job with its precompile
+   * and needs no contract of ours in the middle.
+   *
+   * Absent also means "not deployed here yet", and the two are the same thing to a
+   * caller: without it, a one-off payment on that chain is three transactions.
+   */
+  privatePayRouter?: `0x${string}`;
+
+  /**
    * Arc's Multicall3 that preserves `msg.sender` through the CallFrom precompile.
    * Absent on every other chain, and the absence is the point: code that needs it
    * has to notice it is missing rather than fall back to something that looks alike.
    */
   multicall3From?: `0x${string}`;
 
-  explorerUrl: string;
-  /** Blockscout v2 API base, for the poisoning check and clean-history lookups. */
-  explorerApi: string;
+  /** The explorer's front page. Undefined where the chain has no published one. */
+  explorerUrl: string | undefined;
+  /**
+   * Blockscout v2 API base, for the poisoning check and clean-history lookups.
+   *
+   * Undefined where no Blockscout serves this chain, and that is a capability gap
+   * rather than a missing string: without a history source the recipient firewall
+   * has nothing to read, so it must say it cannot judge rather than judge on
+   * nothing. Avalanche Fuji is in that position -- it has no Blockscout instance,
+   * and Snowtrace answers a different API shape behind a key.
+   */
+  explorerApi?: string;
 }
 
-const BASE_SEPOLIA_CHAIN_ID = CCTP_CHAINS.Base_Sepolia.chainId;
+/**
+ * One entry per chain we deployed on 2026-08-17, from that chain's own broadcast
+ * record. None of these addresses was typed by hand; each was read back off the
+ * chain afterwards (`CtrlArcZ.USDC()`, `factory.implementation()`,
+ * `router.PERMIT2()`) before being written down.
+ */
+function deployed(
+  chain: CctpChainName,
+  a: {
+    ctrlArcZ: `0x${string}`;
+    codeClaimVerifier: `0x${string}`;
+    spendPolicyFactory: `0x${string}`;
+    spendPolicyAccountImpl: `0x${string}`;
+    stealthAnnouncer: `0x${string}`;
+    privatePayRouter: `0x${string}`;
+    deployBlock: bigint;
+    explorerApi?: string;
+  },
+): ChainDeployment {
+  return {
+    chain,
+    chainId: CCTP_CHAINS[chain].chainId,
+    usdc: CCTP_CHAINS[chain].usdc,
+    ctrlArcZ: a.ctrlArcZ,
+    codeClaimVerifier: a.codeClaimVerifier,
+    spendPolicyFactory: a.spendPolicyFactory,
+    spendPolicyAccountImpl: a.spendPolicyAccountImpl,
+    stealthAnnouncer: a.stealthAnnouncer,
+    privatePayRouter: a.privatePayRouter,
+    ctrlArcZDeployBlock: a.deployBlock,
+    // One broadcast, so both event sources start at the same block.
+    stealthAnnouncerDeployBlock: a.deployBlock,
+    // These RPCs answer far wider ranges than Arc's 10k cap, but the chunker only
+    // ever asks for less than it is allowed, so a conservative figure costs a few
+    // extra calls and never earns a range error.
+    maxLogRange: 10000n,
+    // Gas is the chain's own coin here, not USDC. Getting this backwards makes Max
+    // either leave a reserve nobody owes or spend one that is owed.
+    gasToken: 'native',
+    explorerUrl: chainExplorerUrl(chain),
+    ...(a.explorerApi ? { explorerApi: a.explorerApi } : {}),
+  };
+}
 
 export const DEPLOYMENTS: Readonly<Record<number, ChainDeployment>> = {
   [ARC_TESTNET_CHAIN_ID]: {
@@ -111,33 +174,56 @@ export const DEPLOYMENTS: Readonly<Record<number, ChainDeployment>> = {
   },
 
   /**
-   * Deployed 2026-08-17 by `script/DeployChain.s.sol`, one broadcast, block
-   * 45603570. Verified after the fact by reading the chain back rather than by
-   * trusting the script's own log: `CtrlArcZ.USDC()` is Circle's Base Sepolia USDC,
-   * `PERMIT2()` is the canonical singleton, `CODE_VERIFIER()` is the verifier
-   * deployed alongside it, and the factory's `implementation()` is the account
-   * implementation recorded here. A mistyped address does not fail, it sends money
-   * somewhere else, so none of these were copied by hand.
+   * Deployed 2026-08-17. Base first, then the other three in one pass once the
+   * script had been proven on it. Base's router came later than its other five
+   * contracts, which is why it has its own `DeployRouter.s.sol`: rerunning the full
+   * script to add one contract would have moved five addresses that were already
+   * recorded, and orphaned every announcement made against the old announcer.
    */
-  [BASE_SEPOLIA_CHAIN_ID]: {
-    chain: 'Base_Sepolia',
-    chainId: BASE_SEPOLIA_CHAIN_ID,
-    usdc: CCTP_CHAINS.Base_Sepolia.usdc,
+  [CCTP_CHAINS.Base_Sepolia.chainId]: deployed('Base_Sepolia', {
     ctrlArcZ: '0x1C70d0c9A093fA7F27B0F6473D5Ca3bd3Ec50312',
     codeClaimVerifier: '0xfEb8397a85dbBbc298e9025B0Ae5fF9fAcd8e184',
     spendPolicyFactory: '0x2ce48fE79CaE15B2B05BF5d16C0CA649b15C76a0',
     spendPolicyAccountImpl: '0x9f958A530fF44325E056B03A55A101a1cA6829fD',
     stealthAnnouncer: '0xc69ab232410722E38A00474D8A4F2c743D51Df1B',
-    ctrlArcZDeployBlock: 45603570n,
-    stealthAnnouncerDeployBlock: 45603570n,
-    // Base's RPCs answer far wider ranges than Arc's 10k cap, but the chunker only
-    // ever asks for less than it is allowed, so a conservative figure costs a few
-    // extra calls and never earns a -32614.
-    maxLogRange: 10000n,
-    gasToken: 'native',
-    explorerUrl: 'https://sepolia.basescan.org',
+    privatePayRouter: '0xCe219028FC4a9D0AC4DBfa7436106f31c654E707',
+    deployBlock: 45603570n,
     explorerApi: 'https://base-sepolia.blockscout.com/api/v2',
-  },
+  }),
+
+  [CCTP_CHAINS.Ethereum_Sepolia.chainId]: deployed('Ethereum_Sepolia', {
+    ctrlArcZ: '0xe75f950c20fe30Fd5c55431D42F0863f1f79b359',
+    codeClaimVerifier: '0xde55794622f466CC64Ea576f172d176991949Dac',
+    spendPolicyFactory: '0x90DAe3231356B3f805DE6A72EFb4AaE104E6ee0b',
+    spendPolicyAccountImpl: '0xb54B709CB094F115F7a7f7276572ddCdB84a469c',
+    stealthAnnouncer: '0x8914bd04a8E753356bBC7087ac97F3434D32eCa2',
+    privatePayRouter: '0x71f47955b810e126b9FA832d51DB60FE4cB3d701',
+    deployBlock: 11509328n,
+    explorerApi: 'https://eth-sepolia.blockscout.com/api/v2',
+  }),
+
+  [CCTP_CHAINS.Arbitrum_Sepolia.chainId]: deployed('Arbitrum_Sepolia', {
+    ctrlArcZ: '0xf313096e7e37d7B91B6dB8d960C073D35098e410',
+    codeClaimVerifier: '0x464fD4f004856ede0D6f7f04708eE380A16fbBB3',
+    spendPolicyFactory: '0xD3fafeAD88C6684Ee701FaC818278Fed95A513bC',
+    spendPolicyAccountImpl: '0xd7A601f80ae9ec10906601e3F315fD2fcC2FF220',
+    stealthAnnouncer: '0xC9a80F08bED30B6CBfB94ee33D0Aeb9F38e67D22',
+    privatePayRouter: '0x0cD8d125036f805EE34B5092C51Cb01Beb3DB8A6',
+    deployBlock: 11509330n,
+    explorerApi: 'https://arbitrum-sepolia.blockscout.com/api/v2',
+  }),
+
+  /** No `explorerApi`: Fuji has no Blockscout instance and Snowtrace answers a
+   *  different API behind a key. The firewall has no history source here. */
+  [CCTP_CHAINS.Avalanche_Fuji.chainId]: deployed('Avalanche_Fuji', {
+    ctrlArcZ: '0x42Fb208A045051CC3ae681C797DDcDaB6E5FFb80',
+    codeClaimVerifier: '0x8b4eEE1ca335892a921726DB5C5e043071aA57B1',
+    spendPolicyFactory: '0x9C5fbf3e13582B635C5af82c2Aa7c1dCe0fDA607',
+    spendPolicyAccountImpl: '0x29209D78EA29F716b4d05a8FDfB9D38815cB930F',
+    stealthAnnouncer: '0x693E2B03AD97Bcd3Ac74ECeE321081ccBBa42bE3',
+    privatePayRouter: '0x2C0f268DE2Aa8BB2ab27F2Ea5Ae8a0f9a0E068c4',
+    deployBlock: 57807450n,
+  }),
 };
 
 /**

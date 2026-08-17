@@ -38,16 +38,20 @@ const ALSO_NEEDS: Record<ChainFeature, ((chainId: number) => boolean) | null> = 
   receive: null,
   /**
    * One-transaction Private Pay funds the box inside the same call that creates and
-   * pays from it, and both ways of doing that are Arc's. The native-value route
-   * works because a USDC transfer on Arc moves native balance; the ERC-20 route goes
-   * through `Multicall3From`, which is backed by Arc's `CallFrom` precompile.
+   * pays from it, and that needs a way to move the payer's tokens from inside a
+   * batch. Arc has one in its `CallFrom` precompile, reached through
+   * `Multicall3From`. Every other chain needs the `PrivatePayRouter`, which does the
+   * same job through Permit2.
    *
-   * Standard Multicall3 is not a substitute and must not be treated as one: it does
-   * not preserve `msg.sender`, so a `transfer` batched inside it moves Multicall3's
-   * own tokens rather than the payer's. Until a portable funding route exists, this
-   * stays Arc-only even where the factory is deployed.
+   * Standard Multicall3 is not a substitute anywhere and must not be treated as one:
+   * it does not preserve `msg.sender`, so a `transfer` batched inside it moves
+   * Multicall3's own tokens rather than the payer's.
+   *
+   * So the question is not "is this Arc", it is "does this chain have a route", and
+   * a chain deployed without a router correctly answers no.
    */
-  privatePay: (chainId) => chainId === ARC_TESTNET_CHAIN_ID,
+  privatePay: (chainId) =>
+    chainId === ARC_TESTNET_CHAIN_ID || deploymentFor(chainId)?.privatePayRouter !== undefined,
   /** Boxes are funded by a Circle Gateway mint, so the box's chain must be one
    *  Gateway can mint on. That is true of Arc and of the chains we deploy to, but
    *  it is a second condition and is checked as one. */
