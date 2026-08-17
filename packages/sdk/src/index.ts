@@ -12,6 +12,12 @@
  */
 
 export * from './chains/arcTestnet.js';
+export {
+  DEPLOYMENTS,
+  deploymentFor,
+  deployedChainIds,
+  type ChainDeployment,
+} from './chains/deployments.js';
 export { ctrlArcZAbi, codeClaimVerifierAbi, memoAbi } from './abi/ctrlArcZ.js';
 export { getLogsChunked, type ChunkedEventsParams } from './events.js';
 

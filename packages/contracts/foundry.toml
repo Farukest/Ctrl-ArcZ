@@ -10,6 +10,10 @@ optimizer_runs = 200
 fs_permissions = [
     { access = "read-write", path = "./deployments" },
     { access = "read", path = "./addresses.arc-testnet.json" },
+    # Every chain after Arc. A directory rather than one more named file, because
+    # the alternative is editing this list for each new network, which is the kind
+    # of step that gets skipped and then debugged as a permissions error.
+    { access = "read", path = "./addresses" },
 ]
 
 [profile.default.fuzz]
@@ -17,6 +21,13 @@ runs = 256
 
 [rpc_endpoints]
 arc_testnet = "https://rpc.testnet.arc.network"
+# The CCTP testnets we can deploy onto. Public endpoints on purpose: a deploy is a
+# handful of transactions, and naming a keyed provider here would put a URL in the
+# repo that has to be rotated rather than read.
+base_sepolia = "https://sepolia.base.org"
+ethereum_sepolia = "https://ethereum-sepolia-rpc.publicnode.com"
+arbitrum_sepolia = "https://sepolia-rollup.arbitrum.io/rpc"
+avalanche_fuji = "https://api.avax-test.network/ext/bc/C/rpc"
 
 # Arc Testnet Explorer runs Blockscout; `forge verify-contract --verifier blockscout`
 # publishes source there. Source: https://docs.arc.io/arc/tutorials/deploy-on-arc
