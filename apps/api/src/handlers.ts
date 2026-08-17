@@ -3,7 +3,7 @@ import { createPublicClient, erc20Abi, fallback, http, isAddress, type Address, 
 import { privateKeyToAccount } from 'viem/accounts';
 import {
   ADDRESSES,
-  ARC_TOKENS,
+  ARC_TESTNET_CHAIN_ID,
   BlockscoutDataProvider,
   CachingDataProvider,
   CTRL_ARCZ_ADDRESS,
@@ -13,6 +13,8 @@ import {
   arcTestnet,
   buildDossier,
   check,
+  deploymentFor,
+  spendableTokensFor,
   type EphemeralPolicy,
   type TokenInfo,
 } from '@ctrl-arcz/sdk';
@@ -195,30 +197,49 @@ export async function gaslessPost(req: IncomingMessage, res: ServerResponse): Pr
 // event. The relayer spends gas, so both are signed and quota-limited.
 
 /**
- * Tokens this relayer will deploy a box for.
+ * Tokens this relayer will deploy a box for, on a given chain.
  *
- * A set of server-side constants, never anything the caller supplies. The
- * property that matters is not "the token is USDC", it is that the relayer can
- * only ever be talked into signing a call the operator chose; a fixed list keeps
- * that exactly as a single pinned address did.
+ * A set of server-side values, never anything the caller supplies. The property
+ * that matters is not "the token is USDC", it is that the relayer can only ever be
+ * talked into signing a call the operator chose; a per-chain list keeps that
+ * exactly as a single pinned address did.
  *
- * Resolved from the registry rather than written out again, so the addresses and
- * the decimals below cannot drift from the ones the apps send.
+ * Resolved from the SDK's registry rather than written out again, so the addresses
+ * and the decimals cannot drift from the ones the apps send. It is also why this is
+ * keyed by chain: the same symbol is a different contract on every network, and a
+ * list that ignored the chain would accept Arc's USDC address for a Base box.
  */
-const RELAYABLE_TOKENS: readonly TokenInfo[] = ARC_TOKENS.filter(
-  (t) => t.symbol === 'USDC' || t.symbol === 'EURC',
-);
+function relayableTokens(chainId: number): readonly TokenInfo[] {
+  return spendableTokensFor(chainId).filter((t) => t.symbol === 'USDC' || t.symbol === 'EURC');
+}
 
-function relayableToken(v: unknown): TokenInfo {
+function relayableToken(v: unknown, chainId: number): TokenInfo {
   const wanted = addr(v, 'token').toLowerCase();
-  const found = RELAYABLE_TOKENS.find((t) => t.address.toLowerCase() === wanted);
+  const allowed = relayableTokens(chainId);
+  const found = allowed.find((t) => t.address.toLowerCase() === wanted);
   if (!found) {
     throw new HttpError(
       400,
-      `only ${RELAYABLE_TOKENS.map((t) => t.symbol).join(' and ')} boxes are relayed`,
+      `only ${allowed.map((t) => t.symbol).join(' and ')} boxes are relayed on chain ${chainId}`,
     );
   }
   return found;
+}
+
+/**
+ * The chain a relayed request is for.
+ *
+ * Absent means Arc, so clients written before there was a second chain keep
+ * working. A chain we have no deployment on is refused: the relayer would
+ * otherwise be asked to submit to a factory address that is not there, which on an
+ * address with no code succeeds and does nothing.
+ */
+function chainOf(v: unknown): number {
+  if (v === undefined || v === null) return ARC_TESTNET_CHAIN_ID;
+  if (typeof v !== 'number' || !Number.isSafeInteger(v) || !deploymentFor(v)) {
+    throw new HttpError(400, 'invalid chainId');
+  }
+  return v;
 }
 
 /**
@@ -259,14 +280,23 @@ function seconds(v: unknown, what: string, max: number): number {
  * cosigner has to be this server's own co-signer, which means the relayer can only
  * ever deploy boxes that The Machine still governs.
  */
-export function parsePolicy(body: unknown): { salt: Hex; policy: EphemeralPolicy } {
-  const { salt, policy } = (body ?? {}) as { salt?: unknown; policy?: unknown };
+export function parsePolicy(body: unknown): {
+  salt: Hex;
+  policy: EphemeralPolicy;
+  chainId: number;
+} {
+  const { salt, policy, chainId: rawChainId } = (body ?? {}) as {
+    salt?: unknown;
+    policy?: unknown;
+    chainId?: unknown;
+  };
   if (typeof salt !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(salt)) {
     throw new HttpError(400, 'invalid salt');
   }
+  const chainId = chainOf(rawChainId);
   const p = (policy ?? {}) as Record<string, unknown>;
 
-  const token = relayableToken(p.token);
+  const token = relayableToken(p.token, chainId);
   if (!env.cosignerPk) throw new HttpError(400, 'no co-signer key configured');
   const expected = cosignerAddress(env.cosignerPk);
   if (addr(p.cosigner, 'cosigner').toLowerCase() !== expected.toLowerCase()) {
@@ -280,6 +310,7 @@ export function parsePolicy(body: unknown): { salt: Hex; policy: EphemeralPolicy
 
   return {
     salt: salt as Hex,
+    chainId,
     policy: {
       // The matched entry, not the string that was sent. Comparing and then
       // writing back the caller's value would make the check advisory: two
@@ -305,8 +336,8 @@ export async function relayCreatePost(req: IncomingMessage, res: ServerResponse)
   checkQuota(caller, 1);
   if (!env.relayerPk) throw new HttpError(400, 'no relayer key configured');
   const body = parseBody(raw);
-  const { salt, policy } = parsePolicy(body);
-  const result = await relayCreateBox(env.relayerPk, salt, policy);
+  const { salt, policy, chainId } = parsePolicy(body);
+  const result = await relayCreateBox(env.relayerPk, chainId, salt, policy);
 
   // Announce in the same call, when asked to.
   //
@@ -335,6 +366,7 @@ export async function relayCreatePost(req: IncomingMessage, res: ServerResponse)
     const label = typeof announce.label === 'string' ? announce.label.trim().slice(0, 40) : '';
     announceTx = await relayAnnounceBox(
       env.relayerPk,
+      chainId,
       {
         stealthAddress: addr(announce.stealthAddress, 'stealthAddress'),
         ephemeralPubKey: announce.ephemeralPubKey as Hex,
@@ -352,11 +384,13 @@ export async function relayAnnouncePost(req: IncomingMessage, res: ServerRespons
   checkQuota(caller, 1);
   if (!env.relayerPk) throw new HttpError(400, 'no relayer key configured');
 
-  const { stealthAddress, ephemeralPubKey, box } = parseBody(raw) as {
+  const { stealthAddress, ephemeralPubKey, box, chainId: rawChainId } = parseBody(raw) as {
     stealthAddress?: unknown;
     ephemeralPubKey?: unknown;
     box?: unknown;
+    chainId?: unknown;
   };
+  const chainId = chainOf(rawChainId);
   // 33-byte compressed secp256k1 point, as ERC-5564 specifies for scheme 1.
   if (typeof ephemeralPubKey !== 'string' || !/^0x[0-9a-fA-F]{66}$/.test(ephemeralPubKey)) {
     throw new HttpError(400, 'invalid ephemeralPubKey');
@@ -366,9 +400,11 @@ export async function relayAnnouncePost(req: IncomingMessage, res: ServerRespons
 
   // An announcement for an address with no code would be a relayer-funded lie, and
   // the scanner on the other side would hand the payer a box that cannot be swept.
-  if (!(await boxExists(env.relayerPk, boxAddr))) throw new HttpError(400, 'box does not exist');
+  if (!(await boxExists(env.relayerPk, chainId, boxAddr))) {
+    throw new HttpError(400, 'box does not exist');
+  }
 
-  const result = await relayAnnounceBox(env.relayerPk, stealth, boxAddr);
+  const result = await relayAnnounceBox(env.relayerPk, chainId, stealth, boxAddr);
   json(res, 200, result);
 }
 
@@ -436,7 +472,7 @@ export async function relayGasPost(req: IncomingMessage, res: ServerResponse): P
   const caller = await requireSignedRequest(req, raw, '/api/relay/gas');
   checkQuota(caller, 1);
   if (!env.relayerPk) throw new HttpError(400, 'no relayer key configured');
-  const { to } = parseBody(raw) as { to?: unknown };
-  const result = await relayStealthGas(env.relayerPk, addr(to, 'to'));
+  const { to, chainId: rawChainId } = parseBody(raw) as { to?: unknown; chainId?: unknown };
+  const result = await relayStealthGas(env.relayerPk, chainOf(rawChainId), addr(to, 'to'));
   json(res, 200, result);
 }

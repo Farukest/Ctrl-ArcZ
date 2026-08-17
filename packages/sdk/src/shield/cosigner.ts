@@ -353,6 +353,11 @@ export class RemoteCoSigner implements CoSigner {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
+        // The chain the account is on. The server reads the policy from here and
+        // puts this id in the signature's EIP-712 domain, so the two can never
+        // describe different networks -- a signature carrying the wrong chain is
+        // refused by the account it was meant for.
+        chainId: req.chainId,
         account: req.account,
         owner: req.owner,
         amount: req.amount.toString(),
@@ -381,6 +386,7 @@ export class RemoteCoSigner implements CoSigner {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         phase: 'sign-cf',
+        chainId: req.chainId,
         factory: req.factory,
         ownerHash: req.ownerHash,
         salt: req.salt,

@@ -180,6 +180,26 @@ export async function predictEphemeral(
  * check also covers a benign identical-params front-run, where the deploy tx
  * reverts yet the correct account exists.)
  */
+/**
+ * Wait for the node we are talking to to have the code we just deployed.
+ *
+ * A receipt is not enough on a load-balanced endpoint. Base Sepolia's public RPC
+ * fronts several nodes, and the one that returns a receipt is not always the one
+ * that answers the next call: the policy read straight after a successful deploy
+ * came back as `cosigner returned no data ("0x")`, which reads as a factory that
+ * silently deployed nothing.
+ *
+ * Bounded, and it re-throws by doing nothing: if the code never appears, the
+ * policy assertion below runs anyway and fails with its own, more specific error.
+ */
+async function awaitCode(client: PublicClient, account: Address): Promise<void> {
+  for (let i = 0; i < 10; i++) {
+    const code = await client.getCode({ address: account }).catch(() => undefined);
+    if (code && code !== '0x') return;
+    await new Promise((r) => setTimeout(r, 600));
+  }
+}
+
 export async function createEphemeral(
   clients: ShieldClients,
   factory: Address,
@@ -199,11 +219,13 @@ export async function createEphemeral(
       chain: clients.walletClient.chain ?? null,
     });
     await clients.publicClient.waitForTransactionReceipt({ hash: txHash });
+    await awaitCode(clients.publicClient, account);
   } catch (e) {
     // Benign deploy collision: anyone who knows (ownerHash, salt, policy) can call
     // createAccount first. Because the salt commits to the full policy, the account
     // that already exists carries EXACTLY our intended config — so our reverted
     // deploy is not an error. Verify the on-chain code + policy and proceed to fund.
+    await awaitCode(clients.publicClient, account);
     const code = await clients.publicClient.getCode({ address: account });
     if (!code || code === '0x') throw e; // nothing there: a real failure
     await assertDeployedPolicy(clients.publicClient, account, policy); // wrong policy -> throw

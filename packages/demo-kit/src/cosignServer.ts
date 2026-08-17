@@ -6,6 +6,7 @@ import {
   recoverMessageAddress,
   type Address,
   type Hex,
+  type PublicClient,
   type Transport,
 } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
@@ -17,9 +18,10 @@ import {
   AnnouncementIndex,
   cosignAuthMessage,
   arcTestnet,
+  ARC_TESTNET_CHAIN_ID,
+  deploymentFor,
   RPC_URLS,
   CTRL_ARCZ_ADDRESS,
-  SPEND_POLICY_FACTORY_ADDRESS,
   spendPolicyFactoryAbi,
   ACTION_PAY,
   ACTION_PULL,
@@ -51,6 +53,17 @@ import {
  *  policy from chain and signs. */
 export interface CosignBody {
   phase?: 'precheck' | 'sign' | 'sign-cf';
+  /**
+   * Which chain the box is on. Absent means Arc, so every client written before
+   * there was a second chain keeps working unchanged.
+   *
+   * It is used, not merely accepted, and that is what makes a wrong claim
+   * harmless rather than dangerous. The policy is read from this chain's RPC and
+   * the signature carries this chain's id in its EIP-712 domain, so the two can
+   * never describe different networks. A caller naming the wrong chain gets a
+   * signature the box on the real chain refuses.
+   */
+  chainId?: number;
   account?: string;
   owner?: string;
   target?: string;
@@ -177,6 +190,51 @@ const publicClient = createPublicClient({
   batch: { multicall: { wait: 20 } },
 });
 
+/**
+ * A read client for whichever chain the request names.
+ *
+ * Arc keeps the client above: it is the busy one, it carries the rate-limit
+ * back-off these public endpoints need, and it batches the policy read into a
+ * single Multicall3 call. The others are built on demand from the registry's
+ * endpoints and cached, because building one per request would open a new
+ * connection pool for every signature.
+ *
+ * An unknown chain throws rather than falling back. Reading a policy from the
+ * wrong network and approving against it is the one failure here that would not
+ * announce itself.
+ */
+const chainClients = new Map<number, PublicClient>();
+function clientFor(chainId: number): PublicClient {
+  if (chainId === ARC_TESTNET_CHAIN_ID) return publicClient;
+  const cached = chainClients.get(chainId);
+  if (cached) return cached;
+  const deployment = deploymentFor(chainId);
+  if (!deployment) throw new Error(`invalid chainId ${chainId}`);
+  const client = createPublicClient({
+    transport: fallback(
+      deployment.rpcUrls.map((u: string) => http(u, { retryCount: 2, timeout: 20_000 })),
+    ),
+    batch: { multicall: { wait: 20 } },
+  }) as PublicClient;
+  chainClients.set(chainId, client);
+  return client;
+}
+
+/**
+ * The chain a request is about.
+ *
+ * Defaulting to Arc rather than rejecting an absent field keeps the Android and
+ * iOS clients working while they are updated; naming a chain we have nothing on
+ * is still refused outright.
+ */
+function chainOf(body: CosignBody): number {
+  const chainId = body.chainId ?? ARC_TESTNET_CHAIN_ID;
+  if (typeof chainId !== 'number' || !deploymentFor(chainId)) {
+    throw new Error(`invalid chainId ${String(body.chainId)}`);
+  }
+  return chainId;
+}
+
 // Dedicated indexer: backfills the sender->verified-recipients map once, then polls
 // incrementally, so the firewall never does a from-deploy-block getLogs scan on a
 // cosign request (that scan was the ~220s cold-start / 504 bottleneck).
@@ -286,7 +344,8 @@ async function reconstruct(body: CosignBody): Promise<AuthorizeRequest> {
   if (body.amount == null || !/^\d+$/.test(String(body.amount))) throw new Error('invalid amount');
   const action: SpendAction = body.action === ACTION_PULL ? ACTION_PULL : ACTION_PAY;
 
-  const state = await readAccount(publicClient, body.account as Address);
+  const chainId = chainOf(body);
+  const state = await readAccount(clientFor(chainId), body.account as Address);
 
   return {
     account: body.account as Address,
@@ -295,7 +354,7 @@ async function reconstruct(body: CosignBody): Promise<AuthorizeRequest> {
     action,
     target: state.target,
     nonce: state.nonce,
-    chainId: arcTestnet.id,
+    chainId,
     remaining: state.remaining,
     expiry: state.expiry,
     perPullMax: state.perPullMax,
@@ -339,12 +398,18 @@ async function signCounterfactual(
     mode: p.mode,
   } as const;
 
+  // The factory on the chain this request names. Recomputing against Arc's factory
+  // for a box on Base would produce a different address and reject every honest
+  // request, which is the safe direction and still wrong.
+  const chainId = chainOf(body);
+  const factory = deploymentFor(chainId)!.spendPolicyFactory;
+
   // Recompute the box address independently. If it does not equal the client's `box`,
   // the client's owner-auth is bound to an address its policy does not produce: reject.
   let predicted: Address;
   try {
-    predicted = (await publicClient.readContract({
-      address: SPEND_POLICY_FACTORY_ADDRESS,
+    predicted = (await clientFor(chainId).readContract({
+      address: factory,
       abi: spendPolicyFactoryAbi,
       functionName: 'predictAddress',
       args: [body.ownerHash as Hex, body.salt as Hex, initParams],
@@ -357,13 +422,13 @@ async function signCounterfactual(
   }
 
   const req: CounterfactualRequest = {
-    factory: SPEND_POLICY_FACTORY_ADDRESS,
+    factory,
     ownerHash: body.ownerHash as Hex,
     salt: body.salt as Hex,
     box: predicted,
     owner: body.owner as Address,
     amount: BigInt(body.amount),
-    chainId: arcTestnet.id,
+    chainId,
     policy: {
       token: initParams.token,
       cosigner: initParams.cosigner,

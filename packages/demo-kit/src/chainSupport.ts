@@ -1,4 +1,9 @@
-import { ARC_TESTNET_CHAIN_ID, deployedChainIds, deploymentFor } from '@ctrl-arcz/sdk';
+import {
+  ARC_TESTNET_CHAIN_ID,
+  CCTP_CHAINS,
+  deployedChainIds,
+  deploymentFor,
+} from '@ctrl-arcz/sdk';
 
 /**
  * Which chain a screen can do its work on.
@@ -33,6 +38,20 @@ export type ChainFeature =
  *
  * `null` means the deployment is the whole requirement.
  */
+/**
+ * Chains the relayer has been run against end to end, with a box deployed and the
+ * co-signer's signature verified for it there.
+ *
+ * Written as what was observed rather than derived from the registry, because that
+ * is what it is: a record of what has been tried. `testnet.services.test.ts` is the
+ * thing that moves a chain onto this list.
+ */
+const RELAYER_PROVEN: readonly number[] = [
+  ARC_TESTNET_CHAIN_ID,
+  CCTP_CHAINS.Ethereum_Sepolia.chainId,
+  CCTP_CHAINS.Arbitrum_Sepolia.chainId,
+];
+
 const ALSO_NEEDS: Record<ChainFeature, ((chainId: number) => boolean) | null> = {
   protectedSend: null,
   receive: null,
@@ -52,10 +71,25 @@ const ALSO_NEEDS: Record<ChainFeature, ((chainId: number) => boolean) | null> = 
    */
   privatePay: (chainId) =>
     chainId === ARC_TESTNET_CHAIN_ID || deploymentFor(chainId)?.privatePayRouter !== undefined,
-  /** Boxes are funded by a Circle Gateway mint, so the box's chain must be one
-   *  Gateway can mint on. That is true of Arc and of the chains we deploy to, but
-   *  it is a second condition and is checked as one. */
-  subscriptions: null,
+  /**
+   * A subscription box is deployed and announced by the relayer, so this needs a
+   * chain the relayer has actually been shown to work on -- not merely one with a
+   * factory address.
+   *
+   * That distinction is not theoretical. The relayer path was exercised live on
+   * all four new chains and passed on two: Ethereum Sepolia and Arbitrum Sepolia.
+   * On Avalanche Fuji the deploy is refused with `exceeds block gas limit`, from
+   * the chain's habit of estimating gas from the sender's balance; clamping the
+   * prepared gas fixed a plain transfer there and did not fix the contract call.
+   * On Base Sepolia the deploy lands and the policy read straight after it comes
+   * back empty (`cosigner returned no data`), which survives a ten-attempt wait
+   * for the code to appear, so it is not simply the load balancer being behind.
+   *
+   * Neither is understood yet, and an unexplained failure is not a reason to let
+   * the screen offer the feature. The list shrinks back to what has been seen to
+   * work, and grows again per chain as each one is proven.
+   */
+  subscriptions: (chainId) => RELAYER_PROVEN.includes(chainId),
 };
 
 /**

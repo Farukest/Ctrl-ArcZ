@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  CCTP_CHAINS,
   ADDRESSES,
   ARC_TOKENS,
   tokensFor,
@@ -79,14 +80,37 @@ describe('tokens are per chain', () => {
 
   /**
    * Not an oversight and not an empty state to fill in later: we have verified no
-   * token addresses on these chains, and a symbol resolved against the wrong chain
-   * is a transfer to the wrong contract. Nothing is the honest answer.
+   * token addresses on a chain we do not deploy to, and a symbol resolved against
+   * the wrong chain is a transfer to the wrong contract. Nothing is the honest
+   * answer, and it stays nothing rather than falling back to Arc's list.
    */
   it('offers nothing on a chain we have verified nothing for', () => {
-    expect(tokensFor(84532)).toEqual([]);
     expect(tokensFor(1)).toEqual([]);
     expect(tokensFor(undefined)).toEqual([]);
-    expect(defaultTokenFor(84532)).toBeUndefined();
+    expect(defaultTokenFor(1)).toBeUndefined();
+  });
+
+  /**
+   * USDC and only USDC on the chains deployed alongside Arc.
+   *
+   * The shortness is the point. USDC's address on each was read off Circle's own
+   * published table; EURC and cirBTC exist on some of them at addresses nobody has
+   * verified, and an unverified address in a picker is how money reaches a
+   * lookalike. The entry has to exist at all, though: without one,
+   * `defaultTokenFor` answers nothing and the screen falls back to Arc's USDC,
+   * which on Base is not a token.
+   */
+  it('offers verified USDC on each deployed chain', () => {
+    for (const chain of ['Base_Sepolia', 'Ethereum_Sepolia', 'Arbitrum_Sepolia', 'Avalanche_Fuji'] as const) {
+      const id = CCTP_CHAINS[chain].chainId;
+      const tokens = tokensFor(id);
+      expect(tokens.map((t) => t.symbol)).toEqual(['USDC']);
+      expect(tokens[0]!.address.toLowerCase()).toBe(CCTP_CHAINS[chain].usdc.toLowerCase());
+      expect(tokens[0]!.decimals).toBe(6);
+      expect(defaultTokenFor(id)?.address.toLowerCase()).toBe(
+        CCTP_CHAINS[chain].usdc.toLowerCase(),
+      );
+    }
   });
 
   it('scopes a lookup to the chain when it is given one', () => {

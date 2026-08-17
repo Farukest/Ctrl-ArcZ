@@ -8,6 +8,7 @@ import {
   EXPLORER_API_URL,
   EXPLORER_URL,
   MAX_LOG_RANGE,
+  RPC_URLS,
   SHIELD_VAULT_ADDRESS,
   SPEND_POLICY_ACCOUNT_IMPL_ADDRESS,
   SPEND_POLICY_FACTORY_ADDRESS,
@@ -95,6 +96,20 @@ export interface ChainDeployment {
    */
   multicall3From?: `0x${string}`;
 
+  /**
+   * Endpoints a server can reach this chain on, best first.
+   *
+   * For the server side only: the co-signer has to read a box's policy and the
+   * relayer has to submit its deploy, and neither has a user's wallet to borrow.
+   * The browser never uses these -- it reaches every chain but Arc through the
+   * connected wallet's own provider, which is by definition on the chain the user
+   * is on.
+   *
+   * More than one where more than one is published, so a single rate-limited
+   * endpoint cannot stop the service.
+   */
+  rpcUrls: readonly string[];
+
   /** The explorer's front page. Undefined where the chain has no published one. */
   explorerUrl: string | undefined;
   /**
@@ -125,6 +140,7 @@ function deployed(
     stealthAnnouncer: `0x${string}`;
     privatePayRouter: `0x${string}`;
     deployBlock: bigint;
+    rpcUrls: readonly string[];
     explorerApi?: string;
   },
 ): ChainDeployment {
@@ -148,6 +164,7 @@ function deployed(
     // Gas is the chain's own coin here, not USDC. Getting this backwards makes Max
     // either leave a reserve nobody owes or spend one that is owed.
     gasToken: 'native',
+    rpcUrls: a.rpcUrls,
     explorerUrl: chainExplorerUrl(chain),
     ...(a.explorerApi ? { explorerApi: a.explorerApi } : {}),
   };
@@ -168,6 +185,7 @@ export const DEPLOYMENTS: Readonly<Record<number, ChainDeployment>> = {
     stealthAnnouncerDeployBlock: STEALTH_ANNOUNCER_DEPLOY_BLOCK,
     maxLogRange: MAX_LOG_RANGE,
     gasToken: 'usdc',
+    rpcUrls: RPC_URLS,
     multicall3From: ADDRESSES.MULTICALL3_FROM,
     explorerUrl: EXPLORER_URL,
     explorerApi: EXPLORER_API_URL,
@@ -188,6 +206,7 @@ export const DEPLOYMENTS: Readonly<Record<number, ChainDeployment>> = {
     stealthAnnouncer: '0xc69ab232410722E38A00474D8A4F2c743D51Df1B',
     privatePayRouter: '0xCe219028FC4a9D0AC4DBfa7436106f31c654E707',
     deployBlock: 45603570n,
+    rpcUrls: ['https://sepolia.base.org', 'https://base-sepolia-rpc.publicnode.com'],
     explorerApi: 'https://base-sepolia.blockscout.com/api/v2',
   }),
 
@@ -199,6 +218,10 @@ export const DEPLOYMENTS: Readonly<Record<number, ChainDeployment>> = {
     stealthAnnouncer: '0x8914bd04a8E753356bBC7087ac97F3434D32eCa2',
     privatePayRouter: '0x71f47955b810e126b9FA832d51DB60FE4cB3d701',
     deployBlock: 11509328n,
+    rpcUrls: [
+      'https://ethereum-sepolia-rpc.publicnode.com',
+      'https://sepolia.drpc.org',
+    ],
     explorerApi: 'https://eth-sepolia.blockscout.com/api/v2',
   }),
 
@@ -210,6 +233,10 @@ export const DEPLOYMENTS: Readonly<Record<number, ChainDeployment>> = {
     stealthAnnouncer: '0xC9a80F08bED30B6CBfB94ee33D0Aeb9F38e67D22',
     privatePayRouter: '0x0cD8d125036f805EE34B5092C51Cb01Beb3DB8A6',
     deployBlock: 11509330n,
+    rpcUrls: [
+      'https://sepolia-rollup.arbitrum.io/rpc',
+      'https://arbitrum-sepolia-rpc.publicnode.com',
+    ],
     explorerApi: 'https://arbitrum-sepolia.blockscout.com/api/v2',
   }),
 
@@ -223,6 +250,10 @@ export const DEPLOYMENTS: Readonly<Record<number, ChainDeployment>> = {
     stealthAnnouncer: '0x693E2B03AD97Bcd3Ac74ECeE321081ccBBa42bE3',
     privatePayRouter: '0x2C0f268DE2Aa8BB2ab27F2Ea5Ae8a0f9a0E068c4',
     deployBlock: 57807450n,
+    rpcUrls: [
+      'https://api.avax-test.network/ext/bc/C/rpc',
+      'https://avalanche-fuji-c-chain-rpc.publicnode.com',
+    ],
   }),
 };
 

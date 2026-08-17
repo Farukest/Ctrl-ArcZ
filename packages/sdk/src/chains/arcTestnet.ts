@@ -8,6 +8,7 @@
  *   - https://docs.arc.io/arc/references/connect-to-arc
  */
 import { arcTestnet as viemArcTestnet } from 'viem/chains';
+import { CCTP_CHAINS, type CctpChainName } from '../bridge/cctp.js';
 
 /** viem ships Arc Testnet as a built-in chain (requires viem >= 2.38). */
 export const arcTestnet = viemArcTestnet;
@@ -206,7 +207,42 @@ export const TOKENS_BY_CHAIN: Readonly<Record<number, readonly TokenInfo[]>> = {
       restricted: { reason: 'allowlist' },
     },
   ],
+
+  /**
+   * Every other chain we deploy on: USDC and nothing else, yet.
+   *
+   * Not an oversight and not a placeholder. USDC is the one token whose address on
+   * each of these was read off the chain rather than assumed, through
+   * `CCTP_CHAINS`, which is Circle's own published table. EURC and cirBTC exist on
+   * some of them, at addresses we have not verified, and listing an unverified
+   * address in a picker is how someone sends money to a lookalike contract.
+   *
+   * The list being short matters more than it looks: without an entry at all,
+   * `defaultTokenFor` returns nothing and `useToken` falls back to the module's
+   * default, which is Arc's USDC -- a screen on Base denominated in an address that
+   * is not a token there.
+   */
+  ...usdcOnly(['Base_Sepolia', 'Ethereum_Sepolia', 'Arbitrum_Sepolia', 'Avalanche_Fuji']),
 };
+
+/** USDC as this app describes it, on chains where that is all we have verified. */
+function usdcOnly(chains: readonly CctpChainName[]): Record<number, readonly TokenInfo[]> {
+  return Object.fromEntries(
+    chains.map((name) => [
+      CCTP_CHAINS[name].chainId,
+      [
+        {
+          symbol: 'USDC',
+          name: 'USD Coin',
+          address: CCTP_CHAINS[name].usdc as `0x${string}`,
+          decimals: 6,
+          searchNames: ['dollar', 'usd'],
+          tint: '#2775ca',
+        },
+      ] as const,
+    ]),
+  );
+}
 
 /** Tokens on `chainId`. Empty for a chain we have verified no addresses on. */
 export function tokensFor(chainId: number | undefined): readonly TokenInfo[] {

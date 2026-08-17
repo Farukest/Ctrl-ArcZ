@@ -1,5 +1,6 @@
 import type { Address } from 'viem';
 import { EXPLORER_API_URL } from '../chains/arcTestnet.js';
+import { deploymentFor } from '../chains/deployments.js';
 import type { AddressActivity, CounterpartyScan, IDataProvider } from './types.js';
 
 /**
@@ -41,11 +42,37 @@ interface Paged<T> {
 const MAX_COUNTERPARTY_PAGES = 10;
 
 export interface BlockscoutProviderOptions {
-  /** Defaults to Arc Testnet's ArcScan. */
+  /** Defaults to Arc Testnet's ArcScan. Takes precedence over `chainId`. */
   apiUrl?: string;
+  /**
+   * Read this chain's explorer instead, from the deployment registry.
+   *
+   * A chain with no Blockscout instance -- Avalanche Fuji today -- has no entry,
+   * and this throws rather than quietly falling back to Arc's. The firewall reads
+   * a target's history to judge it, and Arc's history of a Base address is not
+   * "no history", it is the wrong question answered confidently.
+   */
+  chainId?: number;
   /** Abort a slow explorer rather than stalling a send. Default 8000 ms. */
   timeoutMs?: number;
   fetchFn?: typeof fetch;
+}
+
+/**
+ * The explorer API for a chain, or a refusal.
+ *
+ * Refusing is the point. Without a history source the firewall cannot judge a
+ * recipient, and the honest outcome is that it says so -- the rules already fail
+ * closed on incomplete data. Silently reading Arc for a Base address would instead
+ * produce a confident verdict about the wrong chain.
+ */
+function explorerApiFor(chainId: number | undefined): string {
+  if (chainId === undefined) return EXPLORER_API_URL;
+  const deployment = deploymentFor(chainId);
+  if (!deployment?.explorerApi) {
+    throw new Error(`no explorer API for chain ${chainId}`);
+  }
+  return deployment.explorerApi;
 }
 
 export class BlockscoutDataProvider implements IDataProvider {
@@ -54,7 +81,7 @@ export class BlockscoutDataProvider implements IDataProvider {
   private readonly fetchFn: typeof fetch;
 
   constructor(options: BlockscoutProviderOptions = {}) {
-    this.apiUrl = options.apiUrl ?? EXPLORER_API_URL;
+    this.apiUrl = options.apiUrl ?? explorerApiFor(options.chainId);
     this.timeoutMs = options.timeoutMs ?? 15_000;
     // Wrap rather than store the bare reference: in a browser `fetch` is a method of
     // the global object and calling it as `this.fetchFn(...)` gives it the provider as

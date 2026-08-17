@@ -6,6 +6,7 @@ export {
   switchToArc,
   watchWallet,
   localSigner,
+  signerFor,
   bridgeClients,
   switchWalletChain,
   switchWalletTo,

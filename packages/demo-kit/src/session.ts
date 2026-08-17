@@ -14,6 +14,7 @@ import { privateKeyToAccount } from 'viem/accounts';
 import {
   arcTestnet,
   ARC_TESTNET_CHAIN_ID,
+  deploymentFor,
   RPC_URL,
   RPC_URLS,
   SIGNING_RPC_URLS,
@@ -164,6 +165,100 @@ export function localSigner(privateKey: `0x${string}`): ClientPair {
     transport: arcSigningTransport(),
   });
   return { publicClient, walletClient };
+}
+
+/**
+ * A gas limit no call of ours could legitimately need, and every chain can hold.
+ *
+ * Below the block limit on all four testnets (Fuji's is the smallest at 32M) and
+ * roughly thirty times the largest thing this codebase submits, which is a box
+ * deploy at a little over half a million.
+ */
+const MAX_SENSIBLE_GAS = 15_000_000n;
+
+/**
+ * Clamp a gas limit that cannot be one.
+ *
+ * Avalanche Fuji's `eth_estimateGas` answers with what the sender can afford
+ * rather than what the call costs: with its base fee at 160 wei and half an AVAX
+ * in the relayer, it returned 1.48e15, and the node then refused the transaction
+ * for exceeding its own 32M block limit. It is the chain, not the client -- `cast
+ * send` fails identically and succeeds the moment a limit is passed by hand.
+ *
+ * Applied by overriding `prepareTransactionRequest` rather than by filtering the
+ * RPC response, which is where this was tried first and did not work: on the same
+ * client, a direct `eth_estimateGas` came back clamped at 15,000,000 while the
+ * prepared transaction still carried 1,482,259,570,496,032. viem fills the gas
+ * somewhere other than that one call, so the clamp belongs where the number is
+ * finally decided. `getAction` looks an action up on the client before falling
+ * back to its own, so an extension here covers `writeContract` and
+ * `sendTransaction` alike.
+ *
+ * Clamping high costs nothing: a transaction is charged for gas used, not gas
+ * offered, and the node's own metering still stops a call that really does need
+ * more.
+ */
+function withSaneGas(client: WalletClient): WalletClient {
+  type Prepare = (args: unknown) => Promise<{ gas?: bigint }>;
+  return (client as unknown as { extend: (fn: (c: unknown) => unknown) => unknown }).extend(
+    (c) => ({
+      async prepareTransactionRequest(args: unknown) {
+        const base = (c as { prepareTransactionRequest: Prepare }).prepareTransactionRequest;
+        const prepared = await base(args);
+        return prepared.gas != null && prepared.gas > MAX_SENSIBLE_GAS
+          ? { ...prepared, gas: MAX_SENSIBLE_GAS }
+          : prepared;
+      },
+    }),
+  ) as WalletClient;
+}
+
+/**
+ * Clients for a service key on any chain we have deployed to.
+ *
+ * `localSigner` is Arc and only Arc, which was the whole truth while Arc was the
+ * only deployment. The co-signer has to read a box's policy where the box actually
+ * is, and the relayer has to submit its deploy there; neither has a user's wallet
+ * to borrow, so both need endpoints of their own. Those live in the deployment
+ * registry, next to the addresses they serve.
+ *
+ * Throws on a chain with no deployment rather than falling back to Arc. A service
+ * that quietly answers for the wrong chain signs for the wrong chain, and an
+ * EIP-712 signature carrying the wrong `chainId` is refused by the account it was
+ * meant for -- which is the good case. The bad one is reading a policy from a
+ * network the box is not on and approving against it.
+ *
+ * NOT for user wallets. The key belongs to the operator's backend.
+ */
+export function signerFor(chainId: number, privateKey: `0x${string}`): ClientPair {
+  if (chainId === ARC_TESTNET_CHAIN_ID) return localSigner(privateKey);
+
+  const deployment = deploymentFor(chainId);
+  if (!deployment) throw new Error(`no deployment on chain ${chainId}`);
+
+  const account = privateKeyToAccount(privateKey);
+  // viem needs the id to tag transactions. The rest of a chain definition is for
+  // transports that dial an RPC by name, and these dial the registry's list.
+  const chain = {
+    id: deployment.chainId,
+    name: deployment.chain,
+    nativeCurrency: { name: 'Gas', symbol: 'GAS', decimals: 18 },
+    rpcUrls: { default: { http: [...deployment.rpcUrls] } },
+  };
+  const transport = fallback(
+    deployment.rpcUrls.map((u) => http(u, { retryCount: 2, timeout: 20_000 })),
+    { retryCount: 1 },
+  );
+  return {
+    // No `chain` on the read client: the transport already dials this chain's
+    // endpoints, and viem's typing for a hand-built definition fights the
+    // `PublicClient` shape for no gain. Only the wallet client needs the id, to
+    // tag what it signs.
+    publicClient: createPublicClient({ transport, pollingInterval: 4000 }) as PublicClient,
+    walletClient: withSaneGas(
+      createWalletClient({ account, chain: chain as never, transport }) as WalletClient,
+    ),
+  };
 }
 
 function getProvider(): EIP1193Provider {
