@@ -6,6 +6,7 @@ import {
   NetworkMenu,
   NO_ARRIVALS,
   SegmentedTabs,
+  SiteFooter,
   TopBar,
   nextArrival,
   useT,
@@ -141,6 +142,10 @@ export function App() {
           </div>
         </>
       )}
+
+      {/* Outside the session guard on purpose: someone who has not connected a
+          wallet yet is exactly who the docs and the deck are written for. */}
+      <SiteFooter />
     </main>
   );
 }

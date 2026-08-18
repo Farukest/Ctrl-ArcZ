@@ -58,6 +58,12 @@ export const tr: Record<TranslationKey, string> = {
   'amount.max': 'Max',
 
   'app.subtitle': 'Arc üzerinde korumalı USDC transferleri',
+
+  'footer.docs': 'Dokümantasyon',
+  'footer.docsSub': "SDK'yı entegre et",
+  'footer.deck': 'Sunum',
+  'footer.deckSub': 'Projenin slaytları',
+
   'mode.send': 'Gönder',
   'mode.receive': 'Al',
   'receive.yourAddress': 'Adresin',

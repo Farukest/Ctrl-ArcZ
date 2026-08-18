@@ -29,6 +29,7 @@ export { Stepper, type Step } from './Stepper.js';
 export { ConnectBar } from './ConnectBar.js';
 export { ModeSwitch, type Mode } from './ModeSwitch.js';
 export { TopBar } from './TopBar.js';
+export { SiteFooter } from './SiteFooter.js';
 export { NetworkMenu } from './NetworkMenu.js';
 export { NeedsChain } from './NeedsChain.js';
 export { TokenPicker } from './TokenPicker.js';

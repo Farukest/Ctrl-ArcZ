@@ -73,6 +73,12 @@ export const en = {
   'amount.max': 'Max',
 
   'app.subtitle': 'Protected USDC transfers on Arc',
+
+  'footer.docs': 'Documentation',
+  'footer.docsSub': 'Integrate the SDK',
+  'footer.deck': 'Deck',
+  'footer.deckSub': 'The project in slides',
+
   'mode.send': 'Send',
   'mode.receive': 'Receive',
   'receive.yourAddress': 'Your address',

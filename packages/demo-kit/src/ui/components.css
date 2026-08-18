@@ -53,6 +53,94 @@
   margin: calc(-1 * var(--sp-3)) 0 var(--sp-5);
 }
 
+/* Site footer: the docs and the deck ------------------------------------- */
+/* Two cards rather than a row of text links. Both are somewhere you go and read
+   for a while, not an action inside the app, and a card says that where a link in
+   a line of small print does not. Kept quiet by default and lit only on hover, so
+   it never competes with the payment controls above it. */
+/* Inside the app shell, so the rule above it lines up with the content rather
+   than running the full width of the window. */
+.sitefooter {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--sp-3);
+  margin-top: var(--sp-6);
+  padding-top: var(--sp-5);
+  border-top: 1px solid var(--border-subtle);
+}
+.sitefooter__card {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--surface-1);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-md);
+  color: var(--text-hi);
+  text-decoration: none;
+  transition:
+    border-color var(--dur-2) var(--ease),
+    background-color var(--dur-2) var(--ease);
+}
+@media (hover: hover) {
+  .sitefooter__card:hover {
+    border-color: var(--accent);
+    background: var(--surface-2);
+  }
+  .sitefooter__card:hover .sitefooter__icon {
+    color: var(--accent);
+  }
+  .sitefooter__card:hover .sitefooter__go {
+    opacity: 1;
+  }
+}
+.sitefooter__card:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.sitefooter__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 38px;
+  height: 38px;
+  border-radius: var(--r-sm);
+  background: var(--surface-3);
+  color: var(--text-mid);
+  transition: color var(--dur-2) var(--ease);
+}
+.sitefooter__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.sitefooter__title {
+  font-weight: 620;
+  font-size: var(--fs-sm);
+  line-height: 1.3;
+}
+.sitefooter__sub {
+  color: var(--text-mid);
+  font-size: var(--fs-xs);
+  line-height: 1.35;
+}
+/* Present but faint: it says "this leaves the app" without drawing the eye to
+   itself. Full strength arrives with hover, together with the border. */
+.sitefooter__go {
+  flex: 0 0 auto;
+  margin-left: auto;
+  color: var(--text-lo);
+  opacity: 0.7;
+  transition: opacity var(--dur-2) var(--ease);
+}
+@media (max-width: 560px) {
+  .sitefooter {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* Logo (the wordmark IS the logo — no icon) ------------------------------- */
 .logo--interactive {
   cursor: pointer;

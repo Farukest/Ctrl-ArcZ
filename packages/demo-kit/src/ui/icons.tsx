@@ -147,3 +147,23 @@ export const IconInfo = (p: SVGProps<SVGSVGElement>) => (
     <path d="M12 11v5M12 8h.01" />
   </svg>
 );
+
+/* The two off-site destinations in the footer. Both are read at 20px, where detail
+   turns to mush: each is one closed silhouette plus one interior line, and nothing
+   smaller. An earlier pair carried page-edge ticks that vanished at this size and
+   left the book looking like two plain bars. */
+export const IconBook = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}>
+    <path d="M12 7.5v12" />
+    <path d="M3 17.5V5a1 1 0 0 1 1-1h4.5A3.5 3.5 0 0 1 12 7.5 3.5 3.5 0 0 1 15.5 4H20a1 1 0 0 1 1 1v12.5a1 1 0 0 1-1 1h-5a3 3 0 0 0-3 3 3 3 0 0 0-3-3H4a1 1 0 0 1-1-1Z" />
+  </svg>
+);
+
+export const IconSlides = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}>
+    <rect x="3" y="4" width="18" height="12" rx="2" />
+    <path d="M12 16v4" />
+    <path d="M8.5 20h7" />
+    <path d="m7.5 12 3-3.5 2.5 2.5 3.5-4" />
+  </svg>
+);
