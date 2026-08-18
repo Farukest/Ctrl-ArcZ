@@ -20,6 +20,22 @@ kilitli kalıyordu. İkisi de tek bir kökten geliyordu.
   `fundBoxFromGateway`'in `to` alanı zorunlu oldu, varsayılanı yok: varsayılan,
   çağıranın hangi zinciri kastettiği hakkında ikinci bir görüştü ve kutu adresini
   elinde tutan çağırandı.
+- **Kutu fonlamasının canlı testi eklendi** (`testnet.boxfunding.test.ts`,
+  `INTEGRATION=1`). Base Sepolia'da gerçek parayla: mint kutuya düşüyor, tutar tam
+  geliyor (ücret Gateway bakiyesinden çıkıyor, kutudan değil), **aynı adres Arc'ta
+  boş kalıyor**, ve kesilen bir bekleme hiçbir şey kaybettirmiyor çünkü Circle'ın
+  transfer id'si beklemeden önce elde oluyor. Ayrıca fonlanmamış adrese, farklı
+  policy'li kutuya ve bakiyenin yetmediği duruma imza atılmadan hayır deniyor.
+  Ölçümle çıkan iki şey: Circle'ın `/v1/transfer` durumu kendi mint'inin gerisinde
+  kalıyor (para kutudayken hâlâ `pending` diyordu, fonlama bu yüzden bakiyeye
+  bakarak yargılanıyor), ve zincirin kaydettiği fonlama satırı sıfır adresten bir
+  **mint**, yani Circle'ın minter'ı bile gönderen olarak görünmüyor.
+- **`docs/privacy.md` kanıt olarak yanlış kutuyu gösteriyordu.** Sayfadaki Arc
+  kutusu Gateway fonlamasından on iki gün önce, 2026-07-28'de fonlanmış ve zincirdeki
+  kaydı hâlâ `payer -> box`. "Beşinin hiçbiri ödeyenin adresini taşımaz" cümlesinin
+  altında, tam da kapatıldığı söylenen sızıntıyı belgeliyordu. Yerine 2026-08-18'de
+  Base'de ölçülen kutu ve tx'i kondu, eski örnek ise silinmek yerine ne olduğu
+  yazılarak bırakıldı.
 - **Ücret de gideceği rotaya göre fiyatlanıyor.** Arc hedefine sorulan fiyat Base
   hedefine ödenen fiyat değil: aynı kutu için 0.050006 ile 0.111868 arasında fark
   var. Ekranda duran rakam başka bir transferin rakamıydı.

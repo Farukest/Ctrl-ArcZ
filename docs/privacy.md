@@ -8,16 +8,14 @@ name the payer, so nobody has to infer it from the code.
 
 ## Measured, not asserted
 
-The trace below is every USDC movement around one real box on Arc Testnet
-(`0x3cDB93434d64d08a803694C64f4027Fc7CBFE50E`), created and cancelled through the
-app:
+The shape of a box's life is five public transactions:
 
 ```
 deploy   (SpendPolicyFactory.createAccount)   sent by relayer
 announce (StealthAnnouncer.announce)          sent by relayer, caller = relayer
-fund     Circle minter -> box   0.1  USDC     sent by Circle's forwarder
+fund     mint -> box                          submitted by Circle's forwarder
 gas      relayer -> stealth     0.05 USDC     sent by relayer
-sweep    box    -> stealth      0.1  USDC     sent by stealth
+sweep    box    -> stealth                    sent by stealth
 ```
 
 None of the five carries the payer's address.
@@ -26,8 +24,23 @@ The funding line used to, and it was the one that mattered: it read
 `PAYER -> box`, both ends indexed, so anyone could take a wallet's outgoing
 transfers, intersect them with the announcer's metadata and recover its boxes with
 no viewing key. Measured on a real wallet, that recovered eight boxes out of eight
-with no false positives. The box is funded through Circle Gateway now, so the
-transfer Arc records is a mint from Circle's minter.
+with no false positives.
+
+The box is funded through Circle Gateway now. Verified 2026-08-18 on Base Sepolia,
+box [`0x7da74e31873dEbb59bD006512B01F0f107f55927`](https://base-sepolia.blockscout.com/address/0x7da74e31873dEbb59bD006512B01F0f107f55927),
+funded in [`0xb4138b81…`](https://base-sepolia.blockscout.com/tx/0xb4138b8177e238193e7c54e23de2c61100b7a4a678b83bc2e1e63a004a566f2f):
+the box's only incoming movement is a **mint from the zero address**, so the
+funding line has one end and it is the box. Not even Circle's minter appears as a
+sender. This is asserted in `testnet.boxfunding.test.ts` rather than left to a
+reading of the code.
+
+An earlier revision of this page traced box `0x3cDB93434d64d08a803694C64f4027Fc7CBFE50E`
+on Arc and presented it as the evidence for the paragraph above. It is not: that box
+was funded on 2026-07-28, twelve days before Gateway funding landed, and its record
+on chain still reads `payer -> box`. It documented the leak, directly under the
+sentence saying the leak was closed. Left here rather than deleted, because an
+address that contradicts the claim beside it is the failure mode this page exists
+to prevent.
 
 ## Why the relay is not cosmetic
 
