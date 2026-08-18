@@ -392,6 +392,62 @@ describe('the quote is flat, and it is asked for every time', () => {
       }),
     ).rejects.toThrow(/Could not price/i);
   });
+
+  /**
+   * Measured in a real browser: an extension defining `BigInt.prototype.toJSON`
+   * sent `"value":"1000000n"`, Circle answered "Must be a valid positive integer
+   * string", and the subscription page could neither price nor create anything.
+   *
+   * `JSON.stringify` runs `toJSON` before the replacer, so a replacer that tests
+   * `typeof v === 'bigint'` is handed a string and passes it through untouched.
+   * The page cannot choose what else runs on it, so the amounts are converted
+   * before `JSON.stringify` is given anything to convert.
+   */
+  it('sends decimal amounts even where BigInt serialisation has been redefined', async () => {
+    const proto = BigInt.prototype as unknown as { toJSON?: () => string };
+    proto.toJSON = function toJSON(this: bigint) {
+      return `${this}n`;
+    };
+    try {
+      const a = api();
+      await quoteGatewaySpend({
+        from: 'Arc_Testnet',
+        to: 'Base_Sepolia',
+        amount: 1_000_000n,
+        depositor: WALLET,
+        fetchImpl: a.impl as never,
+      });
+      const sent = a.calls.find((c) => c.url.includes('/v1/estimate'))!;
+      const body = JSON.parse(String(sent.init!.body)) as [{ spec: { value: string } }];
+      expect(body[0]!.spec.value).toBe('1000000');
+    } finally {
+      delete proto.toJSON;
+    }
+  });
+
+  /** The same hazard on `toString`, which a template literal does not consult. */
+  it('sends decimal amounts even where BigInt.toString has been redefined', async () => {
+    const proto = BigInt.prototype as unknown as { toString: () => string };
+    const real = proto.toString;
+    proto.toString = function toString(this: bigint) {
+      return `${real.call(this)}n`;
+    };
+    try {
+      const a = api();
+      await quoteGatewaySpend({
+        from: 'Arc_Testnet',
+        to: 'Base_Sepolia',
+        amount: 1_000_000n,
+        depositor: WALLET,
+        fetchImpl: a.impl as never,
+      });
+      const sent = a.calls.find((c) => c.url.includes('/v1/estimate'))!;
+      const body = JSON.parse(String(sent.init!.body)) as [{ spec: { value: string } }];
+      expect(body[0]!.spec.value).toBe('1000000');
+    } finally {
+      proto.toString = real;
+    }
+  });
 });
 
 describe('an interrupted spend is finished from its transferId alone', () => {

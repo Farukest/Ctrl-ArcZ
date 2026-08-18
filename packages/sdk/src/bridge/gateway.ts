@@ -143,9 +143,36 @@ const TYPES = {
 
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000' as Address;
 
-/** bigint values have to reach Circle as decimal strings, not JSON numbers. */
+/**
+ * bigint values have to reach Circle as decimal strings, not JSON numbers.
+ *
+ * The obvious way to write this is a `JSON.stringify` replacer that tests for
+ * `typeof v === 'bigint'`, and it is not safe. `JSON.stringify` calls a value's
+ * `toJSON` BEFORE handing it to the replacer, so anything that defines
+ * `BigInt.prototype.toJSON` decides what we send and the replacer is handed a
+ * string it has no reason to touch. That is not hypothetical: a browser extension
+ * that returns `${this}n` turned `"value":"1000000"` into `"value":"1000000n"`,
+ * Circle refused the estimate with "Must be a valid positive integer string", and
+ * the subscription page could neither price nor create anything. Nothing in this
+ * repo or its dependencies patches that prototype; the page does not get to
+ * choose its neighbours, so the serialiser has to survive them.
+ *
+ * So the conversion happens here, before `JSON.stringify` is ever given a bigint,
+ * and it converts with a template literal rather than `v.toString()`: ToString on
+ * a bigint is an internal operation, while `.toString()` is one more method a
+ * third party can redefine.
+ */
+function toWire(value: unknown): unknown {
+  if (typeof value === 'bigint') return `${value}`;
+  if (Array.isArray(value)) return value.map(toWire);
+  if (value !== null && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, toWire(v)]));
+  }
+  return value;
+}
+
 function jsonBigints(value: unknown): string {
-  return JSON.stringify(value, (_k, v) => (typeof v === 'bigint' ? v.toString() : v));
+  return JSON.stringify(toWire(value));
 }
 
 /**

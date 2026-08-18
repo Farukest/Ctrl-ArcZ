@@ -143,6 +143,20 @@ self-transfer guards, SafeERC20 on every movement, and no admin / upgrade /
   non-secret `tid` pointer, sanitized before use and never rendered as HTML; all
   `target="_blank"` links carry `rel="noreferrer"`;
   no open-redirect; SDK-built explorer links are fixed-scheme.
+- **Fixed: a redefined `BigInt.prototype` chose what we sent to Circle.** Gateway
+  request bodies were built with a `JSON.stringify` replacer testing
+  `typeof v === 'bigint'`. `toJSON` runs before the replacer, so anything defining
+  `BigInt.prototype.toJSON` decided the wire format and the replacer was handed a
+  string it had no reason to touch. Observed in a real browser: an extension
+  returning `${this}n` sent `"value":"1000000n"`, and Circle refused every estimate
+  and every transfer. No funds were at risk, because the burn intent is signed over
+  the real bigints, so a rewritten body cannot make a payer overpay; it can only be
+  rejected. The cost was denial of function, permanent in that browser, with a
+  message that blamed Circle. Amounts are now converted before `JSON.stringify` is
+  given anything to convert, using a template literal rather than the redefinable
+  `.toString()`. Nothing in this repo or its dependencies patches that prototype,
+  and that is exactly the point: a page does not get to choose what else runs on it,
+  so anything carrying an amount has to survive its neighbours.
 - **Documented: address truncation in list rows.** Counterparty/recipient rows show
   `0x1234…abcd`, the same ambiguous form poisoning exploits. The send flow is guarded
   by the risk firewall; consider full-address-on-hover in history/pending lists.

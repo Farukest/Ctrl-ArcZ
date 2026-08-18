@@ -2,6 +2,37 @@
 
 Bu proje [Keep a Changelog](https://keepachangelog.com/) biçimini izler.
 
+## Yayınlanmamış: 2026-08-18
+
+Abonelik sayfası Circle'ın ücretini okuyamıyordu ve "Abonelik oluştur" butonu
+kilitli kalıyordu. İkisi de tek bir kökten geliyordu.
+
+### Düzeltildi
+
+- **Gateway gövdelerindeki tutarlar artık sayfanın ortamına emanet değil.** Circle'a
+  giden JSON, `typeof v === 'bigint'` sınayan bir `JSON.stringify` replacer'ı ile
+  kuruluyordu. `JSON.stringify` bir değerin `toJSON`'ını replacer'dan **önce**
+  çağırır, dolayısıyla `BigInt.prototype.toJSON` tanımlayan herhangi bir şey ne
+  gönderdiğimize karar veriyor ve replacer'ın eline dokunmaya sebebi olmayan bir
+  string geçiyordu. Varsayımsal değil: `${this}n` döndüren bir tarayıcı eklentisi
+  `"value":"1000000n"` gönderdi, Circle "Must be a valid positive integer string"
+  ile reddetti, ve o tarayıcıda abonelik sayfası ne fiyatlanabildi ne de kutu
+  açabildi. Tutarlar artık `JSON.stringify` bir bigint görmeden önce çevriliyor;
+  çevirme `v.toString()` ile değil şablon değişmeziyle yapılıyor, çünkü bigint'te
+  ToString içsel bir işlem, `.toString()` ise yeniden tanımlanabilir bir metot. Bu
+  hem `/v1/estimate`'i hem asıl fonlamayı yapan `/v1/transfer`'ü kurtarıyor. Depoda
+  ve bağımlılıklarında o prototipi yamalayan bir şey yok; sayfa komşularını
+  seçemediği için serileştiricinin onlara dayanması gerekiyor. İki test, biri
+  `toJSON` biri `toString` yamalı.
+- **Bakiye ile ücret ayrı okunuyor.** Abonelik formu ikisini tek bir `Promise.all`
+  içinde istiyordu, yani biri patlayınca diğerinin 200 dönen cevabı da çöpe
+  gidiyordu. Ücret reddedilince okunmuş bakiye atılıyor, `gwOnSource` null kalıyor
+  ve "Abonelik oluştur" bakiyeyle hiç ilgisi olmayan bir sebeple kilitleniyordu.
+  Artık `Promise.allSettled`: her okuma kendi sonucunu yazıyor, "Circle'ın ücreti
+  okunamadı" satırı yalnız ücret düştüğünde çıkıyor, bakiyenin durumu ayrı bir
+  bayrakta. `canCreate` ücretin okunmuş olmasını açıkça şart koşuyor; eskiden bu
+  güvence "ikisi birlikte gelir ya da hiç gelmez" kazasına dayanıyordu.
+
 ## Yayınlanmamış: 2026-08-17
 
 Ağ kontrolü header'a taşındı ve Private Pay EURC ile de ödenebiliyor.
