@@ -442,8 +442,9 @@ first; a two-character row number is the second.
 Mintlify CLI over `docs/` and writes `docs-export.zip`; unpacking that zip into the
 web root is the whole deployment. The export is roughly 57 MB, nearly all of it the
 theme's own JavaScript, and it is rewritten wholesale on every CLI release, so it is
-built rather than tracked. Run `mint login` first if you want the search index: an
-anonymous export builds every page but ships the search box disabled.
+built rather than tracked. The one thing an export cannot carry is search: it ships no
+index, and the search box reads "Login into CLI to enable search" whether or not the
+CLI is logged in. Search is a hosted service, so a self-hosted copy does without it.
 
 The Android client is a separate native Kotlin/Compose app whose source is not
 public. It is held to the TypeScript implementation by

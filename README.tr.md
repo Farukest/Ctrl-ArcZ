@@ -438,9 +438,10 @@ Adres ve işlem hash'i birincisi; iki karakterlik satır numarası ikincisi.
 `docs.ctrlarcz.xyz` bir servis değil, statik bir site. `pnpm docs:export`, Mintlify
 CLI'ını `docs/` üzerinde çalıştırıp `docs-export.zip` üretir; o zip'i web kök dizinine
 açmak dağıtımın tamamıdır. Çıktı yaklaşık 57 MB ve neredeyse tamamı temanın kendi
-JavaScript'i; her CLI sürümünde baştan yazıldığı için depoda tutulmaz, üretilir. Arama
-dizinini istiyorsanız önce `mint login` yapın: girişsiz alınan export tüm sayfaları
-üretir ama arama kutusunu kapalı gönderir.
+JavaScript'i; her CLI sürümünde baştan yazıldığı için depoda tutulmaz, üretilir.
+Export'un taşıyamadığı tek şey arama: içinde dizin yok ve arama kutusu, CLI'a giriş
+yapılmış olsun ya da olmasın, "Login into CLI to enable search" der. Arama barındırılan
+bir servis; kendi sunucunuzdaki kopya onsuz çalışır.
 
 Android istemcisi, kaynağı açık olmayan ayrı bir native Kotlin/Compose uygulaması.
 TypeScript uygulamasına `packages/sdk/parity-vectors.json` ile bağlı ve bu bağı kuran
