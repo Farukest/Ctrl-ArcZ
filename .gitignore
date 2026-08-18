@@ -2,9 +2,13 @@
 *.local.md
 /notes.local/
 
-# Mintlify local preview cache
+# Mintlify local preview cache, and the static export `pnpm docs:export` produces.
+# The export is ~57 MB, almost all of it the theme's own JS, and it is rewritten
+# wholesale on every CLI release: rebuild it, never track it.
 .mint/
 docs/.mint/
+docs-export.zip
+docs/export.zip
 
 # secrets — never commit
 .env

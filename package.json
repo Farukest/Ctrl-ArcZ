@@ -19,6 +19,7 @@
     "contracts:build": "pnpm --filter @ctrl-arcz/contracts build",
     "contracts:test": "pnpm --filter @ctrl-arcz/contracts test",
     "deploy:testnet": "pnpm --filter @ctrl-arcz/contracts deploy:testnet",
+    "docs:export": "cd docs && mint export --output ../docs-export.zip",
     "dev:api": "pnpm --filter @ctrl-arcz/api dev",
     "dev:sender": "pnpm --filter @ctrl-arcz/sender dev"
   },

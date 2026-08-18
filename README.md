@@ -436,6 +436,14 @@ first; a two-character row number is the second.
 | `apps/api`           | The backend: co-signer, relayer, gasless claim, discovery, investigator |
 | `apps/keeper`        | The keeper agent: returns expired transfers, paid from a bounded box    |
 | `examples`           | A standalone Node quickstart, no framework                              |
+| `docs`               | The Mintlify sources behind [docs.ctrlarcz.xyz](https://docs.ctrlarcz.xyz) |
+
+`docs.ctrlarcz.xyz` is a static site, not a service. `pnpm docs:export` runs the
+Mintlify CLI over `docs/` and writes `docs-export.zip`; unpacking that zip into the
+web root is the whole deployment. The export is roughly 57 MB, nearly all of it the
+theme's own JavaScript, and it is rewritten wholesale on every CLI release, so it is
+built rather than tracked. Run `mint login` first if you want the search index: an
+anonymous export builds every page but ships the search box disabled.
 
 The Android client is a separate native Kotlin/Compose app whose source is not
 public. It is held to the TypeScript implementation by
