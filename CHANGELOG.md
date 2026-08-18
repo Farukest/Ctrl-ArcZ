@@ -9,6 +9,20 @@ kilitli kalıyordu. İkisi de tek bir kökten geliyordu.
 
 ### Düzeltildi
 
+- **Abonelik kutusu artık kendi zincirinde fonlanıyor.** Kutu, cüzdanın bulunduğu
+  zincire deploy oluyor; ondan sonraki her adım ise Arc yazıyordu. Dört yerde:
+  policy'nin token'ı Arc'ın USDC'siydi (`0x3600...`, başka hiçbir zincirde bir şey
+  değil), fonlanabilirlik kontrolü Arc'a pinli istemciden okuyordu, Gateway'in
+  hedefi sabit `Arc_Testnet`'ti ve paranın gelişi yine Arc'tan bekleniyordu. Hepsi
+  bir zamanlar doğruydu, kutular yalnız Arc'ta yaşarken. Base, Ethereum ve Arbitrum
+  Sepolia'ya çıktıktan sonra kalan şey, kutusu bir zincirde fonlaması başka zincirde
+  olan bir abonelikti. Zincir artık tek yerde türetiliyor ve dördü de onu kullanıyor.
+  `fundBoxFromGateway`'in `to` alanı zorunlu oldu, varsayılanı yok: varsayılan,
+  çağıranın hangi zinciri kastettiği hakkında ikinci bir görüştü ve kutu adresini
+  elinde tutan çağırandı.
+- **Ücret de gideceği rotaya göre fiyatlanıyor.** Arc hedefine sorulan fiyat Base
+  hedefine ödenen fiyat değil: aynı kutu için 0.050006 ile 0.111868 arasında fark
+  var. Ekranda duran rakam başka bir transferin rakamıydı.
 - **Gateway gövdelerindeki tutarlar artık sayfanın ortamına emanet değil.** Circle'a
   giden JSON, `typeof v === 'bigint'` sınayan bir `JSON.stringify` replacer'ı ile
   kuruluyordu. `JSON.stringify` bir değerin `toJSON`'ını replacer'dan **önce**

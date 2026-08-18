@@ -45,27 +45,48 @@ describe('fundBoxFromGateway', () => {
     const spend = fakeSpend();
     for (const amount of [0n, -1n]) {
       await expect(
-        fundBoxFromGateway(clients, { account: BOX, amount, from: 'Arc_Testnet', spend: spend.fn }),
+        fundBoxFromGateway(clients, { account: BOX, amount, from: 'Arc_Testnet', to: 'Arc_Testnet', spend: spend.fn }),
       ).rejects.toThrow(/positive/i);
     }
     expect(spend.calls).toHaveLength(0);
   });
 
-  it('sends to Arc, to the box, from the chosen chain', async () => {
+  it('mints on the box own chain, to the box, from the chosen chain', async () => {
+    // This used to say `to` was always Arc, and the code agreed with it. Both were
+    // written when a box could only exist on Arc. A box on Base Sepolia funded that
+    // way names an address on Arc, where the box is not, so the box it was created
+    // for stays empty.
+    const spend = fakeSpend();
+    await fundBoxFromGateway(clients, {
+      account: BOX,
+      amount: 5n,
+      from: 'Ethereum_Sepolia',
+      to: 'Base_Sepolia',
+      spend: spend.fn,
+    });
+    const p = spend.calls[0]!;
+    expect(p.to).toBe('Base_Sepolia');
+    expect(p.recipient).toBe(BOX);
+    // The source chain is not "wherever the balance is": an intent carries one
+    // source domain, and Circle refuses one aimed at a chain with nothing on it.
+    expect(p.from).toBe('Ethereum_Sepolia');
+    expect(p.amount).toBe(5n);
+  });
+
+  it('funds a box on the payer own chain without routing it through Arc', async () => {
+    // The ordinary case, and the one the hardcoded destination turned into a
+    // cross-chain transfer: same chain in, same chain out, no hop.
     const spend = fakeSpend();
     await fundBoxFromGateway(clients, {
       account: BOX,
       amount: 5n,
       from: 'Base_Sepolia',
+      to: 'Base_Sepolia',
       spend: spend.fn,
     });
     const p = spend.calls[0]!;
-    expect(p.to).toBe('Arc_Testnet');
-    expect(p.recipient).toBe(BOX);
-    // The source chain is not "wherever the balance is": an intent carries one
-    // source domain, and Circle refuses one aimed at a chain with nothing on it.
     expect(p.from).toBe('Base_Sepolia');
-    expect(p.amount).toBe(5n);
+    expect(p.to).toBe('Base_Sepolia');
   });
 
   it("hands back Circle's id the moment the intent is accepted, before the mint", async () => {
@@ -85,6 +106,7 @@ describe('fundBoxFromGateway', () => {
       account: BOX,
       amount: 5n,
       from: 'Arc_Testnet',
+      to: 'Arc_Testnet',
       spend: spend.fn,
       onTransferId: (id) => seen.push(`caller got ${id}`),
     });
@@ -106,6 +128,7 @@ describe('fundBoxFromGateway', () => {
       account: BOX,
       amount: 5n,
       from: 'Arc_Testnet',
+      to: 'Arc_Testnet',
       spend: spend.fn,
     });
     expect(out.transferId).toBe('circle-late');
@@ -119,6 +142,7 @@ describe('fundBoxFromGateway', () => {
       account: BOX,
       amount: 5n,
       from: 'Arc_Testnet',
+      to: 'Arc_Testnet',
       spend: spend.fn,
     });
     expect(out.transferId).toBeUndefined();
@@ -135,6 +159,7 @@ describe('fundBoxFromGateway', () => {
         account: BOX,
         amount: 5n,
         from: 'Arc_Testnet',
+      to: 'Arc_Testnet',
         spend: spend.fn,
       }),
     ).rejects.toThrow(/insufficient/i);
@@ -148,6 +173,7 @@ describe('fundBoxFromGateway', () => {
       account: BOX,
       amount: 5n,
       from: 'Arc_Testnet',
+      to: 'Arc_Testnet',
       spend: bare.fn,
     });
     expect('timeoutMs' in bare.calls[0]!).toBe(false);
@@ -157,6 +183,7 @@ describe('fundBoxFromGateway', () => {
       account: BOX,
       amount: 5n,
       from: 'Arc_Testnet',
+      to: 'Arc_Testnet',
       spend: withTimeout.fn,
       timeoutMs: 42,
     });

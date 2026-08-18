@@ -60,6 +60,16 @@ export interface FundBoxParams {
    * nothing on is an intent Circle refuses after it has been signed.
    */
   from: GatewayChain;
+  /**
+   * Which chain the box is on, and therefore where Circle must mint.
+   *
+   * Required, with no default. It was `'Arc_Testnet'`, written when a box could
+   * only be on Arc, and it stayed that way after boxes started being deployed on
+   * Base, Ethereum and Arbitrum Sepolia too. A default here is not a convenience,
+   * it is a second opinion about which chain the caller meant, and the caller is
+   * the one holding the box address.
+   */
+  to: GatewayChain;
   /** Persist this the instant it arrives; see {@link spendFromGateway}. */
   onTransferId?: (transferId: string) => void;
   onStep?: (step: GatewayStep, txHash?: string) => void;
@@ -77,9 +87,11 @@ export interface FundBoxParams {
 /**
  * Ask Circle to mint into the box from the payer's Gateway balance on `from`.
  *
- * The destination is Arc, because that is where a policy box lives, and the
- * recipient is the box itself. What appears on Arc is a mint from Circle's minter to
- * the box; the payer's address is not in it.
+ * The destination is the box's own chain and the recipient is the box itself. What
+ * appears there is a mint from Circle's minter to the box; the payer's address is
+ * not in it. `from` and `to` are free to be the same chain: Gateway prices and
+ * settles a same-chain intent like any other, and paying a box on the chain the
+ * payer already holds a balance on is the ordinary case, not a special one.
  */
 export async function fundBoxFromGateway(
   clients: { walletClient: WalletClient },
@@ -90,7 +102,7 @@ export async function fundBoxFromGateway(
   let transferId: string | undefined;
   await doSpend(clients, {
     from: params.from,
-    to: 'Arc_Testnet',
+    to: params.to,
     amount: params.amount,
     recipient: params.account,
     ...(params.timeoutMs != null ? { timeoutMs: params.timeoutMs } : {}),
