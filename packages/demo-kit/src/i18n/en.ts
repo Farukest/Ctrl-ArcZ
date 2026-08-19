@@ -334,6 +334,8 @@ export const en = {
   'bridge.gwWalletBalance': '{amount} USDC in your wallet on {chain}.',
   'bridge.gwWalletLoading': 'Reading your wallet balance...',
   'bridge.gwWalletOtherChain': 'Your wallet is on another network, so what it holds on {chain} cannot be read yet.',
+  'bridge.gwWalletUnreadable':
+    'Your wallet did not answer for what it holds on {chain}. Retrying; the deposit field still works.',
   'bridge.gwDepositCta': 'Deposit',
   'bridge.gwDepositTooBig': 'More than your wallet holds on this chain.',
   'bridge.depositButton': 'Deposit {amount} USDC on {chain}',

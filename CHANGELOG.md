@@ -8,6 +8,14 @@ Kutular Arc dışında da açılıyordu ama listede görünmüyorlardı.
 
 ### Değişti
 
+- **"Cüzdan bakiyesi" okunamayınca artık sebebini söylüyor.** Etiketin yanı bomboş
+  kalıyordu: değer `null` olunca yerini tutan gri çubuk açık temada zemine karışıyor
+  ve ekranda bir hata varmış gibi duruyor. İki farklı sebep var ve yalnız biri
+  yazılıydı. Cüzdan başka ağdaysa bunu söyleyen bir satır zaten vardı; cüzdan doğru
+  ağda olup okumayı cevapsız bıraktığında ise hiçbir şey yazmıyordu. Bu durum
+  üretilerek doğrulandı: `eth_call`'a `0x` dönen bir sağlayıcıyla etiketin yanı
+  boşalıyor, düzgün bir sağlayıcıyla 57.9 USDC okunuyor. Okuma 15 saniyede bir
+  tekrarlandığı için satır cüzdan toparlayınca kendiliğinden kayboluyor.
 - **Abonelik formu, oluşturamayacağı ağda hiç görünmüyor.** Ağ uyarısı yalnız
   listenin içindeydi; üstündeki form ise Fuji'de eksiksiz duruyordu: satıcı, tutar,
   aralık, fiyatlanmış Circle ücreti ve aktif bir "Create subscription" butonu.

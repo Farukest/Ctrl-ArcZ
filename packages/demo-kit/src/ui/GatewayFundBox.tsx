@@ -146,9 +146,18 @@ export function GatewayFundBox({
           {t('bridge.gwDepositTooBig')}
         </span>
       )}
-      {!walletOnChain && (
+      {/* Two different reasons the figure above is missing, and until now only one
+          of them was on screen. The other showed a held placeholder and nothing
+          else: on a light background that is a blank space beside a label, which
+          reads as a bug in the page rather than a wallet that did not answer. The
+          read repeats on a timer, so this clears itself when the wallet recovers. */}
+      {!walletOnChain ? (
         <span className="gwfund__note">{t('bridge.gwWalletOtherChain', { chain: chainLabelOf(chainOptions, chain) })}</span>
-      )}
+      ) : maxDeposit == null ? (
+        <span className="gwfund__note" data-testid="gateway-wallet-unreadable">
+          {t('bridge.gwWalletUnreadable', { chain: chainLabelOf(chainOptions, chain) })}
+        </span>
+      ) : null}
       {pending > 0n && (
         <span className="gwfund__note" data-testid="gateway-pending">
           {t('bridge.gwPending', { amount: format(pending) })}

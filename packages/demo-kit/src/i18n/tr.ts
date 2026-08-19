@@ -297,6 +297,8 @@ export const tr: Record<TranslationKey, string> = {
   'bridge.gwWalletBalance': '{chain} üzerindeki cüzdanında {amount} USDC var.',
   'bridge.gwWalletLoading': 'Cüzdan bakiyen okunuyor...',
   'bridge.gwWalletOtherChain': 'Cüzdanın başka bir ağda, bu yüzden {chain} üzerinde ne tuttuğu henüz okunamıyor.',
+  'bridge.gwWalletUnreadable':
+    '{chain} üzerinde ne tuttuğu sorulduğunda cüzdanın cevap vermedi. Tekrar deneniyor; yatırma alanı yine de çalışıyor.',
   'bridge.gwDepositCta': 'Yatır',
   'bridge.gwDepositTooBig': 'Bu zincirdeki cüzdan bakiyenden fazla.',
   'bridge.depositButton': '{chain} üzerinde {amount} USDC yatır',
