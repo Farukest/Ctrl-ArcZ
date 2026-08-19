@@ -366,23 +366,36 @@ export interface AccountState {
   lastPull: number;
   expiry: number;
   mode: SpendMode;
+  /**
+   * The ERC-20 this box holds and pays in, fixed at creation.
+   *
+   * Read rather than assumed, because every number beside it is denominated in it
+   * and a caller that supplies its own answer will eventually supply the wrong one.
+   * A box on Base asked about Arc's USDC address does not return a wrong balance,
+   * it fails: there is no contract there. A screen that then swallows the failure
+   * shows no subscription at all, which is how this came to be part of the policy
+   * read instead of a constant at the call site.
+   */
+  token: Address;
 }
 
 /** Getter-first read of an account (no reliance on event logs — APS-ready). This
  *  is the authoritative policy source; the co-signer validates against it. */
 export async function readAccount(publicClient: PublicClient, account: Address): Promise<AccountState> {
   const at = { address: account, abi: spendPolicyAccountAbi } as const;
-  const [nonce, spent, remaining, target, perPullMax, interval, lastPull, expiry, mode] = await Promise.all([
-    publicClient.readContract({ ...at, functionName: 'nonce' }),
-    publicClient.readContract({ ...at, functionName: 'spent' }),
-    publicClient.readContract({ ...at, functionName: 'remaining' }),
-    publicClient.readContract({ ...at, functionName: 'target' }),
-    publicClient.readContract({ ...at, functionName: 'perPullMax' }),
-    publicClient.readContract({ ...at, functionName: 'interval' }),
-    publicClient.readContract({ ...at, functionName: 'lastPull' }),
-    publicClient.readContract({ ...at, functionName: 'expiry' }),
-    publicClient.readContract({ ...at, functionName: 'mode' }),
-  ]);
+  const [nonce, spent, remaining, target, perPullMax, interval, lastPull, expiry, mode, token] =
+    await Promise.all([
+      publicClient.readContract({ ...at, functionName: 'nonce' }),
+      publicClient.readContract({ ...at, functionName: 'spent' }),
+      publicClient.readContract({ ...at, functionName: 'remaining' }),
+      publicClient.readContract({ ...at, functionName: 'target' }),
+      publicClient.readContract({ ...at, functionName: 'perPullMax' }),
+      publicClient.readContract({ ...at, functionName: 'interval' }),
+      publicClient.readContract({ ...at, functionName: 'lastPull' }),
+      publicClient.readContract({ ...at, functionName: 'expiry' }),
+      publicClient.readContract({ ...at, functionName: 'mode' }),
+      publicClient.readContract({ ...at, functionName: 'token' }),
+    ]);
   return {
     nonce,
     spent,
@@ -393,6 +406,7 @@ export async function readAccount(publicClient: PublicClient, account: Address):
     lastPull: Number(lastPull),
     expiry: Number(expiry),
     mode: mode as SpendMode,
+    token,
   };
 }
 

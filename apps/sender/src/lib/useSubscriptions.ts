@@ -3,7 +3,6 @@ import { erc20Abi, type Address, type Hex } from 'viem';
 import type { Session } from '@ctrl-arcz/demo-kit';
 import { readClientFor } from './chainRead.js';
 import {
-  ADDRESSES,
   SPEND_POLICY_FACTORY_ADDRESS,
   deploymentFor,
   STEALTH_ANNOUNCER_DEPLOY_BLOCK,
@@ -19,7 +18,6 @@ import {
 import { getStealthKeys, stealthKeysDeclined, allowStealthPrompt } from './stealthKeys.js';
 import { fetchAnnouncements } from './announcements.js';
 
-const USDC = ADDRESSES.USDC as Address;
 // Bound the one-time discovery scan (the factory is recent; this keeps the initial
 // eth_getLogs cheap instead of scanning from an ancient deploy block).
 const DISCOVER_LOOKBACK = 120_000n;
@@ -231,16 +229,21 @@ export function useSubscriptions(session: Session | null): {
         const account = addrLc as Address;
         const { salt, ephemeralPubKey, order, label } = meta;
         try {
-          const [state, balance] = await Promise.all([
-            readAccount(client, account),
-            client.readContract({
-              address: USDC,
-              abi: erc20Abi,
-              functionName: 'balanceOf',
-              args: [account],
-            }) as Promise<bigint>,
-          ]);
+          // The policy first, then the balance in the token the policy names. It
+          // used to be one `Promise.all` against a module-level constant holding
+          // Arc's USDC, which is not a contract anywhere else: on Base the read
+          // threw, the `catch` below turned the whole row into `null`, and a
+          // subscription that existed and held money was simply absent from the
+          // list. One extra round trip is the price of asking the box instead of
+          // assuming.
+          const state = await readAccount(client, account);
           if (state.mode !== MODE_PULL) return null;
+          const balance = (await client.readContract({
+            address: state.token,
+            abi: erc20Abi,
+            functionName: 'balanceOf',
+            args: [account],
+          })) as bigint;
           const cap = state.remaining + state.spent;
           const status = statusOf({ balance, spent: state.spent, cap, expiry: state.expiry, now });
           const nextPullAt = state.lastPull === 0 ? now : state.lastPull + state.interval;

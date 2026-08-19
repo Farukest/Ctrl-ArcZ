@@ -2,6 +2,32 @@
 
 Bu proje [Keep a Changelog](https://keepachangelog.com/) biçimini izler.
 
+## Yayınlanmamış: 2026-08-19
+
+Kutular Arc dışında da açılıyordu ama listede görünmüyorlardı.
+
+### Düzeltildi
+
+- **Abonelik listesi kutunun kendi token'ını okuyor.** Bakiye, modül seviyesinde
+  sabitlenmiş Arc USDC'sinden (`0x3600...`) okunuyordu; istemci ise cüzdanın
+  bulunduğu zincire bakıyordu. O adres Base'de kontrat bile değil, dolayısıyla
+  okuma yanlış bir sayı döndürmüyor, **fırlatıyordu**; satırın etrafındaki `catch`
+  onu `null`'a çeviriyor ve içinde parası olan bir abonelik ekranda hiç
+  görünmüyordu. Base'deki gerçek kutuyla ölçüldü
+  (`0x7da74e31873dEbb59bD006512B01F0f107f55927`): `token()` Base USDC'sini
+  veriyor, yeni yol 50000 birim bakiye okuyor, eski yol
+  `returned no data ("0x")` ile patlıyor. Token artık `readAccount`'un döndürdüğü
+  politikanın parçası, çünkü kutunun yanındaki her rakam onun cinsinden ve onu
+  çağırana sordurmak er geç yanlış cevabı almak demek.
+- **Token bakiyeleri cüzdanın zincirinden okunuyor.** `useTokenBalances` Arc'a
+  çivili istemciyi kullanıyor ve "bu USDC mi" sorusunu Arc'ın adresiyle
+  soruyordu. Arc dışında bu iki şeyi birden bozuyordu: zincirin gerçek USDC'si
+  testten geçemeyip yeniden okunmaya gidiyor (ve yanlış zincirde bulunamıyor),
+  oturumun zaten çekmiş olduğu bakiye ise hiçbir satırla eşleşmediği için
+  düşüyordu. Okunacak bir şey kalmadığında `attempted` artık `true`: Arc dışında
+  kayıtta yalnız USDC var ve onun bakiyesi zaten oturumdan geliyor, bayrak `false`
+  kalsaydı hiç gelmeyecek bir rakam için sonsuza kadar ışıldardı.
+
 ## Yayınlanmamış: 2026-08-18
 
 Abonelik sayfası Circle'ın ücretini okuyamıyordu ve "Abonelik oluştur" butonu
