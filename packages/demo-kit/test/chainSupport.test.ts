@@ -24,17 +24,33 @@ describe('supportsChain', () => {
    * "does this chain have a route", and a chain deployed without a router has to
    * answer no.
    *
-   * The other three features need only the contracts.
+   * The other three need a history source, and Private Pay needs both.
    */
-  it('gates Private Pay on a funding route, not on a deployment', () => {
+  it('gates Private Pay on a funding route as well as a history', () => {
     for (const chainId of deployedChainIds()) {
       const d = deploymentFor(chainId)!;
-      // Claiming judges nobody, so it needs the contract and nothing else.
-      expect(supportsChain(chainId, 'receive'), `${d.chain} receive`).toBe(true);
-
       const routed = chainId === ARC_TESTNET_CHAIN_ID || d.privatePayRouter !== undefined;
       const judged = d.explorerApi !== undefined;
       expect(supportsChain(chainId, 'privatePay'), `${d.chain} privatePay`).toBe(routed && judged);
+    }
+  });
+
+  /**
+   * Receive is offered where a send could have originated, not everywhere a claim
+   * would technically run.
+   *
+   * A claim needs no history: it judges nobody and reads the contract's own logs
+   * over RPC. But a transfer cannot reach a chain whose send side refuses, and the
+   * send side refuses wherever the firewall is blind -- `sendProtected` fails closed
+   * there too. An open tab that can only ever be empty says less than one that names
+   * the network to switch to.
+   */
+  it('offers receive only where a send could have started', () => {
+    for (const chainId of deployedChainIds()) {
+      const d = deploymentFor(chainId)!;
+      expect(supportsChain(chainId, 'receive'), `${d.chain} receive`).toBe(
+        supportsChain(chainId, 'protectedSend'),
+      );
     }
   });
 
@@ -47,14 +63,17 @@ describe('supportsChain', () => {
     for (const chainId of deployedChainIds()) {
       const d = deploymentFor(chainId)!;
       const judged = d.explorerApi !== undefined;
-      for (const feature of ['protectedSend', 'subscriptions'] as const) {
+      for (const feature of ['protectedSend', 'subscriptions', 'receive'] as const) {
         expect(supportsChain(chainId, feature), `${d.chain} ${feature}`).toBe(judged);
       }
     }
-    // Fuji is the chain that has the contracts and no Blockscout.
+    // Fuji is the chain that has the contracts and no Blockscout. Nothing is
+    // offered there: a send cannot be judged, so nothing can arrive to be claimed.
+    // Money already locked is still reachable -- cancelling asks no chain question
+    // and an unclaimed transfer expires back to its sender.
     const fuji = CCTP_CHAINS.Avalanche_Fuji.chainId;
     expect(deploymentFor(fuji)?.explorerApi).toBeUndefined();
-    expect(supportsChain(fuji, 'receive')).toBe(true);
+    expect(supportsChain(fuji, 'receive')).toBe(false);
     expect(supportsChain(fuji, 'privatePay')).toBe(false);
     expect(supportsChain(fuji, 'subscriptions')).toBe(false);
     expect(supportsChain(fuji, 'protectedSend')).toBe(false);
@@ -118,8 +137,11 @@ describe('supportsChain', () => {
    */
   it('answers from the registry, so a new chain is a data change', () => {
     for (const id of deployedChainIds()) {
-      expect(deploymentFor(id)).toBeDefined();
-      expect(supportsChain(id, 'receive')).toBe(true);
+      const d = deploymentFor(id)!;
+      expect(d).toBeDefined();
+      // Every answer comes from registry fields, so a new chain is a data change:
+      // an explorer endpoint decides three of the four features, a router the last.
+      expect(supportsChain(id, 'receive')).toBe(d.explorerApi !== undefined);
     }
   });
 });

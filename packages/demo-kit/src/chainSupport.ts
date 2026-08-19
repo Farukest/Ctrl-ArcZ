@@ -16,7 +16,7 @@ import { ARC_TESTNET_CHAIN_ID, deployedChainIds, deploymentFor } from '@ctrl-arc
 export type ChainFeature =
   /** `CtrlArcZ.sendProtected`. */
   | 'protectedSend'
-  /** Claiming and cancelling, same contract. */
+  /** Claiming, same contract. Cancelling is not gated at all; see below. */
   | 'receive'
   /** `SpendPolicyFactory` plus the co-signer, whose EIP-712 domain names one chain. */
   | 'privatePay'
@@ -51,9 +51,30 @@ const hasFirewall = (chainId: number) => deploymentFor(chainId)?.explorerApi !==
 const ALSO_NEEDS: Record<ChainFeature, ((chainId: number) => boolean) | null> = {
   /** Every send goes through the recipient firewall before it is signed. */
   protectedSend: hasFirewall,
-  /** Claiming judges nobody: the money is already sent and the claimant is the
-   *  one being paid. No history needed, so this works wherever the contract is. */
-  receive: null,
+  /**
+   * Offered where a send could have come from, which is not the same as where a
+   * claim could technically run.
+   *
+   * Claiming judges nobody -- the money is already sent and the claimant is the one
+   * being paid -- and it reads the contract's own logs over RPC rather than
+   * Blockscout, so it needs no history source and would work on any chain the
+   * contract is on. It was ungated for exactly that reason.
+   *
+   * What that produced was a screen with nothing behind it. A transfer can only
+   * reach a chain the send side refuses, and the send side refuses everywhere the
+   * firewall has no history to read; the SDK's `sendProtected` fails closed there
+   * too. So on such a chain the only way to fill this screen is an integrator
+   * passing `skipRiskCheck`, and an open tab that is empty for everyone else is a
+   * worse answer than saying which network to be on.
+   *
+   * This is safe to close because a claim is not the last resort. An unclaimed
+   * transfer expires and `reclaimExpired` returns it to the sender, callable by
+   * anyone, so a recipient who cannot reach the screen loses time rather than
+   * money. Cancelling is not gated by this or anything else -- `TransfersTab` asks
+   * no chain question at all -- so a sender is never locked out of their own funds
+   * by a screen that will not open.
+   */
+  receive: hasFirewall,
   /**
    * One-transaction Private Pay funds the box inside the same call that creates and
    * pays from it, and that needs a way to move the payer's tokens from inside a

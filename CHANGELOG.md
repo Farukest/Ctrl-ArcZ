@@ -6,6 +6,19 @@ Bu proje [Keep a Changelog](https://keepachangelog.com/) biçimini izler.
 
 Kutular Arc dışında da açılıyordu ama listede görünmüyorlardı.
 
+### Değişti
+
+- **Al ekranı artık yalnız bir gönderimin başlayabileceği ağlarda açık.** Claim
+  hiçbir şeyi yargılamıyor ve geçmiş kaynağına ihtiyacı yok; kontratın kendi
+  log'larını RPC'den okuyor, Blockscout'tan değil. Kapısız olmasının sebebi buydu.
+  Ama bir transfer, gönderim tarafının reddettiği bir zincire ulaşamıyor: firewall'un
+  geçmiş kaynağı olmayan yerde `sendProtected` de fail-closed reddediyor. Fuji'de
+  ortaya çıkan şey, hiçbir zaman dolamayacak bir sekmeydi. Artık orada hangi ağa
+  geçileceğini söylüyor. Kapatmanın parayı kilitlemediği doğrulandı: talep edilmeyen
+  transfer süresi dolunca `reclaimExpired` ile gönderene dönüyor ve bu çağrı
+  izinsiz, ayrıca iptal hiçbir ağ sorusu sormuyor. Gönderene iade listesi de kapının
+  dışında kaldı, yalnız claim formu kapandı.
+
 ### Düzeltildi
 
 - **Abonelik listesi kutunun kendi token'ını okuyor.** Bakiye, modül seviyesinde
