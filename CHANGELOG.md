@@ -8,6 +8,20 @@ Kutular Arc dışında da açılıyordu ama listede görünmüyorlardı.
 
 ### Değişti
 
+- **Abonelik formu, oluşturamayacağı ağda hiç görünmüyor.** Ağ uyarısı yalnız
+  listenin içindeydi; üstündeki form ise Fuji'de eksiksiz duruyordu: satıcı, tutar,
+  aralık, fiyatlanmış Circle ücreti ve aktif bir "Create subscription" butonu.
+  Kullanıcı formu doldurup butona bastığında, stealth anahtarı için bir imza attıktan
+  sonra reddediliyordu. `NeedsChain`'in var oluş sebebi bu: doldurulabilen ama
+  gönderilemeyen bir form, kullanıcının dikkatini harcadıktan sonra haber veriyor.
+  Uyarı artık formun yerinde duruyor, listedeki ikinci kopyası kaldırıldı.
+- **Abonelik listesi zincirler arasında sızıyordu.** Tanınan kutuların önbelleği
+  yalnız cüzdan adresiyle anahtarlanmıştı, oysa bir kutu tek bir zincirde yaşıyor.
+  Ağ değiştirince liste, o ağda var olmayan kutularla yeniden dolduruluyordu: Fuji'de
+  Arc'ın abonelikleri sayılıyordu ("All 16, Active 6") ve ancak her okuma tek tek
+  başarısız oldukça boşalıyordu. Anahtar artık zincir + cüzdan. Aynı yerde bir sabit
+  daha vardı: tarama imleci Arc'ın announcer deploy bloğuna düşüyordu, artık o
+  zincirin kendi bloğuna düşüyor.
 - **Al ekranı artık yalnız bir gönderimin başlayabileceği ağlarda açık.** Claim
   hiçbir şeyi yargılamıyor ve geçmiş kaynağına ihtiyacı yok; kontratın kendi
   log'larını RPC'den okuyor, Blockscout'tan değil. Kapısız olmasının sebebi buydu.

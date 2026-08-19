@@ -5,7 +5,6 @@ import { readClientFor } from './chainRead.js';
 import {
   SPEND_POLICY_FACTORY_ADDRESS,
   deploymentFor,
-  STEALTH_ANNOUNCER_DEPLOY_BLOCK,
   spendPolicyFactoryAbi,
   ownerHash as toOwnerHash,
   readAccount,
@@ -63,10 +62,23 @@ function dedupeBoxes(
   return [...byBox.values()];
 }
 
+/**
+ * Recognised boxes, per wallet **and per chain**.
+ *
+ * A box lives on one chain. Keyed by the wallet alone, this cache became the union
+ * of every chain the session had visited: switching networks re-seeded the list
+ * with boxes that do not exist on the new one, so the screen opened showing
+ * somebody's Arc subscriptions under Avalanche Fuji and only emptied once each
+ * read had failed. Two wallets never shared an entry; one wallet on two chains did.
+ */
 const scanned = new Map<
   string,
   { cursor: bigint; boxes: Array<{ box: Address; ephemeralPubKey: Hex; label: string }> }
 >();
+
+/** The cache is per wallet per chain, and the key has to say both. */
+const scanKey = (address: string, chainId: number | undefined) =>
+  `${chainId ?? 'none'}:${address.toLowerCase()}`;
 
 /**
  * The boxes this wallet is known to own, lowercased, and the names they carry.
@@ -100,13 +112,16 @@ function announcerBlockOn(session: Session): bigint {
   return deployment.stealthAnnouncerDeployBlock;
 }
 
-export function knownBoxes(address: string | undefined): {
+export function knownBoxes(
+  address: string | undefined,
+  chainId: number | undefined,
+): {
   boxes: Set<string>;
   names: Map<string, string>;
 } {
   const empty = { boxes: new Set<string>(), names: new Map<string, string>() };
   if (!address) return empty;
-  const seen = scanned.get(address.toLowerCase());
+  const seen = scanned.get(scanKey(address, chainId));
   if (!seen) return empty;
   const boxes = new Set<string>();
   const names = new Map<string, string>();
@@ -285,7 +300,7 @@ export function useSubscriptions(session: Session | null): {
   // and only legacy boxes show. This is the fast path — the demo's boxes are stealth.
   const discoverStealth = useCallback(async () => {
     if (!session) return;
-    const cacheKey = session.address.toLowerCase();
+    const cacheKey = scanKey(session.address, session.chainId);
     try {
       const keys = await getStealthKeys(session);
       const seen = scanned.get(cacheKey);
@@ -320,7 +335,10 @@ export function useSubscriptions(session: Session | null): {
         // The index is authoritative to its own head, so the fallback scan is the
         // only thing that needs a cursor of its own; when the index answers, the
         // list it returns is already complete and the cursor is not consulted.
-        cursor: seen?.cursor ?? STEALTH_ANNOUNCER_DEPLOY_BLOCK,
+        // This chain's announcer, not Arc's. The constant that used to be here is
+        // Arc's deploy block, and a scan resuming from it on another chain either
+        // starts before that chain existed or skips the blocks the boxes are in.
+        cursor: seen?.cursor ?? announcerBlockOn(session),
         boxes: dedupeBoxes([
           ...(seen?.boxes ?? []),
           ...found.map((b) => ({

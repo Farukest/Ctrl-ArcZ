@@ -658,7 +658,7 @@ export function BridgeTab({ session }: { session: Session }) {
    * has been recognised yet, and every record lands in the ordinary half, which is
    * the honest answer when we do not know.
    */
-  const { boxes: myBoxes, names: boxNames } = knownBoxes(session.address);
+  const { boxes: myBoxes, names: boxNames } = knownBoxes(session.address, session.chainId);
 
   /** Only the engine filter stays here; search, date and paging are the list's. */
   const filteredByEngine = useMemo(
