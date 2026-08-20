@@ -116,8 +116,7 @@ const WALLET_ONLY = new Set([
  * prepares transactions, so it asks `eth_fillTransaction`, and the read ordering
  * leads with the two endpoints that refuse that method.
  */
-function injectedTransport(provider: EIP1193Provider): Transport {
-  const reads = arcSigningTransport();
+function splitTransport(provider: EIP1193Provider, reads: Transport): Transport {
   return ((params) => {
     const wallet = custom(provider)(params);
     const rpc = reads(params);
@@ -129,6 +128,47 @@ function injectedTransport(provider: EIP1193Provider): Transport {
     };
     return { ...wallet, request } as typeof wallet;
   }) as Transport;
+}
+
+function injectedTransport(provider: EIP1193Provider): Transport {
+  return splitTransport(provider, arcSigningTransport());
+}
+
+/**
+ * The same split for a chain that is not Arc, dialling that chain's own endpoints.
+ *
+ * No per-endpoint backoff here, unlike Arc. Arc's list is four views of one network
+ * and waiting out a `-32011` is usually quicker than moving; these lists are
+ * different providers, and when the first is throttling the second is not. Sitting
+ * on a 429 for three retries before moving costs seconds on every read, and the
+ * measured behaviour was exactly that: `sepolia.base.org` refusing while
+ * publicnode answered immediately. Fail to the next endpoint at once, and let
+ * `fallback` walk the list a second time before giving up.
+ */
+const readTransports = new Map<number, Transport>();
+
+function chainReadTransport(chainId: number): Transport | undefined {
+  const cached = readTransports.get(chainId);
+  if (cached) return cached;
+  const urls = deploymentFor(chainId)?.rpcUrls;
+  if (!urls?.length) return undefined;
+  /*
+   * One transport per chain, not one per read. `bridgeClients` runs on every read,
+   * so the transport it built was new every time and kept no connection.
+   *
+   * Deliberately not ranked. viem can sort a fallback by which endpoint is
+   * answering, which looks like the right answer when the first one is throttling,
+   * and measuring it here made things worse rather than better: ranking adds its
+   * own probes, and against an endpoint that is already refusing this client those
+   * are more refusals. A plain fallback moves on after one failure, which is the
+   * cheapest thing that works.
+   */
+  const transport = fallback(
+    urls.map((u) => http(u, { retryCount: 0, timeout: 15_000 })),
+    { retryCount: 1 },
+  );
+  readTransports.set(chainId, transport);
+  return transport;
 }
 
 export interface Session {
@@ -400,8 +440,28 @@ export async function switchToArc(): Promise<void> {
  */
 export function bridgeClients(chainId: number, account: Address): ClientPair {
   const provider = getProvider();
-  // viem needs the id to tag the transaction. The rest of a chain definition only
-  // matters to transports that dial an RPC, and this one delegates to the wallet.
+
+  /*
+   * Reads go to the chain's own endpoints, exactly as they do on Arc, and for the
+   * same reason: MetaMask rate-limits a site by how many requests it makes through
+   * `window.ethereum`, and preparing one transaction is not one request. Every read
+   * here used to go through the wallet, so a Gateway deposit on Base -- an approve
+   * and then a send, each filling fees, nonce and gas -- ran the site's budget out
+   * and came back as `eth_getBlockByNumber: Request is being rate limited` in the
+   * middle of an approve for a contract that was perfectly fine. The same routing
+   * also stops one throttled read blanking a balance the page had already asked
+   * for twice.
+   *
+   * This is the browser using the registry's `rpcUrls`, which its comment used to
+   * say never happened. It happens now, on the same terms Arc has always had: a
+   * chain's published endpoints answering public reads, while identity, chain and
+   * every signature stay with the wallet. A chain we have no entry for keeps the
+   * old behaviour, because there we have nothing better to dial.
+   */
+  const reads = chainReadTransport(chainId);
+  const transport = reads ? splitTransport(provider, reads) : custom(provider);
+
+  // viem needs the id to tag the transaction; the endpoints come from the transport.
   const chain = {
     id: chainId,
     name: `chain-${chainId}`,
@@ -413,13 +473,14 @@ export function bridgeClients(chainId: number, account: Address): ClientPair {
       chainId === ARC_TESTNET_CHAIN_ID
         ? publicClient
         : (createPublicClient({
-            transport: custom(provider),
+            // A pure read client needs no wallet at all, so it does not get one.
+            transport: reads ?? custom(provider),
             pollingInterval: 4000,
           }) as PublicClient),
     walletClient: createWalletClient({
       account,
       chain: chain as never,
-      transport: custom(provider),
+      transport,
     }) as WalletClient,
   };
 }

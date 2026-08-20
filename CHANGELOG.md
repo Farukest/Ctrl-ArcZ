@@ -6,6 +6,23 @@ Bu proje [Keep a Changelog](https://keepachangelog.com/) biçimini izler.
 
 Kutular Arc dışında da açılıyordu ama listede görünmüyorlardı.
 
+### Düzeltildi (Arc dışı okumalar)
+
+- **Arc dışındaki zincir okumaları cüzdandan geçmiyor artık.** Base'de Gateway'e
+  para yatırmak `approve` sırasında şu hatayla düşüyordu: `eth_getBlockByNumber:
+  Request is being rate limited`. Sebep kontratta değil: MetaMask bir siteyi,
+  `window.ethereum` üzerinden yaptığı istek sayısıyla kısıtlıyor ve tek bir işlemi
+  hazırlamak tek bir istek değil (ücret, nonce, gaz; üstelik önce approve sonra
+  gönderim). Repo bunu Arc için çoktan çözmüş ve gerekçesini yazmış: *"None of
+  those reads need the wallet."* Arc dışına hiç uygulanmamıştı. Artık aynı ayrım
+  her zincirde: kimlik, bağlı zincir kimliği ve bütün imzalar cüzdanda kalıyor,
+  genel zincir okumaları o zincirin kayıttaki uçlarına gidiyor. Taşıyıcı zincir
+  başına bir kez kuruluyor, eskiden her okumada yeniden kuruluyordu. Üretilerek
+  doğrulandı: her okumayı "Request is being rate limited" ile reddeden bir cüzdanla
+  bile ekran çalışıyor ve cüzdana yalnız `eth_accounts`, `eth_chainId` ve
+  `personal_sign` soruluyor. Bu, `rpcUrls`'in "yalnız sunucu için" olduğu notunu
+  geçersiz kılıyor; not da güncellendi.
+
 ### Değişti
 
 - **"Cüzdan bakiyesi" okunamayınca artık sebebini söylüyor.** Etiketin yanı bomboş

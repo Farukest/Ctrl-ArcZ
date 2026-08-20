@@ -97,16 +97,20 @@ export interface ChainDeployment {
   multicall3From?: `0x${string}`;
 
   /**
-   * Endpoints a server can reach this chain on, best first.
+   * Endpoints for reading this chain, best first.
    *
-   * For the server side only: the co-signer has to read a box's policy and the
-   * relayer has to submit its deploy, and neither has a user's wallet to borrow.
-   * The browser never uses these -- it reaches every chain but Arc through the
-   * connected wallet's own provider, which is by definition on the chain the user
-   * is on.
+   * The server needs them outright: the co-signer reads a box's policy and the
+   * relayer submits its deploy, and neither has a user's wallet to borrow.
+   *
+   * The browser uses them too, and the comment here used to say it never did. It
+   * reached every chain but Arc through the connected wallet instead, and MetaMask
+   * rate-limits a site by how many requests it makes: one Gateway deposit is an
+   * approve and a send, each filling fees, nonce and gas, and the budget ran out
+   * mid-approve. Public reads go to these endpoints now, on the terms Arc always
+   * had. Identity, the connected chain id and every signature stay with the wallet.
    *
    * More than one where more than one is published, so a single rate-limited
-   * endpoint cannot stop the service.
+   * endpoint cannot stop either side.
    */
   rpcUrls: readonly string[];
 
