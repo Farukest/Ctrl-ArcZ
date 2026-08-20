@@ -1,6 +1,6 @@
 {
   "name": "@ctrl-arcz/sdk",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "Ctrl+ArcZ SDK — protected USDC transfers on Arc: pre-send risk firewall, code-gated claim, sender cancel, automatic refund",
   "keywords": [
     "arc",

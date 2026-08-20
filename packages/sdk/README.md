@@ -155,26 +155,60 @@ The guard calls `check()`, which reads ArcScan. **If the indexer cannot be reach
 | `watchTransfer(client, id, opts)`                                    | Subscribe to state changes                                                    |
 | `getCleanHistory(address, opts)`                                     | Layer 3, a spam-free history                                                  |
 
-All addresses and chain constants live in one export: `import { ADDRESSES, arcTestnet, CTRL_ARCZ_ADDRESS } from '@ctrl-arcz/sdk'`.
+### Every chain, from one registry
+
+The SDK started on Arc alone, and one export used to carry every address. It no
+longer does: the same contracts are deployed on several testnets, and the same
+ticker is a different contract on each of them. Ask the registry for the chain you
+are on rather than reaching for a constant.
+
+| Function                      | Purpose                                                                            |
+| ----------------------------- | ---------------------------------------------------------------------------------- |
+| `deploymentFor(chainId)`      | Everything deployed on that chain: contracts, USDC, RPCs, explorer, or `undefined` |
+| `deployedChainIds()`          | The chains this build knows about                                                  |
+| `DEPLOYMENTS`                 | The whole registry, keyed by chain id                                              |
+| `tokensFor(chainId)`          | The tokens that exist on it, with addresses, decimals and search names             |
+| `spendableTokensFor(chainId)` | The same list without the ones an allowlist would refuse                           |
+| `cctpChainByChainId(id)`      | Circle's name for a chain id, for the bridge functions                             |
+
+`ADDRESSES`, `arcTestnet` and `CTRL_ARCZ_ADDRESS` are still exported and still
+Arc's. They are the right thing to use only when you know you are on Arc; on
+anything else `deploymentFor` is the one that answers.
 
 ### Spend boxes
 
 Anything that repeats, a subscription or an agent's budget, runs from a `SpendPolicyAccount` whose policy is on chain rather than from a token allowance. The recipient is locked at deploy time, so whoever submits the pull, the funds can only ever reach it.
 
-| Function                                            | Purpose                                                                                              |
-| --------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `createEphemeral(clients, factory, salt, policy)`   | Deploy a box for one payee. `policy`: target, per-pull cap, min interval, total budget, expiry       |
-| `predictEphemeral(publicClient, factory, salt, policy)` | The CREATE2 address a policy would get, before spending anything on it                           |
+| Function                                                | Purpose                                                                                        |
+| ------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `createEphemeral(clients, factory, salt, policy)`       | Deploy a box for one payee. `policy`: target, per-pull cap, min interval, total budget, expiry |
+| `predictEphemeral(publicClient, factory, salt, policy)` | The CREATE2 address a policy would get, before spending anything on it                         |
 
 ### CCTP and Gateway
 
 Both are signed by the wallet that owns the money. No server key appears in either path, so no operator balance stands behind a user's transfer.
 
-| Function                                    | Purpose                                                                            |
-| -------------------------------------------- | ------------------------------------------------------------------------------------ |
-| `bridgeFromWallet(clients, params)`         | CCTP v2 burn-and-mint between chains. Circle's Forwarding Service submits the mint  |
-| `depositToGateway(clients, params)`         | Deposit into `GatewayWallet`; the balance stays credited to the depositor           |
-| `spendFromGateway(clients, params)`         | Spend the unified balance to any supported chain with an EIP-712 intent, no source-chain tx |
+| Function                            | Purpose                                                                                     |
+| ----------------------------------- | ------------------------------------------------------------------------------------------- |
+| `bridgeFromWallet(clients, params)` | CCTP v2 burn-and-mint between chains. Circle's Forwarding Service submits the mint          |
+| `depositToGateway(clients, params)` | Deposit into `GatewayWallet`; the balance stays credited to the depositor                   |
+| `spendFromGateway(clients, params)` | Spend the unified balance to any supported chain with an EIP-712 intent, no source-chain tx |
+
+`bridgeFromWallet` takes `onStep` for progress and `onQuote` for the price. The
+quote is in the result as well, but the result arrives when the transfer does, and
+the fee is knowable long before that: `onQuote` fires the moment Circle has priced
+it and before anything is signed, so a caller recording the transfer can record
+what it costs at the same time.
+
+```ts
+await bridgeFromWallet(clients, {
+  from: 'Arc_Testnet',
+  to: 'Base_Sepolia',
+  amount: 1_000_000n,
+  onQuote: ({ maxFee }) => showFee(maxFee), // before the first signature
+  onStep: (step, txHash) => showStep(step, txHash),
+});
+```
 
 ## Custom data source
 

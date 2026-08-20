@@ -163,6 +163,40 @@ describe('bridgeFromWallet burns the sender own funds', () => {
     expect(res.forwardTxHash).toBeUndefined();
   });
 
+  it('reports the fee before it signs anything, not only when the transfer ends', async () => {
+    /*
+     * The quote is in the result too, and the result arrives when the whole
+     * transfer does -- minutes after the burn, on a row that has been on screen
+     * the entire time with nothing to say about the cost. A caller writing the
+     * transfer down needs the number while it is still writing.
+     *
+     * The order is the point: quoted before the first signature, and the same
+     * figure the result carries at the end.
+     */
+    const c = clients(10_000_000n);
+    const quotes: bigint[] = [];
+    let signedBefore = 0;
+    const res = await bridgeFromWallet(c.clients as never, {
+      from: 'Arc_Testnet',
+      to: 'Base_Sepolia',
+      amount: 1_000_000n,
+      onQuote: (q) => {
+        quotes.push(q.maxFee);
+        signedBefore = c.writeContract.mock.calls.length + c.sendTransaction.mock.calls.length;
+      },
+      fetchImpl: fetchStub() as never,
+      timeoutMs: 10,
+    });
+    expect(quotes).toEqual([res.quote.maxFee]);
+    expect(signedBefore).toBe(0);
+  });
+
+  it('is optional, and a transfer without one behaves exactly as before', async () => {
+    const c = clients(10_000_000n);
+    const res = await run(c);
+    expect(res.burnTxHash).toBe('0xburn');
+  });
+
   it('refuses a same-chain or non-positive transfer', async () => {
     const c = clients(10_000_000n);
     await expect(run(c, { to: 'Arc_Testnet' })).rejects.toThrow(/must differ/i);

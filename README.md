@@ -2,7 +2,7 @@
 
 **Screened before it is signed. Recallable until it is claimed. Repeatable without handing over your wallet.**
 
-[![Watch the demo](https://img.shields.io/badge/Watch_the_demo-FF0000?style=flat-square&logo=youtube&logoColor=white)](https://www.youtube.com/watch?v=fcgyqBUbkcg) [![Live app](https://img.shields.io/badge/Live-ctrlarcz.xyz-4b9fff?style=flat-square)](https://ctrlarcz.xyz) [![npm](https://img.shields.io/badge/npm-%40ctrl--arcz%2Fsdk-cb3837?style=flat-square&logo=npm&logoColor=white)](https://www.npmjs.com/package/@ctrl-arcz/sdk) [![Android app](https://img.shields.io/badge/Android_app-Google_Play-3ddc84?style=flat-square&logo=googleplay&logoColor=white)](https://play.google.com/store/apps/details?id=com.xyz.ctrlarcz) [![Watch the Android demo](https://img.shields.io/badge/Watch_the_Android_demo-FF0000?style=flat-square&logo=youtube&logoColor=white)](https://www.youtube.com/watch?v=DnSkbgBZaM8) [![Docs](https://img.shields.io/badge/Docs-docs.ctrlarcz.xyz-8b93a1?style=flat-square)](https://docs.ctrlarcz.xyz) [![Arc Testnet](https://img.shields.io/badge/Arc_Testnet-5042002-2fbf71?style=flat-square)](https://testnet.arcscan.app/address/0x8dAb7148cdc31DAcad6d7e12161AA3DEDb572Dca) [![Tests](https://img.shields.io/badge/tests-654_passing-2fbf71?style=flat-square)](#tech-stack) [![Custody](https://img.shields.io/badge/custody-none-8b93a1?style=flat-square)](#security)
+[![Watch the demo](https://img.shields.io/badge/Watch_the_demo-FF0000?style=flat-square&logo=youtube&logoColor=white)](https://www.youtube.com/watch?v=fcgyqBUbkcg) [![Live app](https://img.shields.io/badge/Live-ctrlarcz.xyz-4b9fff?style=flat-square)](https://ctrlarcz.xyz) [![npm](https://img.shields.io/badge/npm-%40ctrl--arcz%2Fsdk-cb3837?style=flat-square&logo=npm&logoColor=white)](https://www.npmjs.com/package/@ctrl-arcz/sdk) [![Android app](https://img.shields.io/badge/Android_app-Google_Play-3ddc84?style=flat-square&logo=googleplay&logoColor=white)](https://play.google.com/store/apps/details?id=com.xyz.ctrlarcz) [![Watch the Android demo](https://img.shields.io/badge/Watch_the_Android_demo-FF0000?style=flat-square&logo=youtube&logoColor=white)](https://www.youtube.com/watch?v=DnSkbgBZaM8) [![Docs](https://img.shields.io/badge/Docs-docs.ctrlarcz.xyz-8b93a1?style=flat-square)](https://docs.ctrlarcz.xyz) [![Arc Testnet](https://img.shields.io/badge/Arc_Testnet-5042002-2fbf71?style=flat-square)](https://testnet.arcscan.app/address/0x8dAb7148cdc31DAcad6d7e12161AA3DEDb572Dca) [![Tests](https://img.shields.io/badge/tests-722_passing-2fbf71?style=flat-square)](#tech-stack) [![Custody](https://img.shields.io/badge/custody-none-8b93a1?style=flat-square)](#security)
 
 USDC payments on Arc with the three things a plain transfer does not have: a firewall that refuses a bad recipient before anything is signed, a lock the sender can undo until the recipient proves the money was meant for them, and a bounded spend box that lets a merchant or an agent charge you again without ever touching your wallet. One SDK, one contract, no custody.
 
@@ -37,14 +37,14 @@ npm install @ctrl-arcz/sdk viem
 
 ## In one look
 
-|                |                                                                                       |
-| -------------- | ------------------------------------------------------------------------------------- |
-| **Network**    | Arc Testnet, chain id `5042002`                                                       |
+|                |                                                                                                                                                    |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Network**    | Arc Testnet, chain id `5042002`                                                                                                                    |
 | **Asset**      | USDC, which on Arc is both the gas token and the thing you are sending. Private payments can also be sent in EURC or cirBTC; the gas is still USDC |
-| **Protection** | Pre-send risk firewall, code-gated claim, sender cancel, automatic expiry refund      |
-| **Custody**    | None. Funds are with the user or in the contract. No owner, no pause, no upgrade path |
-| **Product**    | An SDK any wallet, exchange or payments app embeds. Not another wallet                |
-| **Tests**      | 654 in total: 114 Foundry, 365 SDK, 86 demo-kit, 56 api, 33 keeper, plus live testnet runs |
+| **Protection** | Pre-send risk firewall, code-gated claim, sender cancel, automatic expiry refund                                                                   |
+| **Custody**    | None. Funds are with the user or in the contract. No owner, no pause, no upgrade path                                                              |
+| **Product**    | An SDK any wallet, exchange or payments app embeds. Not another wallet                                                                             |
+| **Tests**      | 722 in total: 123 Foundry, 384 SDK, 126 demo-kit, 56 api, 33 keeper, plus live testnet runs                                                        |
 
 ## Two clients: web and Android
 
@@ -52,8 +52,8 @@ The same contract and the same API are driven by two full clients. The web app i
 
 **[Get it on Google Play](https://play.google.com/store/apps/details?id=com.xyz.ctrlarcz)**
 
-| Firewall verdict and the real cost | Subscriptions by merchant | A bridge that gives the money back |
-| ---------------------------------- | ------------------------- | ---------------------------------- |
+| Firewall verdict and the real cost                               | Subscriptions by merchant                                         | A bridge that gives the money back                                         |
+| ---------------------------------------------------------------- | ----------------------------------------------------------------- | -------------------------------------------------------------------------- |
 | ![Send confirmation on Android](./docs/android/send-confirm.png) | ![Merchant picker on Android](./docs/android/merchant-picker.png) | ![Returned bridge transfer on Android](./docs/android/bridge-returned.png) |
 
 Three things the app does that a browser cannot:
@@ -74,7 +74,7 @@ A stablecoin transfer is **final, blind and one-shot**, and every product built 
 
 **Blind.** Nothing between the user and the chain reads the recipient before they commit. Address poisoning is the sharpest version of this, and it works because of a detail every wallet shares: addresses are shown abbreviated, as `0x64Ea…Fe3F`. The attacker grinds an address whose first and last characters match one you already pay, sends you a zero-value transfer from it so it lands in your history, and waits for you to copy it back out. The defining property is that **the victim sends to the wrong address on purpose**: no unexpected signature, no malicious contract, nothing downstream behaving abnormally. It is why the ritual of sending one dollar first proves nothing: the test payment confirms perfectly against the poisoned address. And it is why an escrow alone does not help: locking the funds for the wrong recipient just locks them for the attacker. Something has to refuse the send.
 
-**One-shot.** A transfer pays one address, one time. Anything that repeats, a subscription, an allowance, an agent that pays its own bills, has to be built on top, and the two ways it is normally built are an unlimited token approval or a shared key. Both are a blank cheque, and both write *this wallet pays that merchant, on this schedule* onto a public ledger where it stays.
+**One-shot.** A transfer pays one address, one time. Anything that repeats, a subscription, an allowance, an agent that pays its own bills, has to be built on top, and the two ways it is normally built are an unlimited token approval or a shared key. Both are a blank cheque, and both write _this wallet pays that merchant, on this schedule_ onto a public ledger where it stays.
 
 Ctrl+ArcZ answers the three in one place. A firewall refuses a bad recipient before anything is signed. The transfer that follows is locked behind a code the sender hands over out of band, recallable at any time until it is claimed and refunded on its own if it never is. And what repeats runs from a spend box whose policy is on chain (this merchant, this much, this often, until this date), owned by a one-time address, so what the chain records is a box, not a person.
 
@@ -321,14 +321,14 @@ A protected transfer needs USDC on Arc. Both of Circle's cross-chain routes are 
 </tr>
 </table>
 
-|                   | CCTP                                        | Gateway                                                     |
-| ----------------- | ------------------------------------------- | ----------------------------------------------------------- |
-| Model             | Burn on the source, mint on the destination | Deposit once into a unified balance, then spend from it     |
-| First transfer    | About a minute                              | The deposit, then the spend                                 |
-| Repeat transfers  | About a minute, every time                  | Seconds, no deposit                                         |
-| Best for          | A one-off move                              | Sending often                                               |
-| Chains on testnet | 20                                          | 11                                                          |
-| Destination gas   | None needed, Circle forwards the mint       | None needed, Circle forwards the mint                       |
+|                   | CCTP                                        | Gateway                                                 |
+| ----------------- | ------------------------------------------- | ------------------------------------------------------- |
+| Model             | Burn on the source, mint on the destination | Deposit once into a unified balance, then spend from it |
+| First transfer    | About a minute                              | The deposit, then the spend                             |
+| Repeat transfers  | About a minute, every time                  | Seconds, no deposit                                     |
+| Best for          | A one-off move                              | Sending often                                           |
+| Chains on testnet | 20                                          | 11                                                      |
+| Destination gas   | None needed, Circle forwards the mint       | None needed, Circle forwards the mint                   |
 
 ```mermaid
 flowchart LR
@@ -404,15 +404,15 @@ The full audit lives in [`SECURITY.md`](./SECURITY.md). The short version:
 
 ## Tech stack
 
-| Layer       | Choice                                                                |
-| ----------- | --------------------------------------------------------------------- |
-| Contract    | Solidity 0.8.24, Foundry, OpenZeppelin (SafeERC20, ReentrancyGuard)   |
-| SDK         | TypeScript, viem, tsup (ESM, CJS and types), vitest                   |
-| Risk data   | ArcScan (Blockscout REST), behind an `IDataProvider` seam             |
-| Cross-chain | Circle CCTP and Circle Gateway, both signed by the user's own wallet  |
+| Layer       | Choice                                                                    |
+| ----------- | ------------------------------------------------------------------------- |
+| Contract    | Solidity 0.8.24, Foundry, OpenZeppelin (SafeERC20, ReentrancyGuard)       |
+| SDK         | TypeScript, viem, tsup (ESM, CJS and types), vitest                       |
+| Risk data   | ArcScan (Blockscout REST), behind an `IDataProvider` seam                 |
+| Cross-chain | Circle CCTP and Circle Gateway, both signed by the user's own wallet      |
 | Gasless     | Permissionless `claim`, sponsored by Circle Gas Station, relayer fallback |
-| Approvals   | Permit2, for single-signature sends                                   |
-| Apps        | React, Vite, a shared design system in `@ctrl-arcz/demo-kit`          |
+| Approvals   | Permit2, for single-signature sends                                       |
+| Apps        | React, Vite, a shared design system in `@ctrl-arcz/demo-kit`              |
 
 Every list of past things in the app is one component. Sent transfers, the plain
 history, received transfers, bridges and subscriptions had each grown their own
@@ -427,15 +427,15 @@ first; a two-character row number is the second.
 
 ## Repository layout
 
-| Path                 | What                                                                    |
-| -------------------- | ----------------------------------------------------------------------- |
-| `packages/contracts` | `CtrlArcZ.sol`, `CodeClaimVerifier`, `IClaimVerifier`, Foundry tests    |
-| `packages/sdk`       | `@ctrl-arcz/sdk`, the thing an integrator actually installs             |
-| `packages/demo-kit`  | Shared wallet session, the design system, and the server-side helpers   |
-| `apps/sender`        | The web app, port 5173. Sending and receiving are two modes of it       |
-| `apps/api`           | The backend: co-signer, relayer, gasless claim, discovery, investigator |
-| `apps/keeper`        | The keeper agent: returns expired transfers, paid from a bounded box    |
-| `examples`           | A standalone Node quickstart, no framework                              |
+| Path                 | What                                                                       |
+| -------------------- | -------------------------------------------------------------------------- |
+| `packages/contracts` | `CtrlArcZ.sol`, `CodeClaimVerifier`, `IClaimVerifier`, Foundry tests       |
+| `packages/sdk`       | `@ctrl-arcz/sdk`, the thing an integrator actually installs                |
+| `packages/demo-kit`  | Shared wallet session, the design system, and the server-side helpers      |
+| `apps/sender`        | The web app, port 5173. Sending and receiving are two modes of it          |
+| `apps/api`           | The backend: co-signer, relayer, gasless claim, discovery, investigator    |
+| `apps/keeper`        | The keeper agent: returns expired transfers, paid from a bounded box       |
+| `examples`           | A standalone Node quickstart, no framework                                 |
 | `docs`               | The Mintlify sources behind [docs.ctrlarcz.xyz](https://docs.ctrlarcz.xyz) |
 
 `docs.ctrlarcz.xyz` is a static site, not a service. `pnpm docs:export` runs the
@@ -466,16 +466,16 @@ cp .env.example .env      # fill in throwaway testnet wallets
 
 USDC is both gas and the asset on Arc, so fund the wallets with Arc Testnet USDC from [faucet.circle.com](https://faucet.circle.com). Foundry is required for the contract: <https://getfoundry.sh>
 
-| Command               | What it does                                        |
-| --------------------- | --------------------------------------------------- |
-| `pnpm build`          | Build every package                                 |
-| `pnpm test`           | Foundry plus vitest                                 |
-| `pnpm contracts:test` | Contract tests only                                 |
-| `pnpm lint`           | ESLint across the workspace                         |
-| `pnpm typecheck`      | `tsc --noEmit` in every package                     |
-| `pnpm deploy:testnet` | Deploy `CtrlArcZ` to Arc Testnet                    |
-| `pnpm dev:api`        | The backend on http://localhost:8787                |
-| `pnpm dev:sender`     | The web app on http://localhost:5173                |
+| Command               | What it does                         |
+| --------------------- | ------------------------------------ |
+| `pnpm build`          | Build every package                  |
+| `pnpm test`           | Foundry plus vitest                  |
+| `pnpm contracts:test` | Contract tests only                  |
+| `pnpm lint`           | ESLint across the workspace          |
+| `pnpm typecheck`      | `tsc --noEmit` in every package      |
+| `pnpm deploy:testnet` | Deploy `CtrlArcZ` to Arc Testnet     |
+| `pnpm dev:api`        | The backend on http://localhost:8787 |
+| `pnpm dev:sender`     | The web app on http://localhost:5173 |
 
 Run both: the web app calls the backend for the gasless claim, the co-signer, the
 stealth relay and the investigator, and without it those answer 404 from a page
@@ -521,9 +521,9 @@ The demos run without MetaMask if you drop a `.env.local` into each app; the wal
 
 ## Subscriptions and agent wallets
 
-Sending once is easy. The hard part is letting something spend *repeatedly* without handing it your wallet. A subscription, an allowance, an AI agent that pays its own bills: each needs a budget that renews, not a blank cheque.
+Sending once is easy. The hard part is letting something spend _repeatedly_ without handing it your wallet. A subscription, an allowance, an AI agent that pays its own bills: each needs a budget that renews, not a blank cheque.
 
-Ctrl+ArcZ solves this with a **disposable spend box**. You do not pay the merchant directly. You create a tiny on-chain account, fund it with a budget, and lock a policy into it: *this merchant only, this much per pull, this often, until this date.* An off-chain co-signer ("The Machine") firewall-checks every pull and refuses to sign anything outside the policy. The box's own code enforces the same limits, so even a leaked co-signer key or a misbehaving merchant can never take more than the budget, or send it anywhere else.
+Ctrl+ArcZ solves this with a **disposable spend box**. You do not pay the merchant directly. You create a tiny on-chain account, fund it with a budget, and lock a policy into it: _this merchant only, this much per pull, this often, until this date._ An off-chain co-signer ("The Machine") firewall-checks every pull and refuses to sign anything outside the policy. The box's own code enforces the same limits, so even a leaked co-signer key or a misbehaving merchant can never take more than the budget, or send it anywhere else.
 
 You stay invisible (the merchant sees the box, never your wallet), you stay bounded (the worst case is the budget you funded), and you can cancel any time (sweep the box, funds come home, the pulls stop).
 
@@ -535,7 +535,7 @@ The co-signer is a gatekeeper, not a custodian. Bringing the money home (`sweepT
 
 The form used to ask for a per-pull cap, an interval, a total budget and an expiry as four independent fields, and left the arithmetic between them to the person filling it in. Nobody thinks "0.02 every minute against a 0.1 budget"; they think "one a month, twelve times". Deriving the budget removed a whole class of quiet mistake with it: funding 0.1 against 0.03 charges gave three pulls and stranded 0.01 with nothing on screen saying so, and the "budget must be at least one charge" error is now unreachable rather than merely unlikely. The contract sees the same numbers either way.
 
-**Manage them all in one place.** Every box you created, read straight from chain, with live status, search, status filters, sorting and pagination. It is the same list component as every other history in the app, with one difference that matters: a subscription's date is when it *ends*, so the date filter narrows forwards ("ends within 7 days") instead of backwards:
+**Manage them all in one place.** Every box you created, read straight from chain, with live status, search, status filters, sorting and pagination. It is the same list component as every other history in the app, with one difference that matters: a subscription's date is when it _ends_, so the date filter narrows forwards ("ends within 7 days") instead of backwards:
 
 ![Your subscriptions](./docs/screenshots/subscriptions-list.png)
 
@@ -587,8 +587,8 @@ one `sweepToVault`. Details and the full trace: [`apps/keeper/README.md`](./apps
 ## The investigator: the judgement a rule cannot make
 
 The firewall answers one question at a time, the same way every time. That is what
-makes it worth trusting, and it is also its ceiling: it says *"this address has no
-on-chain history"* about a colleague's fresh wallet and about a contract that
+makes it worth trusting, and it is also its ceiling: it says _"this address has no
+on-chain history"_ about a colleague's fresh wallet and about a contract that
 would swallow the payment, because from any single rule those are identical. A
 real dossier from Arc Testnet shows the gap plainly. The rules rate the CtrlArcZ
 contract itself `safe / KNOWN_COUNTERPARTY`, because the sender has interacted

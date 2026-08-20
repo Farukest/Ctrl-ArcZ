@@ -2,7 +2,48 @@
 
 Bu proje [Keep a Changelog](https://keepachangelog.com/) biçimini izler.
 
-## Yayınlanmamış: 2026-08-19
+## [0.2.0]: 2026-08-21
+
+`0.1.2`'den bu yana SDK tek zincirden çıkıp beş zincire yayıldı, kayıt defteri
+kazandı ve köprü artık ücreti imzadan önce söylüyor. Kırıcı değişiklik yok: eski
+çağrıların hepsi aynı imzayla çalışıyor.
+
+### Eklendi
+
+- **Zincir kayıt defteri.** `deploymentFor(chainId)`, `deployedChainIds()`,
+  `DEPLOYMENTS`: bir zincirde ne varsa (kontratlar, USDC, RPC'ler, explorer) tek
+  yerden. `ADDRESSES` ve `CTRL_ARCZ_ADDRESS` duruyor ama artık yalnızca Arc'ı
+  anlatıyor; başka zincirde doğru cevabı veren kayıt defteri.
+- **Zincir başına token listesi.** `tokensFor(chainId)`,
+  `spendableTokensFor(chainId)`: aynı sembol her ağda başka bir kontrat, o yüzden
+  liste zincire bağlı. Adres, ondalık ve arama adları dahil.
+- **Tek işlemlik Private Pay.** `PrivatePayRouter` ile Permit2 üzerinden
+  oluştur + fonla + öde, Arc dışındaki dört zincirde tek işlemde.
+- **`bridgeFromWallet` artık `onQuote` alıyor.** Ücret sonuçta da dönüyor ama
+  sonuç işlem bitince geliyor: yani satır dakikalarca ücreti söyleyemiyordu.
+  `onQuote`, Circle fiyatı verir vermez ve **hiçbir şey imzalanmadan önce**
+  tetikleniyor. Opsiyonel; mevcut imza değişmedi.
+- **`readAccount` kutunun token'ını da dönüyor.** Kutunun yanındaki her rakam onun
+  cinsinden, ve bunu çağırana sordurmak Arc'ın USDC'sini başka zincirde okumaya
+  çalışan bir hata sınıfı üretiyordu.
+
+### Değişti
+
+- **Co-signer ve relayer zincir-bağımsız.** Her giriş noktası `chainId` alıyor,
+  kayıttan çözüyor, deployment'i olmayan zinciri reddediyor. Policy o zincirin
+  RPC'sinden okunuyor ve imza o zincirin id'sini EIP-712 domain'ine koyuyor.
+- **`rpcUrls` artık tarayıcıda da kullanılıyor.** Eski not "yalnızca sunucu için"
+  diyordu; MetaMask'in site başına istek bütçesi yüzünden genel okumalar zincirin
+  kendi uçlarına taşındı. Kimlik, bağlı zincir ve imzalar cüzdanda kaldı.
+
+### Test
+
+- 384 SDK testi (`onQuote`'un ilk imzadan önce tetiklendiği ve sonuçla aynı rakamı
+  verdiği dahil), 123 Foundry, 126 demo-kit, 56 api, 33 keeper: toplam 722.
+- Gerçek testnet: aynı cüzdandan aynı anda başlatılan bir Gateway deposit ve bir
+  CCTP köprüsü; beş işlemin beşi de zincirde onaylı, mint Ethereum Sepolia'da.
+
+## 0.2.0 içinde: 2026-08-19
 
 Kutular Arc dışında da açılıyordu ama listede görünmüyorlardı.
 
@@ -10,11 +51,11 @@ Kutular Arc dışında da açılıyordu ama listede görünmüyorlardı.
 
 - **Arc dışındaki zincir okumaları cüzdandan geçmiyor artık.** Base'de Gateway'e
   para yatırmak `approve` sırasında şu hatayla düşüyordu: `eth_getBlockByNumber:
-  Request is being rate limited`. Sebep kontratta değil: MetaMask bir siteyi,
+Request is being rate limited`. Sebep kontratta değil: MetaMask bir siteyi,
   `window.ethereum` üzerinden yaptığı istek sayısıyla kısıtlıyor ve tek bir işlemi
   hazırlamak tek bir istek değil (ücret, nonce, gaz; üstelik önce approve sonra
-  gönderim). Repo bunu Arc için çoktan çözmüş ve gerekçesini yazmış: *"None of
-  those reads need the wallet."* Arc dışına hiç uygulanmamıştı. Artık aynı ayrım
+  gönderim). Repo bunu Arc için çoktan çözmüş ve gerekçesini yazmış: _"None of
+  those reads need the wallet."_ Arc dışına hiç uygulanmamıştı. Artık aynı ayrım
   her zincirde: kimlik, bağlı zincir kimliği ve bütün imzalar cüzdanda kalıyor,
   genel zincir okumaları o zincirin kayıttaki uçlarına gidiyor. Taşıyıcı zincir
   başına bir kez kuruluyor, eskiden her okumada yeniden kuruluyordu. Üretilerek
@@ -80,7 +121,7 @@ Kutular Arc dışında da açılıyordu ama listede görünmüyorlardı.
   kayıtta yalnız USDC var ve onun bakiyesi zaten oturumdan geliyor, bayrak `false`
   kalsaydı hiç gelmeyecek bir rakam için sonsuza kadar ışıldardı.
 
-## Yayınlanmamış: 2026-08-18
+## 0.2.0 içinde: 2026-08-18
 
 Abonelik sayfası Circle'ın ücretini okuyamıyordu ve "Abonelik oluştur" butonu
 kilitli kalıyordu. İkisi de tek bir kökten geliyordu.
@@ -141,7 +182,7 @@ kilitli kalıyordu. İkisi de tek bir kökten geliyordu.
   bayrakta. `canCreate` ücretin okunmuş olmasını açıkça şart koşuyor; eskiden bu
   güvence "ikisi birlikte gelir ya da hiç gelmez" kazasına dayanıyordu.
 
-## Yayınlanmamış: 2026-08-17
+## 0.2.0 içinde: 2026-08-17
 
 Ağ kontrolü header'a taşındı ve Private Pay EURC ile de ödenebiliyor.
 
@@ -271,7 +312,7 @@ Ağ kontrolü header'a taşındı ve Private Pay EURC ile de ödenebiliyor.
   ve bu yüzden yedek yol olarak bırakılmadı. Yani engel relayer değil, fonlama
   rayı.
 
-## Yayınlanmamış: 2026-08-16
+## 0.2.0 içinde: 2026-08-16
 
 Web arayüzünde ölçümle bulunmuş hatalar. Hepsi tarayıcıda sayıyla doğrulandı; denetim
 `apps/sender/src/audit/uiAudit.ts` içinde, kurallar ve eşikler `PLAN_UI.md`'de.

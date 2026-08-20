@@ -39,6 +39,36 @@ never used, and the two must not be mixed.
 
 ## Chains and addresses
 
+The SDK began on Arc and one export carried every address. Since `0.2.0` the same
+contracts are deployed on several testnets, so the addresses come from a registry
+keyed by chain id. The Arc constants below are still exported and still correct
+**for Arc**; on any other chain, ask the registry.
+
+### The registry
+
+```ts
+import { deploymentFor, deployedChainIds, tokensFor, spendableTokensFor } from '@ctrl-arcz/sdk';
+
+const deployment = deploymentFor(chainId);
+// undefined on a chain this build knows nothing about, which is the honest answer
+// and the thing to branch on before offering a feature.
+
+deployment?.ctrlArcZ;     // the contract on that chain
+deployment?.usdc;         // that chain's USDC, which is not Arc's
+deployment?.rpcUrls;      // public endpoints for reads
+deployment?.explorerApi;  // undefined where the chain publishes no readable history
+
+deployedChainIds();       // every chain this build can work on
+tokensFor(chainId);       // that chain's tokens: address, decimals, search names
+spendableTokensFor(chainId); // the same list without the ones an allowlist refuses
+```
+
+The same ticker is a different contract on every network, which is why the token
+list takes a chain id rather than being a constant. Reaching for `ADDRESSES.USDC`
+on Base reads an address that is not a contract there.
+
+### Arc's own constants
+
 Everything under `chains/arcTestnet` is re-exported at the top level.
 
 ```ts
