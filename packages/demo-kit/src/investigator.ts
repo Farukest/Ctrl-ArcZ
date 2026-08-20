@@ -26,7 +26,23 @@ import { clampVerdict, type Advisory, type Dossier } from '@ctrl-arcz/sdk';
  * never concatenated into the instructions.
  */
 
-const MODEL = 'claude-opus-5';
+/**
+ * Which model reads the dossier, and why it is not the largest one available.
+ *
+ * Measured on the server, for one real address: the rules took 2.6 to 3.5
+ * seconds, assembling the dossier took half a second, and the model took 4.7 to
+ * 6.1 of a ten second wait. The button is held for all of it, because this check
+ * is allowed to make a verdict stricter and nothing downstream re-runs it, so
+ * every second here is a second somebody sits in front of a locked form.
+ *
+ * The task is small and closed: a fixed schema over a dossier of a dozen numbers,
+ * answered in a headline and up to four sentences. That is what the fast model is
+ * for. Overridable with `INVESTIGATOR_MODEL` so an operator who would rather have
+ * the prose of a larger one can pay the seconds for it without a deploy.
+ */
+const MODEL = process.env.INVESTIGATOR_MODEL || 'claude-haiku-4-5-20251001';
+/** A headline and four short sentences. The old 1024 was never close to reached. */
+const MAX_TOKENS = 512;
 const TIMEOUT_MS = 12_000;
 
 const SYSTEM = `You review a single USDC payment recipient on the Arc blockchain and report what the on-chain evidence suggests.
@@ -90,7 +106,7 @@ export async function investigate(
   try {
     const response = await client.messages.create({
       model: MODEL,
-      max_tokens: 1024,
+      max_tokens: MAX_TOKENS,
       system: SYSTEM,
       output_config: {
         effort: 'low',
