@@ -14,6 +14,7 @@ import {
   useToast,
   type Mode,
 } from '@ctrl-arcz/demo-kit/ui';
+import { useSettleDeposits } from './lib/activity.js';
 import { PayTab } from './components/PayTab.js';
 import { ActivityTab } from './components/ActivityTab.js';
 import { BridgeTab } from './components/BridgeTab.js';
@@ -96,6 +97,18 @@ export function App() {
    * one. SegmentedTabs shows none highlighted while Activity is open, which is the
    * intended "you left the main tabs" cue.
    */
+  /*
+   * The last step of a deposit, finished wherever the reader happens to be.
+   *
+   * It used to run inside the balance poll of the screen with the deposit box on
+   * it, so a deposit made and then left on another tab never completed: measured
+   * on a real one, five minutes on "Counted by Circle" and four seconds after
+   * coming back. Mounted once here, it costs nothing when there is nothing
+   * pending, and being the only settler is what stops two of them crediting the
+   * same rise in the balance.
+   */
+  useSettleDeposits(state.session?.address);
+
   const primaryTabs: { id: Exclude<Tab, 'activity'>; label: string }[] = [
     { id: 'pay', label: t('nav.pay') },
     { id: 'bridge', label: t('nav.bridge') },

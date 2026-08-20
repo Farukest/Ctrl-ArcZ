@@ -3966,22 +3966,31 @@ a.hstep__go:hover {
    it; and the extra width pushed the last chip onto a second line, so the row
    gained a whole line halfway through. Every chip is one height now, and the
    chips stay on one line and scroll if they run out of room. */
+/* One step per line, which is what finally holds a row still.
+   Wrapped chips grew the row by a whole line the moment a step gained its hash and
+   the extra width pushed the last one over. Forcing them onto one line instead
+   traded that for a worse fault: the last step scrolled off the right edge, so a
+   row hid part of what it was reporting. A column has neither. The number of lines
+   is the number of steps, known from the first render because every step is drawn
+   from the first render, and a hash arriving fills a space already reserved for it
+   on its own line. */
+.arow__steps {
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  gap: 4px;
+}
 .achip {
   min-height: 24px;
+  justify-content: flex-start;
 }
-.arow__steps {
-  flex-wrap: nowrap;
-  overflow-x: auto;
-  scrollbar-width: none;
-  /* The last pixel of it: a chip carrying a copy button measured 26px and one
-     without measured 25, so a row still moved by one as its steps gained their
-     receipts. The strip is the taller of the two either way. */
-  min-height: 26px;
-  align-items: center;
+.achip__name {
+  overflow: visible;
+  text-overflow: clip;
 }
-.arow__steps::-webkit-scrollbar {
-  display: none;
-}
+/* The receipt sits at the end of its line, so a column of them lines up whatever
+   the labels beside them are. */
 .achip__go {
   white-space: nowrap;
+  margin-left: auto;
 }

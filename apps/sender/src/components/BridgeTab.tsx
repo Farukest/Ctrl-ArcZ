@@ -70,8 +70,8 @@ import {
 import { loadBridges, saveBridge, type StoredBridge, type StoredBridgeStep } from '../store.js';
 import { useRecipientGate } from '../lib/useRecipientGate.js';
 import { RiskGate } from './RiskGate.js';
-import { pendingOn, reconcile, rememberDeposit } from '../lib/pendingDeposits.js';
-import { reasonOf, settleCountedDeposits, startRun, useActivity } from '../lib/activity.js';
+import { pendingOn, rememberDeposit } from '../lib/pendingDeposits.js';
+import { reasonOf, startRun, useActivity } from '../lib/activity.js';
 import { activityLabels, toActivityItem } from '../lib/activityView.js';
 
 // The wallet signs both engines, so there is no key here to gate on. A plain flag
@@ -518,15 +518,13 @@ export function BridgeTab({ session }: { session: Session }) {
         if (!live) return;
         const here = bal.byChain[gwSource] ?? 0n;
         // Clear anything Circle has caught up on before reading what is still out.
-        reconcile(gwSource, here, gwOnSource ?? here);
         setGwOnSource(here);
         setGwByChain(bal.byChain);
-        const waiting = pendingOn(gwSource);
-        setGwPending(waiting);
-        // Nothing left outstanding on this chain means Circle has counted every
-        // deposit made on it from this browser, which is what closes the last row
-        // of a deposit still on screen and settles the records behind it.
-        if (waiting === 0n && settleCountedDeposits(gwSource)) setBridges(loadBridges());
+        // What is still outstanding, for the note under the box. The crediting
+        // itself is `useSettleDeposits`, mounted once for the whole app: a deposit
+        // must finish whether or not this screen is the one being looked at, and
+        // two watchers of the same balance would credit the same rise twice.
+        setGwPending(pendingOn(gwSource));
         setGwCeiling(quote.maxFee);
       } catch {
         // Leave the last known figures rather than blanking the screen on one

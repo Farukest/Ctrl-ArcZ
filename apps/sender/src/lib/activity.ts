@@ -16,9 +16,17 @@
  * Everything lands in the same store as the bridge history because it is the same
  * question; `kind` is what tells a deposit from a transfer from a subscription.
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { BridgeEngine } from '@ctrl-arcz/demo-kit';
-import { chainExplorerTxUrl, chainLabel, type CctpChainName } from '@ctrl-arcz/sdk';
+import type { Address } from 'viem';
+import {
+  chainExplorerTxUrl,
+  chainLabel,
+  gatewayBalance,
+  type CctpChainName,
+  type GatewayChain,
+} from '@ctrl-arcz/sdk';
+import { loadPendingDeposits, pendingOn, reconcile } from './pendingDeposits.js';
 import { loadBridges, saveBridge, type StoredBridge, type StoredBridgeStep } from '../store.js';
 
 /**
@@ -243,4 +251,57 @@ export function settleCountedDeposits(chain: CctpChainName): boolean {
     changed = true;
   }
   return changed;
+}
+
+/**
+ * Finish the deposits Circle has counted, wherever the reader happens to be.
+ *
+ * This used to live in the balance poll of the screen with the deposit box on it,
+ * which meant the last step of a deposit only completed while that screen was
+ * open. Measured on a real deposit: it sat on "Counted by Circle" for five minutes
+ * with the bridge screen's other tab showing, and finished four seconds after
+ * switching back. The money had been credited the whole time; the row was waiting
+ * on a poll that was not running.
+ *
+ * So it runs once, for the whole app, and only when there is something to settle:
+ * no pending deposit, no polling. Being the only settler also matters -- two of
+ * them watching the same balance would each credit the same rise, and the pending
+ * note would go to zero twice as fast as the money arrived.
+ */
+const SETTLE_POLL_MS = 12_000;
+
+export function useSettleDeposits(address: Address | undefined): void {
+  const lastSeen = useRef(new Map<string, bigint>());
+  useEffect(() => {
+    if (!address) return;
+    let live = true;
+    lastSeen.current.clear();
+    const tick = async () => {
+      const waiting = loadPendingDeposits();
+      if (waiting.length === 0) return;
+      let byChain: Partial<Record<GatewayChain, bigint>>;
+      try {
+        ({ byChain } = await gatewayBalance({ depositor: address }));
+      } catch {
+        // A poll that fails leaves the row waiting, which is the honest answer.
+        return;
+      }
+      if (!live) return;
+      for (const chain of new Set(waiting.map((w) => w.chain))) {
+        const now = byChain[chain] ?? 0n;
+        const before = lastSeen.current.get(chain);
+        lastSeen.current.set(chain, now);
+        // Circle reports a total, so a credit is only visible as a rise, and a
+        // rise needs something to be measured against.
+        if (before != null) reconcile(chain, now, before);
+        if (pendingOn(chain) === 0n) settleCountedDeposits(chain);
+      }
+    };
+    void tick();
+    const timer = setInterval(() => void tick(), SETTLE_POLL_MS);
+    return () => {
+      live = false;
+      clearInterval(timer);
+    };
+  }, [address]);
 }
