@@ -24,6 +24,18 @@ import { usePendingClaims } from './lib/usePendingClaims.js';
 // utility reached from "More", not a peer of the core pay/track/subscribe loop.
 type Tab = 'pay' | 'activity' | 'subscriptions' | 'bridge';
 
+/**
+ * Which build this is, for the footer's bottom line.
+ *
+ * Both halves come from `vite.config.ts` at build time. The commit is the half
+ * that gets used: it is how anyone, including whoever deployed it, can tell at a
+ * glance whether the page in front of them is the one that was just pushed.
+ */
+function buildLabel(): string {
+  const parts = [__APP_VERSION__ ? `v${__APP_VERSION__}` : '', __APP_COMMIT__].filter(Boolean);
+  return parts.join(' · ');
+}
+
 export function App() {
   const state = useSession();
   const t = useT();
@@ -151,7 +163,7 @@ export function App() {
           because someone who has not connected a wallet yet is exactly who the
           links are written for; outside the shell so the band can run the width of
           the window instead of being one more card in the column. */}
-      <SiteFooter />
+      <SiteFooter version={buildLabel()} />
     </>
   );
 }

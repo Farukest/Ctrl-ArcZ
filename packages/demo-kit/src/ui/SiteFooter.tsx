@@ -63,17 +63,12 @@ function Card({
   );
 }
 
-export function SiteFooter() {
+export function SiteFooter({ version }: { version?: string }) {
   const t = useT();
 
   return (
     <footer className="sitefooter" data-testid="site-footer">
       <div className="sitefooter__inner">
-        <div className="sitefooter__head">
-          <span className="sitefooter__wordmark">Ctrl+ArcZ</span>
-          <span className="sitefooter__tagline">{t('footer.tagline')}</span>
-        </div>
-
         <nav className="sitefooter__grid" aria-label={t('footer.nav')}>
           <Card
             href="https://docs.ctrlarcz.xyz"
@@ -131,8 +126,23 @@ export function SiteFooter() {
           />
         </nav>
 
-        {/* The one sentence someone should not have to look for. */}
-        <p className="sitefooter__note">{t('footer.note')}</p>
+        {/*
+          The bottom line of an ordinary footer: what this is, whose it is, and
+          which build you are looking at.
+
+          The build is not decoration. "Is what I just pushed actually live" was a
+          question answered by opening a shell and comparing a bundle hash, and the
+          page had the answer all along. The year is read at render rather than
+          written down, because a footer that says 2026 forever is a footer nobody
+          maintained.
+        */}
+        <div className="sitefooter__bottom">
+          <span className="sitefooter__note">{t('footer.note')}</span>
+          <span className="sitefooter__legal">
+            {t('footer.copyright', { year: String(new Date().getFullYear()) })}
+            {version ? <span className="sitefooter__build">{version}</span> : null}
+          </span>
+        </div>
       </div>
     </footer>
   );

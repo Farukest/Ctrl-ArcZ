@@ -61,7 +61,6 @@ export const tr: Record<TranslationKey, string> = {
   'app.subtitle': 'Arc üzerinde korumalı USDC transferleri',
 
   'footer.nav': 'Proje bağlantıları',
-  'footer.tagline': 'Zincirler arası, korumalı USDC ödemeleri.',
   'footer.docs': 'Dokümantasyon',
   'footer.docsSub': "SDK'yı entegre et",
   'footer.deck': 'Sunum',
@@ -76,6 +75,7 @@ export const tr: Record<TranslationKey, string> = {
   'footer.iosSub': "iPhone'da",
   'footer.soon': 'Çok yakında',
   'footer.note': 'Testnet sürümü. Burada gerçek para hareket etmiyor.',
+  'footer.copyright': '© {year} Ctrl+ArcZ',
 
   'mode.send': 'Gönder',
   'mode.receive': 'Al',

@@ -76,7 +76,6 @@ export const en = {
   'app.subtitle': 'Protected USDC transfers on Arc',
 
   'footer.nav': 'Project links',
-  'footer.tagline': 'Protected USDC payments, across chains.',
   'footer.docs': 'Documentation',
   'footer.docsSub': 'Integrate the SDK',
   'footer.deck': 'Deck',
@@ -94,6 +93,7 @@ export const en = {
   'footer.soon': 'Coming soon',
   // Said once, at the bottom, in the one place a person looks for the catch.
   'footer.note': 'Testnet build. Nothing here moves real money.',
+  'footer.copyright': '© {year} Ctrl+ArcZ',
 
   'mode.send': 'Send',
   'mode.receive': 'Receive',

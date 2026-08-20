@@ -1,5 +1,37 @@
+import { execSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { defineConfig, loadEnv, type Plugin, type ViteDevServer } from 'vite';
 import react from '@vitejs/plugin-react';
+
+/**
+ * Which build the page in front of you is.
+ *
+ * The footer prints both, and the commit is the useful half: "is what I just
+ * pushed actually live" has been answered by hand, from a shell, more times than
+ * it should have been, and the answer belongs on the page. Read at build time,
+ * because that is the only moment either fact is knowable.
+ *
+ * Git may not be there at all -- a tarball, a container without the history --
+ * and a missing commit is not a reason to fail a build, so it degrades to the
+ * version on its own.
+ */
+const pkgVersion = (
+  JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as {
+    version?: string;
+  }
+).version;
+
+function gitCommit(): string {
+  try {
+    return execSync('git rev-parse --short HEAD', {
+      stdio: ['ignore', 'pipe', 'ignore'],
+    })
+      .toString()
+      .trim();
+  } catch {
+    return '';
+  }
+}
 
 /**
  * Dev-only CCTP bridge endpoint.
@@ -117,6 +149,10 @@ export default defineConfig(({ command, mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   assertNoLeakedSecrets(env, command);
   return {
+    define: {
+      __APP_VERSION__: JSON.stringify(pkgVersion ?? ''),
+      __APP_COMMIT__: JSON.stringify(gitCommit()),
+    },
     plugins: [react(), cosignApi(env)],
     server: {
       port: Number(process.env.PORT) || 5173,

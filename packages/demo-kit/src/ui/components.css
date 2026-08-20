@@ -77,22 +77,6 @@
   flex-direction: column;
   gap: var(--sp-5);
 }
-.sitefooter__head {
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 4px var(--sp-3);
-}
-.sitefooter__wordmark {
-  font-family: var(--font-mono);
-  font-weight: 700;
-  font-size: var(--fs-sm);
-  letter-spacing: -0.01em;
-}
-.sitefooter__tagline {
-  color: var(--text-mid);
-  font-size: var(--fs-xs);
-}
 /* Two columns, not three. The band lines up with the app's column, which is
    576px, and three cards across it leave each one too narrow for its own second
    line: every sub in the row came out truncated, including the package name,
@@ -200,10 +184,31 @@
   font-size: 11px;
   white-space: nowrap;
 }
-.sitefooter__note {
-  margin: 0;
+/* The line every footer ends on. Two halves that swap to stacked when they stop
+   fitting side by side, rather than one shrinking into the other. */
+.sitefooter__bottom {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px var(--sp-4);
+  padding-top: var(--sp-4);
+  border-top: 1px solid var(--border-subtle);
   color: var(--text-lo);
   font-size: var(--fs-xs);
+}
+.sitefooter__legal {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  margin-left: auto;
+}
+/* The build, in the same face as every other identifier on this site that exists
+   to be compared against another one. */
+.sitefooter__build {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  opacity: 0.85;
 }
 @media (max-width: 560px) {
   .sitefooter__grid {
