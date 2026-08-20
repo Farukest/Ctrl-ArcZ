@@ -44,7 +44,8 @@ export const en = {
   'chain.needs.receive': 'Claiming is not available on {chain}.',
   'chain.needs.privatePay': 'Private payments are not available on {chain}.',
   'chain.needs.subscriptions': 'Subscriptions are not available on {chain}.',
-  'ppay.gasShort': 'Sending {symbol} still costs USDC for gas, and this wallet does not have enough.',
+  'ppay.gasShort':
+    'Sending {symbol} still costs USDC for gas, and this wallet does not have enough.',
   'token.restricted.allowlist': 'Needs an allowlist',
   'token.choose': 'Choose a token',
   'token.label': 'Token',
@@ -74,10 +75,25 @@ export const en = {
 
   'app.subtitle': 'Protected USDC transfers on Arc',
 
+  'footer.nav': 'Project links',
+  'footer.tagline': 'Protected USDC payments, across chains.',
   'footer.docs': 'Documentation',
   'footer.docsSub': 'Integrate the SDK',
   'footer.deck': 'Deck',
   'footer.deckSub': 'The project in slides',
+  'footer.github': 'Source',
+  'footer.githubSub': 'Contracts, SDK and this app',
+  'footer.sdk': 'SDK',
+  'footer.sdkSub': '@ctrl-arcz/sdk on npm',
+  'footer.android': 'Android',
+  'footer.androidSub': 'On Google Play',
+  'footer.ios': 'iOS',
+  // Short enough to sit on one line beside the chip: the sub wrapping made this
+  // card taller than the one next to it, for a line nobody needed.
+  'footer.iosSub': 'On iPhone',
+  'footer.soon': 'Coming soon',
+  // Said once, at the bottom, in the one place a person looks for the catch.
+  'footer.note': 'Testnet build. Nothing here moves real money.',
 
   'mode.send': 'Send',
   'mode.receive': 'Receive',
@@ -114,8 +130,7 @@ export const en = {
   // One line. The form below already says what the numbers are; this only has to
   // say what they buy, and the old version spent three clauses restating the
   // fields the reader is looking at.
-  'sub.createSummary':
-    'The merchant can pull this much, this often, and no more. Cancel any time.',
+  'sub.createSummary': 'The merchant can pull this much, this often, and no more. Cancel any time.',
   // Names the thing being picked rather than the field it fills in. "(optional)" went
   // with it: the control is a list with an escape hatch, so what it wants is obvious,
   // and nothing stops a box being created without one.
@@ -152,8 +167,10 @@ export const en = {
   'sub.merchantList': 'Back to list',
   'sub.countTooLow': 'At least one {unit}',
   'sub.countTooHigh': 'At most {max} {unit}',
-  'sub.gwShort': 'Short {amount} USDC of Gateway balance on {chain}. Top it up above to create this subscription.',
-  'sub.fundingOnWay': 'Created. Circle is minting the budget into the box; it lands in a few minutes.',
+  'sub.gwShort':
+    'Short {amount} USDC of Gateway balance on {chain}. Top it up above to create this subscription.',
+  'sub.fundingOnWay':
+    'Created. Circle is minting the budget into the box; it lands in a few minutes.',
   'sub.step.fundGw': 'Circle minting budget',
   // Says which figure is missing and that nothing was charged. A price that
   // cannot be quoted is not a failed subscription, it is a form that cannot
@@ -326,7 +343,8 @@ export const en = {
     'The fee is larger than the transfer. Another route, or one bigger transfer, costs less.',
   'bridge.refusal.gwNoBalanceHere':
     'No Gateway balance on {chain}. You have {amount} USDC on {other}.',
-  'bridge.refusal.gwEnoughOn': 'Short {missing} USDC on {chain}. {other} has {amount} USDC, enough for this.',
+  'bridge.refusal.gwEnoughOn':
+    'Short {missing} USDC on {chain}. {other} has {amount} USDC, enough for this.',
   'bridge.refusal.gwShort': 'Short {amount} USDC on {chain}, fee included.',
   'bridge.refusal.shortWithFee': 'Short {amount} USDC on {chain}, fee included.',
   'bridge.refusal.shortWithGas': 'Short {amount} USDC on {chain}, gas included.',
@@ -340,7 +358,8 @@ export const en = {
   'bridge.gwWalletLabel': 'Wallet balance',
   'bridge.gwWalletBalance': '{amount} USDC in your wallet on {chain}.',
   'bridge.gwWalletLoading': 'Reading your wallet balance...',
-  'bridge.gwWalletOtherChain': 'Your wallet is on another network, so what it holds on {chain} cannot be read yet.',
+  'bridge.gwWalletOtherChain':
+    'Your wallet is on another network, so what it holds on {chain} cannot be read yet.',
   'bridge.gwWalletUnreadable':
     'Your wallet did not answer for what it holds on {chain}. Retrying; the deposit field still works.',
   'bridge.gwDepositCta': 'Deposit',

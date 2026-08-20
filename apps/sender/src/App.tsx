@@ -80,72 +80,78 @@ export function App() {
   ];
 
   return (
-    <main className="app-shell">
-      <TopBar actions={<NetworkMenu state={state} />} />
-      <p className="subtitle">{t('app.subtitle')}</p>
+    <>
+      <main className="app-shell">
+        <TopBar actions={<NetworkMenu state={state} />} />
+        <p className="subtitle">{t('app.subtitle')}</p>
 
-      <ConnectBar state={state} />
+        <ConnectBar state={state} />
 
-      {state.session && (
-        <>
-          <div style={{ marginTop: 'var(--sp-4)' }}>
-            <ModeSwitch mode={mode} onChange={setMode} pendingCount={pendingCount} />
-          </div>
+        {state.session && (
+          <>
+            <div style={{ marginTop: 'var(--sp-4)' }}>
+              <ModeSwitch mode={mode} onChange={setMode} pendingCount={pendingCount} />
+            </div>
 
-          {/* Keyed so switching replays the enter transition (see .mode-view). */}
-          <div className="mode-view" data-mode={mode} key={mode}>
-            {mode === 'send' ? (
-              <>
-                <div className="tabrow">
-                  <SegmentedTabs
-                    tabs={primaryTabs}
-                    value={tab === 'bridge' ? ('' as Exclude<Tab, 'bridge'>) : tab}
-                    onChange={setTab}
-                  />
-                  <button
-                    type="button"
-                    className={['tab-more', tab === 'bridge' && 'is-active'].filter(Boolean).join(' ')}
-                    aria-pressed={tab === 'bridge'}
-                    onClick={() => setTab('bridge')}
-                    data-testid="tab-bridge"
-                  >
-                    {t('nav.bridge')}
-                  </button>
-                </div>
-                {tab === 'pay' && (
-                  <PayTab
-                    session={state.session}
-                    balance={state.balanceRaw}
-                    balanceMissing={state.balanceMissing}
-                    onSent={state.refreshBalance}
-                    onSwitchChain={state.switchTo}
-                  />
-                )}
-                {tab === 'activity' && (
-                  <ActivityTab session={state.session} onChange={state.refreshBalance} />
-                )}
-                {tab === 'subscriptions' && (
-                  <SubscriptionsTab session={state.session} onSwitchChain={state.switchTo} />
-                )}
-                {tab === 'bridge' && <BridgeTab session={state.session} />}
-              </>
-            ) : (
-              <ReceiveTab
-                session={state.session}
-                pending={pending}
-                reload={reload}
-                balance={state.balance}
-                onClaimed={state.refreshBalance}
-                onSwitchChain={state.switchTo}
-              />
-            )}
-          </div>
-        </>
-      )}
+            {/* Keyed so switching replays the enter transition (see .mode-view). */}
+            <div className="mode-view" data-mode={mode} key={mode}>
+              {mode === 'send' ? (
+                <>
+                  <div className="tabrow">
+                    <SegmentedTabs
+                      tabs={primaryTabs}
+                      value={tab === 'bridge' ? ('' as Exclude<Tab, 'bridge'>) : tab}
+                      onChange={setTab}
+                    />
+                    <button
+                      type="button"
+                      className={['tab-more', tab === 'bridge' && 'is-active']
+                        .filter(Boolean)
+                        .join(' ')}
+                      aria-pressed={tab === 'bridge'}
+                      onClick={() => setTab('bridge')}
+                      data-testid="tab-bridge"
+                    >
+                      {t('nav.bridge')}
+                    </button>
+                  </div>
+                  {tab === 'pay' && (
+                    <PayTab
+                      session={state.session}
+                      balance={state.balanceRaw}
+                      balanceMissing={state.balanceMissing}
+                      onSent={state.refreshBalance}
+                      onSwitchChain={state.switchTo}
+                    />
+                  )}
+                  {tab === 'activity' && (
+                    <ActivityTab session={state.session} onChange={state.refreshBalance} />
+                  )}
+                  {tab === 'subscriptions' && (
+                    <SubscriptionsTab session={state.session} onSwitchChain={state.switchTo} />
+                  )}
+                  {tab === 'bridge' && <BridgeTab session={state.session} />}
+                </>
+              ) : (
+                <ReceiveTab
+                  session={state.session}
+                  pending={pending}
+                  reload={reload}
+                  balance={state.balance}
+                  onClaimed={state.refreshBalance}
+                  onSwitchChain={state.switchTo}
+                />
+              )}
+            </div>
+          </>
+        )}
+      </main>
 
-      {/* Outside the session guard on purpose: someone who has not connected a
-          wallet yet is exactly who the docs and the deck are written for. */}
+      {/* Outside the shell as well as outside the session guard. Outside the guard
+          because someone who has not connected a wallet yet is exactly who the
+          links are written for; outside the shell so the band can run the width of
+          the window instead of being one more card in the column. */}
       <SiteFooter />
-    </main>
+    </>
   );
 }

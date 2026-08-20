@@ -29,7 +29,8 @@ export const tr: Record<TranslationKey, string> = {
   'chain.needs.receive': 'Claim işlemi {chain} ağında kullanılamıyor.',
   'chain.needs.privatePay': 'Gizli ödeme {chain} ağında kullanılamıyor.',
   'chain.needs.subscriptions': 'Abonelikler {chain} ağında kullanılamıyor.',
-  'ppay.gasShort': '{symbol} göndermek için de gaz USDC’den gidiyor ve bu cüzdanda yeterli USDC yok.',
+  'ppay.gasShort':
+    '{symbol} göndermek için de gaz USDC’den gidiyor ve bu cüzdanda yeterli USDC yok.',
   'token.restricted.allowlist': 'Allowlist gerekiyor',
   'token.choose': 'Token seç',
   'token.label': 'Token',
@@ -59,10 +60,22 @@ export const tr: Record<TranslationKey, string> = {
 
   'app.subtitle': 'Arc üzerinde korumalı USDC transferleri',
 
+  'footer.nav': 'Proje bağlantıları',
+  'footer.tagline': 'Zincirler arası, korumalı USDC ödemeleri.',
   'footer.docs': 'Dokümantasyon',
   'footer.docsSub': "SDK'yı entegre et",
   'footer.deck': 'Sunum',
   'footer.deckSub': 'Projenin slaytları',
+  'footer.github': 'Kaynak kod',
+  'footer.githubSub': 'Kontratlar, SDK ve bu uygulama',
+  'footer.sdk': 'SDK',
+  'footer.sdkSub': "npm'de @ctrl-arcz/sdk",
+  'footer.android': 'Android',
+  'footer.androidSub': "Google Play'de",
+  'footer.ios': 'iOS',
+  'footer.iosSub': "iPhone'da",
+  'footer.soon': 'Çok yakında',
+  'footer.note': 'Testnet sürümü. Burada gerçek para hareket etmiyor.',
 
   'mode.send': 'Gönder',
   'mode.receive': 'Al',
@@ -123,14 +136,15 @@ export const tr: Record<TranslationKey, string> = {
   'sub.merchantList': 'Listeye dön',
   'sub.countTooLow': 'En az bir {unit}',
   'sub.countTooHigh': 'En fazla {max} {unit}',
-  'sub.gwShort': '{chain} üzerinde {amount} USDC Gateway bakiyesi eksik. Aboneliği kurmak için yukarıdan doldur.',
+  'sub.gwShort':
+    '{chain} üzerinde {amount} USDC Gateway bakiyesi eksik. Aboneliği kurmak için yukarıdan doldur.',
   'sub.fundingOnWay': 'Kuruldu. Circle bütçeyi kutuya mint ediyor, birkaç dakika içinde düşüyor.',
   'sub.step.fundGw': 'Circle bütçeyi mint ediyor',
   'sub.quoteUnavailable': 'Circle ücreti okunamadı, bu yüzden fiyat henüz hesaplanamıyor.',
   'sub.createButton': 'Abonelik oluştur',
   'sub.fundTitle': 'Abonelik bakiyesi',
   'sub.fundSummary':
-    "Abonelikler cüzdandan değil, Circle Gateway bakiyenden ödenir. Buradan yükleme seçtiğin zincirde tek bir işlem, ve o zincirin onay süresi kadar sürer.",
+    'Abonelikler cüzdandan değil, Circle Gateway bakiyenden ödenir. Buradan yükleme seçtiğin zincirde tek bir işlem, ve o zincirin onay süresi kadar sürer.',
   'sub.step.machine': 'Satıcı kontrol ediliyor',
   'sub.step.create': 'Kutu oluşturuluyor',
   'sub.step.listing': 'Listede göster',
@@ -287,7 +301,8 @@ export const tr: Record<TranslationKey, string> = {
     'Ücret transferden büyük. Başka bir rota, ya da tek seferde daha büyük bir transfer daha ucuza gelir.',
   'bridge.refusal.gwNoBalanceHere':
     '{chain} üzerinde Gateway bakiyen yok. {other} üzerinde {amount} USDC var.',
-  'bridge.refusal.gwEnoughOn': '{chain} üzerinde {missing} USDC eksik. {other} üzerinde {amount} USDC var, bu transferi karşılar.',
+  'bridge.refusal.gwEnoughOn':
+    '{chain} üzerinde {missing} USDC eksik. {other} üzerinde {amount} USDC var, bu transferi karşılar.',
   'bridge.refusal.gwShort': '{chain} üzerinde {amount} USDC eksik, ücret dahil.',
   'bridge.refusal.shortWithFee': '{chain} üzerinde {amount} USDC eksik, ücret dahil.',
   'bridge.refusal.shortWithGas': '{chain} üzerinde {amount} USDC eksik, gaz dahil.',
@@ -301,7 +316,8 @@ export const tr: Record<TranslationKey, string> = {
   'bridge.gwWalletLabel': 'Cüzdan bakiyesi',
   'bridge.gwWalletBalance': '{chain} üzerindeki cüzdanında {amount} USDC var.',
   'bridge.gwWalletLoading': 'Cüzdan bakiyen okunuyor...',
-  'bridge.gwWalletOtherChain': 'Cüzdanın başka bir ağda, bu yüzden {chain} üzerinde ne tuttuğu henüz okunamıyor.',
+  'bridge.gwWalletOtherChain':
+    'Cüzdanın başka bir ağda, bu yüzden {chain} üzerinde ne tuttuğu henüz okunamıyor.',
   'bridge.gwWalletUnreadable':
     '{chain} üzerinde ne tuttuğu sorulduğunda cüzdanın cevap vermedi. Tekrar deneniyor; yatırma alanı yine de çalışıyor.',
   'bridge.gwDepositCta': 'Yatır',

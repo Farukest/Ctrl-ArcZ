@@ -58,15 +58,50 @@
    for a while, not an action inside the app, and a card says that where a link in
    a line of small print does not. Kept quiet by default and lit only on hover, so
    it never competes with the payment controls above it. */
-/* Inside the app shell, so the rule above it lines up with the content rather
-   than running the full width of the window. */
+/* A band, not a block. It renders outside the app shell so it can run the full
+   width of the window on its own surface: two cards on the page background, inside
+   the same column as the cards above them, read as one more thing the app wanted
+   from you rather than as the end of the page. */
 .sitefooter {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--sp-3);
-  margin-top: var(--sp-6);
-  padding-top: var(--sp-5);
+  margin-top: var(--sp-8);
   border-top: 1px solid var(--border-subtle);
+  background: var(--bg-sunken);
+  padding: var(--sp-6) var(--sp-4) calc(var(--sp-8) + env(safe-area-inset-bottom));
+}
+/* The content still lines up with the app above it. Full width is for the surface;
+   a line of text the width of a monitor is not a favour to anyone. */
+.sitefooter__inner {
+  max-width: var(--maxw);
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+}
+.sitefooter__head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px var(--sp-3);
+}
+.sitefooter__wordmark {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: var(--fs-sm);
+  letter-spacing: -0.01em;
+}
+.sitefooter__tagline {
+  color: var(--text-mid);
+  font-size: var(--fs-xs);
+}
+/* Two columns, not three. The band lines up with the app's column, which is
+   576px, and three cards across it leave each one too narrow for its own second
+   line: every sub in the row came out truncated, including the package name,
+   which is the one string in the footer somebody might want to read character by
+   character. */
+.sitefooter__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sp-3);
 }
 .sitefooter__card {
   display: flex;
@@ -78,6 +113,7 @@
   border-radius: var(--r-md);
   color: var(--text-hi);
   text-decoration: none;
+  min-width: 0;
   transition:
     border-color var(--dur-2) var(--ease),
     background-color var(--dur-2) var(--ease);
@@ -93,10 +129,23 @@
   .sitefooter__card:hover .sitefooter__go {
     opacity: 1;
   }
+  /* The one card that is not a link does not light up under the cursor, because
+     there is nothing to press. */
+  .sitefooter__card--soon:hover {
+    border-color: var(--border-subtle);
+    background: var(--surface-1);
+  }
 }
 .sitefooter__card:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+.sitefooter__card--soon {
+  cursor: default;
+}
+.sitefooter__card--soon .sitefooter__icon,
+.sitefooter__card--soon .sitefooter__body {
+  opacity: 0.65;
 }
 .sitefooter__icon {
   display: inline-flex;
@@ -110,10 +159,13 @@
   color: var(--text-mid);
   transition: color var(--dur-2) var(--ease);
 }
+/* Takes the space the icon and the trailing mark do not, so the chip on the iOS
+   card has somewhere to sit instead of landing on top of the title. */
 .sitefooter__body {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  flex: 1 1 auto;
   min-width: 0;
 }
 .sitefooter__title {
@@ -121,10 +173,13 @@
   font-size: var(--fs-sm);
   line-height: 1.3;
 }
+/* Wraps rather than truncates. An ellipsis in a footer is a link whose own label
+   you have to guess at, and `@ctrl-arcz/...` is not a package name. */
 .sitefooter__sub {
   color: var(--text-mid);
   font-size: var(--fs-xs);
   line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 /* Present but faint: it says "this leaves the app" without drawing the eye to
    itself. Full strength arrives with hover, together with the border. */
@@ -135,8 +190,23 @@
   opacity: 0.7;
   transition: opacity var(--dur-2) var(--ease);
 }
+.sitefooter__soon {
+  flex: 0 0 auto;
+  margin-left: auto;
+  padding: 2px 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-pill);
+  color: var(--text-lo);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.sitefooter__note {
+  margin: 0;
+  color: var(--text-lo);
+  font-size: var(--fs-xs);
+}
 @media (max-width: 560px) {
-  .sitefooter {
+  .sitefooter__grid {
     grid-template-columns: 1fr;
   }
 }

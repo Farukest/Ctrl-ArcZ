@@ -34,7 +34,9 @@
   align-items: start;
 }
 @media (max-width: 560px) {
-  .sub-grid { grid-template-columns: 1fr; }
+  .sub-grid {
+    grid-template-columns: 1fr;
+  }
 }
 .sub-select {
   width: 100%;
@@ -47,59 +49,147 @@
   font: inherit;
   cursor: pointer;
 }
-.sub-select:focus { outline: none; border-color: var(--accent, #f5a524); }
+.sub-select:focus {
+  outline: none;
+  border-color: var(--accent, #f5a524);
+}
 
 /* margin-top matters: both users of this put a search control directly above it,
    and with only a bottom margin the chips sat flush against the input. */
-.sub-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; margin-bottom: 14px; }
-.sub-chip {
-  display: inline-flex; align-items: center; gap: 6px;
-  padding: 5px 11px; border-radius: 999px;
-  border: 1px solid var(--border-subtle, #262d38);
-  background: transparent; color: var(--text-mid, #9ba6b4);
-  font-size: 13px; cursor: pointer;
+.sub-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+  margin-bottom: 14px;
 }
-.sub-chip--on { border-color: var(--accent, #f5a524); color: var(--text-hi, #e9edf2); }
+.sub-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  border: 1px solid var(--border-subtle, #262d38);
+  background: transparent;
+  color: var(--text-mid, #9ba6b4);
+  font-size: 13px;
+  cursor: pointer;
+}
+.sub-chip--on {
+  border-color: var(--accent, #f5a524);
+  color: var(--text-hi, #e9edf2);
+}
 .sub-chip__n {
-  font-size: 11px; font-weight: 700; color: var(--text-mid, #9ba6b4);
-  background: var(--bg-sunken, #070809); border-radius: 999px; padding: 0 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-mid, #9ba6b4);
+  background: var(--bg-sunken, #070809);
+  border-radius: 999px;
+  padding: 0 6px;
 }
 
 .sub-row {
   border: 1px solid var(--border-subtle, #262d38);
-  border-radius: 12px; padding: 14px; margin-bottom: 10px;
+  border-radius: 12px;
+  padding: 14px;
+  margin-bottom: 10px;
 }
-.sub-row__head { display: flex; align-items: center; gap: 10px; }
-.sub-row__name { font-weight: 600; color: var(--text-hi, #e9edf2); }
-.sub-row__meta { color: var(--text-mid, #9ba6b4); font-size: 13px; margin-top: 5px; }
-.sub-row__sep { margin: 0 7px; opacity: 0.5; }
+.sub-row__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.sub-row__name {
+  font-weight: 600;
+  color: var(--text-hi, #e9edf2);
+}
+.sub-row__meta {
+  color: var(--text-mid, #9ba6b4);
+  font-size: 13px;
+  margin-top: 5px;
+}
+.sub-row__sep {
+  margin: 0 7px;
+  opacity: 0.5;
+}
 /* `display: block` is load-bearing: this lives inside a fact value now, which is
    an inline context, and an inline span ignores height. It rendered as a stray
    orange block beside the buttons instead of a bar under the number. */
 .sub-bar {
   display: block;
-  height: 5px; border-radius: 999px; background: var(--bg-sunken, #070809);
-  margin-top: 9px; overflow: hidden;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--bg-sunken, #070809);
+  margin-top: 9px;
+  overflow: hidden;
 }
-.sub-bar span { display: block; height: 100%; background: var(--accent, #f5a524); }
-.sub-row__actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.sub-bar span {
+  display: block;
+  height: 100%;
+  background: var(--accent, #f5a524);
+}
+.sub-row__actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
 
-.sub-pager { display: flex; align-items: center; justify-content: center; gap: 14px; margin-top: 8px; }
+.sub-pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  margin-top: 8px;
+}
 
 .sub-detail {
-  margin-top: 12px; padding-top: 12px;
+  margin-top: 12px;
+  padding-top: 12px;
   border-top: 1px dashed var(--border-subtle, #262d38);
 }
-.sub-dl { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 18px; margin: 0; }
-@media (max-width: 560px) { .sub-dl { grid-template-columns: 1fr; } }
-.sub-dl > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.sub-dl dt { color: var(--text-lo, #5d6675); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
-.sub-dl dd { margin: 0; color: var(--text-hi, #e9edf2); font-size: 14px; word-break: break-all; }
+.sub-dl {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 18px;
+  margin: 0;
+}
+@media (max-width: 560px) {
+  .sub-dl {
+    grid-template-columns: 1fr;
+  }
+}
+.sub-dl > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.sub-dl dt {
+  color: var(--text-lo, #5d6675);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.sub-dl dd {
+  margin: 0;
+  color: var(--text-hi, #e9edf2);
+  font-size: 14px;
+  word-break: break-all;
+}
 
 /* Primary nav: 3 destinations (Pay / Activity / Subscriptions) + a secondary
    "More" affordance holding Bridge, so the core loop stays a short, uncrowded row. */
-.tabrow { display: flex; align-items: stretch; gap: var(--sp-2); margin-bottom: var(--sp-4); }
-.tabrow .segtabs { flex: 1 1 auto; margin-bottom: 0; }
+.tabrow {
+  display: flex;
+  align-items: stretch;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-4);
+}
+.tabrow .segtabs {
+  flex: 1 1 auto;
+  margin-bottom: 0;
+}
 .tab-more {
   flex: 0 0 auto;
   display: inline-flex;
@@ -117,10 +207,17 @@
   cursor: pointer;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
-  transition: background-color var(--dur-2) var(--ease), color var(--dur-2) var(--ease),
+  transition:
+    background-color var(--dur-2) var(--ease),
+    color var(--dur-2) var(--ease),
     border-color var(--dur-2) var(--ease);
 }
-@media (hover: hover) { .tab-more:hover { color: var(--text-hi); border-color: var(--border-strong); } }
+@media (hover: hover) {
+  .tab-more:hover {
+    color: var(--text-hi);
+    border-color: var(--border-strong);
+  }
+}
 /* Matches `.segtab.is-active`: raised thumb plus accent label, so the secondary
    destination reads as selected by the same two signals as the primary ones. */
 .tab-more.is-active {
@@ -133,13 +230,18 @@
 /* Secondary sub-toggle inside a primary destination (Pay: Standard|Private,
    Activity: Active|History). Rendered smaller and sunken so it reads as a sub-choice,
    never mistaken for a second primary nav bar. */
-.paytab__seg, .activitytab__seg { margin-bottom: var(--sp-4); }
-.paytab__seg .segtabs, .activitytab__seg .segtabs {
+.paytab__seg,
+.activitytab__seg {
+  margin-bottom: var(--sp-4);
+}
+.paytab__seg .segtabs,
+.activitytab__seg .segtabs {
   display: inline-flex;
   flex-wrap: nowrap;
   margin-bottom: 0;
 }
-.paytab__seg .segtab, .activitytab__seg .segtab {
+.paytab__seg .segtab,
+.activitytab__seg .segtab {
   flex: 0 0 auto;
   min-height: 32px;
   padding: 0 var(--sp-4);
@@ -148,7 +250,9 @@
 /* The two claim buttons share the row equally. Sized by their own labels, the
    left one shrank the moment it went into its loading state and pushed the
    gasless button sideways -- out from under a cursor already on its way there. */
-.claim-actions .btn { flex: 1 1 0; }
+.claim-actions .btn {
+  flex: 1 1 0;
+}
 
 /* The escape hatch under a refusal ----------------------------------------- */
 
@@ -256,4 +360,23 @@
 .sub-summary {
   margin: 0;
   font-size: var(--fs-xs, 13px);
+}
+
+/*
+ * The footer band reaches the bottom of the window even when the page is short.
+ *
+ * The body is `min-height: 100dvh` with the dot grid painted on it, so a page
+ * with little content left the band floating with the grid showing underneath it:
+ * a footer with a page background below it reads as a stray card, which is the
+ * one thing moving it out of the column was meant to stop. Column layout here
+ * rather than on `body`, which the other apps in this workspace share.
+ */
+#root {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+}
+#root > .app-shell {
+  flex: 1 0 auto;
+  width: 100%;
 }
