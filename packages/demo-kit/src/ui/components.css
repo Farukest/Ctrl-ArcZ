@@ -3959,3 +3959,29 @@ a.hstep__go:hover {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* A row is the height it will end at, from the moment it appears.
+   Two things used to change it as the run progressed. A chip grew when its step
+   gained a transaction, because the copy button is taller than the label beside
+   it; and the extra width pushed the last chip onto a second line, so the row
+   gained a whole line halfway through. Every chip is one height now, and the
+   chips stay on one line and scroll if they run out of room. */
+.achip {
+  min-height: 24px;
+}
+.arow__steps {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+  /* The last pixel of it: a chip carrying a copy button measured 26px and one
+     without measured 25, so a row still moved by one as its steps gained their
+     receipts. The strip is the taller of the two either way. */
+  min-height: 26px;
+  align-items: center;
+}
+.arow__steps::-webkit-scrollbar {
+  display: none;
+}
+.achip__go {
+  white-space: nowrap;
+}

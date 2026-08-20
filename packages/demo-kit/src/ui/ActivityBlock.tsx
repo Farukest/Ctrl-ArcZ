@@ -59,9 +59,11 @@ export interface ActivityLabels {
   empty: string;
   all: string;
   collapse: string;
-  /** Both carry `{n}`. */
+  /** All three carry `{n}`. */
   running: string;
   failed: string;
+  /** Just made, still fine: "1 new" rather than an alarm. */
+  fresh: string;
   jump: string;
 }
 
@@ -141,6 +143,7 @@ export function ActivityBlock({
   items,
   labels,
   limit = 5,
+  spotlight,
   children,
   ...rest
 }: {
@@ -148,6 +151,16 @@ export function ActivityBlock({
   items: readonly ActivityItem[];
   labels: ActivityLabels;
   limit?: number;
+  /**
+   * A row this page has just created, to be pointed at once.
+   *
+   * The screen that starts something knows which row it is; the block does not,
+   * and waiting for it to become "attention-worthy" would mean saying nothing at
+   * the one moment somebody wants to be told where their transfer went. Pointed at
+   * once and then let go: it lights if the block is in view, raises the pill if it
+   * is not, and either way it is finished with as soon as it has been followed.
+   */
+  spotlight?: string | null;
   /** The full list, revealed behind `All`. Omitted where there is nothing more. */
   children?: ReactNode;
 } & { [k: `data-${string}`]: string }) {
@@ -166,12 +179,24 @@ export function ActivityBlock({
 
   const shown = useMemo(() => items.slice(0, limit), [items, limit]);
 
+  /*
+   * What the pill is for: rows that need a look, plus the one this page just
+   * started. Both are keyed the same way, so following the pill retires the run
+   * that raised it without retiring the next thing that goes wrong with it.
+   */
   const calling = useMemo(
-    () => items.filter((i) => i.attention && !seen.includes(`${i.id}:${i.attention}`)),
-    [items, seen],
+    () =>
+      items.filter((i) => {
+        const why = i.id === spotlight ? (i.attention ?? 'new') : i.attention;
+        return why && !seen.includes(`${i.id}:${why}`);
+      }),
+    [items, seen, spotlight],
   );
   const running = calling.filter((i) => i.attention === 'running').length;
   const failed = calling.filter((i) => i.attention === 'failed').length;
+  // A row that is neither: the one this page just made, which is finished or
+  // waiting and needs no alarm, only pointing at.
+  const fresh = calling.length - running - failed;
 
   /*
    * Whether the block is already where the reader is looking. A pill pointing at
@@ -221,9 +246,29 @@ export function ActivityBlock({
     return () => clearTimeout(timer);
   }, [lit]);
 
+  /*
+   * A new row that is already in view needs no pill; it just lights.
+   *
+   * Marked as seen at the same moment, so it does not raise the pill a second
+   * later if the reader happens to scroll away from it.
+   */
+  useEffect(() => {
+    if (!spotlight || !onScreen) return;
+    // Once. The effect re-runs on every write to the run -- which is every step it
+    // reports -- and without this the row lit again on each of them, so a transfer
+    // spent its whole life flashing rather than being pointed at once.
+    if (seen.includes(`${spotlight}:new`)) return;
+    if (!items.some((i) => i.id === spotlight)) return;
+    setSeen((prev) => [...prev, `${spotlight}:new`]);
+    setLit([spotlight]);
+  }, [spotlight, onScreen, items, seen]);
+
   const jump = useCallback(() => {
     const ids = calling.map((i) => i.id);
-    setSeen((prev) => [...prev, ...calling.map((i) => `${i.id}:${i.attention}`)]);
+    setSeen((prev) => [
+      ...prev,
+      ...calling.map((i) => `${i.id}:${i.id === spotlight ? (i.attention ?? 'new') : i.attention}`),
+    ]);
     setLit(ids);
     // The row itself rather than the block, since the block's title may be the only
     // part that fits on a short screen and the row is what someone was sent to see.
@@ -283,13 +328,15 @@ export function ActivityBlock({
             <span className="ajump__mark" aria-hidden>
               !
             </span>
-          ) : (
+          ) : running > 0 ? (
             <span className="spinner" style={{ width: 13, height: 13 }} aria-hidden />
-          )}
+          ) : null}
           <span>
             {failed > 0
               ? labels.failed.replace('{n}', String(failed))
-              : labels.running.replace('{n}', String(running))}
+              : running > 0
+                ? labels.running.replace('{n}', String(running))
+                : labels.fresh.replace('{n}', String(fresh))}
           </span>
           <span className="ajump__arrow" aria-hidden>
             &darr;

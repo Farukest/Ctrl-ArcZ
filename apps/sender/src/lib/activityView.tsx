@@ -117,6 +117,7 @@ export function activityLabels(t: T, title: string) {
     collapse: t('activity.collapse'),
     running: t('activity.running'),
     failed: t('activity.failed'),
+    fresh: t('activity.fresh'),
     jump: t('activity.jump'),
   };
 }

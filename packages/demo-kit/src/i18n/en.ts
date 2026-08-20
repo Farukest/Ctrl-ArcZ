@@ -427,6 +427,7 @@ export const en = {
   'activity.collapse': 'Show less',
   'activity.running': '{n} in progress',
   'activity.failed': '{n} needs a look',
+  'activity.fresh': 'Just now',
   'activity.jump': 'Go to it',
   'activity.steps': 'Steps',
   'activity.today': 'Today',

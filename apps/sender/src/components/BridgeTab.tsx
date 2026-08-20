@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { Session } from '@ctrl-arcz/demo-kit';
 import { isAddress, parseUnits, type Address } from 'viem';
 import {
@@ -36,15 +36,11 @@ import {
 import { knownBoxes } from '../lib/useSubscriptions.js';
 import {
   bridgeChainLabel,
-  deriveStepStatuses,
   ownedBy,
   stepIndexFor,
   stepsForEngine,
-  stepsForRun,
   type BridgeEngine,
   type BridgeOutcome,
-  type LiveRun,
-  type ReportedStep,
 } from '@ctrl-arcz/demo-kit';
 import {
   AmountField,
@@ -65,12 +61,10 @@ import {
   Copyable,
   relativeTime,
   short,
-  Stepper,
   TxLink,
   useSubmitGuard,
   useT,
   useToast,
-  type Step,
   type RowStep,
 } from '@ctrl-arcz/demo-kit/ui';
 import { loadBridges, saveBridge, type StoredBridge, type StoredBridgeStep } from '../store.js';
@@ -311,7 +305,6 @@ export function BridgeTab({ session }: { session: Session }) {
    */
   const [result, setResult] = useState<(BridgeOutcome & { engine: BridgeEngine }) | null>(null);
   /** The transfer this wallet is signing right now. */
-  const [selfBridge, setSelfBridge] = useState<LiveRun | null>(null);
   /**
    * Which wallet-signed run owns the slot above.
    *
@@ -320,9 +313,16 @@ export function BridgeTab({ session }: { session: Session }) {
    * and wipe the other one's live progress, which reads as a transfer that stopped
    * happening. A finisher now only clears the slot if the slot is still its own.
    */
-  const runSeq = useRef(0);
-  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
   const [bridges, setBridges] = useState<StoredBridge[]>(() => loadBridges());
+  /**
+   * The row this screen has just created, for the block to point at once.
+   *
+   * The form no longer draws progress, so without this a transfer would start and
+   * the screen would say nothing until somebody thought to scroll. Set wherever a
+   * record is first written, cleared by the block as soon as it has been seen or
+   * followed.
+   */
+  const [spotlight, setSpotlight] = useState<string | null>(null);
   const [histEngine, setHistEngine] = useState<'all' | BridgeEngine>('all');
   /*
    * The same records, read the live way, for the block at the bottom.
@@ -526,16 +526,7 @@ export function BridgeTab({ session }: { session: Session }) {
         // Nothing left outstanding on this chain means Circle has counted every
         // deposit made on it from this browser, which is what closes the last row
         // of a deposit still on screen and settles the records behind it.
-        if (waiting === 0n) {
-          setSelfBridge((run) =>
-            run?.kind === 'deposit' &&
-            run.state === 'running' &&
-            run.steps.some((s) => s.name === 'counted')
-              ? { ...run, state: 'success' }
-              : run,
-          );
-          if (settleCountedDeposits(gwSource)) setBridges(loadBridges());
-        }
+        if (waiting === 0n && settleCountedDeposits(gwSource)) setBridges(loadBridges());
         setGwCeiling(quote.maxFee);
       } catch {
         // Leave the last known figures rather than blanking the screen on one
@@ -656,20 +647,7 @@ export function BridgeTab({ session }: { session: Session }) {
    * three rows that correctly said nothing had started. Switching tabs is not a
    * transfer, so it should not be able to report one.
    */
-  const liveRun = ownedBy(engine, selfBridge);
   const shownResult = ownedBy(engine, result);
-
-  const steps: Step[] = useMemo(() => {
-    // Which step is actually running, from the runner, rather than lighting all of
-    // them up for the duration. The runner reports each one as it happens; before
-    // this the indicator could only say "something is in progress" for half a minute.
-    // A deposit gets its own single row, because that is all a deposit is.
-    const rows = stepsForRun(engine, liveRun);
-    return deriveStepStatuses(rows, liveRun).map((status, i) => ({
-      label: stepLabel(rows[i] as string),
-      status,
-    }));
-  }, [liveRun, engine, t]);
 
   /**
    * Which of these records paid for a subscription box.
@@ -869,68 +847,6 @@ export function BridgeTab({ session }: { session: Session }) {
     };
   }
 
-  /**
-   * Claim the stepper slot for a new run, and hand back the only three ways it may
-   * be written to.
-   *
-   * Every writer checks the run id first, so a deposit that finishes while a spend
-   * is on screen leaves the spend alone instead of blanking it, and a step arriving
-   * late from an abandoned run cannot repopulate a slot someone else now owns. The
-   * engine tag goes on here, once, rather than at each of the seven `setSelfBridge`
-   * calls that used to exist.
-   */
-  function beginRun(runEngine: BridgeEngine, kind: 'transfer' | 'deposit') {
-    const id = ++runSeq.current;
-    const mine = (prev: LiveRun | null) => prev?.id === id;
-    setSelfBridge({ engine: runEngine, kind, id, state: 'running', steps: [] });
-    return {
-      /** One step happened. Reported steps stay in the order they first arrived. */
-      step(name: string, txHash?: string) {
-        setSelfBridge((prev) =>
-          prev && mine(prev)
-            ? {
-                ...prev,
-                steps: [
-                  ...prev.steps.filter((x) => x.name !== name),
-                  { name, ...(txHash ? { txHash } : {}) },
-                ],
-              }
-            : prev,
-        );
-      },
-      /** A step this run will not be performing, said out loud from the start. */
-      skip(name: string) {
-        setSelfBridge((prev) =>
-          prev && mine(prev)
-            ? {
-                ...prev,
-                steps: [...prev.steps.filter((x) => x.name !== name), { name, state: 'noop' }],
-              }
-            : prev,
-        );
-      },
-      /** The run is over, or as over as it gets: `pending` is still in flight. */
-      finish(state: string, steps: ReportedStep[]) {
-        setSelfBridge((prev) =>
-          mine(prev) ? { engine: runEngine, kind, id, state, steps } : prev,
-        );
-      },
-      /** Let the slot go, but only if it is still ours. */
-      clear() {
-        setSelfBridge((prev) => (mine(prev) ? null : prev));
-      },
-    };
-  }
-
-  /**
-   * Fund the unified balance.
-   *
-   * The progress is not on this screen any more. It is a record from the moment the
-   * button is pressed, drawn by the block at the bottom like everything else, which
-   * is what lets a second deposit start before the first one has been counted --
-   * the stepper slot above holds one run and a deposit spends nineteen minutes in
-   * it on Base, blocking the screen for a wait that needs no attention at all.
-   */
   async function deposit() {
     if (!gwSource || depositValue <= 0n) return;
     setDepositing(true);
@@ -943,6 +859,7 @@ export function BridgeTab({ session }: { session: Session }) {
       amount: depositAmount,
     });
     record.begin('approve');
+    setSpotlight(record.id);
     let reached = 'approve';
     try {
       await depositToGateway(bridgeClients(CCTP_CHAINS[on].chainId, session.address), {
@@ -977,9 +894,7 @@ export function BridgeTab({ session }: { session: Session }) {
       setGwPending(pendingOn(on));
       setDepositAmount('');
       toast.push(
-        t('bridge.deposited')
-          .replace('{amount}', depositAmount)
-          .replace('{wait}', waitLabel(on)),
+        t('bridge.deposited').replace('{amount}', depositAmount).replace('{wait}', waitLabel(on)),
         'success',
       );
     } catch (e) {
@@ -1019,7 +934,6 @@ export function BridgeTab({ session }: { session: Session }) {
         dispatch.release();
         return;
       }
-      const run = beginRun('gateway', 'transfer');
       /**
        * A spend does not fund anything.
        *
@@ -1031,8 +945,9 @@ export function BridgeTab({ session }: { session: Session }) {
        * not made. The row stays, because it is how the model works; what changes is
        * that it says so. A run that does report a deposit overwrites this.
        */
-      run.skip('deposit');
-      let funded = false;
+      // What the runner has reported, in order, so the row written while Circle
+      // still has the intent carries the steps that actually happened.
+      const reported: StoredBridgeStep[] = [];
       try {
         // No wallet client bound to a chain: a spend is a signature, so it works
         // wherever the wallet happens to be.
@@ -1046,8 +961,7 @@ export function BridgeTab({ session }: { session: Session }) {
             onStep: (step, txHash) => {
               const name = GW_STEP_TO_UI[step];
               if (!name) return;
-              if (name === 'deposit') funded = true;
-              run.step(name, txHash);
+              reported.push(stepRow(name, txHash, from));
             },
             // Write the receipt down the moment Circle accepts the intent, not when
             // the mint lands. The wait in between is where a tab gets closed, and
@@ -1064,9 +978,13 @@ export function BridgeTab({ session }: { session: Session }) {
                 amount,
                 ...(isAddress(recipient.trim()) ? { recipient: recipient.trim() } : {}),
                 state: 'pending',
-                // The record lists what this transfer did. A deposit it did not make
-                // is not one of those things, so it is not written down as one.
-                steps: [{ name: 'sign' }, { name: 'attestation' }],
+                /*
+                 * What this transfer has done so far. A spend from the balance
+                 * makes no deposit, so no deposit is written down; the rows that
+                 * were reported are, with their hashes, and the ones still to come
+                 * are drawn as such by the shared step rules.
+                 */
+                steps: reported.length > 0 ? [...reported] : [{ name: 'sign' }],
                 createdAt: Date.now(),
                 /**
                  * What the balance was before this spend, written now because now
@@ -1082,25 +1000,19 @@ export function BridgeTab({ session }: { session: Session }) {
                  */
                 ...(gwOnSource != null ? { returnBaseline: gwOnSource.toString() } : {}),
               });
+              setSpotlight(transferId);
               setBridges(loadBridges());
             },
           },
         );
         // What was done, for the record.
         const steps = [
-          { name: 'sign' },
-          { name: 'attestation' },
+          ...reported.filter((x) => x.name !== 'mint'),
           ...(res.mintTxHash ? [stepRow('mint', res.mintTxHash, to)] : []),
         ];
         // `pending`, not `running`: Circle has the intent and the mint has not
-        // landed. Both keep the indicator moving, and `pending` is the word the
-        // stored row already uses for the same moment. The indicator also keeps the
-        // funding row, marked as the no-op it was, because it has four rows and
-        // dropping one at the end would renumber the other three.
-        run.finish(res.mintTxHash ? 'success' : 'pending', [
-          { name: 'deposit', ...(funded ? {} : { state: 'noop' }) },
-          ...steps,
-        ]);
+        // landed. `pending` is the word the stored row already uses for that
+        // moment, and the block reads it as still moving.
         saveBridge({
           // The transferId is the receipt here, the way the burn hash is for CCTP.
           id: res.transferId,
@@ -1122,7 +1034,6 @@ export function BridgeTab({ session }: { session: Session }) {
           res.mintTxHash ? 'success' : 'info',
         );
       } catch (e) {
-        run.clear();
         toast.push(e instanceof Error ? e.message : String(e), 'error');
       } finally {
         dispatch.release();
@@ -1130,7 +1041,9 @@ export function BridgeTab({ session }: { session: Session }) {
       return;
     }
 
-    const run = beginRun('cctp', 'transfer');
+    // What the runner has told us so far, in the order it arrived, so a record
+    // written mid-transfer carries the same steps the screen is showing.
+    const reported: StoredBridgeStep[] = [];
     try {
       // Clients bound to the source chain, not to Arc. The wallet is already there
       // -- the button would have offered to switch otherwise -- but the app's own
@@ -1144,8 +1057,8 @@ export function BridgeTab({ session }: { session: Session }) {
           ...(isAddress(recipient.trim()) ? { recipient: recipient.trim() as Address } : {}),
           onStep: (step, txHash) => {
             const name = SDK_STEP_TO_UI[step];
-            if (!name) return; // quoting is instant; it has no row in the stepper
-            run.step(name, txHash);
+            if (!name) return; // quoting is instant; it has no row of its own
+            reported.push(stepRow(name, txHash, from));
             // Write the burn down the moment it confirms, not when the whole
             // transfer resolves. The wait for Circle is the long part and a reload
             // during it would otherwise lose the one hash the money can be traced
@@ -1162,9 +1075,28 @@ export function BridgeTab({ session }: { session: Session }) {
                 amount,
                 ...(isAddress(recipient.trim()) ? { recipient: recipient.trim() } : {}),
                 state: 'pending',
-                steps: [stepRow('burn', txHash, from)],
+                /*
+                 * Everything reported so far, not the burn alone.
+                 *
+                 * This row used to carry only the burn, so for the whole minute
+                 * Circle takes it showed the approval greyed out beside it -- the
+                 * same grey as a step that has not happened. The approval had
+                 * happened, or had not been needed, and either way the row was
+                 * saying otherwise about the one part of a transfer a person is
+                 * asked to sign.
+                 */
+                steps: [
+                  ...(reported.some((x) => x.name === 'approve')
+                    ? []
+                    : // Nothing reported it, which for this SDK means the allowance
+                      // already covered the amount: a step that did not need to
+                      // happen, drawn as a dash rather than as one still to come.
+                      [{ name: 'approve', state: 'noop' as const }]),
+                  ...reported,
+                ],
                 createdAt: Date.now(),
               });
+              setSpotlight(txHash);
               setBridges(loadBridges());
             }
           },
@@ -1183,7 +1115,6 @@ export function BridgeTab({ session }: { session: Session }) {
             // after the burn had confirmed.
             [stepRow('fetchAttestation')]),
       ];
-      run.finish(res.forwardTxHash ? 'success' : 'pending', steps);
       saveBridge({
         id: res.burnTxHash,
         engine: 'cctp',
@@ -1205,7 +1136,6 @@ export function BridgeTab({ session }: { session: Session }) {
         res.forwardTxHash ? 'success' : 'info',
       );
     } catch (e) {
-      setSelfBridge(null);
       toast.push(e instanceof Error ? e.message : String(e), 'error');
     } finally {
       dispatch.release();
@@ -1495,10 +1425,19 @@ export function BridgeTab({ session }: { session: Session }) {
             could refuse on an advisory the user was never shown. */}
         <RiskGate gate={risk} recoverable={false} data-testid="bridge-risk" />
 
-        {/* Only for a transfer this engine performed. The condition used to be three
-            untagged pieces of state, so arriving on a tab that had never run
-            anything still drew a stepper, filled in from the other tab's transfer. */}
-        {(shownResult || liveRun) && <Stepper steps={steps} highlightIndex={hoverIdx} />}
+        {/*
+          No stepper here any more.
+
+          It drew four rows inside the form, above the button that made them, and
+          it held one run: a second transfer had nowhere to go while the first was
+          still waiting on Circle, which on this screen is most of a minute. The
+          same slot problem the deposit had, in the place where somebody is most
+          likely to want to start another one.
+
+          Progress is a row in the block at the bottom now, where two of them are
+          two rows. What replaces the stepper is being taken there: the run lights
+          up when it appears, or raises the pill when the block is out of view.
+        */}
 
         <div style={{ marginTop: 16 }}>
           {/* Being on the wrong network is a step, not a failure. Offering the
@@ -1566,8 +1505,6 @@ export function BridgeTab({ session }: { session: Session }) {
                   label={s.name}
                   copyValue={s.txHash ?? ''}
                   title={reportedLabel(s.name)}
-                  onMouseEnter={() => setHoverIdx(stepIndexFor(s.name, activeSteps))}
-                  onMouseLeave={() => setHoverIdx(null)}
                 />
               ))}
           </div>
@@ -1588,6 +1525,7 @@ export function BridgeTab({ session }: { session: Session }) {
         <ActivityBlock
           items={activityItems}
           labels={activityLabels(t as never, t('activity.title'))}
+          spotlight={spotlight}
           data-testid="bridge-activity"
         >
           {/* Two halves of one list. Written as a second component they would be two

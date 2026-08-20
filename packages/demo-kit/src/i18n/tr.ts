@@ -381,6 +381,7 @@ export const tr: Record<TranslationKey, string> = {
   'activity.collapse': 'Daha az',
   'activity.running': '{n} işlem sürüyor',
   'activity.failed': '{n} işleme bakman lazım',
+  'activity.fresh': 'Az önce',
   'activity.jump': 'İşleme git',
   'activity.steps': 'Adımlar',
   'activity.today': 'Bugün',
