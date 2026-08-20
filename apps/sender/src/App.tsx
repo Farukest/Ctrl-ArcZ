@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSession } from '@ctrl-arcz/demo-kit';
 import {
   ConnectBar,
+  IconHistory,
   ModeSwitch,
   NetworkMenu,
   NO_ARRIVALS,
@@ -83,11 +84,21 @@ export function App() {
     arrival.current = NO_ARRIVALS;
   }, [state.session?.address]);
 
-  // Three primary destinations; SegmentedTabs shows none highlighted while the
-  // secondary Bridge view is open, which is the intended "you left the main tabs" cue.
-  const primaryTabs: { id: Exclude<Tab, 'bridge'>; label: string }[] = [
+  /*
+   * The three things you come here to do, and then the record of having done them.
+   *
+   * Bridge used to be the odd one out, parked on the right as a secondary
+   * destination while Activity sat in the row. That had it backwards: moving money
+   * across chains is a thing you do, in the same breath as paying and subscribing,
+   * and Activity is where you go afterwards to check. So Bridge joins the row and
+   * Activity takes the place beside it, with an icon, because a history is a
+   * different kind of destination from an action and should not look like a fourth
+   * one. SegmentedTabs shows none highlighted while Activity is open, which is the
+   * intended "you left the main tabs" cue.
+   */
+  const primaryTabs: { id: Exclude<Tab, 'activity'>; label: string }[] = [
     { id: 'pay', label: t('nav.pay') },
-    { id: 'activity', label: t('nav.activity') },
+    { id: 'bridge', label: t('nav.bridge') },
     { id: 'subscriptions', label: t('nav.subscriptions') },
   ];
 
@@ -112,19 +123,20 @@ export function App() {
                   <div className="tabrow">
                     <SegmentedTabs
                       tabs={primaryTabs}
-                      value={tab === 'bridge' ? ('' as Exclude<Tab, 'bridge'>) : tab}
+                      value={tab === 'activity' ? ('' as Exclude<Tab, 'activity'>) : tab}
                       onChange={setTab}
                     />
                     <button
                       type="button"
-                      className={['tab-more', tab === 'bridge' && 'is-active']
+                      className={['tab-more', tab === 'activity' && 'is-active']
                         .filter(Boolean)
                         .join(' ')}
-                      aria-pressed={tab === 'bridge'}
-                      onClick={() => setTab('bridge')}
-                      data-testid="tab-bridge"
+                      aria-pressed={tab === 'activity'}
+                      onClick={() => setTab('activity')}
+                      data-testid="tab-activity"
                     >
-                      {t('nav.bridge')}
+                      <IconHistory width={16} height={16} aria-hidden />
+                      {t('nav.activity')}
                     </button>
                   </div>
                   {tab === 'pay' && (

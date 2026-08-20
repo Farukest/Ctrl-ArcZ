@@ -190,11 +190,15 @@
   flex: 1 1 auto;
   margin-bottom: 0;
 }
+/* The record, beside the things that make it. Icon and word together: the icon
+   is what makes it read as a different kind of destination from the three actions
+   in the row, and the word is what stops the icon being a guess. */
 .tab-more {
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: var(--sp-2);
   min-height: 38px;
   padding: 0 var(--sp-4);
   background: var(--surface-1);

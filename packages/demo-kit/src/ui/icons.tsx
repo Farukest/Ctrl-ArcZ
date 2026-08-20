@@ -202,6 +202,15 @@ export const IconApple = (p: SVGProps<SVGSVGElement>) => (
   </svg>
 );
 
+/** A clock wound backwards: what has already happened, not what is scheduled. */
+export const IconHistory = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}>
+    <path d="M3 12a9 9 0 1 0 2.6-6.4" />
+    <path d="M3 3.5V8h4.5" />
+    <path d="M12 7.5V12l3.2 1.9" />
+  </svg>
+);
+
 export const IconSlides = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)}>
     <rect x="3" y="4" width="18" height="12" rx="2" />
