@@ -4,12 +4,7 @@ import './components.css';
 export * from './components.js';
 export * from './icons.js';
 export { RiskCard } from './RiskCard.js';
-export {
-  RiskPanel,
-  type CheckState,
-  type PanelCheck,
-  type PanelLevel,
-} from './RiskPanel.js';
+export { RiskPanel, type CheckState, type PanelCheck, type PanelLevel } from './RiskPanel.js';
 export { ChainLogo } from './ChainLogo.js';
 export { MerchantLogo, MERCHANTS, merchantByName, type Merchant } from './MerchantLogo.js';
 export { AmountField, type AmountFieldProps } from './AmountField.js';
@@ -55,6 +50,7 @@ export {
   type HistoryListProps,
 } from './HistoryList.js';
 export { HistoryRow, Copyable, Address, type RowStep, type RowTone } from './HistoryRow.js';
+export { ActivityScreen } from './ActivityScreen.js';
 export {
   ActivityBlock,
   type ActivityItem,
