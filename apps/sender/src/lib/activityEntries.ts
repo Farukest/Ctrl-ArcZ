@@ -248,7 +248,10 @@ export function bridgeEntries(bridges: readonly StoredBridge[], t: T): ActivityE
         icon: sameChain
           ? { kind: 'chain' as const, id: b.from }
           : { kind: 'route' as const, from: b.from, to: b.to },
-        title: sameChain ? b.toLabel : `${b.fromLabel} → ${b.toLabel}`,
+        // Where it ended up. The mark to the left already shows both chains, and
+        // spelling the route out again cost the row a second line on a phone to
+        // say what the two logos beside it had just said.
+        title: b.toLabel,
         ...(b.label ? { subtitle: b.label } : {}),
         amount: `${b.amount} USDC`,
         chips: [chip],
