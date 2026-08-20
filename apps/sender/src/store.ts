@@ -28,24 +28,97 @@ const key = (sender: Address) => `ctrl-arcz:sender:${sender.toLowerCase()}`;
  */
 const sessionSecrets = new Map<string, string>();
 
-export function loadTransfers(sender: Address): StoredTransfer[] {
+/**
+ * One record per key, rather than one array under one key.
+ *
+ * An array is read, changed and written back, and between the read and the write
+ * another tab can do the same thing. Measured on two real tabs: both read an empty
+ * list, both added their own transfer, and the second write erased the first --
+ * not a stale row, a receipt for money that had moved, gone. There is no lock
+ * across tabs to take, and re-reading just before writing only narrows the window.
+ *
+ * Two tabs writing two records now touch two different keys and cannot lose each
+ * other's work. The cost is a scan to read them back, over a list capped at fifty.
+ */
+const CAP = 50;
+
+function scan<T>(prefix: string): { key: string; value: T }[] {
+  const out: { key: string; value: T }[] = [];
   try {
-    const raw = localStorage.getItem(key(sender));
-    const stored = raw ? (JSON.parse(raw) as StoredTransfer[]) : [];
-    // Re-attach any secret we still hold in memory for this session.
-    return stored.map((t) => ({ ...t, secret: sessionSecrets.get(t.transferId) ?? '' }));
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (!k || !k.startsWith(prefix)) continue;
+      const raw = localStorage.getItem(k);
+      if (!raw) continue;
+      try {
+        out.push({ key: k, value: JSON.parse(raw) as T });
+      } catch {
+        // One unreadable record is not a reason to lose the rest of them.
+      }
+    }
   } catch {
-    return [];
+    // Private mode or storage disabled: an empty history, not a crash.
   }
+  return out;
+}
+
+/** Drop the oldest beyond the cap, so a long-lived browser does not grow forever. */
+function prune(sortedNewestFirst: { key: string }[]): void {
+  for (const extra of sortedNewestFirst.slice(CAP)) {
+    try {
+      localStorage.removeItem(extra.key);
+    } catch {
+      /* see above */
+    }
+  }
+}
+
+const transferPrefix = (sender: Address) => `${key(sender)}:`;
+
+/**
+ * Records written before the split, moved to their own keys once.
+ *
+ * Deleted only after every row has been written out, so an interruption halfway
+ * leaves the old array in place and the next load tries again.
+ */
+function migrateArray<T>(arrayKey: string, prefix: string, idOf: (row: T) => string): void {
+  let raw: string | null = null;
+  try {
+    raw = localStorage.getItem(arrayKey);
+  } catch {
+    return;
+  }
+  if (!raw) return;
+  try {
+    const rows = JSON.parse(raw) as T[];
+    for (const row of rows) localStorage.setItem(prefix + idOf(row), JSON.stringify(row));
+    localStorage.removeItem(arrayKey);
+  } catch {
+    /* a corrupt array is left alone rather than half-migrated */
+  }
+}
+
+export function loadTransfers(sender: Address): StoredTransfer[] {
+  migrateArray<StoredTransfer>(key(sender), transferPrefix(sender), (t) => t.transferId);
+  const rows = scan<StoredTransfer>(transferPrefix(sender)).sort(
+    (a, b) => (b.value.createdAt ?? 0) - (a.value.createdAt ?? 0),
+  );
+  prune(rows);
+  // Re-attach any secret we still hold in memory for this session.
+  return rows
+    .slice(0, CAP)
+    .map(({ value }) => ({ ...value, secret: sessionSecrets.get(value.transferId) ?? '' }));
 }
 
 export function saveTransfer(sender: Address, transfer: StoredTransfer): void {
   if (transfer.secret) sessionSecrets.set(transfer.transferId, transfer.secret);
-  const all = loadTransfers(sender);
-  all.unshift(transfer);
-  // Persist everything EXCEPT the secret.
-  const persistable = all.slice(0, 50).map(({ secret: _secret, ...rest }) => rest);
-  localStorage.setItem(key(sender), JSON.stringify(persistable));
+  // Everything EXCEPT the secret.
+  const { secret: _secret, ...persistable } = transfer;
+  try {
+    localStorage.setItem(transferPrefix(sender) + transfer.transferId, JSON.stringify(persistable));
+  } catch {
+    /* private mode or a full quota; the transfer itself is unaffected */
+  }
 }
 
 /**
@@ -136,14 +209,15 @@ export interface StoredBridge {
 }
 
 const BRIDGES_KEY = 'ctrl-arcz:bridges';
+const BRIDGE_PREFIX = 'ctrl-arcz:bridge:';
 
 export function loadBridges(): StoredBridge[] {
-  try {
-    const raw = localStorage.getItem(BRIDGES_KEY);
-    return raw ? (JSON.parse(raw) as StoredBridge[]) : [];
-  } catch {
-    return [];
-  }
+  migrateArray<StoredBridge>(BRIDGES_KEY, BRIDGE_PREFIX, (b) => b.id);
+  const rows = scan<StoredBridge>(BRIDGE_PREFIX).sort(
+    (a, b) => (b.value.createdAt ?? 0) - (a.value.createdAt ?? 0),
+  );
+  prune(rows);
+  return rows.slice(0, CAP).map(({ value }) => value);
 }
 
 /**
@@ -156,7 +230,9 @@ export function loadBridges(): StoredBridge[] {
  * the list twice, once stuck on "pending" forever.
  */
 export function saveBridge(bridge: StoredBridge): void {
-  const all = loadBridges().filter((b) => b.id !== bridge.id);
-  all.unshift(bridge);
-  localStorage.setItem(BRIDGES_KEY, JSON.stringify(all.slice(0, 50)));
+  try {
+    localStorage.setItem(BRIDGE_PREFIX + bridge.id, JSON.stringify(bridge));
+  } catch {
+    /* private mode or a full quota; the transfer itself is unaffected */
+  }
 }
