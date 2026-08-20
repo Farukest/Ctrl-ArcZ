@@ -160,6 +160,7 @@ export const en = {
   // total up yet.
   'sub.quoteUnavailable': "Circle's fee could not be read, so this cannot be priced yet.",
   'sub.createButton': 'Create subscription',
+  'sub.fundingTitle': 'Recent funding',
   'sub.step.machine': 'Checking merchant',
   'sub.step.create': 'Creating box',
   'sub.step.listing': 'Show it in the list',
@@ -283,7 +284,11 @@ export const en = {
   'bridge.info.gatewayTitle': 'Gateway',
   'bridge.info.gatewayBody':
     'Best if you send often. Fund a balance once, then each transfer lands in about a second.',
+  'bridge.gwstep.approve': 'Approving USDC...',
   'bridge.gwstep.deposit': 'Funding unified balance...',
+  // Named for the wait, not for the transaction. The deposit is mined long before
+  // the money can be spent, and this row is the gap between those two moments.
+  'bridge.gwstep.counted': 'Waiting for Circle to count it...',
   'bridge.gwstep.sign': 'Signing the transfer...',
   'bridge.gwstep.attestation': 'Waiting for Circle attestation...',
   'bridge.gwstep.mint': 'Minting on the destination chain...',
@@ -382,6 +387,7 @@ export const en = {
   'bridge.rowstep.fetchAttestation': 'Attestation',
   'bridge.rowstep.mint': 'Mint',
   'bridge.rowstep.deposit': 'Deposit',
+  'bridge.rowstep.counted': 'Counted by Circle',
   'bridge.rowstep.sign': 'Sign',
   'bridge.rowstep.attestation': 'Attestation',
   'bridge.done': 'Bridged. USDC arrived on the destination chain.',

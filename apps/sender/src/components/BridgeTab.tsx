@@ -76,6 +76,7 @@ import { loadBridges, saveBridge, type StoredBridge, type StoredBridgeStep } fro
 import { useRecipientGate } from '../lib/useRecipientGate.js';
 import { RiskGate } from './RiskGate.js';
 import { pendingOn, reconcile, rememberDeposit } from '../lib/pendingDeposits.js';
+import { recordDeposit, settleCountedDeposits } from '../lib/depositRecord.js';
 
 // The wallet signs both engines, so there is no key here to gate on. A plain flag
 // is enough to hide the tab where a deployment does not want it.
@@ -509,7 +510,21 @@ export function BridgeTab({ session }: { session: Session }) {
         reconcile(gwSource, here, gwOnSource ?? here);
         setGwOnSource(here);
         setGwByChain(bal.byChain);
-        setGwPending(pendingOn(gwSource));
+        const waiting = pendingOn(gwSource);
+        setGwPending(waiting);
+        // Nothing left outstanding on this chain means Circle has counted every
+        // deposit made on it from this browser, which is what closes the last row
+        // of a deposit still on screen and settles the records behind it.
+        if (waiting === 0n) {
+          setSelfBridge((run) =>
+            run?.kind === 'deposit' &&
+            run.state === 'running' &&
+            run.steps.some((s) => s.name === 'counted')
+              ? { ...run, state: 'success' }
+              : run,
+          );
+          if (settleCountedDeposits(gwSource)) setBridges(loadBridges());
+        }
         setGwCeiling(quote.maxFee);
       } catch {
         // Leave the last known figures rather than blanking the screen on one
@@ -900,16 +915,38 @@ export function BridgeTab({ session }: { session: Session }) {
         {
           chain: gwSource,
           amount: depositValue,
+          /*
+           * The deposit's own steps, not the transfer map above.
+           *
+           * That map answers for a spend, whose rows are deposit, sign, attestation
+           * and mint, and it folded `approve` into `deposit` because a deposit had
+           * only the one row to fold it into. Both of those things now have a row of
+           * their own, and an approval the user was prompted for is not the deposit
+           * they were prompted for next.
+           */
           onStep: (step, txHash) => {
-            const name = GW_STEP_TO_UI[step];
-            if (!name) return;
-            run.step(name, txHash);
+            if (step !== 'approve' && step !== 'deposit') return;
+            // No hash on `approve` is the SDK saying the allowance already covered
+            // this, which is a step that did not need to happen.
+            if (step === 'approve' && !txHash) run.skip('approve');
+            else run.step(step, txHash);
           },
         },
       );
-      run.clear();
+      // Mined, and not yet spendable. Circle credits it after the source chain's
+      // confirmations, and that wait is the run's last row rather than its end.
+      run.step('counted');
       rememberDeposit(gwSource, depositValue);
       setGwPending(pendingOn(gwSource));
+      recordDeposit({
+        chain: gwSource,
+        amount: depositAmount,
+        ...(res.approveTxHash ? { approveTxHash: res.approveTxHash } : {}),
+        depositTxHash: res.depositTxHash,
+        state: 'pending',
+        createdAt: Date.now(),
+      });
+      setBridges(loadBridges());
       setDepositAmount('');
       toast.push(
         t('bridge.deposited')
@@ -917,7 +954,6 @@ export function BridgeTab({ session }: { session: Session }) {
           .replace('{wait}', waitLabel(gwSource)),
         'success',
       );
-      void res;
     } catch (e) {
       run.clear();
       toast.push(e instanceof Error ? e.message : String(e), 'error');

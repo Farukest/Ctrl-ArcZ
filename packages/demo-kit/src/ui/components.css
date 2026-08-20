@@ -3065,6 +3065,22 @@ a.hstep__go:hover {
    own action and the one that has to happen first. The chain is chosen here and
    the From card follows, so a deposit can never point at a chain the transfer is
    not spending from. */
+/* The last few fundings, under the box that makes them. Not a card of its own:
+   it is the same subject as the box above it, and a second border between them
+   would read as a second thing to deal with. */
+.subfund {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 14px;
+  min-width: 0;
+}
+.subfund__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-mid);
+}
+
 .gwfund {
   display: flex;
   flex-direction: column;

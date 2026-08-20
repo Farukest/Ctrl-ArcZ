@@ -55,8 +55,25 @@ export function stepsForEngine(engine: BridgeEngine): readonly string[] {
   return engine === 'gateway' ? GATEWAY_STEPS : BRIDGE_STEPS;
 }
 
-/** Funding the balance is one on-chain transaction and nothing else. */
-export const DEPOSIT_STEPS = ['deposit'] as const;
+/**
+ * What a deposit is made of, from the side of the person doing it.
+ *
+ * This was one row, on the grounds that funding the balance is a single
+ * transaction. Two of the three things that happen are not that transaction. An
+ * allowance has to exist before the deposit can be called, which is a second
+ * signature and a second wallet prompt. And the money is not spendable when the
+ * deposit is mined: Circle credits it only once the source chain reaches the
+ * confirmations it asks for, which was measured at over twenty minutes on Base.
+ *
+ * One row covered the middle of those three and went quiet for the other two, so
+ * the screen said nothing during the two waits a person actually asks about --
+ * the prompt they were not expecting, and the balance that has not moved yet.
+ *
+ * `approve` is reported without a hash when the allowance already covered the
+ * amount. That is a step which did not need to happen rather than one that did,
+ * and the caller says so with `skip`, which draws a dash instead of a tick.
+ */
+export const DEPOSIT_STEPS = ['approve', 'deposit', 'counted'] as const;
 
 /**
  * The rows to draw for whatever is currently happening.

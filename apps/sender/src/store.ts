@@ -61,6 +61,16 @@ export interface StoredBridge {
   id: string;
   /** Which engine performed the move (older entries may be missing this). */
   engine?: BridgeEngine;
+  /**
+   * What kind of move it was. Absent means a transfer, which is what every record
+   * written before deposits were recorded at all is.
+   *
+   * A deposit is distinguishable from a transfer by more than convention: it names
+   * one chain at both ends, since the money does not travel. So does a Gateway
+   * withdrawal back to its own chain, which is why this is written down rather
+   * than inferred from the two chains being equal.
+   */
+  kind?: 'deposit';
   from: string;
   to: string;
   fromLabel: string;

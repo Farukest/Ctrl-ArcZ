@@ -256,12 +256,43 @@ describe('stepIndexFor', () => {
 });
 
 describe('stepsForRun', () => {
-  it('gives a deposit one row, not the four a transfer has', () => {
+  it('gives a deposit its own rows, not the ones a transfer has', () => {
     const deposit = { engine: GW, kind: 'deposit', id: 1, state: 'running', steps: [] };
-    expect(stepsForRun(GW, deposit)).toEqual(['deposit']);
+    expect(stepsForRun(GW, deposit)).toEqual(['approve', 'deposit', 'counted']);
     // What that used to look like: a deposit with a pending sign, attestation and
     // mint underneath it, none of which a deposit performs.
-    expect(deriveStepStatuses(stepsForRun(GW, deposit), deposit)).toEqual(['pending']);
+    expect(deriveStepStatuses(stepsForRun(GW, deposit), deposit)).toEqual([
+      'pending',
+      'pending',
+      'pending',
+    ]);
+  });
+
+  it('waits on Circle after the deposit is mined, rather than declaring it over', () => {
+    // The transaction is done and the balance has not moved. Neither a tick nor a
+    // blank screen is true here; the run is still going and it is the last row's.
+    const mined = {
+      engine: GW,
+      kind: 'deposit',
+      id: 1,
+      state: 'running',
+      steps: [
+        { name: 'approve', state: 'noop' },
+        { name: 'deposit', txHash: '0xdead' },
+      ],
+    };
+    expect(deriveStepStatuses(stepsForRun(GW, mined), mined)).toEqual([
+      'skipped',
+      'active',
+      'pending',
+    ]);
+
+    const counted = { ...mined, state: 'success', steps: [...mined.steps, { name: 'counted' }] };
+    expect(deriveStepStatuses(stepsForRun(GW, counted), counted)).toEqual([
+      'skipped',
+      'done',
+      'done',
+    ]);
   });
 
   it('gives a transfer the rows of its engine', () => {
