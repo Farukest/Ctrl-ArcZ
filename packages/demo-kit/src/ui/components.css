@@ -910,6 +910,12 @@
   z-index: 2;
   display: flex;
   align-items: center;
+  /* The clear button appears with the first character typed, and the row grew
+     3px when it did -- the list underneath shifting down at the moment somebody
+     starts reading it. Measured: 42.7px with the input alone, 45.6px once the
+     29px button joins it, so the row is held at the taller of the two and neither
+     state moves anything. */
+  min-height: 46px;
   gap: var(--sp-2);
   margin: calc(-1 * var(--sp-1)) calc(-1 * var(--sp-1)) var(--sp-1);
   padding: var(--sp-2) var(--sp-3);
@@ -996,10 +1002,15 @@
 /* The clear button sits inside the search row, which is already a flex line with
    its own padding, so it is positioned in the flow rather than absolutely like
    the one inside a bordered input. */
+/* Sized to the input beside it rather than to itself. At 29px against a 25px
+   input it was the tallest thing in the row, so the row's height was decided by a
+   button that is not there until you type. */
 .menu__search-clear {
   position: static;
   transform: none;
   flex-shrink: 0;
+  width: 26px;
+  height: 26px;
 }
 .menu__search-input {
   flex: 1;
@@ -1025,8 +1036,17 @@
   display: flex;
   flex-direction: column;
 }
+/* The height of a row, not of a paragraph. A menu whose one matching row is
+   replaced by a taller "nothing matched" block grows at the exact moment the
+   reader has typed themselves down to nothing, which reads as the menu reacting
+   to the failure. Same box, different words. */
 .menu__empty {
-  padding: var(--sp-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  margin: 0;
+  padding: 0 var(--sp-3);
   text-align: center;
   color: var(--text-lo);
   font-size: var(--fs-sm);

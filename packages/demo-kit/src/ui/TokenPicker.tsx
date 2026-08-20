@@ -26,6 +26,9 @@ import { TokenLogo } from './TokenLogo.js';
  * contracts answering to that symbol, three of them named Mock or Demo; a picker
  * that accepts any address is a picker that will be handed one of those.
  */
+/** Below this many tokens the list is short enough to read without filtering. */
+const SEARCH_FROM = 3;
+
 export function TokenPicker({
   value,
   onChange,
@@ -102,11 +105,16 @@ export function TokenPicker({
         if (next && next.symbol !== value.symbol) onChange(next);
       }}
       disabled={disabled ?? false}
-      // Always, not only once the list is long. The box is the only place a
-      // contract address can be checked against what is on screen, and that is
-      // worth a row of chrome on a screen about sending money to a token you may
-      // not have sent before.
-      searchable
+      /*
+       * Only once there is a list worth searching.
+       *
+       * The box earns its row when it saves scrolling or lets somebody check a
+       * contract address against what is on screen. Above a chain with one token
+       * it did neither: a search field, a placeholder reading "Search by name or
+       * address", and one row underneath it, which is a control that exists to
+       * filter a list of one. Four is where a list starts being a list.
+       */
+      searchable={tokens.length > SEARCH_FROM}
       searchPlaceholder={t('token.search')}
       noResultsText={t('token.none')}
       ariaLabel={t('token.label')}

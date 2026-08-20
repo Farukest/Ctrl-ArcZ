@@ -519,6 +519,21 @@ function AnchoredLayer({
   const isMobile = useIsMobile();
   const panelRef = useRef<HTMLDivElement>(null);
   const [style, setStyle] = useState<React.CSSProperties>();
+  /**
+   * The width this panel had when it opened, held for as long as it stays open.
+   *
+   * Nothing set a width, so the panel was sized by whatever was inside it at the
+   * time. In a searchable menu that content changes on every keystroke: typing one
+   * letter narrowed the token picker to the width of the one row that still
+   * matched, a second letter replaced the rows with "No matching token" and it
+   * changed size again, and because the left edge is computed from the width, the
+   * whole panel slid sideways under the cursor each time. A menu resizing itself
+   * while somebody is reading it is the thing this pins down.
+   *
+   * Measured on open, before any query has narrowed anything, so it is the width
+   * of the full list -- and cleared on close, so a different list gets its own.
+   */
+  const pinnedWidth = useRef<number | null>(null);
 
   const reposition = useCallback(() => {
     if (isMobile || !anchorRef.current) return;
@@ -531,7 +546,10 @@ function AnchoredLayer({
     // than the info popover actually is (280), so the clamp that was supposed to
     // keep it on screen let it hang 80px past the right edge and the text was cut
     // off. `minWidth` below never exceeds the trigger, so this cannot oscillate.
-    const width = Math.max(panelRef.current?.offsetWidth ?? 0, r.width, 200);
+    const natural = Math.max(panelRef.current?.offsetWidth ?? 0, r.width, 200);
+    if (pinnedWidth.current === null) pinnedWidth.current = natural;
+    // Never wider than the window, however wide the list wanted to be.
+    const width = Math.min(pinnedWidth.current, window.innerWidth - 16);
     const desired =
       align === 'center'
         ? r.left + r.width / 2 - width / 2
@@ -554,13 +572,16 @@ function AnchoredLayer({
     const maxHeight = cap ? Math.min(room, cap) : room;
     setStyle(
       openUp
-        ? { bottom: window.innerHeight - r.top + 6, left, minWidth: r.width, maxHeight }
-        : { top: r.bottom + 6, left, minWidth: r.width, maxHeight },
+        ? { bottom: window.innerHeight - r.top + 6, left, width, maxHeight }
+        : { top: r.bottom + 6, left, width, maxHeight },
     );
   }, [isMobile, anchorRef, onClose, align, cap]);
 
   useLayoutEffect(() => {
     if (open) reposition();
+    // A closed panel forgets its width, so the next thing to open in this layer
+    // measures itself rather than inheriting the last menu's shape.
+    else pinnedWidth.current = null;
   }, [open, reposition]);
 
   useEffect(() => {
