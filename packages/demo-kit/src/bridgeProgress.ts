@@ -76,6 +76,16 @@ export function stepsForEngine(engine: BridgeEngine): readonly string[] {
 export const DEPOSIT_STEPS = ['approve', 'deposit', 'counted'] as const;
 
 /**
+ * Opening a subscription: a box is derived, deployed, published so its owner can
+ * find it again, and then funded by Circle minting the budget into it.
+ *
+ * Listed here beside the other two because all three end up in the same list, and
+ * a reader of that list should not have to know which screen made a row to know
+ * what its rows mean.
+ */
+export const SUBSCRIPTION_STEPS = ['machine', 'create', 'listing', 'fundGw'] as const;
+
+/**
  * The rows to draw for whatever is currently happening.
  *
  * A deposit is not a transfer. Drawn against the transfer's four rows it came out
@@ -87,7 +97,9 @@ export function stepsForRun(
   engine: BridgeEngine,
   run: { kind?: string } | null | undefined,
 ): readonly string[] {
-  return run?.kind === 'deposit' ? DEPOSIT_STEPS : stepsForEngine(engine);
+  if (run?.kind === 'deposit') return DEPOSIT_STEPS;
+  if (run?.kind === 'subscription') return SUBSCRIPTION_STEPS;
+  return stepsForEngine(engine);
 }
 
 /**
@@ -154,6 +166,18 @@ export function deriveStepStatuses(
     // as unstarted, then flip to a green tick the moment the transfer finished, so
     // the one row that never ran was also the one that looked most convincing.
     if (st === 'noop' || st === 'skipped') return 'skipped';
+    /*
+     * A runner that says a step has begun, rather than leaving it to be inferred
+     * from being the last one reported.
+     *
+     * Inference is right for a runner that only speaks when something finishes,
+     * which is what the bridge engines do. A run being recorded step by step can
+     * say so directly, and it has to: a step reported as started is also the last
+     * one, so both readings agree while it runs, but the moment the next step is
+     * reported the inference alone would leave the record with no active row at
+     * all between the two.
+     */
+    if (st === 'active') return moving ? 'active' : 'pending';
     if (moving && at === last) return 'active';
     return 'done';
   });

@@ -160,7 +160,9 @@ export const en = {
   // total up yet.
   'sub.quoteUnavailable': "Circle's fee could not be read, so this cannot be priced yet.",
   'sub.createButton': 'Create subscription',
-  'sub.fundingTitle': 'Recent funding',
+  'sub.fundTitle': 'Balance for subscriptions',
+  'sub.fundSummary':
+    'Subscriptions are paid out of your Circle Gateway balance, not out of the wallet directly. Topping it up here is one transaction on the chain you choose, and it takes as long as that chain needs to confirm.',
   'sub.step.machine': 'Checking merchant',
   'sub.step.create': 'Creating box',
   'sub.step.listing': 'Show it in the list',
@@ -398,6 +400,15 @@ export const en = {
   'bridge.historySubsTitle': 'Subscription funding',
   'bridge.historyKindBridge': 'Bridge',
   'bridge.historyKindSubs': 'Subscriptions',
+  // The block at the bottom of every screen that moves money.
+  'activity.title': 'Recent transfers',
+  'activity.fundingTitle': 'Recent funding',
+  'activity.empty': 'Nothing from this browser yet.',
+  'activity.all': 'All',
+  'activity.collapse': 'Show less',
+  'activity.running': '{n} in progress',
+  'activity.failed': '{n} needs a look',
+  'activity.jump': 'Go to it',
   'bridge.historyTitle': 'Bridge history',
   'bridge.historyEmpty': 'No bridges from this browser yet.',
   'bridge.historySearch': 'Search by network, amount, or tx hash',
@@ -407,6 +418,11 @@ export const en = {
   'bridge.state.success': 'arrived',
   'bridge.state.pending': 'pending',
   'bridge.state.error': 'failed',
+  'bridge.state.running': 'in progress',
+  // Not a failure. A run whose page went away mid-flight, which may well have
+  // landed on chain; saying it failed would be a guess, and the wrong one more
+  // often than not.
+  'bridge.state.stalled': 'interrupted',
   // A Gateway spend does not burn on the source chain until settlement, so a
   // mint that fails leaves a hold rather than a payment, and Circle lets it go.
   // "failed" would tell someone their money is gone while it is on its way back.

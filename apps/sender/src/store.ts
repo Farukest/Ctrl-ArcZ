@@ -56,6 +56,16 @@ export interface StoredBridgeStep {
   name: string;
   txHash?: string;
   explorerUrl?: string;
+  /**
+   * What the runner said about this step, when it said anything.
+   *
+   * Absent means it simply happened. `active` is a step reported as started rather
+   * than as finished, which is the difference between a record written as a run
+   * goes and one written after it: the first can say which step a person is
+   * waiting on, and that is the whole point of writing it down while it runs.
+   * `noop` is a step that did not need to happen, `error` the one that failed.
+   */
+  state?: 'active' | 'noop' | 'error';
 }
 export interface StoredBridge {
   id: string;
@@ -70,7 +80,23 @@ export interface StoredBridge {
    * withdrawal back to its own chain, which is why this is written down rather
    * than inferred from the two chains being equal.
    */
-  kind?: 'deposit';
+  kind?: 'deposit' | 'subscription';
+  /**
+   * What the row is about, when the two chains do not say it: the subscription's
+   * name. Written by the screen that made it, because the merchant label is a
+   * local thing and no chain knows it.
+   */
+  label?: string;
+  /**
+   * When this record was last written to.
+   *
+   * A run that is interrupted -- the tab closed between the signature and the
+   * receipt -- leaves a record saying `running` and nothing to ever finish it. The
+   * row would claim to be in progress for good. Age is what tells that apart from
+   * a run that genuinely is in progress, and `createdAt` cannot: a long transfer
+   * is old and fine, while a stalled one may be a minute old.
+   */
+  updatedAt?: number;
   from: string;
   to: string;
   fromLabel: string;

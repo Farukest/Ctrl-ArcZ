@@ -295,6 +295,50 @@ describe('stepsForRun', () => {
     ]);
   });
 
+  it('gives a subscription its four rows on either engine', () => {
+    const sub = { engine: GW, kind: 'subscription', id: 1, state: 'running', steps: [] };
+    expect(stepsForRun(GW, sub)).toEqual(['machine', 'create', 'listing', 'fundGw']);
+    expect(stepsForRun(CCTP, sub)).toEqual(['machine', 'create', 'listing', 'fundGw']);
+  });
+
+  it('puts the spinner on the step a runner says has begun, not on the last one reported', () => {
+    // A record written as it goes says `active` outright. Without that, the moment
+    // `deposit` was reported as finished the spinner would sit on it, when what is
+    // actually happening is the wait after it.
+    const run = {
+      engine: GW,
+      kind: 'deposit',
+      id: 1,
+      state: 'running',
+      steps: [
+        { name: 'approve', state: 'noop' },
+        { name: 'deposit', txHash: '0xdead' },
+        { name: 'counted', state: 'active' },
+      ],
+    };
+    expect(deriveStepStatuses(stepsForRun(GW, run), run)).toEqual(['skipped', 'done', 'active']);
+  });
+
+  it('does not leave a step spinning on a run that has stopped', () => {
+    // What a tab closed mid-deposit leaves behind. The screen decides that such a
+    // run is over; the step it was on must not still claim to be in progress.
+    const abandoned = {
+      engine: GW,
+      kind: 'deposit',
+      id: 1,
+      state: 'failed',
+      steps: [
+        { name: 'approve', txHash: '0xaaa' },
+        { name: 'deposit', state: 'active' },
+      ],
+    };
+    expect(deriveStepStatuses(stepsForRun(GW, abandoned), abandoned)).toEqual([
+      'done',
+      'pending',
+      'pending',
+    ]);
+  });
+
   it('gives a transfer the rows of its engine', () => {
     expect(stepsForRun(GW, { kind: 'transfer' })).toEqual(GATEWAY_STEPS);
     expect(stepsForRun(CCTP, { kind: 'transfer' })).toEqual(BRIDGE_STEPS);

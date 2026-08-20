@@ -55,6 +55,12 @@ export {
   type HistoryListProps,
 } from './HistoryList.js';
 export { HistoryRow, Copyable, Address, type RowStep, type RowTone } from './HistoryRow.js';
+export {
+  ActivityBlock,
+  type ActivityItem,
+  type ActivityStep,
+  type ActivityLabels,
+} from './ActivityBlock.js';
 export { isArmed, type ArmingState } from './riskArming.js';
 export {
   NO_ARRIVALS,

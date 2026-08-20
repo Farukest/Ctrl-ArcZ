@@ -57,6 +57,7 @@ import {
   InfoPopover,
   Input,
   SegmentedTabs,
+  ActivityBlock,
   Select,
   HistoryList,
   HistoryRow,
@@ -76,7 +77,8 @@ import { loadBridges, saveBridge, type StoredBridge, type StoredBridgeStep } fro
 import { useRecipientGate } from '../lib/useRecipientGate.js';
 import { RiskGate } from './RiskGate.js';
 import { pendingOn, reconcile, rememberDeposit } from '../lib/pendingDeposits.js';
-import { recordDeposit, settleCountedDeposits } from '../lib/depositRecord.js';
+import { reasonOf, settleCountedDeposits, startRun, useActivity } from '../lib/activity.js';
+import { activityLabels, toActivityItem } from '../lib/activityView.js';
 
 // The wallet signs both engines, so there is no key here to gate on. A plain flag
 // is enough to hide the tab where a deployment does not want it.
@@ -322,6 +324,15 @@ export function BridgeTab({ session }: { session: Session }) {
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
   const [bridges, setBridges] = useState<StoredBridge[]>(() => loadBridges());
   const [histEngine, setHistEngine] = useState<'all' | BridgeEngine>('all');
+  /*
+   * The same records, read the live way, for the block at the bottom.
+   *
+   * `bridges` above stays as it is: the recovery pass walks it, writes to it and
+   * re-reads it at points of its own choosing, and rewiring that is a separate
+   * change to a piece of code whose job is finishing transfers that were
+   * interrupted. This is a second reader of one store, not a second store.
+   */
+  const activity = useActivity();
 
   const risk = useRecipientGate(session, recipient);
   const recipientBad = recipient.trim() !== '' && !isAddress(recipient.trim());
@@ -675,6 +686,12 @@ export function BridgeTab({ session }: { session: Session }) {
    */
   const { boxes: myBoxes, names: boxNames } = knownBoxes(session.address, session.chainId);
 
+  /** The five rows at the top of the block, unfiltered: recent means recent. */
+  const activityItems = useMemo(
+    () => activity.map((b) => toActivityItem(b, t as never)),
+    [activity, t],
+  );
+
   /** Only the engine filter stays here; search, date and paging are the list's. */
   const filteredByEngine = useMemo(
     () =>
@@ -905,57 +922,69 @@ export function BridgeTab({ session }: { session: Session }) {
     };
   }
 
+  /**
+   * Fund the unified balance.
+   *
+   * The progress is not on this screen any more. It is a record from the moment the
+   * button is pressed, drawn by the block at the bottom like everything else, which
+   * is what lets a second deposit start before the first one has been counted --
+   * the stepper slot above holds one run and a deposit spends nineteen minutes in
+   * it on Base, blocking the screen for a wait that needs no attention at all.
+   */
   async function deposit() {
     if (!gwSource || depositValue <= 0n) return;
     setDepositing(true);
-    const run = beginRun('gateway', 'deposit');
+    const on = gwSource;
+    const record = startRun({
+      kind: 'deposit',
+      engine: 'gateway',
+      from: on,
+      to: on,
+      amount: depositAmount,
+    });
+    record.begin('approve');
+    let reached = 'approve';
     try {
-      const res = await depositToGateway(
-        bridgeClients(CCTP_CHAINS[gwSource].chainId, session.address),
-        {
-          chain: gwSource,
-          amount: depositValue,
-          /*
-           * The deposit's own steps, not the transfer map above.
-           *
-           * That map answers for a spend, whose rows are deposit, sign, attestation
-           * and mint, and it folded `approve` into `deposit` because a deposit had
-           * only the one row to fold it into. Both of those things now have a row of
-           * their own, and an approval the user was prompted for is not the deposit
-           * they were prompted for next.
-           */
-          onStep: (step, txHash) => {
-            if (step !== 'approve' && step !== 'deposit') return;
-            // No hash on `approve` is the SDK saying the allowance already covered
-            // this, which is a step that did not need to happen.
-            if (step === 'approve' && !txHash) run.skip('approve');
-            else run.step(step, txHash);
-          },
+      await depositToGateway(bridgeClients(CCTP_CHAINS[on].chainId, session.address), {
+        chain: on,
+        amount: depositValue,
+        /*
+         * The deposit's own steps, not the transfer map above.
+         *
+         * That map answers for a spend, whose rows are deposit, sign, attestation
+         * and mint, and it folded `approve` into `deposit` because a deposit had
+         * only the one row to fold it into. Both of those things now have a row of
+         * their own, and an approval the user was prompted for is not the deposit
+         * they were prompted for next.
+         */
+        onStep: (step, txHash) => {
+          if (step !== 'approve' && step !== 'deposit') return;
+          // No hash on `approve` is the SDK saying the allowance already covered
+          // this, which is a step that did not need to happen.
+          if (step === 'approve' && !txHash) record.skip('approve');
+          else record.done(step, txHash);
+          if (step === 'approve') {
+            record.begin('deposit');
+            reached = 'deposit';
+          }
         },
-      );
-      // Mined, and not yet spendable. Circle credits it after the source chain's
-      // confirmations, and that wait is the run's last row rather than its end.
-      run.step('counted');
-      rememberDeposit(gwSource, depositValue);
-      setGwPending(pendingOn(gwSource));
-      recordDeposit({
-        chain: gwSource,
-        amount: depositAmount,
-        ...(res.approveTxHash ? { approveTxHash: res.approveTxHash } : {}),
-        depositTxHash: res.depositTxHash,
-        state: 'pending',
-        createdAt: Date.now(),
       });
-      setBridges(loadBridges());
+      // Mined, and not yet spendable. Circle credits it after the source chain's
+      // confirmations, and that wait is the run's last step rather than its end.
+      record.begin('counted');
+      record.waiting();
+      rememberDeposit(on, depositValue);
+      setGwPending(pendingOn(on));
       setDepositAmount('');
       toast.push(
         t('bridge.deposited')
           .replace('{amount}', depositAmount)
-          .replace('{wait}', waitLabel(gwSource)),
+          .replace('{wait}', waitLabel(on)),
         'success',
       );
     } catch (e) {
-      run.clear();
+      // The row gets the sentence, the toast gets the whole thing.
+      record.fail(reached, reasonOf(e));
       toast.push(e instanceof Error ? e.message : String(e), 'error');
     } finally {
       setDepositing(false);
@@ -1545,10 +1574,21 @@ export function BridgeTab({ session }: { session: Session }) {
         )}
       </Card>
 
+      {/*
+        The same block that sits at the bottom of the subscriptions screen, over the
+        same records: the last few things this wallet did, with whatever is still
+        going at the top of them, and the full searchable history behind `All`.
+
+        The list underneath is unchanged. It is the ledger -- fifty rows, filtered,
+        paged, split by whether a transfer paid for a subscription -- and it is a
+        bad answer to "is the thing I just did alright", which is the question the
+        five rows above it exist for.
+      */}
       <div style={{ marginTop: 16 }}>
-        <Card
-          title={t(histKind === 'subs' ? 'bridge.historySubsTitle' : 'bridge.historyTitle')}
-          data-testid="bridge-history"
+        <ActivityBlock
+          items={activityItems}
+          labels={activityLabels(t as never, t('activity.title'))}
+          data-testid="bridge-activity"
         >
           {/* Two halves of one list. Written as a second component they would be two
               copies of the filtering, paging and day grouping below, and the first
@@ -1654,7 +1694,7 @@ export function BridgeTab({ session }: { session: Session }) {
               </HistoryRow>
             )}
           />
-        </Card>
+        </ActivityBlock>
       </div>
     </>
   );

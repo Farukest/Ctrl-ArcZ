@@ -267,6 +267,15 @@
 .card + .card {
   margin-top: var(--sp-4);
 }
+/* The card that moves money into the balance, as opposed to the ones that spend it.
+   A tinted edge and a bar down the leading side rather than a louder heading: the
+   point is that it is a different act, not a more important one. Logical properties
+   so the bar is on the reading side in either direction. */
+.card--fund {
+  border-color: var(--accent-ring);
+  background: linear-gradient(var(--accent-soft), var(--accent-soft)), var(--surface-1);
+  border-inline-start: 3px solid var(--accent);
+}
 /* A flex row so the info dot centres on the title's optical middle. It used to be
    an inline element in a text flow, which sits it on the baseline: against a
    20px heading a 24px circle then hangs low and reads as misaligned. `center`
@@ -3065,20 +3074,227 @@ a.hstep__go:hover {
    own action and the one that has to happen first. The chain is chosen here and
    the From card follows, so a deposit can never point at a chain the transfer is
    not spending from. */
-/* The last few fundings, under the box that makes them. Not a card of its own:
-   it is the same subject as the box above it, and a second border between them
-   would read as a second thing to deal with. */
-.subfund {
+/* ---- Activity block ------------------------------------------------------
+   The bottom block on every screen that moves money. Its own card so it reads as
+   a separate thing from the form above it, and the same one everywhere so nobody
+   has to work out where the last transfer went this time. */
+.ablock {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin-top: 14px;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 16px;
+  background: var(--surface-1);
   min-width: 0;
 }
-.subfund__title {
+.ablock__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+.ablock__title {
   font-size: 13px;
   font-weight: 600;
   color: var(--text-mid);
+}
+.ablock__all {
+  border: 0;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  color: var(--accent);
+}
+.ablock__all:hover {
+  text-decoration: underline;
+}
+.ablock__rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.ablock__all-list {
+  margin-top: 6px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.arow {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  background: var(--surface-2);
+  min-width: 0;
+}
+.arow__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  min-width: 0;
+}
+.arow__lead {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  min-width: 0;
+}
+.arow__meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+.arow__amount {
+  font-size: 13px;
+  font-weight: 600;
+}
+.arow__time {
+  font-size: 11px;
+  color: var(--text-lo);
+}
+.arow__note {
+  font-size: 12px;
+  color: var(--text-lo);
+}
+.arow__steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+/* Someone was sent here by the pill. Three and a half seconds of a ring they did
+   not have to hunt for, then out of the way -- a highlight that stays is just a
+   row with a different border. */
+@keyframes arow-lit {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+  15%,
+  70% {
+    box-shadow: 0 0 0 2px var(--accent);
+  }
+}
+.arow--lit {
+  animation: arow-lit 3.5s ease-in-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .arow--lit {
+    animation: none;
+    border-color: var(--accent);
+  }
+}
+
+.achip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  background: var(--surface-1);
+  font-size: 11px;
+  color: var(--text-lo);
+  max-width: 100%;
+  min-width: 0;
+}
+.achip__mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 12px;
+  height: 12px;
+  flex: none;
+}
+.achip__name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.achip__go {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--text-lo);
+  font-family: var(--font-mono);
+}
+.achip__go:hover {
+  color: var(--accent);
+}
+/* A step that has not started reads as an outline, one that is running as the
+   accent, one that is done as ordinary text. The status has to be legible without
+   reading the label, because the label is the same in every state. */
+.achip--pending {
+  opacity: 0.55;
+}
+.achip--active {
+  border-color: var(--accent);
+  color: var(--text-hi);
+}
+.achip--done {
+  color: var(--text-mid);
+}
+.achip--done .achip__mark {
+  color: var(--safe);
+}
+.achip--skipped {
+  opacity: 0.5;
+}
+.achip--error {
+  border-color: var(--block);
+  color: var(--block);
+}
+
+/* The pill. Fixed, because it points at something that is off screen and it has
+   to be reachable from wherever the reader is, not from where the block is. */
+.ajump {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 18px;
+  z-index: 40;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  background: var(--surface-1);
+  color: var(--text-hi);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: var(--el-3);
+}
+.ajump:hover {
+  border-color: var(--accent);
+}
+.ajump--err {
+  border-color: var(--block);
+  color: var(--block);
+}
+.ajump__mark {
+  display: inline-flex;
+  width: 14px;
+  height: 14px;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+}
+.ajump__arrow {
+  opacity: 0.7;
 }
 
 .gwfund {
