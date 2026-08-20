@@ -327,6 +327,16 @@ export async function bridgeFromWallet(
     recipient?: Address;
     onStep?: (step: CctpStep, txHash?: Hex) => void;
     /**
+     * What the transfer will cost, as soon as it is known.
+     *
+     * The quote is in the result too, and the result arrives when the whole
+     * transfer does -- minutes after the burn, on a row that has been on screen
+     * the entire time saying nothing about the fee. This fires the moment Circle
+     * has quoted, which is before anything is signed, so a caller writing the
+     * transfer down can write down what it costs at the same time.
+     */
+    onQuote?: (quote: BridgeQuote) => void;
+    /**
      * How long to wait for Circle's forwarded mint before returning. Returning
      * early is safe: the burn has happened and the attestation is permanent, so a
      * caller who wants to stop watching loses nothing but the wait.
@@ -362,6 +372,7 @@ export async function bridgeFromWallet(
     amount: params.amount,
     ...(params.fetchImpl ? { fetchImpl: params.fetchImpl } : {}),
   });
+  params.onQuote?.(quote);
 
   // Refuse before signing anything if the wallet cannot cover the burn. The chain
   // would refuse too, but only after the user has approved a transaction.

@@ -62,6 +62,20 @@ function attentionOf(b: StoredBridge): ActivityItem['attention'] {
   return undefined;
 }
 
+/**
+ * What kind of move this was, in one word.
+ *
+ * The rows carried a route, an amount and a status, and nothing said whether the
+ * money had been deposited into the balance, spent from it, or burned and minted
+ * across chains -- three different things that look identical when all you show is
+ * two chain names.
+ */
+function kindChip(b: StoredBridge, t: T): string {
+  if (b.kind === 'deposit') return t('bridge.rowstep.deposit');
+  if (b.engine === 'cctp') return t('bridge.engine.cctp');
+  return t('bridge.engine.gateway');
+}
+
 export function toActivityItem(b: StoredBridge, t: T): ActivityItem {
   const engine: BridgeEngine = b.engine === 'cctp' ? 'cctp' : 'gateway';
   const names = stepsForRun(engine, b);
@@ -90,6 +104,8 @@ export function toActivityItem(b: StoredBridge, t: T): ActivityItem {
       </>
     ),
     amount: `${b.amount} USDC`,
+    kind: kindChip(b, t),
+    ...(b.fee ? { fee: t('activity.feeIs', { fee: b.fee }) } : {}),
     status: { tone, label: t(key) },
     time: relativeTime(b.createdAt),
     ...(b.label || b.failureReason

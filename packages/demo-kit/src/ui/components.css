@@ -3994,3 +3994,21 @@ a.hstep__go:hover {
   white-space: nowrap;
   margin-left: auto;
 }
+
+/* What kind of move it was and what it cost, on the line under the head. Two
+   facts a row of two chain names and an amount cannot supply on its own. */
+.arow__facts {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+.arow__fee {
+  font-size: 11px;
+  color: var(--text-lo);
+}
+
+/* The kind goes to the trailing edge, under the amount and the status. */
+.arow__kind {
+  margin-left: auto;
+}

@@ -297,6 +297,10 @@ export function bridgeEntries(bridges: readonly StoredBridge[], t: T): ActivityE
       },
       facts: [
         { label: t('cost.amount'), value: `${b.amount} USDC` },
+        // What it cost and what kind of move it was: two things a route and an
+        // amount cannot say, and the two the detail was missing.
+        ...(b.fee ? [{ label: t('cost.circleFee'), value: `${b.fee} USDC` }] : []),
+        { label: t('activity.type'), value: chip },
         { label: t('bridge.rowTo'), value: b.toLabel },
         ...(b.recipient
           ? [

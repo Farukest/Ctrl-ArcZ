@@ -428,6 +428,8 @@ export const en = {
   'activity.running': '{n} in progress',
   'activity.failed': '{n} needs a look',
   'activity.fresh': 'Just now',
+  'activity.feeIs': 'Fee {fee} USDC',
+  'activity.type': 'Type',
   'activity.jump': 'Go to it',
   'activity.steps': 'Steps',
   'activity.today': 'Today',

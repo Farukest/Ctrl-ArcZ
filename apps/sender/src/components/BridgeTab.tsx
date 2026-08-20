@@ -997,6 +997,9 @@ export function BridgeTab({ session }: { session: Session }) {
                  * `returning` for good.
                  */
                 ...(gwOnSource != null ? { returnBaseline: gwOnSource.toString() } : {}),
+                // The same figure the card above this form calls the fee: the
+                // ceiling that was signed, not a quote that can drift from it.
+                ...(gwCeiling != null ? { fee: usdc(gwCeiling) } : {}),
               });
               setSpotlight(transferId);
               setBridges(loadBridges());
@@ -1023,6 +1026,7 @@ export function BridgeTab({ session }: { session: Session }) {
           ...(isAddress(recipient.trim()) ? { recipient: recipient.trim() } : {}),
           state: res.mintTxHash ? 'success' : 'pending',
           steps,
+          ...(gwCeiling != null ? { fee: usdc(gwCeiling) } : {}),
           createdAt: Date.now(),
         });
         setBridges(loadBridges());
@@ -1042,6 +1046,27 @@ export function BridgeTab({ session }: { session: Session }) {
     // What the runner has told us so far, in the order it arrived, so a record
     // written mid-transfer carries the same steps the screen is showing.
     const reported: StoredBridgeStep[] = [];
+    /** Circle's figure for this transfer, known before the burn and written with it. */
+    let quotedFee: string | undefined;
+    /*
+     * The row exists before the wallet prompt does.
+     *
+     * It used to be written when the burn confirmed, which is ten to twenty seconds
+     * after the button is pressed and two signatures later. With the stepper gone
+     * from this form, that was ten to twenty seconds in which a transfer had been
+     * started and nothing anywhere said so. The id is generated rather than taken
+     * from the burn, because there is no burn yet; the burn hash lives in the steps,
+     * which is where the recovery pass reads it from anyway.
+     */
+    const record = startRun({
+      engine: 'cctp',
+      from,
+      to,
+      amount,
+      ...(isAddress(recipient.trim()) ? { recipient: recipient.trim() } : {}),
+    });
+    setSpotlight(record.id);
+    record.begin('approve');
     try {
       // Clients bound to the source chain, not to Arc. The wallet is already there
       // -- the button would have offered to switch otherwise -- but the app's own
@@ -1053,6 +1078,9 @@ export function BridgeTab({ session }: { session: Session }) {
           to,
           amount: parseUnits(amount, 6),
           ...(isAddress(recipient.trim()) ? { recipient: recipient.trim() as Address } : {}),
+          onQuote: (q) => {
+            quotedFee = usdc(q.maxFee);
+          },
           onStep: (step, txHash) => {
             const name = SDK_STEP_TO_UI[step];
             if (!name) return; // quoting is instant; it has no row of its own
@@ -1064,7 +1092,7 @@ export function BridgeTab({ session }: { session: Session }) {
             if (step === 'burn' && txHash) {
               dispatch.release();
               saveBridge({
-                id: txHash,
+                id: record.id,
                 engine: 'cctp',
                 from,
                 to,
@@ -1092,9 +1120,9 @@ export function BridgeTab({ session }: { session: Session }) {
                       [{ name: 'approve', state: 'noop' as const }]),
                   ...reported,
                 ],
+                ...(quotedFee ? { fee: quotedFee } : {}),
                 createdAt: Date.now(),
               });
-              setSpotlight(txHash);
               setBridges(loadBridges());
             }
           },
@@ -1114,7 +1142,7 @@ export function BridgeTab({ session }: { session: Session }) {
             [stepRow('fetchAttestation')]),
       ];
       saveBridge({
-        id: res.burnTxHash,
+        id: record.id,
         engine: 'cctp',
         from,
         to,
@@ -1126,6 +1154,7 @@ export function BridgeTab({ session }: { session: Session }) {
         // will still mint. Recording it as pending keeps the receipt either way.
         state: res.forwardTxHash ? 'success' : 'pending',
         steps,
+        fee: usdc(res.quote.maxFee),
         createdAt: Date.now(),
       });
       setBridges(loadBridges());
@@ -1134,6 +1163,11 @@ export function BridgeTab({ session }: { session: Session }) {
         res.forwardTxHash ? 'success' : 'info',
       );
     } catch (e) {
+      // The step it died on, told from how far it got: nothing reported means it
+      // never reached the approval.
+      const last = reported[reported.length - 1]?.name ?? 'approve';
+      record.fail(last, reasonOf(e));
+      setBridges(loadBridges());
       toast.push(e instanceof Error ? e.message : String(e), 'error');
     } finally {
       dispatch.release();

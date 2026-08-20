@@ -206,6 +206,14 @@ export interface StoredBridge {
   returnBaseline?: string;
   /** Circle's own words for why the mint failed, e.g. `ON_CHAIN_FAILURE`. */
   failureReason?: string;
+  /**
+   * What Circle charged, in display units, for the routes that charge.
+   *
+   * Absent on a deposit, which pays gas and nothing else, and absent on anything
+   * recorded before this was written down. A row without a fee says nothing about
+   * the fee rather than claiming it was free.
+   */
+  fee?: string;
 }
 
 const BRIDGES_KEY = 'ctrl-arcz:bridges';

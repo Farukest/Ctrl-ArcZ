@@ -40,6 +40,10 @@ export interface ActivityItem {
   /** What the row is about: a route, a chain, a name. */
   lead: ReactNode;
   amount?: ReactNode;
+  /** One word for what kind of move this was: a deposit, CCTP, Gateway. */
+  kind?: string;
+  /** What it cost, already worded, for the routes that charge. */
+  fee?: string;
   status: { tone: RowTone; label: string };
   time: string;
   /** A line under the head, for a subscription's name or a failure's reason. */
@@ -127,6 +131,14 @@ function ActivityRow({ item, lit }: { item: ActivityItem; lit: boolean }) {
           <span className="arow__time">{item.time}</span>
         </div>
       </div>
+      {(item.kind || item.fee) && (
+        <div className="arow__facts">
+          {item.fee && <span className="arow__fee">{item.fee}</span>}
+          {/* The kind sits at the end of the line, under the amount and the status
+              it belongs with, rather than under the route on the left. */}
+          {item.kind && <span className="achip achip--plain arow__kind">{item.kind}</span>}
+        </div>
+      )}
       {item.note && <div className="arow__note">{item.note}</div>}
       {item.steps.length > 0 && (
         <div className="arow__steps">
