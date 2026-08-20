@@ -39,7 +39,17 @@ export interface Advisory {
 export type Investigation =
   | { status: 'clear' }
   | { status: 'advisory'; advisory: Advisory }
-  | { status: 'unavailable' };
+  /**
+   * `why` separates three things the screen used to show as one.
+   *
+   * `unreachable` is the network failing. `off` is a server with no model key
+   * configured, which is every local checkout, since the key has exactly one copy
+   * and it is not on anyone's laptop. `budget` is the operator's daily model spend
+   * being gone. All three leave the rules standing on their own, and none of them
+   * is "the check ran and cleared this address" -- which is what the screen said
+   * for two of them until the server started telling them apart.
+   */
+  | { status: 'unavailable'; why: 'unreachable' | 'off' | 'budget' };
 
 export async function investigate(session: Session, target: Address): Promise<Investigation> {
   try {
@@ -51,11 +61,20 @@ export async function investigate(session: Session, target: Address): Promise<In
       // answer to a different question.
       body: JSON.stringify({ sender: session.address, target, chainId: session.chainId }),
     });
-    if (!res.ok) return { status: 'unavailable' };
-    const body = (await res.json()) as { advisory?: Advisory | null };
-    return body.advisory ? { status: 'advisory', advisory: body.advisory } : { status: 'clear' };
+    if (!res.ok) return { status: 'unavailable', why: 'unreachable' };
+    const body = (await res.json()) as {
+      advisory?: Advisory | null;
+      deep?: 'ran' | 'off' | 'budget';
+    };
+    if (body.advisory) return { status: 'advisory', advisory: body.advisory };
+    // An older server does not send `deep`. Reading its silence as "it ran" keeps
+    // the previous behaviour rather than accusing it of a gap it may not have.
+    if (body.deep === 'off' || body.deep === 'budget') {
+      return { status: 'unavailable', why: body.deep };
+    }
+    return { status: 'clear' };
   } catch {
-    return { status: 'unavailable' };
+    return { status: 'unavailable', why: 'unreachable' };
   }
 }
 

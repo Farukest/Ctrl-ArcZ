@@ -90,10 +90,11 @@ export function RiskGate({
   // Three outcomes, all of them stated. "Found nothing" was previously rendered
   // as the block disappearing, which reads as the check never having run.
   const deep: PanelCheck = investigating
-    ? { name: t('risk.checkDeep'), state: 'running' }
+    ? { name: t('risk.checkDeep'), reserveId: 'risk-agent', state: 'running' }
     : investigation?.status === 'advisory'
       ? {
           name: t('risk.checkDeep'),
+          reserveId: 'risk-agent',
           state: 'done',
           tone: investigation.advisory.level,
           result: investigation.advisory.headline,
@@ -108,13 +109,28 @@ export function RiskGate({
       : investigation?.status === 'clear'
         ? {
             name: t('risk.checkDeep'),
+            reserveId: 'risk-agent',
             state: 'done',
             tone: 'safe',
             result: t('risk.deepClear'),
           }
         : investigation?.status === 'unavailable'
-          ? { name: t('risk.checkDeep'), state: 'unavailable', result: t('risk.deepUnavailable') }
-          : { name: t('risk.checkDeep'), state: 'running' };
+          ? {
+              name: t('risk.checkDeep'),
+              reserveId: 'risk-agent',
+              state: 'unavailable',
+              // Which gap it is. "Not configured here" is the one every local
+              // checkout hits, and reading it as "could not be reached" sends
+              // somebody looking for a network fault that is not there.
+              result: t(
+                investigation.why === 'off'
+                  ? 'risk.deepOff'
+                  : investigation.why === 'budget'
+                    ? 'risk.deepBudget'
+                    : 'risk.deepUnavailable',
+              ),
+            }
+          : { name: t('risk.checkDeep'), reserveId: 'risk-agent', state: 'running' };
 
   // Never softer than what is known, and never green while something is still out.
   const level: PanelLevel = gate.blocked
@@ -124,9 +140,7 @@ export function RiskGate({
       : (gate.level ?? 'pending');
 
   const headline =
-    level === 'pending'
-      ? t('risk.checkingAddress')
-      : t(`risk.${level}` as TranslationKey);
+    level === 'pending' ? t('risk.checkingAddress') : t(`risk.${level}` as TranslationKey);
 
   return (
     <div style={{ marginTop: 12 }} data-testid={testId}>

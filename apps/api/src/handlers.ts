@@ -124,13 +124,21 @@ export async function cosignPost(req: IncomingMessage, res: ServerResponse): Pro
  * anyone can read the same logs. Making the browser sign for it would buy nothing
  * and add a wallet prompt to the send form's first render.
  */
-export async function verifiedRecipientsGet(req: IncomingMessage, res: ServerResponse): Promise<void> {
+export async function verifiedRecipientsGet(
+  req: IncomingMessage,
+  res: ServerResponse,
+): Promise<void> {
   const url = new URL(req.url ?? '', 'http://localhost');
   const sender = url.searchParams.get('sender');
   if (!sender || !isAddress(sender)) throw new HttpError(400, 'invalid sender');
   const chainRaw = url.searchParams.get('chainId');
-  if (chainRaw !== null && !/^\d{1,20}$/.test(chainRaw)) throw new HttpError(400, 'invalid chainId');
-  json(res, 200, verifiedRecipients(sender as Address, chainOf(chainRaw ? Number(chainRaw) : undefined)));
+  if (chainRaw !== null && !/^\d{1,20}$/.test(chainRaw))
+    throw new HttpError(400, 'invalid chainId');
+  json(
+    res,
+    200,
+    verifiedRecipients(sender as Address, chainOf(chainRaw ? Number(chainRaw) : undefined)),
+  );
 }
 
 /**
@@ -157,7 +165,8 @@ export async function announcementsGet(req: IncomingMessage, res: ServerResponse
   // must not throw either: reject it so a client bug is visible.
   if (raw !== null && !/^\d{1,20}$/.test(raw)) throw new HttpError(400, 'invalid fromBlock');
   const chainRaw = url.searchParams.get('chainId');
-  if (chainRaw !== null && !/^\d{1,20}$/.test(chainRaw)) throw new HttpError(400, 'invalid chainId');
+  if (chainRaw !== null && !/^\d{1,20}$/.test(chainRaw))
+    throw new HttpError(400, 'invalid chainId');
   json(
     res,
     200,
@@ -222,19 +231,26 @@ export async function gaslessPost(req: IncomingMessage, res: ServerResponse): Pr
     code?: unknown;
     salt?: unknown;
   };
-  if (typeof transferId !== 'string' || !/^\d{1,78}$/.test(transferId)) throw new HttpError(400, 'invalid transferId');
+  if (typeof transferId !== 'string' || !/^\d{1,78}$/.test(transferId))
+    throw new HttpError(400, 'invalid transferId');
   // The claim code is 16 Crockford base32 characters. It arrives already normalised
   // by the client, and a 6-digit value would be a pre-single-secret transfer.
   if (typeof code !== 'string' || !/^[0-9A-HJKMNP-TV-Z]{16}$/.test(code))
     throw new HttpError(400, 'invalid code');
-  if (typeof salt !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(salt)) throw new HttpError(400, 'invalid salt');
+  if (typeof salt !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(salt))
+    throw new HttpError(400, 'invalid salt');
 
   const cfg = {
     clientKey: env.circleClientKey,
     clientUrl: env.circleClientUrl,
     ownerKey: env.relayerPk,
   };
-  const result = await gaslessClaimToResult(cfg as never, BigInt(transferId), code, salt as `0x${string}`);
+  const result = await gaslessClaimToResult(
+    cfg as never,
+    BigInt(transferId),
+    code,
+    salt as `0x${string}`,
+  );
   json(res, 200, result);
 }
 
@@ -337,7 +353,11 @@ export function parsePolicy(body: unknown): {
   policy: EphemeralPolicy;
   chainId: number;
 } {
-  const { salt, policy, chainId: rawChainId } = (body ?? {}) as {
+  const {
+    salt,
+    policy,
+    chainId: rawChainId,
+  } = (body ?? {}) as {
     salt?: unknown;
     policy?: unknown;
     chainId?: unknown;
@@ -436,7 +456,12 @@ export async function relayAnnouncePost(req: IncomingMessage, res: ServerRespons
   checkQuota(caller, 1);
   if (!env.relayerPk) throw new HttpError(400, 'no relayer key configured');
 
-  const { stealthAddress, ephemeralPubKey, box, chainId: rawChainId } = parseBody(raw) as {
+  const {
+    stealthAddress,
+    ephemeralPubKey,
+    box,
+    chainId: rawChainId,
+  } = parseBody(raw) as {
     stealthAddress?: unknown;
     ephemeralPubKey?: unknown;
     box?: unknown;
@@ -447,7 +472,10 @@ export async function relayAnnouncePost(req: IncomingMessage, res: ServerRespons
   if (typeof ephemeralPubKey !== 'string' || !/^0x[0-9a-fA-F]{66}$/.test(ephemeralPubKey)) {
     throw new HttpError(400, 'invalid ephemeralPubKey');
   }
-  const stealth = { stealthAddress: addr(stealthAddress, 'stealthAddress'), ephemeralPubKey: ephemeralPubKey as Hex };
+  const stealth = {
+    stealthAddress: addr(stealthAddress, 'stealthAddress'),
+    ephemeralPubKey: ephemeralPubKey as Hex,
+  };
   const boxAddr = addr(box, 'box');
 
   // An announcement for an address with no code would be a relayer-funded lie, and
@@ -484,7 +512,11 @@ export async function investigatePost(req: IncomingMessage, res: ServerResponse)
   // The per-IP window in `http.ts` covers a single abuser; `takeInvestigatorBudget`
   // bounds the operator's model spend however many addresses or IPs show up.
   const raw = await readRaw(req);
-  const { target, sender: claimedSender, chainId: rawChainId } = parseBody(raw) as {
+  const {
+    target,
+    sender: claimedSender,
+    chainId: rawChainId,
+  } = parseBody(raw) as {
     target?: unknown;
     sender?: unknown;
     chainId?: unknown;
@@ -512,10 +544,22 @@ export async function investigatePost(req: IncomingMessage, res: ServerResponse)
     verifiedRecipientsLookbackBlocks: VERIFIED_LOOKBACK_BLOCKS,
   });
 
-  // No key, or the day's model budget is spent: answer with the rules alone. The
-  // app is built to behave identically when the investigator says nothing.
-  if (!investigatorEnabled(env.anthropicApiKey) || !takeInvestigatorBudget()) {
-    json(res, 200, { rule: report, advisory: null, dossier: null });
+  /*
+   * No key, or the day's model budget is spent: answer with the rules alone.
+   *
+   * `deep` says which of those happened, and it exists because the answer used to
+   * be `advisory: null` for all three of "it looked and found nothing", "there is
+   * no key here" and "the budget is gone". The screen could only read that one
+   * way, so it said "Nothing further found" -- a claim that a check had run and
+   * cleared the address, on a server where it had never run at all. A firewall
+   * that overstates what it checked is worse than one that admits a gap.
+   */
+  if (!investigatorEnabled(env.anthropicApiKey)) {
+    json(res, 200, { rule: report, advisory: null, dossier: null, deep: 'off' });
+    return;
+  }
+  if (!takeInvestigatorBudget()) {
+    json(res, 200, { rule: report, advisory: null, dossier: null, deep: 'budget' });
     return;
   }
 
@@ -526,7 +570,10 @@ export async function investigatePost(req: IncomingMessage, res: ServerResponse)
   });
   const advisory = await investigate(env.anthropicApiKey, dossier);
 
-  json(res, 200, { rule: report, advisory, dossier });
+  // `ran` even when the advisory is null: the model was asked and either found
+  // nothing to add or declined to answer, and both of those are a check that
+  // happened. The one thing it must not be confused with is a check that did not.
+  json(res, 200, { rule: report, advisory, dossier, deep: 'ran' });
 }
 
 export async function relayGasPost(req: IncomingMessage, res: ServerResponse): Promise<void> {

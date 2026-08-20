@@ -500,19 +500,25 @@ export const en = {
   'risk.expandAll': 'Expand all',
   'risk.collapseAll': 'Collapse all',
   // The two sources, named as the user sees them. "Rules" is what runs in the
-  // browser off chain data; "Deep check" is the server's reasoned second opinion.
+  // browser off chain data. The other half is Claude, reading a dossier this
+  // server assembles about the recipient and answering in its own words, so it is
+  // named for what it is: "Deep check" described the depth and hid the mechanism,
+  // and the mechanism is the interesting part.
   'risk.checkRules': 'Rules',
   'risk.rulePassed': 'Nothing matched',
   'risk.ruleFinding': '1 finding',
   'risk.ruleFindings': '{count} findings',
-  'risk.checkDeep': 'Deep check',
+  'risk.checkDeep': 'Agent check',
   'risk.checkRunning': 'Checking',
   'risk.checkingAddress': 'Checking this address',
   'risk.deepClear': 'Nothing further found',
-  // Said out loud rather than left blank: this is the half of the firewall that
-  // did not run, and the rules alone are a thinner answer than the user thinks.
+  // Three different gaps, said out loud rather than left blank or, worse, dressed
+  // up as a clean result. The rules alone are a thinner answer than the user
+  // thinks, and which half is missing changes what they should do about it.
   'risk.deepUnavailable': 'Could not be reached, rules only',
-  'risk.investigating': 'Checking what the rules cannot see...',
+  'risk.deepOff': 'Not configured here, rules only',
+  'risk.deepBudget': "Today's limit reached, rules only",
+  'risk.investigating': 'Asking the agent what the rules cannot see...',
   'risk.override.open': 'This is a different address, and I mean to pay it',
   'risk.override.openUnverified': 'Send without verifying this address',
   'risk.override.compareTitle': 'Look at both before you decide',

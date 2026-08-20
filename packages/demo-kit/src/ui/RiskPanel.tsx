@@ -1,6 +1,7 @@
-import type { ReactNode } from 'react';
+import type { ReactNode, RefObject } from 'react';
 import { IconAlert, IconBlock, IconChevron, IconShield } from './icons.js';
 import { useT } from '../i18n/context.js';
+import { readReserved, useRecordHeight } from './reservedHeight.js';
 
 export type CheckState = 'running' | 'done' | 'unavailable';
 /** What this source itself concluded, which is not always what the card says. */
@@ -24,6 +25,17 @@ export interface PanelCheck {
   result?: ReactNode;
   /** The reasoning, shown when the panel is expanded. */
   detail?: ReactNode;
+  /**
+   * Hold this row's last height open while it is still running.
+   *
+   * "Nothing moves except the text inside them" was true of a row whose answer is
+   * a few words. It is not true of the agent's, which arrives as a headline and up
+   * to four bullets and pushes the rest of the form down the page at the exact
+   * moment somebody is reading it. What the row will be is unknowable before the
+   * answer, but what it was last time is a good guess at it, so the space is held
+   * from the start and the answer lands in it.
+   */
+  reserveId?: string;
 }
 
 /**
@@ -98,22 +110,48 @@ export function RiskPanel({
 
       <ul className="riskp__checks">
         {checks.map((c, i) => (
-          <li
-            key={i}
-            className={`riskp__check riskp__check--${c.state} riskp__check--tone-${c.tone ?? 'neutral'}`}
-            data-check={i}
-          >
-            <span className="riskp__mark" aria-hidden />
-            <span className="riskp__name">{c.name}</span>
-            <span className="riskp__result">
-              {c.state === 'running' ? t('risk.checkRunning') : c.result}
-            </span>
-            {!collapsed && c.detail && <div className="riskp__detail">{c.detail}</div>}
-          </li>
+          <CheckRow key={i} check={c} index={i} collapsed={collapsed} />
         ))}
       </ul>
 
       {footer}
     </div>
+  );
+}
+
+/**
+ * One source's row.
+ *
+ * Its own component so it can hold a hook: the height it settles at is recorded
+ * when the answer is in, and read back as a floor while the next one is still
+ * out. Recording is switched off while the row is running, or the row would teach
+ * the reserve its own empty height and the space would never be held again.
+ */
+function CheckRow({
+  check,
+  index,
+  collapsed,
+}: {
+  check: PanelCheck;
+  index: number;
+  collapsed: boolean;
+}) {
+  const t = useT();
+  const running = check.state === 'running';
+  const ref = useRecordHeight(running ? undefined : check.reserveId);
+  const reserved = running && check.reserveId ? readReserved(check.reserveId) : null;
+
+  return (
+    <li
+      ref={ref as RefObject<HTMLLIElement>}
+      className={`riskp__check riskp__check--${check.state} riskp__check--tone-${check.tone ?? 'neutral'}`}
+      data-check={index}
+      {...(reserved ? { style: { minHeight: reserved } } : {})}
+    >
+      <span className="riskp__mark" aria-hidden />
+      <span className="riskp__name">{check.name}</span>
+      <span className="riskp__result">{running ? t('risk.checkRunning') : check.result}</span>
+      {!collapsed && check.detail && <div className="riskp__detail">{check.detail}</div>}
+    </li>
   );
 }
