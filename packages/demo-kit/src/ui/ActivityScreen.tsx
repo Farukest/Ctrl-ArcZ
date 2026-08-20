@@ -12,6 +12,8 @@ import type {
 import { IconCheck, IconChevron, IconExternal } from './icons.js';
 import { Button, CopyButton, Pagination, SearchField, Select, short } from './components.js';
 import { ChainLogo } from './ChainLogo.js';
+import { TokenLogo } from './TokenLogo.js';
+import { deploymentFor, tokensFor } from '@ctrl-arcz/sdk';
 import { useT } from '../i18n/context.js';
 
 /**
@@ -48,14 +50,29 @@ function Mark({ icon }: { icon: ActivityIcon }) {
     );
   }
   if (icon.kind === 'token') {
-    // The symbol in a disc, with the direction as a badge on it, which is how the
-    // same row reads in the app this is modelled on. A logo would be better and
-    // is not available from a symbol alone: the same ticker is a different
-    // contract on every chain, and guessing which one would eventually draw the
-    // wrong coin's face beside somebody's money.
+    /*
+     * The token's own mark, resolved through the registry for the chain it moved
+     * on, with that chain badged onto it and the direction under it.
+     *
+     * Resolved rather than guessed from the symbol: the same ticker is a different
+     * contract on every network. An earlier version drew the four letters of the
+     * ticker in a grey disc, which is what a token badge looks like when nobody
+     * checked whether the app already had one. It did.
+     */
+    const token = tokensFor(icon.chainId)?.find((x) => x.symbol === icon.symbol);
+    const chain = icon.chainId === undefined ? undefined : deploymentFor(icon.chainId);
     return (
       <span className={`amark amark--token amark--${icon.direction ?? 'none'}`} aria-hidden>
-        <span className="amark__sym">{icon.symbol.slice(0, 4)}</span>
+        {token ? (
+          <TokenLogo token={token} size={26} />
+        ) : (
+          <span className="amark__sym">{icon.symbol.slice(0, 4)}</span>
+        )}
+        {chain && (
+          <span className="amark__chain">
+            <ChainLogo id={chain.chain} size={13} />
+          </span>
+        )}
         {icon.direction && (
           <span className="amark__dir">{icon.direction === 'in' ? '↓' : '↑'}</span>
         )}
@@ -130,7 +147,12 @@ function Row({
         <Mark icon={view.icon} />
         <span className="arow2__body">
           <span className="arow2__title">{view.title}</span>
-          {view.subtitle && <span className="arow2__sub">{view.subtitle}</span>}
+          {view.subtitle && (
+            <span className="arow2__sub">
+              <span className="arow2__subtext">{view.subtitle}</span>
+              {view.subtitleCopy && <CopyButton value={view.subtitleCopy} />}
+            </span>
+          )}
         </span>
         <span className="arow2__right">
           {view.amount && <span className="arow2__amount mono">{view.amount}</span>}
@@ -157,14 +179,14 @@ function Row({
             {entry.facts.map((f) => (
               <div className="afact" key={f.label}>
                 <dt>{f.label}</dt>
-                <dd className={f.mono ? 'mono' : undefined}>
+                <dd className={f.mono ? 'mono' : undefined} title={f.value}>
                   {f.href ? (
                     <a href={f.href} target="_blank" rel="noreferrer">
-                      {f.value}
+                      {f.display ?? f.value}
                       <IconExternal width={11} height={11} />
                     </a>
                   ) : (
-                    f.value
+                    (f.display ?? f.value)
                   )}
                   {f.copy && <CopyButton value={f.value} />}
                 </dd>

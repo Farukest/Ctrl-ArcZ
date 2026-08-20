@@ -13,7 +13,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { Address } from 'viem';
 import type { Session } from '@ctrl-arcz/demo-kit';
-import { getCleanHistory, getTransfer, type CleanHistory } from '@ctrl-arcz/sdk';
+import {
+  deploymentFor,
+  getCleanHistory,
+  getTransfer,
+  tokensFor,
+  type CleanHistory,
+} from '@ctrl-arcz/sdk';
 import { loadTransfers } from '../store.js';
 import type { SentRow } from './activityEntries.js';
 
@@ -64,14 +70,38 @@ export function useSentTransfers(session: Session): {
 export function useTokenHistory(session: Session): {
   history: CleanHistory | null;
   error: string | null;
+  /** No explorer for this chain, so there is no history to read. */
+  unsupported: boolean;
   reload: () => Promise<void>;
 } {
   const [history, setHistory] = useState<CleanHistory | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const deployment = deploymentFor(session.chainId);
+  const apiUrl = deployment?.explorerApi;
 
   const reload = useCallback(async () => {
+    if (!apiUrl) {
+      setHistory(null);
+      return;
+    }
     try {
-      setHistory(await getCleanHistory(session.address as Address));
+      /*
+       * The chain the wallet is on, and that chain's tokens.
+       *
+       * Both of these default to Arc inside the SDK, and nothing was passing
+       * either, so this list showed Arc's history on every network -- a wallet on
+       * Base was being shown somebody else's transfers, or its own from a chain it
+       * was not looking at, with no way to tell from the rows which it was. The
+       * allowlist has to travel with the endpoint for the same reason: Arc's USDC
+       * address is not a token on Base, so filtering Base's transfers through it
+       * would empty the list rather than clean it.
+       */
+      setHistory(
+        await getCleanHistory(session.address as Address, {
+          apiUrl,
+          allowedTokens: tokensFor(session.chainId).map((token) => token.address),
+        }),
+      );
       setError(null);
     } catch (e) {
       // Only the first failure is worth reporting. A later one leaves the last
@@ -82,7 +112,7 @@ export function useTokenHistory(session: Session): {
         return prev;
       });
     }
-  }, [session.address]);
+  }, [session.address, session.chainId, apiUrl]);
 
   useEffect(() => {
     void reload();
@@ -97,5 +127,5 @@ export function useTokenHistory(session: Session): {
     };
   }, [reload]);
 
-  return { history, error, reload };
+  return { history, error, unsupported: !apiUrl, reload };
 }

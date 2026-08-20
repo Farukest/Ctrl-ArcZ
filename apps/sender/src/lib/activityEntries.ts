@@ -12,7 +12,14 @@
  * for a history line, a chain name for a bridge, a merchant for a subscription.
  */
 import { formatUnits } from 'viem';
-import { explorerTxUrl, type HistoryEntry, type ProtectedTransfer } from '@ctrl-arcz/sdk';
+import {
+  chainLabel,
+  deploymentFor,
+  explorerTxUrl,
+  type CctpChainName,
+  type HistoryEntry,
+  type ProtectedTransfer,
+} from '@ctrl-arcz/sdk';
 import {
   deriveStepStatuses,
   stepsForRun,
@@ -28,6 +35,11 @@ type T = (key: string, vars?: Record<string, string | number>) => string;
 
 /** The four lists this screen can show. Also the facet namespace of each. */
 export type ActivityKind = 'sent' | 'history' | 'bridge' | 'subs';
+
+/** `0x1234...cdef`, the form every id in this app is read in. */
+function short(value: string): string {
+  return value.length > 18 ? `${value.slice(0, 8)}...${value.slice(-6)}` : value;
+}
 
 function lower(parts: readonly (string | number | undefined | null)[]): string {
   return parts
@@ -83,17 +95,25 @@ export function sentEntries(rows: readonly SentRow[], t: T): ActivityEntry[] {
       view: {
         icon: { kind: 'status', tone: sentTone(status) },
         title: `#${stored.transferId}`,
-        subtitle: stored.to,
+        subtitle: short(stored.to),
+        subtitleCopy: stored.to,
         amount: `${stored.amount} USDC`,
         status: { tone: sentTone(status), label: t(`active.status.${status.toLowerCase()}`) },
       },
       facts: [
-        { label: t('activity.to'), value: stored.to, copy: true, mono: true },
+        {
+          label: t('activity.to'),
+          value: stored.to,
+          display: short(stored.to),
+          copy: true,
+          mono: true,
+        },
         ...(stored.txHash
           ? [
               {
                 label: t('bridge.rowReceipt'),
                 value: stored.txHash,
+                display: short(stored.txHash),
                 copy: true,
                 mono: true,
                 href: explorerTxUrl(stored.txHash),
@@ -112,7 +132,14 @@ export function sentEntries(rows: readonly SentRow[], t: T): ActivityEntry[] {
 
 /* ---- History: what the chain itself recorded ----------------------------- */
 
-export function historyEntries(entries: readonly HistoryEntry[], t: T): ActivityEntry[] {
+export function historyEntries(
+  entries: readonly HistoryEntry[],
+  t: T,
+  /** The chain these were read from. Rows without it cannot say where they happened. */
+  chainId: number | undefined,
+): ActivityEntry[] {
+  const network = chainId === undefined ? undefined : deploymentFor(chainId);
+  const networkName = network ? chainLabel(network.chain as CctpChainName) : undefined;
   return entries.map((e) => {
     const amount = formatUnits(e.amount, e.decimals);
     const incoming = e.direction === 'in';
@@ -143,24 +170,35 @@ export function historyEntries(entries: readonly HistoryEntry[], t: T): Activity
       ]),
       facets: [incoming ? 'received' : 'sent', `token:${e.tokenSymbol.toLowerCase()}`],
       view: {
-        icon: { kind: 'token', symbol: e.tokenSymbol, direction: incoming ? 'in' : 'out' },
+        icon: {
+          kind: 'token',
+          symbol: e.tokenSymbol,
+          ...(chainId === undefined ? {} : { chainId }),
+          direction: incoming ? 'in' : 'out',
+        },
         title: t(incoming ? 'history.received' : 'history.sent'),
-        subtitle: party,
+        subtitle: e.kind === 'transfer' ? short(party) : party,
+        ...(e.kind === 'transfer' ? { subtitleCopy: party } : {}),
         amount: `${incoming ? '+' : '-'}${amount} ${e.tokenSymbol}`,
       },
       facts: [
+        ...(networkName ? [{ label: t('common.network'), value: networkName }] : []),
         {
           label: t(incoming ? 'activity.from' : 'activity.to'),
           value: party,
+          ...(e.kind === 'transfer' ? { display: short(party) } : {}),
           copy: e.kind === 'transfer',
           mono: e.kind === 'transfer',
         },
         {
           label: t('bridge.rowReceipt'),
           value: e.txHash,
+          display: short(e.txHash),
           copy: true,
           mono: true,
-          href: explorerTxUrl(e.txHash),
+          // The explorer of the chain it happened on, not of the one this app
+          // started life on.
+          ...(network?.explorerUrl ? { href: `${network.explorerUrl}/tx/${e.txHash}` } : {}),
         },
       ],
     };
@@ -261,7 +299,15 @@ export function bridgeEntries(bridges: readonly StoredBridge[], t: T): ActivityE
         { label: t('cost.amount'), value: `${b.amount} USDC` },
         { label: t('bridge.rowTo'), value: b.toLabel },
         ...(b.recipient
-          ? [{ label: t('sub.d.merchant'), value: b.recipient, copy: true, mono: true }]
+          ? [
+              {
+                label: t('sub.d.merchant'),
+                value: b.recipient,
+                display: short(b.recipient),
+                copy: true,
+                mono: true,
+              },
+            ]
           : []),
         ...(b.failureReason ? [{ label: t('bridge.rowReason'), value: b.failureReason }] : []),
         ...(receipt?.txHash
@@ -269,6 +315,7 @@ export function bridgeEntries(bridges: readonly StoredBridge[], t: T): ActivityE
               {
                 label: t('bridge.rowReceipt'),
                 value: receipt.txHash,
+                display: short(receipt.txHash),
                 copy: true,
                 mono: true,
                 ...(receipt.explorerUrl ? { href: receipt.explorerUrl } : {}),

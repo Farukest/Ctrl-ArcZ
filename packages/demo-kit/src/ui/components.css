@@ -3919,3 +3919,43 @@ a.hstep__go:hover {
 .amark--out .amark__dir {
   color: var(--block);
 }
+
+/* The chain a token moved on, badged onto its mark. Opposite corner from the
+   direction arrow so neither covers the other. */
+.amark__chain {
+  position: absolute;
+  right: -3px;
+  top: -3px;
+  display: inline-flex;
+  border-radius: 50%;
+  background: var(--surface-1);
+  padding: 1px;
+}
+
+/* Room to read. The detail was a label and a value crushed against each other
+   with a 66-character hash wrapping across two lines between them. */
+.afacts {
+  gap: var(--sp-2);
+}
+.afact {
+  gap: var(--sp-4);
+  padding: 4px 0;
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: var(--fs-sm);
+}
+.afact:last-child {
+  border-bottom: 0;
+}
+.afact dd {
+  white-space: nowrap;
+}
+.arow2__sub {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.arow2__subtext {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

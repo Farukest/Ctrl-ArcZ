@@ -392,6 +392,7 @@ export const tr: Record<TranslationKey, string> = {
   'activity.sort.oldest': 'En eski',
   'activity.sort.largest': 'En büyük',
   'activity.noMatch': 'Buna uyan bir şey yok.',
+  'activity.noExplorer': 'Bu ağın okuyabileceğimiz bir işlem geçmişi yok.',
   'activity.v.sent': 'Gönderilen',
   'activity.v.history': 'Geçmiş',
   'activity.v.bridge': 'Köprü',

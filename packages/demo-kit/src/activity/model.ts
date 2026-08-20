@@ -27,7 +27,15 @@ export type ActivityTone = 'ok' | 'warn' | 'err' | 'idle';
 export type ActivityIcon =
   | { kind: 'chain'; id: string }
   | { kind: 'route'; from: string; to: string }
-  | { kind: 'token'; symbol: string; direction?: 'in' | 'out' }
+  /**
+   * A token's own mark, with the chain it moved on badged onto it.
+   *
+   * `chainId` is not decoration. The same ticker is a different contract on every
+   * network, so the app resolves the mark through the registry for that chain
+   * rather than guessing from the symbol -- and a row that shows an amount without
+   * saying which network it moved on is a row nobody can act on.
+   */
+  | { kind: 'token'; symbol: string; chainId?: number; direction?: 'in' | 'out' }
   | { kind: 'status'; tone: ActivityTone };
 
 export interface ActivityView {
@@ -36,6 +44,14 @@ export interface ActivityView {
   title: string;
   /** Under it, when the title does not say enough on its own. */
   subtitle?: string;
+  /**
+   * The full value behind the subtitle, when it is data rather than prose.
+   *
+   * An address in a row is there to be checked and pasted, and a row that shows
+   * one without a way to take it makes the reader open the detail to copy what is
+   * already in front of them.
+   */
+  subtitleCopy?: string;
   /** Already formatted, sign included where the direction is known. */
   amount?: string;
   /** Small labels after the row: `Deposit`, `CCTP`, a subscription's name. */
@@ -54,7 +70,16 @@ export interface ActivityView {
 /** A label and a value in the detail view. Data, so it can be copied or opened. */
 export interface ActivityFact {
   label: string;
+  /** The whole thing. What gets copied, whatever is shown. */
   value: string;
+  /**
+   * A shorter form to show instead.
+   *
+   * A 66-character transaction hash printed in full wrapped onto a second line
+   * and turned the detail into a wall; shortened, it fits its row and the copy
+   * button still hands over every character.
+   */
+  display?: string;
   /** Show a copy button. For anything somebody would paste somewhere else. */
   copy?: boolean;
   /** Opens off site, e.g. an explorer. */

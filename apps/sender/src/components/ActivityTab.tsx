@@ -61,10 +61,11 @@ export function ActivityTab({ session, onChange }: { session: Session; onChange:
 
   const entries: readonly ActivityEntry[] = useMemo(() => {
     if (view === 'sent') return sentEntries(sent.rows ?? [], t as never);
-    if (view === 'history') return historyEntries(chainHistory.history?.entries ?? [], t as never);
+    if (view === 'history')
+      return historyEntries(chainHistory.history?.entries ?? [], t as never, session.chainId);
     const mine = runs.filter((b) => isSubscriptionRun(b, boxes) === (view === 'subs'));
     return bridgeEntries(mine, t as never);
-  }, [view, sent.rows, chainHistory.history, runs, boxes, t]);
+  }, [view, sent.rows, chainHistory.history, runs, boxes, session.chainId, t]);
 
   const facets = useMemo(() => {
     if (view === 'sent')
@@ -148,7 +149,11 @@ export function ActivityTab({ session, onChange }: { session: Session; onChange:
         />
       </div>
       <Card data-testid="activity-card">
-        {view === 'history' && chainHistory.error && chainHistory.history === null ? (
+        {view === 'history' && chainHistory.unsupported ? (
+          <p className="hint" data-testid="activity-no-explorer">
+            {t('activity.noExplorer')}
+          </p>
+        ) : view === 'history' && chainHistory.error && chainHistory.history === null ? (
           <div className="err-text">{chainHistory.error}</div>
         ) : (
           <ActivityScreen
@@ -168,16 +173,26 @@ export function ActivityTab({ session, onChange }: { session: Session; onChange:
   );
 }
 
-/** One chip per token this wallet has actually moved, most-used first. */
+/**
+ * One chip per token this wallet has actually moved, most-used first.
+ *
+ * The label comes off the row's own mark rather than from the facet id, which is
+ * lowercased for matching. Upper-casing that back gave "CIRBTC" for a token whose
+ * name is cirBTC, which is the sort of detail somebody checks a ticker against.
+ */
 function tokenFacets(entries: readonly ActivityEntry[]): { id: string; label: string }[] {
-  const seen = new Map<string, number>();
+  const seen = new Map<string, { n: number; label: string }>();
   for (const e of entries) {
+    const symbol = e.view.icon.kind === 'token' ? e.view.icon.symbol : undefined;
     for (const f of e.facets) {
-      if (f.startsWith('token:')) seen.set(f, (seen.get(f) ?? 0) + 1);
+      if (!f.startsWith('token:')) continue;
+      const at = seen.get(f);
+      if (at) at.n += 1;
+      else seen.set(f, { n: 1, label: symbol ?? f.slice('token:'.length) });
     }
   }
   return [...seen.entries()]
-    .sort((a, b) => b[1] - a[1])
+    .sort((a, b) => b[1].n - a[1].n)
     .slice(0, 4)
-    .map(([id]) => ({ id, label: id.slice('token:'.length).toUpperCase() }));
+    .map(([id, v]) => ({ id, label: v.label }));
 }

@@ -438,6 +438,7 @@ export const en = {
   'activity.sort.oldest': 'Oldest',
   'activity.sort.largest': 'Largest',
   'activity.noMatch': 'Nothing matches that.',
+  'activity.noExplorer': 'This network publishes no transaction history we can read.',
   'activity.v.sent': 'Sent',
   'activity.v.history': 'History',
   'activity.v.bridge': 'Bridge',
