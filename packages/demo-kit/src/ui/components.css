@@ -1558,11 +1558,21 @@
   min-height: 20px;
 }
 /* The status dot. A ring while running, filled once answered, hollow and dim
-   where the source could not be reached. */
+   where the source could not be reached.
+
+   Pinned to the first line, not to the middle of the row. Centring works only
+   while the answer fits on one line, because then the middle IS the first line.
+   The agent's answer is a sentence and wraps to two or three, and the dot slid
+   down to the middle of them while its own label stayed at the top, so the row
+   read as a label floating above someone else's dot. The offset is the optical
+   centre of one 20px line for an 8px dot; `start` is what keeps it there
+   whatever the row grows to, including the height held open while the answer is
+   still out. */
 .riskp__mark {
-  align-self: center;
+  align-self: start;
   width: 8px;
   height: 8px;
+  margin-top: 6px;
   margin-left: 3px;
   border-radius: 50%;
   background: var(--text-lo);
