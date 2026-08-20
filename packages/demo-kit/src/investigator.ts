@@ -43,6 +43,19 @@ import { clampVerdict, type Advisory, type Dossier } from '@ctrl-arcz/sdk';
 const MODEL = process.env.INVESTIGATOR_MODEL || 'claude-haiku-4-5-20251001';
 /** A headline and four short sentences. The old 1024 was never close to reached. */
 const MAX_TOKENS = 512;
+/**
+ * Reasoning effort, sent only when an operator asks for it.
+ *
+ * `effort: 'low'` is a knob on the models that have one, and it was sent
+ * unconditionally. The fast model does not have one, and answers a request
+ * carrying it with `400 This model does not support the effort parameter` --
+ * which this function catches, along with everything else, and turns into a null
+ * advisory. So the check "worked", quickly, and said nothing, on every single
+ * address. A silent switch to a model that cannot be called is the exact failure
+ * this parameter should not be able to cause, and now it cannot: nothing sends it
+ * unless it was asked for, alongside the model that wants it.
+ */
+const EFFORT = process.env.INVESTIGATOR_EFFORT;
 const TIMEOUT_MS = 12_000;
 
 const SYSTEM = `You review a single USDC payment recipient on the Arc blockchain and report what the on-chain evidence suggests.
@@ -109,7 +122,7 @@ export async function investigate(
       max_tokens: MAX_TOKENS,
       system: SYSTEM,
       output_config: {
-        effort: 'low',
+        ...(EFFORT ? { effort: EFFORT as 'low' } : {}),
         format: { type: 'json_schema', schema: SCHEMA },
       },
       messages: [
