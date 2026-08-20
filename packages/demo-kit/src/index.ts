@@ -56,3 +56,31 @@ export {
   type ReportedStep,
   type LiveRun,
 } from './bridgeProgress.js';
+
+// The activity engine: one row shape for everything that has happened, and the
+// query it is read through. UI for it lives in `@ctrl-arcz/demo-kit/ui`.
+export {
+  ALL_FACET,
+  dayStart,
+  emptyQuery,
+  facetCounts,
+  groupByDay,
+  pageOf,
+  selectEntries,
+  type ActivityAction,
+  type ActivityDay,
+  type ActivityEntry,
+  type ActivityFact,
+  type ActivityIcon,
+  type ActivityPage,
+  type ActivityQuery,
+  type ActivitySort,
+  type ActivityStep,
+  type ActivityTone,
+  type ActivityView,
+} from './activity/model.js';
+export {
+  useActivityFeed,
+  type ActivityFacetOption,
+  type ActivityFeed,
+} from './activity/useActivityFeed.js';
