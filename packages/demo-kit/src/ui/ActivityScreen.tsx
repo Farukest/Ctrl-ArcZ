@@ -48,9 +48,17 @@ function Mark({ icon }: { icon: ActivityIcon }) {
     );
   }
   if (icon.kind === 'token') {
+    // The symbol in a disc, with the direction as a badge on it, which is how the
+    // same row reads in the app this is modelled on. A logo would be better and
+    // is not available from a symbol alone: the same ticker is a different
+    // contract on every chain, and guessing which one would eventually draw the
+    // wrong coin's face beside somebody's money.
     return (
       <span className={`amark amark--token amark--${icon.direction ?? 'none'}`} aria-hidden>
         <span className="amark__sym">{icon.symbol.slice(0, 4)}</span>
+        {icon.direction && (
+          <span className="amark__dir">{icon.direction === 'in' ? '↓' : '↑'}</span>
+        )}
       </span>
     );
   }
@@ -126,7 +134,9 @@ function Row({
         </span>
         <span className="arow2__right">
           {view.amount && <span className="arow2__amount mono">{view.amount}</span>}
-          <span className={`hstatus hstatus--${view.status.tone}`}>{view.status.label}</span>
+          {view.status && (
+            <span className={`hstatus hstatus--${view.status.tone}`}>{view.status.label}</span>
+          )}
         </span>
         {expandable && <IconChevron className="arow2__chev" width={15} height={15} aria-hidden />}
       </button>

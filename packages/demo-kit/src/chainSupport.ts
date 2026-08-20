@@ -70,7 +70,7 @@ const ALSO_NEEDS: Record<ChainFeature, ((chainId: number) => boolean) | null> = 
    * This is safe to close because a claim is not the last resort. An unclaimed
    * transfer expires and `reclaimExpired` returns it to the sender, callable by
    * anyone, so a recipient who cannot reach the screen loses time rather than
-   * money. Cancelling is not gated by this or anything else -- `TransfersTab` asks
+   * money. Cancelling is not gated by this or anything else -- the sent list asks
    * no chain question at all -- so a sender is never locked out of their own funds
    * by a screen that will not open.
    */

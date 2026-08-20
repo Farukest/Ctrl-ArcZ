@@ -124,7 +124,7 @@ export function ReceivedTab({ session }: { session: Session }) {
             <HistoryRow.Head
               lead={
                 <>
-                  {/* See TransfersTab: a two-character id is read, not copied. */}
+                  {/* Same rule as the sent list: a two-character id is read, not copied. */}
                   <span className="hrow__id mono">#{transferId.toString()}</span>
                   <span className="hrow__arrow" aria-hidden>
                     &larr;

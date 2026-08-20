@@ -40,7 +40,15 @@ export interface ActivityView {
   amount?: string;
   /** Small labels after the row: `Deposit`, `CCTP`, a subscription's name. */
   chips?: readonly string[];
-  status: { tone: ActivityTone; label: string };
+  /**
+   * Optional, because not every row has a state worth a pill.
+   *
+   * A transfer is pending or claimed or refunded and the reader needs to be told
+   * which. A line from the chain's own history already happened; giving it a pill
+   * meant finding something to put in it, and what went in was the token symbol,
+   * which the amount beside it already said.
+   */
+  status?: { tone: ActivityTone; label: string };
 }
 
 /** A label and a value in the detail view. Data, so it can be copied or opened. */
