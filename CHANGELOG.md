@@ -42,6 +42,26 @@ değişen yalnızca uygulama ve demo-kit.
 - Tarayıcıda: onay reddi ve yakma reddi ayrı ayrı, gerçek viem sarmalamasıyla;
   dil değiştirilince aynı satırın Türkçeye dönmesi.
 
+## [0.2.1]: 2026-08-22
+
+Tek sayı düzeltmesi, ama o sayı Arbitrum Sepolia'yı kullanılmaz yapıyordu. API
+değişmedi.
+
+### Düzeltildi
+
+- **Arbitrum Sepolia'nın deploy bloğu yanlıştı: 11509330 yerine 299143893.**
+  Deploy script'i bloğu `block.number` ile kaydediyor, Arbitrum'da ise o değer
+  L1 bloğu. Bu zincir Ethereum Sepolia ile aynı dakikada çıktığı için deftere
+  Sepolia'nın yüksekliği yazılmıştı. `deploymentFor(421614)` bunu okuyan her
+  tarama 289 milyon blok geriden, onar binlik parçalarla başlıyordu: duyurular
+  ve geçmiş o zincirde hiç dönmüyordu. Yeni değer broadcast makbuzundan alındı,
+  `CodeClaimVerifier`'ın indiği blok, yani iki olay kaynağını da kapsıyor.
+  Diğer dört zincirin blokları makbuzlarla karşılaştırıldı, hepsi doğru.
+- **`DeployChain.s.sol` bir daha aynı şeyi yazmıyor.** Blok numarasını ArbSys
+  (`0x64`) precompile'ına soruyor, cevap gelmezse `block.number`'a düşüyor. 0x64
+  başka hiçbir zincirde kod tutmadığı için ayrıca zincir listesi tutmak
+  gerekmiyor.
+
 ## [0.2.0]: 2026-08-21
 
 `0.1.2`'den bu yana SDK tek zincirden çıkıp beş zincire yayıldı, kayıt defteri
