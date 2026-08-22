@@ -236,7 +236,22 @@ export const DEPLOYMENTS: Readonly<Record<number, ChainDeployment>> = {
     spendPolicyAccountImpl: '0xd7A601f80ae9ec10906601e3F315fD2fcC2FF220',
     stealthAnnouncer: '0xC9a80F08bED30B6CBfB94ee33D0Aeb9F38e67D22',
     privatePayRouter: '0x0cD8d125036f805EE34B5092C51Cb01Beb3DB8A6',
-    deployBlock: 11509330n,
+    /*
+     * The L2 block, taken from the broadcast receipts rather than from the deploy
+     * script's own reading.
+     *
+     * This said 11509330 until 2026-08-22, which is not a small error and not a
+     * typo: on Arbitrum, Solidity's `block.number` is the L1 block, so the script
+     * recorded where Ethereum Sepolia was at that moment (its own deployment ran in
+     * the same minute, at 11509329) while this chain was at 299143893. A scan from
+     * there starts 289 million blocks early, and at 10k per `eth_getLogs` that is
+     * ~29,000 calls before the first real log, so discovery and history on Arbitrum
+     * did not come back at all.
+     *
+     * `CodeClaimVerifier` landed in this block, `CtrlArcZ` eleven later and the
+     * announcer at 299143923; starting at the first covers both event sources.
+     */
+    deployBlock: 299143893n,
     rpcUrls: [
       'https://sepolia-rollup.arbitrum.io/rpc',
       'https://arbitrum-sepolia-rpc.publicnode.com',

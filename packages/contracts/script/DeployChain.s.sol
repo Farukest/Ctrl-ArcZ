@@ -55,7 +55,7 @@ contract DeployChain is Script {
 
         // Read before broadcasting, so it is the block the first deploy lands at or
         // just before it. Event scans start here; early is harmless, late loses logs.
-        uint256 startBlock = block.number;
+        uint256 startBlock = currentBlock();
 
         vm.startBroadcast(deployerKey);
 
@@ -106,5 +106,26 @@ contract DeployChain is Script {
             '"\n}\n'
         );
         vm.writeFile(string.concat("deployments/", slug, ".json"), out);
+    }
+
+    /**
+     * The block number an `eth_getLogs` on this chain is counted in.
+     *
+     * Not `block.number`, because on Arbitrum that is the L1 block: the Arbitrum
+     * Sepolia deployment recorded 11509330 (where Ethereum Sepolia stood at the
+     * time) while the chain itself was at 299143893, and the scan built from it
+     * started 289 million blocks early, which at 10k per request never finished.
+     *
+     * ArbSys answers with the L2 number. Address 0x64 holds no code anywhere else,
+     * and a staticcall to a codeless address succeeds with empty returndata, so the
+     * length check is what distinguishes an Arbitrum chain from every other one --
+     * no chain id list to keep current.
+     */
+    function currentBlock() internal view returns (uint256) {
+        (bool ok, bytes memory data) = address(0x64).staticcall(
+            abi.encodeWithSignature("arbBlockNumber()")
+        );
+        if (ok && data.length == 32) return abi.decode(data, (uint256));
+        return block.number;
     }
 }
