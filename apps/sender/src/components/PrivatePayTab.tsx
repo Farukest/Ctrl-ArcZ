@@ -229,7 +229,7 @@ export function PrivatePayTab({
       toast.push(t('ppay.doneToast'), 'success');
     } catch (e) {
       setPhase('idle');
-      toast.push(e instanceof Error ? e.message : String(e), 'error');
+      toast.fail(e);
     }
   }
 

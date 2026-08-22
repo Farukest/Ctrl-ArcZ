@@ -578,6 +578,24 @@ export const tr: Record<TranslationKey, string> = {
   'claim.locked':
     'Transfer kilitlendi (5 hatalı deneme). Para güvende: yalnızca gönderen iptal edip geri alabilir.',
 
+  'failure.rejected': 'Cüzdanınızda iptal ettiniz. Zincirde hiçbir şey olmadı.',
+  'failure.funds': 'Bakiye bu işleme ve ağ ücretine yetmiyor.',
+  'failure.allowance': 'Bu harcama için henüz onay verilmemiş. Onaylayıp tekrar deneyin.',
+  'failure.nonce':
+    'Bu cüzdandan gönderilen başka bir işlem hâlâ yolda. Tamamlanmasını bekleyip tekrar deneyin.',
+  'failure.ratelimited':
+    'Cüzdanınız bağlı olduğu ağ tarafından hız sınırına takıldı. Biraz bekleyip tekrar deneyin veya cüzdandaki RPC adresini değiştirin.',
+  'failure.chain': 'Cüzdanınız bu işlemin ağından farklı bir ağda. Ağı değiştirip tekrar deneyin.',
+  'failure.timeout':
+    'Ağ zamanında yanıt vermedi. İşlem yine de gerçekleşebilir; tekrar göndermeden önce Activity ekranına bakın.',
+  'failure.network': 'Ağa ulaşılamadı. Bağlantıyı kontrol edip tekrar deneyin.',
+  'failure.gas':
+    'Ağ ücreti hesaplanamadı; bu genelde işlemin bu haliyle başarısız olacağı anlamına gelir.',
+  'failure.reverted': 'Zincir bu işlemi geri çevirdi.',
+  'failure.unknown': 'İşlem gerçekleşmedi.',
+  'activity.rawError': 'Cüzdanın dediği',
+  'failure.at': '{step}: {message}',
+
   'transfer.unavailable.not_pending':
     'Bu transfer artık kullanılamıyor (claim edilmiş, iptal edilmiş veya iade alınmış).',
   'transfer.unavailable.expired': 'Bu transferin süresi doldu.',

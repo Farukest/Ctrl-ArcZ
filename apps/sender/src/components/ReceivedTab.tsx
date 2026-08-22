@@ -50,7 +50,7 @@ export function ReceivedTab({ session }: { session: Session }) {
       await reclaimExpired(session.clients, transferId);
       toast.push(t('received.returned'), 'success');
     } catch (e) {
-      toast.push(e instanceof Error ? e.message : String(e), 'error');
+      toast.fail(e);
     } finally {
       setReturning(null);
     }

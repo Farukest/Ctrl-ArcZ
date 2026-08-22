@@ -209,7 +209,7 @@ export function ReceiveTab({
       } else if (e instanceof TransferUnavailableError) {
         toast.push(t(`transfer.unavailable.${e.reason}` as never), 'error');
       } else {
-        toast.push(e instanceof Error ? e.message : String(e), 'error');
+        toast.fail(e);
       }
     } finally {
       setClaiming(null);

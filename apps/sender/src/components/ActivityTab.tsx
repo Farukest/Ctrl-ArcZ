@@ -120,7 +120,7 @@ export function ActivityTab({ session, onChange }: { session: Session; onChange:
       if (e instanceof TransferUnavailableError) {
         toast.push(t(`transfer.unavailable.${e.reason}` as never), 'error');
       } else {
-        toast.push(e instanceof Error ? e.message : t('active.cancelFailed'), 'error');
+        toast.fail(e);
       }
       // Resync: a cancel that failed because somebody claimed it first should
       // leave the row saying claimed, not saying it can still be cancelled.

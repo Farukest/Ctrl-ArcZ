@@ -13,7 +13,7 @@ import {
   spendableAfterGas,
   usdc,
 } from '@ctrl-arcz/sdk';
-import { supportsChain, walletChainName, type Session } from '@ctrl-arcz/demo-kit';
+import { failureText, supportsChain, walletChainName, type Session } from '@ctrl-arcz/demo-kit';
 import {
   AmountField,
   Button,
@@ -244,7 +244,7 @@ export function SendTab({
         setError(null);
         toast.push(t('send.blockedToast'), 'error');
       } else {
-        setError(e instanceof Error ? e.message : String(e));
+        setError(failureText(e, t));
         toast.push(t('send.failedToast'), 'error');
       }
     } finally {

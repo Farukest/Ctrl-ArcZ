@@ -9,7 +9,7 @@
  */
 import { deriveStepStatuses, stepsForRun, type BridgeEngine } from '@ctrl-arcz/demo-kit';
 import { ChainLogo, relativeTime, type ActivityItem, type RowTone } from '@ctrl-arcz/demo-kit/ui';
-import { isStalled } from './activity.js';
+import { failureNote, isStalled } from './activity.js';
 import type { StoredBridge } from '../store.js';
 
 type T = (key: string, vars?: Record<string, string | number>) => string;
@@ -76,6 +76,18 @@ function kindChip(b: StoredBridge, t: T): string {
   return t('bridge.engine.gateway');
 }
 
+/**
+ * The line under the row: what it was for, and what stopped it.
+ *
+ * Both when there are both, since a failed subscription funding is the one case
+ * where knowing which subscription matters as much as knowing what went wrong.
+ */
+function noteOf(b: StoredBridge, t: T): { note?: string } {
+  const why = failureNote(b, t);
+  const note = [b.label, why].filter(Boolean).join(' - ');
+  return note ? { note } : {};
+}
+
 export function toActivityItem(b: StoredBridge, t: T): ActivityItem {
   const engine: BridgeEngine = b.engine === 'cctp' ? 'cctp' : 'gateway';
   const names = stepsForRun(engine, b);
@@ -108,9 +120,7 @@ export function toActivityItem(b: StoredBridge, t: T): ActivityItem {
     ...(b.fee ? { fee: t('activity.feeIs', { fee: b.fee }) } : {}),
     status: { tone, label: t(key) },
     time: relativeTime(b.createdAt),
-    ...(b.label || b.failureReason
-      ? { note: b.failureReason ? `${b.label ? `${b.label} - ` : ''}${b.failureReason}` : b.label }
-      : {}),
+    ...noteOf(b, t),
     steps: names.map((name, i) => {
       const reported = b.steps.find((s) => s.name === name);
       return {

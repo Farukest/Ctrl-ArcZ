@@ -12,7 +12,8 @@
  */
 import { useCallback, useEffect, useState } from 'react';
 import type { Address } from 'viem';
-import type { Session } from '@ctrl-arcz/demo-kit';
+import { failureText, type Session } from '@ctrl-arcz/demo-kit';
+import { useT } from '@ctrl-arcz/demo-kit/ui';
 import {
   deploymentFor,
   getCleanHistory,
@@ -76,6 +77,7 @@ export function useTokenHistory(session: Session): {
 } {
   const [history, setHistory] = useState<CleanHistory | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const t = useT();
   const deployment = deploymentFor(session.chainId);
   const apiUrl = deployment?.explorerApi;
 
@@ -108,11 +110,11 @@ export function useTokenHistory(session: Session): {
       // good answer on screen, which beats replacing a working list with a
       // message about a poll nobody asked for.
       setHistory((prev) => {
-        if (prev === null) setError(e instanceof Error ? e.message : String(e));
+        if (prev === null) setError(failureText(e, t));
         return prev;
       });
     }
-  }, [session.address, session.chainId, apiUrl]);
+  }, [session.address, session.chainId, apiUrl, t]);
 
   useEffect(() => {
     void reload();

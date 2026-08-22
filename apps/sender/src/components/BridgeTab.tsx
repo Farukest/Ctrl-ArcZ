@@ -71,7 +71,7 @@ import { loadBridges, saveBridge, type StoredBridge, type StoredBridgeStep } fro
 import { useRecipientGate } from '../lib/useRecipientGate.js';
 import { RiskGate } from './RiskGate.js';
 import { pendingOn, rememberDeposit } from '../lib/pendingDeposits.js';
-import { reasonOf, startRun, useActivity } from '../lib/activity.js';
+import { failureNote, startRun, useActivity } from '../lib/activity.js';
 import { activityLabels, toActivityItem } from '../lib/activityView.js';
 
 // The wallet signs both engines, so there is no key here to gate on. A plain flag
@@ -221,7 +221,7 @@ export function BridgeTab({ session }: { session: Session }) {
     fallback: 'Arc_Testnet',
     switchWallet: (chainId, name) =>
       switchWalletTo(chainId, labelFor(name)).catch((e: unknown) => {
-        toast.push(e instanceof Error ? e.message : String(e), 'error');
+        toast.fail(e);
       }),
     // Everything read for the old chain describes the old chain, whether it changed
     // here or in MetaMask.
@@ -896,9 +896,11 @@ export function BridgeTab({ session }: { session: Session }) {
         'success',
       );
     } catch (e) {
-      // The row gets the sentence, the toast gets the whole thing.
-      record.fail(reached, reasonOf(e));
-      toast.push(e instanceof Error ? e.message : String(e), 'error');
+      // Both are told which prompt it was. A deposit asks for an approval and
+      // then for the deposit itself, and "you cancelled it" is ambiguous for
+      // exactly as long as it takes to wonder which of the two was cancelled.
+      record.fail(reached, e);
+      toast.fail(e, { step: `bridge.rowstep.${reached}` });
     } finally {
       setDepositing(false);
     }
@@ -1036,7 +1038,7 @@ export function BridgeTab({ session }: { session: Session }) {
           res.mintTxHash ? 'success' : 'info',
         );
       } catch (e) {
-        toast.push(e instanceof Error ? e.message : String(e), 'error');
+        toast.fail(e);
       } finally {
         dispatch.release();
       }
@@ -1085,6 +1087,20 @@ export function BridgeTab({ session }: { session: Session }) {
             const name = SDK_STEP_TO_UI[step];
             if (!name) return; // quoting is instant; it has no row of its own
             reported.push(stepRow(name, txHash, from));
+            /*
+             * The approval, written down the moment it lands.
+             *
+             * The row is not rewritten until the burn confirms, so an approval
+             * that was mined and then followed by a declined burn left the row
+             * showing an approval with no transaction on it -- the one step the
+             * person had already paid gas for. No hash means the SDK found the
+             * allowance already sufficient, which is a step that did not happen.
+             */
+            if (name === 'approve') {
+              if (txHash) record.done('approve', txHash);
+              else record.skip('approve');
+              record.begin('burn');
+            }
             // Write the burn down the moment it confirms, not when the whole
             // transfer resolves. The wait for Circle is the long part and a reload
             // during it would otherwise lose the one hash the money can be traced
@@ -1163,12 +1179,22 @@ export function BridgeTab({ session }: { session: Session }) {
         res.forwardTxHash ? 'success' : 'info',
       );
     } catch (e) {
-      // The step it died on, told from how far it got: nothing reported means it
-      // never reached the approval.
-      const last = reported[reported.length - 1]?.name ?? 'approve';
-      record.fail(last, reasonOf(e));
+      /*
+       * The step it died on: the first one that never reported.
+       *
+       * The SDK reports a step when it finishes, so the last name in `reported`
+       * is the last thing that worked, not the thing that broke. Blaming it put
+       * the failure one step early: declining the burn marked the approval as
+       * failed, in a run where the approval was already mined and on chain, and
+       * the toast said so out loud. An allowance that already covered the amount
+       * still reports `approve`, so a skipped step does not shift this either.
+       */
+      const done = new Set(reported.map((s) => s.name));
+      const names = stepsForEngine('cctp');
+      const last = names.find((name) => !done.has(name)) ?? names[names.length - 1] ?? 'approve';
+      record.fail(last, e);
       setBridges(loadBridges());
-      toast.push(e instanceof Error ? e.message : String(e), 'error');
+      toast.fail(e, { step: `bridge.rowstep.${last}` });
     } finally {
       dispatch.release();
     }
@@ -1254,7 +1280,7 @@ export function BridgeTab({ session }: { session: Session }) {
                   try {
                     await switchWalletTo(CCTP_CHAINS[gwSource].chainId, fromLabel);
                   } catch (e) {
-                    toast.push(e instanceof Error ? e.message : String(e), 'error');
+                    toast.fail(e);
                     return;
                   } finally {
                     setSwitching(false);
@@ -1485,7 +1511,7 @@ export function BridgeTab({ session }: { session: Session }) {
                   try {
                     await switchWalletTo(cctpSource.chainId, fromLabel);
                   } catch (e) {
-                    toast.push(e instanceof Error ? e.message : String(e), 'error');
+                    toast.fail(e);
                   } finally {
                     setSwitching(false);
                   }
@@ -1653,9 +1679,9 @@ export function BridgeTab({ session }: { session: Session }) {
                     <HistoryRow.Fact label={t('bridge.rowReceipt')}>
                       <Copyable value={b.id} display={short(b.id)} />
                     </HistoryRow.Fact>
-                    {b.failureReason && (
+                    {failureNote(b, t as never) && (
                       <HistoryRow.Fact label={t('bridge.rowReason')}>
-                        <span className="mono">{b.failureReason}</span>
+                        <span>{failureNote(b, t as never)}</span>
                       </HistoryRow.Fact>
                     )}
                   </HistoryRow.Facts>

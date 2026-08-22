@@ -2,6 +2,46 @@
 
 Bu proje [Keep a Changelog](https://keepachangelog.com/) biçimini izler.
 
+## Yayınlanmamış: 2026-08-22
+
+Cüzdan hatası artık ekrana sayfa değil, cümle olarak çıkıyor. SDK'ya dokunulmadı;
+değişen yalnızca uygulama ve demo-kit.
+
+### Değişti
+
+- **Hatalar sınıflandırılıyor, ham metin basılmıyor.** Onay ekranında "iptal"
+  demek, viem'den istek argümanları, çözülmüş kontrat çağrısı, docs linki ve
+  sürüm satırıyla birlikte bir sayfa döndürüyordu; ekranların on altı yerinde bu
+  sayfa olduğu gibi bildirim olarak basılıyordu. `classifyFailure` semptomu
+  okuyor (EIP-1193 kodu, hata adı veya her istemcinin kullandığı ifade) ve on
+  sınıftan birine bağlıyor: reddedildi, bakiye, allowance, nonce, hız sınırı,
+  ağ uyuşmazlığı, zaman aşımı, bağlantı, gas, revert. Tanımadığını uydurmuyor,
+  hatanın kendi ilk satırını gösteriyor. Tam metin konsolda duruyor.
+- **Kullanıcının kendi iptali kırmızı alarm değil.** İmzayı reddetmek bir cevap;
+  cüzdan bozulmuş gibi göstermek yanlıştı.
+- **Bildirim hangi adım olduğunu söylüyor.** Bir deposit üst üste iki imza
+  istiyor, "iptal ettiniz" hangisi olduğunu söylemeden eksik kalıyordu.
+- **Satırda cümle değil sınıf saklanıyor.** Kayıt, hatanın yaşandığı dilden uzun
+  yaşıyor: İngilizce başarısız olan bir satır Türkçeye geçilince Türkçe okunuyor.
+  Cüzdanın kendi sözleri ayrı bir satırda, detay görünümünde duruyor.
+
+### Düzeltildi
+
+- **CCTP'de yanlış adım suçlanıyordu.** SDK bir adımı bittiğinde bildiriyor, yani
+  `reported`'ın sonuncusu **çalışan** son adım. Satır onu hatalı işaretliyordu:
+  yakma reddedildiğinde, zincire çoktan yazılmış onay "başarısız" görünüyordu.
+  Artık bildirilmemiş ilk adım suçlanıyor.
+- **Onay hash'i kayboluyordu.** Satır yakma onaylanana kadar yeniden yazılmadığı
+  için, onay mine olup yakma reddedildiğinde satırda işlemsiz bir onay kalıyordu.
+
+### Test
+
+- 20 yeni demo-kit testi: gerçek MetaMask reddi (Base Sepolia'daki tam metniyle),
+  hız sınırı, iç içe cause, ethers'ın string kodu, kendini gösteren cause,
+  `[object Object]`, iki dilde cümle. demo-kit 146, repo toplamı 742.
+- Tarayıcıda: onay reddi ve yakma reddi ayrı ayrı, gerçek viem sarmalamasıyla;
+  dil değiştirilince aynı satırın Türkçeye dönmesi.
+
 ## [0.2.0]: 2026-08-21
 
 `0.1.2`'den bu yana SDK tek zincirden çıkıp beş zincire yayıldı, kayıt defteri

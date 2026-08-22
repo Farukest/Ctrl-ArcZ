@@ -5,7 +5,7 @@
  * (a sender legitimately holds the code to share it with the recipient).
  */
 import type { Address, Hex } from 'viem';
-import type { BridgeEngine } from '@ctrl-arcz/demo-kit';
+import type { BridgeEngine, FailureCode } from '@ctrl-arcz/demo-kit';
 
 export interface StoredTransfer {
   transferId: string;
@@ -206,6 +206,16 @@ export interface StoredBridge {
   returnBaseline?: string;
   /** Circle's own words for why the mint failed, e.g. `ON_CHAIN_FAILURE`. */
   failureReason?: string;
+  /**
+   * The same failure as a symptom rather than as a sentence.
+   *
+   * A row outlives the language it failed in, and it outlives the wording: the
+   * stored English of a wallet error would still be English after a switch to
+   * Turkish, and would still be last year's phrasing after the sentence is
+   * improved. The code is translated at the moment the row is drawn, and
+   * `failureReason` stays as what the error itself said, for the detail view.
+   */
+  failureCode?: FailureCode;
   /**
    * What Circle charged, in display units, for the routes that charge.
    *

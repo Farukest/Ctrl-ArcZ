@@ -7,6 +7,7 @@ import {
   useEffect,
   useId,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type ButtonHTMLAttributes,
@@ -16,6 +17,8 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 import { useT, useI18n } from '../i18n/context.js';
+import { classifyFailure, failureText } from '../failure.js';
+import type { TranslationKey } from '../i18n/en.js';
 import { useTheme } from './theme.js';
 import {
   IconCheck,
@@ -1046,7 +1049,24 @@ export function Modal({
 /* Toast system (top; dismissible; never covers the bottom of the screen) --- */
 type ToastTone = 'info' | 'success' | 'error' | 'warn';
 type Toast = { id: number; message: ReactNode; tone: ToastTone };
-type ToastCtx = { push: (message: ReactNode, tone?: ToastTone) => void };
+type ToastCtx = {
+  push: (message: ReactNode, tone?: ToastTone) => void;
+  /**
+   * A failure, as one sentence.
+   *
+   * Every screen used to push `e.message`, which for a wallet error is a page of
+   * request arguments, a decoded contract call, a docs link and a library
+   * version. Cancelling an approval prompt produced all of that, and a person who
+   * had just pressed Cancel had to read it to find out they had pressed Cancel.
+   *
+   * The whole text still goes to the console, where it is of use to somebody.
+   *
+   * `step` names the prompt it happened on, for the runs that ask twice in a row.
+   * A translation key is translated; anything else is shown as given, so a caller
+   * outside this app can pass a plain label and get the same result.
+   */
+  fail: (cause: unknown, opts?: { step?: string }) => void;
+};
 const ToastContext = createContext<ToastCtx | null>(null);
 
 const TOAST_ICON: Record<ToastTone, ReactNode> = {
@@ -1059,6 +1079,7 @@ const TOAST_ICON: Record<ToastTone, ReactNode> = {
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const seq = useRef(0);
+  const t = useT();
   const remove = useCallback((id: number) => setToasts((t) => t.filter((x) => x.id !== id)), []);
   const push = useCallback(
     (message: ReactNode, tone: ToastTone = 'info') => {
@@ -1068,9 +1089,20 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     },
     [remove],
   );
-  const t = useT();
+  const fail = useCallback<ToastCtx['fail']>(
+    (cause, opts) => {
+      const { benign, detail } = classifyFailure(cause);
+      if (detail) console.debug('[ctrl-arcz]', detail, cause);
+      const step = opts?.step ? t(opts.step as TranslationKey) : undefined;
+      // Declining a prompt is an answer, not a fault, and colouring it like one
+      // makes the wallet look broken to someone who did exactly what they meant.
+      push(failureText(cause, t, step), benign ? 'warn' : 'error');
+    },
+    [push, t],
+  );
+  const value = useMemo<ToastCtx>(() => ({ push, fail }), [push, fail]);
   return (
-    <ToastContext.Provider value={{ push }}>
+    <ToastContext.Provider value={value}>
       {children}
       <div className="toast-wrap" role="region" aria-label={t('common.notifications')}>
         {toasts.map((x) => (

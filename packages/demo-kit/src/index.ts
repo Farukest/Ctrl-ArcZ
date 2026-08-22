@@ -57,6 +57,15 @@ export {
   type LiveRun,
 } from './bridgeProgress.js';
 
+// A wallet error, as a sentence rather than as a page of request arguments.
+export {
+  classifyFailure,
+  detailOf,
+  failureText,
+  type Failure,
+  type FailureCode,
+} from './failure.js';
+
 // The activity engine: one row shape for everything that has happened, and the
 // query it is read through. UI for it lives in `@ctrl-arcz/demo-kit/ui`.
 export {

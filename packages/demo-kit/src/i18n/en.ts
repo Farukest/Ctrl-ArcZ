@@ -651,6 +651,30 @@ export const en = {
   'claim.locked':
     'Transfer locked (5 wrong attempts). The funds are safe: only the sender can cancel and reclaim them.',
 
+  // What went wrong, said to the person it happened to. A wallet's own error is
+  // written for whoever wrote the code: declining a prompt returns a page of
+  // request arguments with the one useful line buried at the top of it.
+  'failure.rejected': 'You cancelled it in your wallet. Nothing happened on chain.',
+  'failure.funds': 'Not enough balance to cover this, including its network fee.',
+  'failure.allowance': 'This spend has not been approved yet. Approve it, then try again.',
+  'failure.nonce':
+    'Another transaction from this wallet is still in flight. Wait for it to land, then try again.',
+  'failure.ratelimited':
+    'Your wallet is being rate limited by the network it is connected to. Wait a moment and try again, or change its RPC in the wallet.',
+  'failure.chain':
+    'Your wallet is on a different network than this transaction. Switch it, then try again.',
+  'failure.timeout':
+    'The network did not answer in time. The transaction may still land, so check Activity before sending it again.',
+  'failure.network': 'Could not reach the network. Check the connection, then try again.',
+  'failure.gas':
+    'The network fee could not be worked out, which usually means the transaction would fail as it stands.',
+  'failure.reverted': 'The chain rejected this transaction.',
+  'failure.unknown': 'It did not go through.',
+  // The literal error, kept for the expanded row so support has something exact.
+  'activity.rawError': 'Wallet said',
+  // Which of a run's prompts this was. A deposit asks twice in a row.
+  'failure.at': '{step}: {message}',
+
   'transfer.unavailable.not_pending':
     'This transfer is no longer available (already claimed, cancelled, or refunded).',
   'transfer.unavailable.expired': 'This transfer has expired.',

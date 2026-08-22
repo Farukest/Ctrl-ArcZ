@@ -24,11 +24,12 @@ import {
   deriveStepStatuses,
   stepsForRun,
   type ActivityEntry,
+  type ActivityFact,
   type ActivityStep,
   type ActivityTone,
   type BridgeEngine,
 } from '@ctrl-arcz/demo-kit';
-import { isStalled } from './activity.js';
+import { failureNote, isStalled } from './activity.js';
 import type { StoredBridge, StoredTransfer } from '../store.js';
 
 type T = (key: string, vars?: Record<string, string | number>) => string;
@@ -254,6 +255,24 @@ function stepsOf(b: StoredBridge, t: T): ActivityStep[] {
   });
 }
 
+/**
+ * Why it failed, and underneath it what the wallet actually said.
+ *
+ * The sentence is for reading and the original is for reporting. An expanded row
+ * is where somebody who wants the literal error goes looking for it, and it is
+ * the one place with room for both.
+ */
+function failureFacts(b: StoredBridge, t: T): ActivityFact[] {
+  const why = failureNote(b, t);
+  if (!why) return [];
+  return [
+    { label: t('bridge.rowReason'), value: why },
+    ...(b.failureCode && b.failureReason && b.failureReason !== why
+      ? [{ label: t('activity.rawError'), value: b.failureReason, mono: true }]
+      : []),
+  ];
+}
+
 export function bridgeEntries(bridges: readonly StoredBridge[], t: T): ActivityEntry[] {
   return bridges.map((b) => {
     const chip = routeChip(b, t);
@@ -313,7 +332,7 @@ export function bridgeEntries(bridges: readonly StoredBridge[], t: T): ActivityE
               },
             ]
           : []),
-        ...(b.failureReason ? [{ label: t('bridge.rowReason'), value: b.failureReason }] : []),
+        ...failureFacts(b, t),
         ...(receipt?.txHash
           ? [
               {

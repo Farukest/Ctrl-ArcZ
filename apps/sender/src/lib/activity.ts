@@ -17,7 +17,7 @@
  * question; `kind` is what tells a deposit from a transfer from a subscription.
  */
 import { useEffect, useRef, useState } from 'react';
-import type { BridgeEngine } from '@ctrl-arcz/demo-kit';
+import { classifyFailure, type BridgeEngine } from '@ctrl-arcz/demo-kit';
 import type { Address } from 'viem';
 import {
   chainExplorerTxUrl,
@@ -73,24 +73,19 @@ export function loadActivity(): StoredBridge[] {
 }
 
 /**
- * A failure in as many words as a row has space for.
+ * Why a stored run failed, in the language on screen now.
  *
- * A viem error's `message` is a page: the request arguments, the decoded contract
- * call, a docs link and a version, all of which belong in a console and none of
- * which belongs in a list of five rows. `shortMessage` is the sentence at the top
- * of it -- "User rejected the request." -- and it is the whole of what a person
- * needs to know about the row. The cap is for anything else that throws a novel.
+ * Rows are read long after they are written, so the sentence is made at the
+ * moment it is shown rather than kept in the record. Anything from before this
+ * existed, and anything Circle reported in its own words, still has only the
+ * text it was written with, and that is what it shows.
  */
-export function reasonOf(e: unknown): string {
-  const short = (e as { shortMessage?: unknown })?.shortMessage;
-  const text =
-    typeof short === 'string' && short.length > 0
-      ? short
-      : e instanceof Error
-        ? e.message
-        : String(e);
-  const line = text.split('\n')[0]?.trim() ?? '';
-  return line.length > 160 ? `${line.slice(0, 157)}...` : line;
+export function failureNote(
+  b: StoredBridge,
+  t: (key: string, vars?: Record<string, string | number>) => string,
+): string | undefined {
+  if (b.failureCode) return t(`failure.${b.failureCode}`);
+  return b.failureReason;
 }
 
 const listeners = new Set<() => void>();
@@ -142,7 +137,13 @@ export interface RunHandle {
   /** Still going, in a way that is no longer this page's to advance. */
   waiting(): void;
   finish(): void;
-  fail(step: string, reason?: string): void;
+  /**
+   * Whatever was thrown, not a sentence made from it.
+   *
+   * The row keeps the symptom rather than the wording, so it still reads in the
+   * language chosen after the failure rather than the one in use during it.
+   */
+  fail(step: string, cause?: unknown): void;
   /** Anything the run learns about itself after it starts, such as a recipient. */
   amend(patch: Partial<StoredBridge>): void;
 }
@@ -214,12 +215,14 @@ export function startRun(input: StartRun): RunHandle {
     skip: (step) => write({ name: step, state: 'noop' }),
     waiting: () => put({ ...current(), state: 'pending' }),
     finish: () => put({ ...current(), state: 'success' }),
-    fail: (step, reason) => {
+    fail: (step, cause) => {
       const b = current();
+      const { code, detail } = classifyFailure(cause);
       put({
         ...b,
         state: 'error',
-        ...(reason ? { failureReason: reason } : {}),
+        ...(code === 'unknown' ? {} : { failureCode: code }),
+        ...(detail ? { failureReason: detail } : {}),
         steps: [...b.steps.filter((s) => s.name !== step), { name: step, state: 'error' }],
       });
     },
