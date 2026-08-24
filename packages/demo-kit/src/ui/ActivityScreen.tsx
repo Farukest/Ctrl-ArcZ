@@ -52,7 +52,15 @@ function Mark({ icon }: { icon: ActivityIcon }) {
   if (icon.kind === 'token') {
     /*
      * The token's own mark, resolved through the registry for the chain it moved
-     * on, with that chain badged onto it and the direction under it.
+     * on, with that chain badged onto it. The same mark the detail draws, from the
+     * same `view.icon`, so a row and its opened detail cannot show two different
+     * things for one transfer.
+     *
+     * Direction is not on the mark. It is already said twice -- by the signed
+     * amount (+/-, coloured) and by the title (received/sent) -- and a third arrow
+     * on the disc was a busy corner that read as the whole icon and buried the
+     * chain badge next to it. So the disc says what moved and on which chain, and
+     * nothing about which way.
      *
      * Resolved rather than guessed from the symbol: the same ticker is a different
      * contract on every network. An earlier version drew the four letters of the
@@ -62,7 +70,7 @@ function Mark({ icon }: { icon: ActivityIcon }) {
     const token = tokensFor(icon.chainId)?.find((x) => x.symbol === icon.symbol);
     const chain = icon.chainId === undefined ? undefined : deploymentFor(icon.chainId);
     return (
-      <span className={`amark amark--token amark--${icon.direction ?? 'none'}`} aria-hidden>
+      <span className="amark amark--token" aria-hidden>
         {token ? (
           <TokenLogo token={token} size={26} />
         ) : (
@@ -72,9 +80,6 @@ function Mark({ icon }: { icon: ActivityIcon }) {
           <span className="amark__chain">
             <ChainLogo id={chain.chain} size={13} />
           </span>
-        )}
-        {icon.direction && (
-          <span className="amark__dir">{icon.direction === 'in' ? '↓' : '↑'}</span>
         )}
       </span>
     );
@@ -169,7 +174,13 @@ function Row({
           )}
         </span>
         <span className="arow2__right">
-          {view.amount && <span className="arow2__amount mono">{view.amount}</span>}
+          {view.amount && (
+            <span
+              className={`arow2__amount mono${view.amountTone ? ` arow2__amount--${view.amountTone}` : ''}`}
+            >
+              {view.amount}
+            </span>
+          )}
           {view.status && (
             <span className={`hstatus hstatus--${view.status.tone}`}>{view.status.label}</span>
           )}

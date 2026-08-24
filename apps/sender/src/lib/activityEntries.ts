@@ -181,6 +181,7 @@ export function historyEntries(
         subtitle: e.kind === 'transfer' ? short(party) : party,
         ...(e.kind === 'transfer' ? { subtitleCopy: party } : {}),
         amount: `${incoming ? '+' : '-'}${amount} ${e.tokenSymbol}`,
+        ...(incoming ? { amountTone: 'pos' as const } : {}),
       },
       facts: [
         ...(networkName ? [{ label: t('common.network'), value: networkName }] : []),

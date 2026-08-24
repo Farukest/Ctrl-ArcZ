@@ -54,6 +54,13 @@ export interface ActivityView {
   subtitleCopy?: string;
   /** Already formatted, sign included where the direction is known. */
   amount?: string;
+  /**
+   * Colours the amount when the direction carries a colour. `pos` is money in,
+   * drawn green. Money out is left the default text colour, not red -- red is the
+   * danger colour, and a plain send is not a warning. Mirrors the native client,
+   * which greens the received amount and leaves the sent one alone.
+   */
+  amountTone?: 'pos';
   /** Small labels after the row: `Deposit`, `CCTP`, a subscription's name. */
   chips?: readonly string[];
   /**
