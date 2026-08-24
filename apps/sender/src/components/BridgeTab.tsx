@@ -1276,6 +1276,13 @@ export function BridgeTab({ session }: { session: Session }) {
           to scroll past a form they are not filling in.
         */}
         {engine === 'gateway' && (
+          <Card
+            title={t('bridge.gwFundTitle')}
+            className="card--fund"
+            infoLabel={t('bridge.gwFundTitle')}
+            info={<p>{t('bridge.gwFundSummary')}</p>}
+            data-testid="bridge-fund"
+          >
           <GatewayFundBox
             chain={from}
             chainOptions={chainOptions}
@@ -1309,6 +1316,7 @@ export function BridgeTab({ session }: { session: Session }) {
               })()
             }
           />
+          </Card>
         )}
 
         {/*

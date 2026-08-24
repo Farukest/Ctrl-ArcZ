@@ -353,6 +353,8 @@ export const en = {
   'bridge.fixDeposit': 'Deposit {amount} USDC',
   'bridge.fixMax': 'Send {amount} USDC instead',
   'bridge.gwFundTitle': 'Gateway balance',
+  'bridge.gwFundSummary':
+    'Gateway is a shared balance you top up once and then spend from across chains. Funding it here is one transaction on the chain you choose, and it takes as long as that chain needs to confirm.',
   'bridge.gwHere': '{amount} USDC ready to send',
   'bridge.swap': 'Swap the two chains',
   'bridge.gwWalletLabel': 'Wallet balance',

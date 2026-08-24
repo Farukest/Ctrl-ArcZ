@@ -312,6 +312,8 @@ export const tr: Record<TranslationKey, string> = {
   'bridge.fixDeposit': '{amount} USDC yatır',
   'bridge.fixMax': 'Onun yerine {amount} USDC gönder',
   'bridge.gwFundTitle': 'Gateway bakiyesi',
+  'bridge.gwFundSummary':
+    'Gateway, bir kez yükleyip zincirler arası harcadığın ortak bir bakiyedir. Buradan yükleme seçtiğin zincirde tek bir işlem, ve o zincirin onay süresi kadar sürer.',
   'bridge.gwHere': 'Gönderilmeye hazır {amount} USDC',
   'bridge.swap': 'İki zinciri yer değiştir',
   'bridge.gwWalletLabel': 'Cüzdan bakiyesi',
