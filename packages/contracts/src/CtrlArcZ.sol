@@ -89,7 +89,9 @@ contract CtrlArcZ is ReentrancyGuard {
     // ---------------------------------------------------------------------
 
     /// @notice Wrong-code guesses allowed before a transfer is frozen.
-    /// @dev Caps an on-chain brute force of the 6-digit code at 5 tries in 10^6.
+    /// @dev Defense in depth over the claim secret's own 80 bits (16 Crockford
+    ///      base32 characters): the secret is already far too large to grind, and
+    ///      this caps even a lucky on-chain guessing run at 5 tries.
     ///      Attempts are counted for ANY caller, not just the recorded recipient:
     ///      if only the recipient's guesses counted, an attacker could grind the
     ///      code for free from throwaway addresses. The cost is that a griefer can
@@ -372,7 +374,7 @@ contract CtrlArcZ is ReentrancyGuard {
     // Claim
     // ---------------------------------------------------------------------
 
-    /// @notice Release a transfer with the 6-digit code and its salt.
+    /// @notice Release a transfer with the claim code and its salt.
     /// @dev Anyone may submit — the funds always go to the `to` recorded at send
     ///      time, never to `msg.sender`. That makes a claim front-run-safe and
     ///      lets a sender or relayer settle on behalf of a recipient who has no
@@ -381,8 +383,9 @@ contract CtrlArcZ is ReentrancyGuard {
     ///      IMPORTANT — a wrong proof does NOT revert; it returns false.
     ///      An attempt limiter cannot be built on a reverting call: a revert would
     ///      roll back the very counter that records the failed guess, so the limit
-    ///      would never bind and the 20-bit code could be ground down on-chain for
-    ///      the price of gas. The failed attempt must therefore commit. Callers
+    ///      would never bind. The 80-bit claim secret is already infeasible to
+    ///      grind; the limiter is what makes even that impossible rather than merely
+    ///      astronomically unlikely. The failed attempt must therefore commit. Callers
     ///      MUST check the return value (or the receipt: `TransferClaimed` on
     ///      success, `ClaimAttemptFailed` / `TransferLocked` on failure) rather
     ///      than treating a mined transaction as a successful claim. The SDK's

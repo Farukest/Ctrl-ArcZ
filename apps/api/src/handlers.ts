@@ -187,17 +187,31 @@ export async function announcementsGet(req: IncomingMessage, res: ServerResponse
  * secret. What is new is that it can be read without knowing which address to look
  * at, which is the whole difficulty when it fails.
  */
+// Cache the relayer balance read. Health is unmetered on purpose (a monitor must
+// always reach it), so without a cache every health poll is a fresh on-chain read
+// and the endpoint amplifies any caller into RPC load. A few seconds is far fresher
+// than a balance that drains over many transactions needs to be.
+const HEALTH_CACHE_MS = 5_000;
+let healthCache: { at: number; usdc: bigint | null } | null = null;
+
 export async function healthGet(_req: IncomingMessage, res: ServerResponse): Promise<void> {
   if (!env.relayerPk) return json(res, 200, { ok: true, relayer: null });
   const address = privateKeyToAccount(env.relayerPk).address;
-  const usdc = await arcRiskClient
-    .readContract({
-      address: ADDRESSES.USDC as Address,
-      abi: erc20Abi,
-      functionName: 'balanceOf',
-      args: [address],
-    })
-    .catch(() => null);
+  const now = Date.now();
+  let usdc: bigint | null;
+  if (healthCache && now - healthCache.at < HEALTH_CACHE_MS) {
+    usdc = healthCache.usdc;
+  } else {
+    usdc = await arcRiskClient
+      .readContract({
+        address: ADDRESSES.USDC as Address,
+        abi: erc20Abi,
+        functionName: 'balanceOf',
+        args: [address],
+      })
+      .catch(() => null);
+    healthCache = { at: now, usdc };
+  }
   // On Arc the USDC balance is also the gas balance, so one number covers both. Low
   // is a warning, not an error: the API is healthy, its wallet is not.
   const balance = usdc == null ? null : Number(usdc) / 1e6;

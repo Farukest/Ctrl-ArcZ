@@ -727,8 +727,14 @@ export function CopyButton({ value, label }: { value: string; label?: string | u
   }, [value]);
   return (
     <button
+      type="button"
       className="addr__copy"
-      onClick={copy}
+      // Stop the click from reaching an enclosing clickable row (e.g. the Activity
+      // row head): copying an address must not also toggle the row it sits in.
+      onClick={(e) => {
+        e.stopPropagation();
+        copy();
+      }}
       aria-label={label ?? t('common.copy')}
       title={copied ? t('common.copied') : (label ?? t('common.copy'))}
     >

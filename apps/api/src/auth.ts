@@ -45,8 +45,9 @@ export async function requireSignedRequest(
   if (!signature || !/^0x[0-9a-fA-F]+$/.test(signature)) throw new HttpError(401, 'missing signature');
   if (Math.abs(Date.now() - Number(timestamp)) > MAX_SKEW_MS) throw new HttpError(401, 'stale request');
 
+  const message = requestMessage(path, timestamp, rawBody);
   const recovered = await recoverMessageAddress({
-    message: requestMessage(path, timestamp, rawBody),
+    message,
     signature: signature as Hex,
   });
   if (recovered.toLowerCase() !== address.toLowerCase()) {
@@ -54,9 +55,13 @@ export async function requireSignedRequest(
   }
 
   // Anti-replay: even within the 120s skew window, a captured request may not be
-  // re-submitted. The signature already binds path+ts+bodyHash, so its hash is a
-  // natural single-use nonce. Reject a repeat; remember it until its skew expires.
-  const nonce = keccak256(toBytes(signature));
+  // re-submitted. The nonce is keyed by the RECOVERED signer plus the exact message
+  // it signed (path+ts+bodyHash), NOT by the signature bytes: ECDSA is malleable, so
+  // `keccak256(signature)` lets a captured request through under an `s -> n-s` twin
+  // that recovers to the same signer over the same message. Keying by (signer,
+  // message) is malleability-invariant, so a twin lands on the same nonce and is
+  // rejected. Reject a repeat; remember it until its skew expires.
+  const nonce = keccak256(toBytes(`${recovered.toLowerCase()}\n${message}`));
   const now = Date.now();
   const seenAt = usedSignatures.get(nonce);
   if (seenAt !== undefined && now - seenAt < MAX_SKEW_MS) {

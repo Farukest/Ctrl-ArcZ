@@ -252,9 +252,9 @@ export const en = {
 
   'ppay.title': 'Private Pay',
   'ppay.body':
-    'Pay a merchant from a fresh, single-use address that carries none of your identity on-chain. Like a disposable virtual card.',
+    'Pay a merchant from a fresh, single-use address they cannot tie to your history, like a disposable virtual card. The funding transfer stays visible on a transparent chain.',
   'ppay.summary':
-    'Pay from a fresh, single-use address that carries none of your identity on-chain.',
+    'Pay from a fresh, single-use address the merchant cannot tie to your history. The funding transfer stays visible on-chain.',
   'ppay.info.aria': 'How Private Pay works',
   'ppay.info.k1': 'Disposable address',
   'ppay.info.k2': 'The Machine',

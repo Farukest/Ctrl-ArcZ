@@ -197,6 +197,12 @@
   color: var(--text-lo);
   font-size: var(--fs-xs);
 }
+/* In light theme text-lo is 3.9:1 on the sunken footer band, under the 4.5 floor for
+   this small print. text-mid clears it; scoped to the footer so the global token,
+   which is fine on other backgrounds, is left alone. */
+:root[data-theme='light'] .sitefooter__bottom {
+  color: var(--text-mid);
+}
 .sitefooter__legal {
   display: inline-flex;
   align-items: baseline;
@@ -714,8 +720,12 @@
   min-height: 38px;
   gap: var(--sp-1);
   padding: 0 var(--sp-2) 0 var(--sp-3);
-  background: var(--surface-1);
-  border-color: var(--border-subtle);
+  /* A quieter control than the full select, but still a control: surface-1 equals
+     the page in some contexts (e.g. the Activity tools row), so keeping the strong
+     border is what stops the chip from dissolving into the background. Flagged by
+     the in-app a11y audit as surface-not-distinguishable when the border was subtle. */
+  background: var(--surface-2);
+  border-color: var(--border-strong);
   font-size: var(--fs-sm);
   color: var(--text-mid);
   max-width: 190px;
@@ -3576,9 +3586,12 @@ a.hstep__go:hover {
   align-items: center;
   justify-content: center;
   width: 42px;
-  border: 1px solid var(--border-subtle);
+  /* At least a 24px tap target (WCAG 2.5.8): the label is the hit area and forwards
+     to the input, so its height is what a thumb actually gets. */
+  min-height: 38px;
+  border: 1px solid var(--border-strong);
   border-radius: var(--r-md);
-  background: var(--surface-1);
+  background: var(--surface-2);
   cursor: pointer;
 }
 .ascreen__day.is-set {
@@ -3586,7 +3599,11 @@ a.hstep__go:hover {
   color: var(--accent-text);
 }
 .ascreen__day input {
-  width: 22px;
+  /* At least 24px in both axes so the input's own box is a valid tap target, not
+     just the label wrapping it (WCAG 2.5.8). align-self stretches it to the label's
+     38px height; width is widened from the icon's ~16px to clear 24px. */
+  width: 28px;
+  align-self: stretch;
   border: 0;
   background: transparent;
   color: inherit;
@@ -3684,7 +3701,7 @@ a.hstep__go:hover {
   cursor: pointer;
   min-width: 0;
 }
-.arow2__head:disabled {
+.arow2__head[aria-disabled='true'] {
   cursor: default;
 }
 .arow2__body {
@@ -3774,10 +3791,24 @@ a.hstep__go:hover {
   overflow-wrap: anywhere;
 }
 .afact dd a {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  color: var(--accent);
+  /* accent-text, not accent: the fill orange is 2.6:1 on white (unreadable as text);
+     accent-text is the token meant for accent-coloured text on a surface. */
+  color: var(--accent-text);
+}
+/* Widen the tap target to >=24px tall (WCAG 2.5.8) without moving the 20px-tall
+   text: an invisible overlay, the same trick as .addr__copy::after. */
+.afact dd a::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 32px;
+  transform: translateY(-50%);
 }
 .afacts__head {
   margin-top: var(--sp-3);

@@ -445,3 +445,39 @@ day and the process to 2000, out of the same balance that pays for box deploys,
 stealth announcements and gasless claims, so an endpoint no client used could still
 have stopped the ones they do. `GET /api/health` reports that balance and flags it
 low for exactly this reason.
+
+## Follow-up fixes (2026-08-24)
+
+Four hardening changes from a re-audit, each verified live against the deployed
+contracts on Arc testnet. No contract bytecode changed; the fixes are in the SDK,
+the backend and the co-signer.
+
+- **The co-signer binds the owner to the box.** A deployed spend box stores no
+  owner on chain, so the sign path accepted any caller who named a box and
+  authenticated as some address: a stranger could get a valid co-signature for
+  another payer's PULL box and drive its pulls. Funds still reach only the locked
+  target, but the owner never consented. The server now indexes the factory's
+  `AccountCreated(ownerHash)` and refuses to sign unless `keccak256(owner)` equals
+  the box's ownerHash. Proven: a fresh wallet is rejected with "owner does not own
+  this account"; the real owner still passes.
+- **The firewall fails closed when its verified-recipient source is unavailable.**
+  A bounded fallback scan, used when the from-deploy-block index is down, was
+  treated as authoritative, so a lookalike of a recipient outside the window passed
+  as safe. The bounded scan is now marked incomplete, which makes the lookalike
+  rule uncheckable and blocks the unknown target. Proven: the lookalike that scored
+  only "caution" while the index returned 429 now blocks; a healthy index still
+  warns rather than over-blocking an ordinary new address.
+- **Signed-request replay is closed to ECDSA malleability.** The single-use nonce
+  was `keccak256(signature)`, which an `s` to `n-s` twin bypasses; it is now keyed
+  by the recovered signer plus the signed message. Proven: the malleable twin,
+  which used to return 200, now returns 401.
+- **The zero-value bait scan is paged**, so a bait an attacker pads past the first
+  page of history is still counted.
+
+Deferred, and tracked as design work rather than shipped here: an expiry on the
+co-signer's spend signature, and a `msg.sender` gate on `sweepExpired` so the vault
+address is not revealed in calldata by anyone who knows it. Both are contract
+changes that need a redeploy. Private Pay funds its box from the payer's own wallet
+in one instant transaction, so that funding is visible on chain by design (the
+success screen says so); its box commitment linkability adds nothing an observer
+cannot already read from that funding transaction.

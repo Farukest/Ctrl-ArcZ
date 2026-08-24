@@ -53,7 +53,7 @@ export interface BlockscoutProviderOptions {
    * "no history", it is the wrong question answered confidently.
    */
   chainId?: number;
-  /** Abort a slow explorer rather than stalling a send. Default 8000 ms. */
+  /** Abort a slow explorer rather than stalling a send. Default 15000 ms. */
   timeoutMs?: number;
   fetchFn?: typeof fetch;
 }
@@ -221,24 +221,32 @@ export class BlockscoutDataProvider implements IDataProvider {
 
   /** 0-value transfers `from` → `to`: the bait that plants an address in a history. */
   async countZeroValueTransfers(from: Address, to: Address): Promise<number> {
-    // The primary call is intentionally NOT swallowed: if the explorer is
-    // unreachable we want `check` to mark the report incomplete rather than report
-    // "no bait". A fresh `from` (the usual lookalike case) returns 200 with an
-    // empty list, so this does not spuriously fail.
+    // Paged, not a single page. A single page missed a bait an attacker padded past
+    // it with a burst of ordinary transfers, and `check` then reported the address as
+    // clean. `getOutgoingCounterparties` already walks the same list up to the cap;
+    // this walks it the same way so the two cannot disagree about what is in the
+    // history. The primary (token-transfers) call is intentionally NOT swallowed:
+    // getAllPages rejects on any page failure, so `check` marks the report incomplete
+    // rather than reporting "no bait". A fresh `from` returns one empty page and costs
+    // one request.
     const [transfers, transactions] = await Promise.all([
-      this.get<Paged<BlockscoutTokenTransfer>>(`/addresses/${from}/token-transfers?filter=from`),
-      this.get<Paged<BlockscoutTransaction>>(`/addresses/${from}/transactions?filter=from`).catch(
-        () => ({ items: [] }),
+      this.getAllPages<BlockscoutTokenTransfer>(
+        `/addresses/${from}/token-transfers?filter=from`,
+        MAX_COUNTERPARTY_PAGES,
       ),
+      this.getAllPages<BlockscoutTransaction>(
+        `/addresses/${from}/transactions?filter=from`,
+        MAX_COUNTERPARTY_PAGES,
+      ).catch(() => ({ items: [] as BlockscoutTransaction[], complete: true })),
     ]);
 
     const target = to.toLowerCase();
 
-    const zeroTransfers = (transfers.items ?? []).filter(
+    const zeroTransfers = transfers.items.filter(
       (t) => t.to?.hash?.toLowerCase() === target && isZero(t.total?.value),
     ).length;
 
-    const zeroTransactions = (transactions.items ?? []).filter(
+    const zeroTransactions = transactions.items.filter(
       (t) => t.to?.hash?.toLowerCase() === target && isZero(t.value),
     ).length;
 

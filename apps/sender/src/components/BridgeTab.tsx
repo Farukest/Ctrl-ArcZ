@@ -20,6 +20,7 @@ import {
   maxGatewaySpendable,
   maxDepositable,
   gatewayShortfall,
+  cctpShortfall,
   isBoxFunding,
   type CctpChainName,
   type CctpStep,
@@ -453,16 +454,34 @@ export function BridgeTab({ session }: { session: Session }) {
    * cannot drift into disagreeing.
    */
   const refusal =
-    engine !== 'gateway' || amountValue <= 0 || gwOnSource == null || gwNeeded == null
+    amountValue <= 0
       ? null
-      : gatewayShortfall({
-          here: gwOnSource,
-          byChain: gwByChain as Record<string, bigint>,
-          from,
-          fromLabel,
-          committed: gwNeeded,
-          labelOf: labelFor,
-        });
+      : engine === 'gateway'
+        ? gwOnSource == null || gwNeeded == null
+          ? null
+          : gatewayShortfall({
+              here: gwOnSource,
+              byChain: gwByChain as Record<string, bigint>,
+              from,
+              fromLabel,
+              committed: gwNeeded,
+              labelOf: labelFor,
+            })
+        : // CCTP: guard the source USDC balance up front, the same way Gateway does,
+          // so an amount over the balance disables the button instead of only failing
+          // at burn time (the whole reason this refusal is computed while typing). Gas
+          // is re-checked at burn time by the SDK; here the money itself is the guard.
+          walletOnChain == null
+          ? null
+          : cctpShortfall({
+              usdcBalance: walletOnChain,
+              total: BigInt(Math.round(amountValue * 1e6)),
+              maxFee: 0n,
+              gasCost: 0n,
+              nativeBalance: 2n ** 255n,
+              chainLabel: fromLabel,
+              gasInUsdc: false,
+            });
 
   /**
    * The button agrees with the refusal above it.

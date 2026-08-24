@@ -3,7 +3,9 @@ import {
   fallback,
   http,
   isAddress,
+  keccak256,
   recoverMessageAddress,
+  toBytes,
   type Address,
   type Hex,
   type PublicClient,
@@ -16,6 +18,8 @@ import {
   check,
   VerifiedRecipientIndex,
   AnnouncementIndex,
+  AccountOwnerIndex,
+  ownerHash as toOwnerHash,
   cosignAuthMessage,
   arcTestnet,
   ARC_TESTNET_CHAIN_ID,
@@ -126,19 +130,25 @@ async function verifyOwnerAuth(
   if (!scope) {
     return { approved: false, reason: 'owner authentication required' };
   }
-  // Single-use: a captured owner signature cannot be replayed within the window.
-  const seenAt = usedOwnerSigs.get(ownerSig);
-  if (seenAt !== undefined && Date.now() - seenAt < 120_000) {
-    return { approved: false, reason: 'owner authentication already used' };
-  }
+  const message = cosignAuthMessage(owner as Address, ownerSigTs, scope);
   const recovered = await recoverMessageAddress({
-    message: cosignAuthMessage(owner as Address, ownerSigTs, scope),
+    message,
     signature: ownerSig as Hex,
   });
   if (recovered.toLowerCase() !== owner.toLowerCase()) {
     return { approved: false, reason: 'owner authentication failed' };
   }
-  usedOwnerSigs.set(ownerSig, Date.now());
+  // Single-use: a captured owner signature cannot be replayed within the window.
+  // Keyed by the RECOVERED signer plus the exact message signed, NOT the signature
+  // bytes: ECDSA is malleable, so keying by `ownerSig` would let an `s -> n-s` twin
+  // (same signer, same message) past the check. (signer, message) is malleability-
+  // invariant, so the twin collides on the same nonce and is rejected.
+  const nonce = keccak256(toBytes(`${recovered.toLowerCase()}\n${message}`));
+  const seenAt = usedOwnerSigs.get(nonce);
+  if (seenAt !== undefined && Date.now() - seenAt < 120_000) {
+    return { approved: false, reason: 'owner authentication already used' };
+  }
+  usedOwnerSigs.set(nonce, Date.now());
   return null;
 }
 
@@ -282,12 +292,60 @@ function recipientIndexFor(chainId: number): VerifiedRecipientIndex {
 }
 
 /**
+ * The factory's account -> ownerHash index, per chain. This is what lets the sign
+ * phase bind the claimed `owner` to the box being spent from: a deployed box stores
+ * no owner, so without the factory's `AccountCreated(ownerHash)` a stranger could
+ * name anyone else's box and the co-signer would have nothing to say no with.
+ */
+const accountOwnerIndexes = new Map<number, AccountOwnerIndex>();
+function accountOwnerIndexFor(chainId: number): AccountOwnerIndex {
+  const cached = accountOwnerIndexes.get(chainId);
+  if (cached) return cached;
+  const deployment = deploymentFor(chainId);
+  if (!deployment) throw new Error(`invalid chainId ${chainId}`);
+  const index = new AccountOwnerIndex(
+    clientFor(chainId),
+    deployment.spendPolicyFactory,
+    deployment.stealthAnnouncerDeployBlock,
+  );
+  accountOwnerIndexes.set(chainId, index);
+  void index.start();
+  return index;
+}
+
+/**
+ * Confirm the claimed `owner` actually owns `account`, from the factory's ownerHash
+ * event. Fail-closed: an index still warming up, an unknown box, or a mismatch all
+ * withhold the signature. Only for deployed boxes (the `sign` phase) -- the batched
+ * `sign-cf` path already binds the owner by recomputing the box address from
+ * ownerHash + salt + policy.
+ */
+async function verifyBoxOwnership(
+  chainId: number,
+  owner: Address,
+  account: Address,
+): Promise<{ approved: false; reason: string } | null> {
+  const index = accountOwnerIndexFor(chainId);
+  if (!index.isReady()) {
+    return { approved: false, reason: 'ownership index warming up (fail-closed); try again' };
+  }
+  const onChain = index.ownerHashOf(account);
+  if (!onChain) {
+    return { approved: false, reason: 'not a recognised spend account' };
+  }
+  if (onChain.toLowerCase() !== toOwnerHash(owner).toLowerCase()) {
+    return { approved: false, reason: 'owner does not own this account' };
+  }
+  return null;
+}
+
+/**
  * The sender's verified recipients, from the index the co-signer already keeps
  * warm. Exposed so the browser can stop guessing with a block lookback.
  *
- * A bounded scan cannot answer this question. Arc produces roughly nineteen
- * blocks a second, so the 200k-block window the client used covers about three
- * hours — meaning the lookalike rule silently stopped protecting anyone paid
+ * A bounded scan cannot answer this question. Arc produces roughly two blocks a
+ * second (measured 1.94), so the 200k-block window the client used covers a bit
+ * over a day, meaning the lookalike rule silently stopped protecting anyone paid
  * before that. This index backfills from the deploy block once and then follows
  * the chain, so `complete` means complete.
  */
@@ -579,6 +637,15 @@ export async function cosign(
     if (e instanceof Error && /invalid /.test(e.message)) throw e; // bad input -> 4xx path
     return { approved: false, reason: 'policy read unavailable (fail-closed); try again' };
   }
+
+  // Bind the claimed owner to the box before signing. `verifyOwnerAuth` above only
+  // proved the caller controls the address it named as `owner`; this proves that
+  // owner is the one the box was created under. Without it, a stranger who names any
+  // box gets a valid co-signature and can drive that subscription's pulls, since the
+  // box's on-chain policy carries no owner to check against.
+  const ownershipVeto = await verifyBoxOwnership(chainId, request.owner, request.account);
+  if (ownershipVeto) return ownershipVeto;
+
   return machine.authorize(request);
 }
 

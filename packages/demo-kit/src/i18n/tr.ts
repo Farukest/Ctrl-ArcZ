@@ -214,8 +214,9 @@ export const tr: Record<TranslationKey, string> = {
 
   'ppay.title': 'Özel Ödeme',
   'ppay.body':
-    'Bir satıcıya, zincir üstünde kimliğinden hiçbir iz taşımayan taze ve tek kullanımlık bir adresten öde. Tek kullanımlık sanal kart gibi.',
-  'ppay.summary': 'Zincir üstünde kimliğinden iz taşımayan taze, tek kullanımlık bir adresten öde.',
+    'Bir satıcıya, geçmişinle ilişkilendiremeyeceği taze ve tek kullanımlık bir adresten öde, tek kullanımlık sanal kart gibi. Besleme transferi şeffaf zincirde görünür kalır.',
+  'ppay.summary':
+    'Satıcının geçmişinle ilişkilendiremeyeceği taze, tek kullanımlık bir adresten öde. Besleme transferi zincirde görünür kalır.',
   'ppay.info.aria': 'Özel Ödeme nasıl çalışır',
   'ppay.info.k1': 'Tek kullanımlık adres',
   'ppay.info.k2': 'The Machine',

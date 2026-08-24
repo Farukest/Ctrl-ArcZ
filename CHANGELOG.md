@@ -2,6 +2,56 @@
 
 Bu proje [Keep a Changelog](https://keepachangelog.com/) biçimini izler.
 
+## Yayınlanmamış: 2026-08-24
+
+Bir denetim turunun ardından güvenlik sertleştirmeleri ve arayüz düzeltmeleri.
+Kontratın bytecode'u değişmedi (yalnızca NatSpec); değişen SDK, backend, demo-kit
+ve uygulama.
+
+### Güvenlik
+
+- **Co-signer artık kutunun sahibini doğruluyor.** Deployed bir kutuda zincir
+  üstünde owner tutulmadığı için, yabancı biri herhangi bir kutunun adresini verip
+  geçerli bir co-signature alabiliyordu: para kilitli target'a gider ama abonelik
+  sahibinin rızası olmadan sürülebiliyordu. Yeni `AccountOwnerIndex` fabrikanın
+  `AccountCreated` olayındaki `ownerHash`'i indeksliyor; imza fazı, iddia edilen
+  owner'ı kutunun ownerHash'iyle karşılaştırıp tutmazsa imzayı vermiyor.
+- **Firewall, veri kaynağı düşünce artık fail-closed.** Doğrulanmış-alıcı indeksi
+  cevap vermeyince istemci sınırlı bir pencereye (200k blok, kabaca bir gün)
+  düşüyor ama raporu yine "tam" sayıyordu, yani o pencereden eski bir alıcının
+  benzeri "güvenli" geçebiliyordu. Sınırlı tarama artık eksik işaretleniyor,
+  lookalike kuralı çalışamamış sayılıp bilinmeyen hedef bloklanıyor.
+- **İmza tekrar koruması ECDSA malleability'ye kapatıldı.** Tek kullanımlık nonce
+  ham imza byte'ından türetiliyordu; `s -> n-s` ikizi aynı imzacıyı aynı mesaj için
+  recover ettiği halde farklı byte üretip kontrolü atlıyordu. Nonce artık recover
+  edilen imzacı ve imzalanan mesaj üzerinden.
+- **Sıfır değerli bait taraması sayfalanıyor.** Tek sayfa okunuyordu; saldırgan
+  bait'i bir dizi sıradan transferle ilk sayfanın dışına itebiliyordu. Artık
+  benzer geçmiş taraması gibi sayfa sayfa geziliyor.
+
+### Düzeltildi
+
+- **CCTP köprüsünde bakiye üstü tutar önden engelleniyor.** Bakiyeden fazla
+  girildiğinde Bridge butonu açık kalıyor, hata ancak yakma imzalandıktan sonra
+  görünüyordu. Gateway'deki gibi bir eksik uyarısı ve tek tıkla düzelten buton
+  eklendi.
+- **Activity satırında butonun içindeki buton kaldırıldı.** Kopyala butonu satır
+  butonunun içindeydi, geçersiz HTML üretiyordu ve kopyalayınca satırın detayı da
+  açılıyordu. Satır başlığı artık `role="button"` bir öğe, kopyala tıklaması satırı
+  açmıyor, klavye ile yine açılıp kapanıyor.
+- **Activity ekranı erişilebilirlik.** Sıralama chip'i sayfa zeminine karışıyordu,
+  görünür bir kenar aldı; tarih girişi ve makbuz linki tap hedefi 24 pikselin
+  altındaydı, büyütüldü; ışık temasında vurgu rengi link ile alt bilgi metni
+  kontrast eşiğinin altındaydı, düzeltildi.
+- **Private Pay açıklaması gerçeğe hizalandı.** Metin "zincirde kimliğinden iz
+  taşımayan adres" diyordu ama besleme transferinin görünür kaldığını söylemiyordu;
+  artık söylüyor. Akış aynen çalışıyor.
+- **`/api/health` her istekte zinciri okumuyor.** Uç metrelenmediği için her
+  yoklama taze bir zincir okumasıydı; artık bakiye birkaç saniye önbelleklenir.
+- **NatSpec düzeltmeleri.** `CtrlArcZ.sol` hala "6 haneli kod" diyordu; claim
+  secret 16 karakter, 80 bit. Blok hızı ve zaman aşımı yorumları ölçülen değerlere
+  çekildi.
+
 ## Yayınlanmamış: 2026-08-22
 
 Cüzdan hatası artık ekrana sayfa değil, cümle olarak çıkıyor. SDK'ya dokunulmadı;

@@ -46,7 +46,7 @@ export async function check(
   const unavailable: string[] = [];
   let sendHistoryOk = true;
 
-  const [counterpartyScan, targetActivity, zeroValueCount, verified, verifiedRecipients] =
+  const [counterpartyScan, targetActivity, zeroValueCount, verified, verifiedRecipientsResult] =
     await Promise.all([
       provider.getOutgoingCounterparties(sender).catch(() => {
         // A fetch failure means the lookalike rule cannot run at all: fail closed
@@ -80,7 +80,17 @@ export async function check(
   // layer 1. Protected-transfer payments go to the contract, not the recipient
   // directly, so they never appear in raw counterparty history; the contract's
   // RecipientVerified events are the source for them.
+  const verifiedRecipients = verifiedRecipientsResult.recipients;
   const counterparties = [...new Set([...rawCounterparties, ...verifiedRecipients])];
+
+  // A PARTIAL verified-recipients set is as dangerous to the lookalike rule as a
+  // partial send history: a protected-transfer recipient the bounded scan did not
+  // reach is one whose lookalike passes as "safe". So a bounded/failed verified
+  // scan makes the lookalike rule uncheckable too — fail closed, exactly as a send
+  // history fetch failure does. This is what stops the firewall silently narrowing
+  // to a few-hours window when the server's from-deploy-block index is unavailable.
+  if (!verifiedRecipientsResult.complete) unavailable.push('verified recipients (partial scan)');
+  const lookalikeCheckable = sendHistoryOk && verifiedRecipientsResult.complete;
 
   const input: RiskInput = {
     sender,
@@ -89,29 +99,42 @@ export async function check(
     targetActivity,
     zeroValueBait: { count: zeroValueCount },
     isVerifiedRecipient: verified,
-    lookalikeCheckable: sendHistoryOk,
+    lookalikeCheckable,
     ...(unavailable.length > 0 ? { unavailable } : {}),
   };
 
   return evaluateRisk(input, options.now ?? new Date());
 }
 
-/** The sender's verified recipients, read from the contract's RecipientVerified events. */
+/**
+ * The sender's verified recipients, read from the contract's RecipientVerified
+ * events, WITH whether that read was complete.
+ *
+ * `complete` is the important half. It is true only when the set is authoritative:
+ * a pre-supplied indexer list, an unbounded from-deploy-block scan, or a genuinely
+ * empty source (no contract). It is false for a BOUNDED lookback scan — which can
+ * silently omit anyone paid before the window — and for a fetch failure. The caller
+ * folds `complete` into `lookalikeCheckable`, so a bounded/failed read fails closed
+ * instead of passing a few-hours window off as the whole history.
+ */
 async function readVerifiedRecipients(
   sender: Address,
   options: CheckOptions,
   unavailable: string[],
-): Promise<Address[]> {
-  // Indexer path: a pre-supplied list means no on-chain scan at all.
-  if (options.verifiedRecipients) return options.verifiedRecipients;
+): Promise<{ recipients: Address[]; complete: boolean }> {
+  // Indexer path: a pre-supplied list means no on-chain scan at all, and it is
+  // authoritative (the server backfills it from the deploy block).
+  if (options.verifiedRecipients) return { recipients: options.verifiedRecipients, complete: true };
 
   const address = options.contractAddress ?? CTRL_ARCZ_ADDRESS;
-  if (!options.client || /^0x0+$/.test(address)) return [];
+  // No contract to read from: there are genuinely no verified recipients, and that
+  // is a complete answer, not a gap.
+  if (!options.client || /^0x0+$/.test(address)) return { recipients: [], complete: true };
 
   try {
     // Chunked, and from the deploy block by default — Arc caps eth_getLogs at 10k
     // blocks and rejects a from-0 query. A lookback bound trims the scan when there
-    // is no indexer.
+    // is no indexer, and a bounded scan is by definition incomplete.
     let fromBlock: bigint | undefined;
     if (options.verifiedRecipientsLookbackBlocks != null) {
       const latest = await options.client.getBlockNumber();
@@ -125,11 +148,17 @@ async function readVerifiedRecipients(
       args: { sender },
       ...(fromBlock != null ? { fromBlock } : {}),
     });
-    return logs.map((log) => log.args.recipient).filter((r): r is Address => Boolean(r));
+    // Complete only if the scan reached the deploy block: either no lookback bound
+    // was set, or the window was wide enough to start at 0.
+    const complete = fromBlock == null || fromBlock === 0n;
+    return {
+      recipients: logs.map((log) => log.args.recipient).filter((r): r is Address => Boolean(r)),
+      complete,
+    };
   } catch {
     // Record the gap so the report is marked incomplete (never silently "safe").
     unavailable.push('verified recipients');
-    return [];
+    return { recipients: [], complete: false };
   }
 }
 

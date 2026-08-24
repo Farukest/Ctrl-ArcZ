@@ -42,17 +42,10 @@ import { craftLookalikeOfKnownRecipient } from '../lib/poisoning.js';
 import { clearVerifiedRecipients } from '../lib/verifiedRecipients.js';
 import { useGasReserve } from '../lib/useGasReserve.js';
 
-/**
- * The SDK's 10 USDC default for `minProtectedAmount` is priced for a chain where
- * two extra transactions cost real money. On Arc they cost 0.0017 USDC, measured,
- * because gas is USDC and blocks are cheap. Leaving the default in place made the
- * app tell every user that an unprotected transfer "may be cheaper" on every send
- * a testnet faucet can fund — advice that is false here, and advice against the
- * one thing this app exists to do.
- *
- * 0.05 USDC is roughly thirty times the measured protection cost, so below it the
- * hint is true and above it the app stays quiet.
- */
+/** What the success screen needs to show after a send. The `minProtectedAmount`
+ *  rationale that used to sit here (Arc's protection cost is ~0.0017 USDC, so the
+ *  10 USDC SDK default was wrong) now lives with the value it explains, in
+ *  `lib/riskConfig.ts`. */
 interface SentInfo {
   transferId: string;
   /** The one string the recipient needs. Nothing else is handed over. */

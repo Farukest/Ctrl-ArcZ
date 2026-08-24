@@ -136,13 +136,27 @@ function Row({
   return (
     <div className={`arow2${open ? ' is-open' : ''}`} data-testid="activity-item">
       {/* The whole head is the control, because the row is one thing and a reader
-          aiming at a 16px chevron on a phone is a reader who misses. */}
-      <button
-        type="button"
+          aiming at a 16px chevron on a phone is a reader who misses. A div with
+          role=button rather than a real <button>, because the subtitle carries a
+          copy control and a <button> may not nest inside another <button> (invalid
+          HTML, and it made copying the address also toggle the row). */}
+      <div
         className="arow2__head"
+        role="button"
+        tabIndex={expandable ? 0 : -1}
         onClick={expandable ? onToggle : undefined}
+        onKeyDown={
+          expandable
+            ? (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  onToggle();
+                }
+              }
+            : undefined
+        }
         aria-expanded={expandable ? open : undefined}
-        disabled={!expandable}
+        aria-disabled={!expandable}
       >
         <Mark icon={view.icon} />
         <span className="arow2__body">
@@ -161,7 +175,7 @@ function Row({
           )}
         </span>
         {expandable && <IconChevron className="arow2__chev" width={15} height={15} aria-hidden />}
-      </button>
+      </div>
 
       {view.chips && view.chips.length > 0 && (
         <div className="arow2__chips">

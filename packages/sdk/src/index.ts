@@ -220,6 +220,7 @@ export {
   AnnouncementIndex,
   type IndexedAnnouncement,
 } from './shield/announcementIndex.js';
+export { AccountOwnerIndex } from './shield/accountOwnerIndex.js';
 export {
   assertBoxFundable,
   fundBoxFromGateway,
