@@ -474,10 +474,23 @@ the backend and the co-signer.
 - **The zero-value bait scan is paged**, so a bait an attacker pads past the first
   page of history is still counted.
 
-Deferred, and tracked as design work rather than shipped here: an expiry on the
-co-signer's spend signature, and a `msg.sender` gate on `sweepExpired` so the vault
-address is not revealed in calldata by anyone who knows it. Both are contract
-changes that need a redeploy. Private Pay funds its box from the payer's own wallet
-in one instant transaction, so that funding is visible on chain by design (the
-success screen says so); its box commitment linkability adds nothing an observer
-cannot already read from that funding transaction.
+Shipped 2026-08-24 (SpendPolicyAccount redeployed, factory
+`0x9B3b30573D7f1d65d1cFeeb52E3a6E69a5792161`): `sweepExpired` now requires
+`msg.sender == vault`, so a stranger who cracked the vault from its commitment can no
+longer force the sweep and write the vault-to-box link the payer never chose to
+reveal. The redeploy is safe for existing boxes: their `pay`/`pull` calldata is
+unchanged, and the co-signer's owner-bind index now scans the prior factory too, so
+an existing subscription is still recognised (verified end to end before deploy).
+
+Deferred, because it cannot ship without breaking existing boxes: an expiry on the
+co-signer's spend signature. It changes the `pay`/`pull` calldata, so a wallet that
+sent it to a box created before the change would be rejected, stranding every open
+subscription until a per-box version-detection layer is added. Its value is marginal
+over the guards already there (the spend nonce makes each signature single-use, and
+the box expiry bounds the window), so it waits for that layer rather than a rushed
+migration.
+
+Private Pay funds its box from the payer's own wallet in one instant transaction, so
+that funding is visible on chain by design (the success screen says so); its box
+commitment linkability adds nothing an observer cannot already read from that funding
+transaction.

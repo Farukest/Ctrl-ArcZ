@@ -451,23 +451,39 @@ contract SpendPolicyAccountTest is Test {
     function test_sweepExpired_beforeExpiry_reverts() public {
         SpendPolicyAccount acct = _push();
         _fund(acct, 10e6);
+        vm.prank(vault);
         vm.expectRevert(SpendPolicyAccount.NotExpiredYet.selector);
         acct.sweepExpired(vault);
     }
 
-    function test_sweepExpired_wrongVault_reverts() public {
+    function test_sweepExpired_byNonVault_reverts_evenIfTheyKnowIt() public {
+        // The vault is crackable from the commitment on a transparent chain. A
+        // stranger who knows it must still not be able to force the sweep, which
+        // would write the vault-to-box link the payer never chose to reveal.
         SpendPolicyAccount acct = _push();
         _fund(acct, 10e6);
         vm.warp(expiry + 1);
+        vm.prank(stranger);
+        vm.expectRevert(SpendPolicyAccount.NotVault.selector);
+        acct.sweepExpired(vault);
+    }
+
+    function test_sweepExpired_wrongVaultCommitment_reverts() public {
+        // The caller is the address they name, but it is not the box's committed vault.
+        SpendPolicyAccount acct = _push();
+        _fund(acct, 10e6);
+        vm.warp(expiry + 1);
+        vm.prank(stranger);
         vm.expectRevert(SpendPolicyAccount.WrongVault.selector);
         acct.sweepExpired(stranger);
     }
 
     function test_sweepExpired_isTheEnclaveDownEscapeHatch() public {
-        // Enclave gone: no co-signer sig will ever come. Funds still go home.
+        // Enclave gone: no co-signer sig will ever come. The vault sweeps home itself.
         SpendPolicyAccount acct = _push();
         _fund(acct, 25e6);
         vm.warp(expiry + 1);
+        vm.prank(vault);
         acct.sweepExpired(vault);
         assertEq(usdc.balanceOf(vault), 25e6);
     }

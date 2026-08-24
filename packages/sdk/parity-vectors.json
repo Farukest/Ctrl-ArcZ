@@ -18,8 +18,8 @@
       "multicall3From": "0x522fAf9A91c41c443c66765030741e4AaCe147D0",
       "ctrlArcZ": "0x8dAb7148cdc31DAcad6d7e12161AA3DEDb572Dca",
       "codeClaimVerifier": "0x2C0f268DE2Aa8BB2ab27F2Ea5Ae8a0f9a0E068c4",
-      "spendPolicyFactory": "0x8AB90Dfe39D9c9bFE8bdDa84545FA734c02442B9",
-      "spendPolicyAccountImpl": "0xa06419b913abA4BFdfEeb9D1A8800DbC2E3A2C11",
+      "spendPolicyFactory": "0x9B3b30573D7f1d65d1cFeeb52E3a6E69a5792161",
+      "spendPolicyAccountImpl": "0x047870050bA2a20665F053797140044C004970c5",
       "shieldVault": "0xc8185AF46b882368b771E8E8a1C8abe1C8e4127f",
       "stealthAnnouncer": "0x9b9F9F8b98Dd7a74889725e79591B3E69BdC991D"
     }

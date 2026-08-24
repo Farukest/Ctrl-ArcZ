@@ -12,6 +12,7 @@ import {
   SHIELD_VAULT_ADDRESS,
   SPEND_POLICY_ACCOUNT_IMPL_ADDRESS,
   SPEND_POLICY_FACTORY_ADDRESS,
+  SPEND_POLICY_FACTORY_PRIOR_ADDRESSES,
   STEALTH_ANNOUNCER_ADDRESS,
   STEALTH_ANNOUNCER_DEPLOY_BLOCK,
 } from './arcTestnet.js';
@@ -51,6 +52,12 @@ export interface ChainDeployment {
   ctrlArcZ: `0x${string}`;
   codeClaimVerifier: `0x${string}`;
   spendPolicyFactory: `0x${string}`;
+  /**
+   * Factories replaced by a redeploy. Boxes created under them keep working, so the
+   * co-signer's owner-bind index must scan these as well as the current factory or it
+   * would fail to recognise an existing subscription and veto its pulls.
+   */
+  priorSpendPolicyFactories?: readonly `0x${string}`[];
   spendPolicyAccountImpl: `0x${string}`;
   stealthAnnouncer: `0x${string}`;
   /** The demo vault. Only Arc has one; it is a demo payee, not infrastructure. */
@@ -182,6 +189,7 @@ export const DEPLOYMENTS: Readonly<Record<number, ChainDeployment>> = {
     ctrlArcZ: CTRL_ARCZ_ADDRESS,
     codeClaimVerifier: CODE_CLAIM_VERIFIER_ADDRESS,
     spendPolicyFactory: SPEND_POLICY_FACTORY_ADDRESS,
+    priorSpendPolicyFactories: SPEND_POLICY_FACTORY_PRIOR_ADDRESSES,
     spendPolicyAccountImpl: SPEND_POLICY_ACCOUNT_IMPL_ADDRESS,
     stealthAnnouncer: STEALTH_ANNOUNCER_ADDRESS,
     shieldVault: SHIELD_VAULT_ADDRESS,

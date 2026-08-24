@@ -176,10 +176,16 @@ contract SpendPolicyAccount is ReentrancyGuard {
         _sweep(vault);
     }
 
-    /// @notice Once expired, sweep home. Still gated by the vault commitment, so
-    ///         only someone who knows the vault (the payer / their relayer) can
-    ///         call it. Liveness escape hatch if the co-signer ever goes dark.
+    /// @notice Once expired, sweep home. Gated on `msg.sender == vault`, exactly like
+    ///         `sweepToVault`, so only the vault itself can trigger it. The vault
+    ///         address is crackable from the commitment on a transparent chain, and
+    ///         without this gate anyone who cracked it could call `sweepExpired(vault)`
+    ///         and write the vault-to-box link on chain the payer never chose to
+    ///         reveal. Still a liveness escape hatch: the payer holds the vault key,
+    ///         so they can always sweep an expired box themselves if the co-signer
+    ///         goes dark.
     function sweepExpired(address vault) external nonReentrant {
+        if (msg.sender != vault) revert NotVault();
         if (block.timestamp <= expiry) revert NotExpiredYet();
         if (keccak256(abi.encode(vault)) != vaultHash) revert WrongVault();
         _sweep(vault);

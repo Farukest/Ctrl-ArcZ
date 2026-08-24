@@ -297,20 +297,30 @@ function recipientIndexFor(chainId: number): VerifiedRecipientIndex {
  * no owner, so without the factory's `AccountCreated(ownerHash)` a stranger could
  * name anyone else's box and the co-signer would have nothing to say no with.
  */
-const accountOwnerIndexes = new Map<number, AccountOwnerIndex>();
-function accountOwnerIndexFor(chainId: number): AccountOwnerIndex {
+// One index per factory: the current one and any it replaced. A box lives under
+// exactly one factory, so the owner-bind must scan them all or it would fail to
+// recognise a subscription created under a prior factory and veto its pulls.
+const accountOwnerIndexes = new Map<number, AccountOwnerIndex[]>();
+function accountOwnerIndexesFor(chainId: number): AccountOwnerIndex[] {
   const cached = accountOwnerIndexes.get(chainId);
   if (cached) return cached;
   const deployment = deploymentFor(chainId);
   if (!deployment) throw new Error(`invalid chainId ${chainId}`);
-  const index = new AccountOwnerIndex(
-    clientFor(chainId),
+  const factories = [
     deployment.spendPolicyFactory,
-    deployment.stealthAnnouncerDeployBlock,
-  );
-  accountOwnerIndexes.set(chainId, index);
-  void index.start();
-  return index;
+    ...(deployment.priorSpendPolicyFactories ?? []),
+  ];
+  const indexes = factories.map((factory) => {
+    const index = new AccountOwnerIndex(
+      clientFor(chainId),
+      factory,
+      deployment.stealthAnnouncerDeployBlock,
+    );
+    void index.start();
+    return index;
+  });
+  accountOwnerIndexes.set(chainId, indexes);
+  return indexes;
 }
 
 /**
@@ -325,18 +335,22 @@ async function verifyBoxOwnership(
   owner: Address,
   account: Address,
 ): Promise<{ approved: false; reason: string } | null> {
-  const index = accountOwnerIndexFor(chainId);
-  if (!index.isReady()) {
+  const indexes = accountOwnerIndexesFor(chainId);
+  // Fail closed until EVERY index has backfilled: the box could belong to any
+  // factory, and one not yet ready cannot yet say it does not have it.
+  if (indexes.some((index) => !index.isReady())) {
     return { approved: false, reason: 'ownership index warming up (fail-closed); try again' };
   }
-  const onChain = index.ownerHashOf(account);
-  if (!onChain) {
-    return { approved: false, reason: 'not a recognised spend account' };
+  const expected = toOwnerHash(owner).toLowerCase();
+  for (const index of indexes) {
+    const onChain = index.ownerHashOf(account);
+    if (onChain) {
+      return onChain.toLowerCase() === expected
+        ? null
+        : { approved: false, reason: 'owner does not own this account' };
+    }
   }
-  if (onChain.toLowerCase() !== toOwnerHash(owner).toLowerCase()) {
-    return { approved: false, reason: 'owner does not own this account' };
-  }
-  return null;
+  return { approved: false, reason: 'not a recognised spend account' };
 }
 
 /**

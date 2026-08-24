@@ -28,6 +28,15 @@ ve uygulama.
 - **Sıfır değerli bait taraması sayfalanıyor.** Tek sayfa okunuyordu; saldırgan
   bait'i bir dizi sıradan transferle ilk sayfanın dışına itebiliyordu. Artık
   benzer geçmiş taraması gibi sayfa sayfa geziliyor.
+- **`sweepExpired` artık yalnızca vault'un kendisi çağırabiliyor.**
+  `SpendPolicyAccount` Arc'ta yeniden deploy edildi (factory
+  `0x9B3b3057...2161`): eskiden vault'u commitment'tan çözen bir yabancı
+  `sweepExpired(vault)` ile vault-kutu bağını zincire yazdırabiliyordu; artık
+  `msg.sender == vault` şart. Deploy mevcut kutular için güvenli: `pay`/`pull`
+  calldata'ları değişmedi, ve co-signer'ın owner-bind indeksi artık eski
+  factory'yi de tarıyor, yani mevcut abonelikler tanınmaya devam ediyor (deploy
+  öncesi uçtan uca doğrulandı). Co-signer imza deadline'ı ertelendi: calldata'yı
+  değiştirdiği için eski kutuları bozardı, ayrı bir sürüm-tespiti katmanı gerekiyor.
 
 ### Düzeltildi
 

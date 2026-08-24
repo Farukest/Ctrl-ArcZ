@@ -353,10 +353,20 @@ export const CODE_CLAIM_VERIFIER_ADDRESS =
 
 // Payer-side shield (identity-free accounts: no owner stored, co-signer-only pay,
 // hashed vault commitment, per-pull cap, EIP-712). Deployed on Arc Testnet.
+//
+// Redeployed 2026-08-24 (block 58642985) to add the `msg.sender == vault` gate on
+// `sweepExpired`. New boxes use this factory; boxes created under the prior factory
+// keep working (their pay/pull calldata is unchanged), and the co-signer's owner
+// index scans both, so an existing subscription is still recognised.
 export const SPEND_POLICY_FACTORY_ADDRESS =
-  '0x8AB90Dfe39D9c9bFE8bdDa84545FA734c02442B9' as `0x${string}`;
+  '0x9B3b30573D7f1d65d1cFeeb52E3a6E69a5792161' as `0x${string}`;
 export const SPEND_POLICY_ACCOUNT_IMPL_ADDRESS =
-  '0xa06419b913abA4BFdfEeb9D1A8800DbC2E3A2C11' as `0x${string}`;
+  '0x047870050bA2a20665F053797140044C004970c5' as `0x${string}`;
+/** Factories replaced by redeploys, kept so the co-signer's owner-bind index still
+ *  recognises boxes created under them. Newest-first is not required. */
+export const SPEND_POLICY_FACTORY_PRIOR_ADDRESSES = [
+  '0x8AB90Dfe39D9c9bFE8bdDa84545FA734c02442B9',
+] as readonly `0x${string}`[];
 export const SHIELD_VAULT_ADDRESS = '0xc8185AF46b882368b771E8E8a1C8abe1C8e4127f' as `0x${string}`;
 
 // ERC-5564 stealth-address announcement registry (schemeId 1). Standalone; does not
