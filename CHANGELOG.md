@@ -52,6 +52,13 @@ ve uygulama.
   secret 16 karakter, 80 bit. Blok hızı ve zaman aşımı yorumları ölçülen değerlere
   çekildi.
 
+### Test
+
+- 5 yeni regresyon testi (toplam 742'den 747'ye): sınırlı doğrulanmış-alıcı
+  taramasının fail-closed bloklaması ve tam listenin aşırı-bloklamaması (SDK);
+  `AccountOwnerIndex`'in kutuyu ownerHash'e eşlemesi ve bilinmeyen kutuya null
+  dönmesi (SDK); imza tekrarında ECDSA-malleable ikizin reddi (api).
+
 ## Yayınlanmamış: 2026-08-22
 
 Cüzdan hatası artık ekrana sayfa değil, cümle olarak çıkıyor. SDK'ya dokunulmadı;

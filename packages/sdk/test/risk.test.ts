@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Address } from 'viem';
+import type { Address, PublicClient } from 'viem';
 import { check } from '../src/risk/check.js';
 import { craftLookalike, evaluateRisk, isLookalike } from '../src/risk/rules.js';
 import type {
@@ -316,6 +316,52 @@ describe('check', () => {
     });
 
     expect(report.level).toBe('block');
+  });
+
+  // Regression: a bounded verified-recipient scan must not be treated as the whole
+  // history. A protected-transfer recipient outside the window is one whose
+  // lookalike would otherwise pass as safe, so a bounded scan makes the lookalike
+  // rule uncheckable and the report incomplete -- fail closed, not "safe".
+  const DEPLOYED = '0x000000000000000000000000000000000000dEaD' as Address;
+  /** A client whose verified-recipient log scan returns nothing over a window that
+   *  does NOT reach the deploy block (fromBlock > 0), i.e. a partial scan. */
+  const partialScanClient = {
+    getBlockNumber: async () => 1_000_000n,
+    getLogs: async () => [],
+    readContract: async () => false,
+  } as unknown as PublicClient;
+
+  it('fails closed: a bounded verified-recipients scan is not passed off as complete', async () => {
+    const report = await check(SENDER, CLEAN, {
+      provider: new FakeProvider({ counterparties: [REAL] }),
+      client: partialScanClient,
+      contractAddress: DEPLOYED,
+      verifiedRecipientsLookbackBlocks: 200_000,
+      now: NOW,
+    });
+
+    expect(report.complete).toBe(false);
+    expect(report.level).toBe('block');
+    expect(
+      report.reasons.some(
+        (r) =>
+          r.code === 'DATA_UNAVAILABLE' &&
+          r.severity === 'block' &&
+          r.sources?.some((s) => s.includes('verified recipients')),
+      ),
+    ).toBe(true);
+  });
+
+  it('does not over-block: a COMPLETE verified list keeps an ordinary unknown address non-blocked', async () => {
+    const report = await check(SENDER, CLEAN, {
+      provider: new FakeProvider({ counterparties: [REAL] }),
+      // A supplied list is authoritative (the server backfills it from the deploy block).
+      verifiedRecipients: [],
+      now: NOW,
+    });
+
+    expect(report.complete).toBe(true);
+    expect(report.level).not.toBe('block');
   });
 });
 

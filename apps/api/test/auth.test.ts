@@ -210,6 +210,42 @@ describe('requireSignedRequest', () => {
       message: 'request already used',
     });
   });
+
+  it('rejects an ECDSA-malleable twin of an already-used signature', async () => {
+    // A captured signature can be reshaped into a different 65-byte value that still
+    // recovers to the same signer over the same message (s -> n-s, v flipped). When
+    // the nonce was keyed by the signature bytes this twin sailed past the replay
+    // check; keyed by (recovered signer, message) it lands on the same nonce.
+    const signer = account();
+    const s = await sign(signer);
+    const first = signed({
+      'x-ctrl-address': signer.address,
+      'x-ctrl-timestamp': s.timestamp,
+      'x-ctrl-signature': s.signature,
+    });
+    await expect(requireSignedRequest(first, s.rawBody, s.path)).resolves.toBeTruthy();
+
+    const N = 0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141n;
+    const hex = s.signature.slice(2);
+    const r = hex.slice(0, 64);
+    const sValue = BigInt('0x' + hex.slice(64, 128));
+    const v = parseInt(hex.slice(128, 130), 16);
+    const twin = ('0x' +
+      r +
+      (N - sValue).toString(16).padStart(64, '0') +
+      (v === 27 ? 28 : 27).toString(16).padStart(2, '0')) as `0x${string}`;
+    expect(twin).not.toBe(s.signature);
+
+    const twinReq = signed({
+      'x-ctrl-address': signer.address,
+      'x-ctrl-timestamp': s.timestamp,
+      'x-ctrl-signature': twin,
+    });
+    await expect(requireSignedRequest(twinReq, s.rawBody, s.path)).rejects.toMatchObject({
+      status: 401,
+      message: 'request already used',
+    });
+  });
 });
 
 describe('checkQuota', () => {
