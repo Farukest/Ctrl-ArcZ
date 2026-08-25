@@ -68,10 +68,13 @@ export function PrivatePayTab({
   session,
   balance,
   onSwitchChain,
+  bare,
 }: {
   session: Session;
   balance: bigint | null;
   onSwitchChain: (chainId: number) => Promise<void>;
+  /** Render the fields without the outer card, for when a parent already draws one. */
+  bare?: boolean;
 }) {
   const t = useT();
   const toast = useToast();
@@ -238,28 +241,7 @@ export function PrivatePayTab({
       {/* Same treatment as the other cards: the summary and the three points are
           one `i` beside the title rather than a paragraph and a dot in a row of
           their own. */}
-      <Card
-        title={t('ppay.title')}
-        infoLabel={t('ppay.info.aria')}
-        info={
-          <>
-            <p>{t('ppay.summary')}</p>
-            <div className="infopop__item">
-              <span className="infopop__k">{t('ppay.info.k1')}</span>
-              <p>{t('ppay.point1')}</p>
-            </div>
-            <div className="infopop__item">
-              <span className="infopop__k">{t('ppay.info.k2')}</span>
-              <p>{t('ppay.point2')}</p>
-            </div>
-            <div className="infopop__item">
-              <span className="infopop__k">{t('ppay.info.k3')}</span>
-              <p>{t('ppay.point3')}</p>
-            </div>
-          </>
-        }
-        data-testid="privatepay-tab"
-      >
+      <Card bare={bare ?? false} title={t('ppay.title')} data-testid="privatepay-tab">
         <div className="formstack">
           {!onSupportedChain ? (
             <NeedsChain feature="privatePay" onSwitch={onSwitchChain} chainId={session.chainId} />

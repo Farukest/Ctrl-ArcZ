@@ -1225,13 +1225,6 @@
   border-color: var(--accent-ring);
   background: var(--accent-soft);
 }
-.infodot__glyph {
-  font-family: Georgia, 'Times New Roman', serif;
-  font-style: italic;
-  font-weight: 700;
-  font-size: 14px;
-  line-height: 1;
-}
 .infopop {
   width: min(280px, 82vw);
   padding: var(--sp-2) var(--sp-3);
@@ -1281,23 +1274,63 @@
   line-height: 1.5;
   color: var(--text-mid);
 }
+/* The one line of why, above the coloured points that say what it does. */
+.infopop__lead {
+  color: var(--text-hi) !important;
+  font-weight: 560;
+}
+/* Points, not prose: a colour per dot so the reader takes each in on its own,
+   and never mistakes one route's list for the other's. */
+.infobullets {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.infobullets li {
+  position: relative;
+  padding-left: 16px;
+  font-size: var(--fs-sm);
+  line-height: 1.45;
+  color: var(--text-mid);
+}
+.infobullets li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0.5em;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.infobullets li:nth-child(3n + 2)::before {
+  background: color-mix(in srgb, var(--accent) 45%, var(--safe));
+}
+.infobullets li:nth-child(3n)::before {
+  background: var(--safe);
+}
 
-/* Bridge engine toggle row (CCTP / Gateway + info) ------------------------ */
+/* Bridge engine toggle row (CCTP / Gateway) and Pay mode row (Protected /
+   Private), one and the same shape ----------------------------------------- */
 /* The spacing below belongs to this row, not to the tab bar inside it.
    `.segtabs` carries its own `margin-bottom` for the places it stands alone, and
    that margin makes this row 16px taller than its tallest child: `align-items:
    center` then centres the info dot on the row, which is 8px below the centre of
    the tabs it is meant to sit beside. Anything vertically centred against a
    sibling breaks the moment that sibling brings its own outer spacing. */
-.bridge-engine {
+.bridge-engine,
+.paytab__seg {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   margin-bottom: var(--sp-4);
 }
-.bridge-engine .segtabs {
-  flex: 1;
-  min-width: 0;
+.bridge-engine .segtabs,
+.paytab__seg .segtabs {
+  flex: 0 0 auto;
   margin-bottom: 0;
 }
 
@@ -1758,6 +1791,40 @@
   .segtab:hover {
     color: var(--text-hi);
   }
+}
+/* A tab that carries its own info: the label and the `i` sit inside the button,
+   the `i` showing only while the tab is active. It stays a clean glyph, not a
+   bordered pill, so it reads as part of the label rather than a control bolted on
+   beside it. */
+/* Three columns: an empty left cell the exact width of the info cell on the
+   right, so the label in the middle is always dead-centre in the tab and the
+   badge can never sit on top of it. The empty left cell also widens the tab. */
+.segtab--info {
+  display: grid;
+  grid-template-columns: 28px 1fr 28px;
+  align-items: center;
+}
+.segtab--info .segtab__label {
+  grid-column: 2;
+  text-align: center;
+  min-width: 0;
+}
+.segtab--info .segtab__info {
+  grid-column: 3;
+  justify-self: center;
+  display: inline-flex;
+}
+.segtab__info .infodot {
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  color: var(--text-mid);
+}
+.segtab__info .infodot:hover,
+.segtab__info .infodot[aria-expanded='true'] {
+  color: var(--text-hi);
+  background: transparent;
 }
 /* Two independent signals, because either one alone fails in a theme. The raised
    thumb carries it in dark, where the fills genuinely differ; the accent label

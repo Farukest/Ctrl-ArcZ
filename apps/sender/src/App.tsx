@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { useSession } from '@ctrl-arcz/demo-kit';
 import {
   ConnectBar,
@@ -51,6 +51,19 @@ export function App() {
 
   const [mode, setMode] = useState<Mode>(linkTid ? 'receive' : 'send');
   const [tab, setTab] = useState<Tab>('pay');
+
+  /*
+   * A tab switch is a transition, not an urgent update. Mounting a tab is a heavy
+   * synchronous render -- the bridge alone is a large tree that also kicks off its
+   * reads -- and as an urgent update it blocked the main thread on every click, so
+   * flicking between tabs quickly stacked those blocking renders back to back and
+   * the UI froze. As a transition React renders the next tab off the urgent path,
+   * keeps the current one on screen and interactive, and abandons a half-done
+   * render the instant another tab is picked, so only the tab you land on is ever
+   * fully rendered. This is how a router keeps navigation responsive.
+   */
+  const [, startTabSwitch] = useTransition();
+  const selectTab = (next: Tab) => startTabSwitch(() => setTab(next));
 
   const { pending, claimable, reload } = usePendingClaims(state.session);
   const pendingCount = claimable?.length ?? 0;
@@ -137,7 +150,7 @@ export function App() {
                     <SegmentedTabs
                       tabs={primaryTabs}
                       value={tab === 'activity' ? ('' as Exclude<Tab, 'activity'>) : tab}
-                      onChange={setTab}
+                      onChange={selectTab}
                     />
                     <button
                       type="button"
@@ -145,7 +158,7 @@ export function App() {
                         .filter(Boolean)
                         .join(' ')}
                       aria-pressed={tab === 'activity'}
-                      onClick={() => setTab('activity')}
+                      onClick={() => selectTab('activity')}
                       data-testid="tab-activity"
                     >
                       <IconHistory width={16} height={16} aria-hidden />

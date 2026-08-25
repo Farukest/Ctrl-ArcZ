@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { SegmentedTabs, useT } from '@ctrl-arcz/demo-kit/ui';
+import { Card, InfoBody, SegmentedTabs, useT } from '@ctrl-arcz/demo-kit/ui';
 import { type Session } from '@ctrl-arcz/demo-kit';
 import { SendTab } from './SendTab.js';
 import { PrivatePayTab } from './PrivatePayTab.js';
@@ -34,27 +34,54 @@ export function PayTab({
 
   return (
     <div className="paytab">
-      <div className="paytab__seg">
+      <Card data-testid="pay-tab">
+        <div className="paytab__seg">
         <SegmentedTabs
           tabs={[
-            { id: 'standard', label: t('pay.seg.standard') },
-            { id: 'private', label: t('pay.seg.private') },
+            {
+              id: 'standard',
+              label: t('pay.seg.standard'),
+              infoAria: t('pay.pick.aria'),
+              info: (
+                <InfoBody
+                  lead={t('pay.pick.protected.lead')}
+                  points={[
+                    t('pay.pick.protected.b1'),
+                    t('pay.pick.protected.b2'),
+                    t('pay.pick.protected.b3'),
+                  ]}
+                />
+              ),
+            },
+            {
+              id: 'private',
+              label: t('pay.seg.private'),
+              infoAria: t('pay.pick.aria'),
+              info: (
+                <InfoBody
+                  lead={t('ppay.summary')}
+                  points={[t('ppay.point1'), t('ppay.point2'), t('ppay.point3')]}
+                />
+              ),
+            },
           ]}
           value={pay}
           onChange={setPay}
         />
-      </div>
-      {pay === 'standard' ? (
-        <SendTab
-          balanceMissing={balanceMissing}
-          session={session}
-          balance={balance}
-          onSent={onSent}
-          onSwitchChain={onSwitchChain}
-        />
-      ) : (
-        <PrivatePayTab session={session} balance={balance} onSwitchChain={onSwitchChain} />
-      )}
+        </div>
+        {pay === 'standard' ? (
+          <SendTab
+            bare
+            balanceMissing={balanceMissing}
+            session={session}
+            balance={balance}
+            onSent={onSent}
+            onSwitchChain={onSwitchChain}
+          />
+        ) : (
+          <PrivatePayTab bare session={session} balance={balance} onSwitchChain={onSwitchChain} />
+        )}
+      </Card>
     </div>
   );
 }

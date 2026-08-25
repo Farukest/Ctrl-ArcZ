@@ -30,7 +30,6 @@ import {
 import {
   bridgeClients,
   destinationChain,
-  readUsdcOn,
   switchWalletTo,
   useWalletChain,
 } from '@ctrl-arcz/demo-kit';
@@ -51,7 +50,7 @@ import {
   CostBlock,
   Field,
   GatewayFundBox,
-  InfoPopover,
+  InfoBody,
   Input,
   SegmentedTabs,
   ActivityBlock,
@@ -74,6 +73,8 @@ import { RiskGate } from './RiskGate.js';
 import { pendingOn, rememberDeposit } from '../lib/pendingDeposits.js';
 import { failureNote, startRun, useActivity } from '../lib/activity.js';
 import { activityLabels, toActivityItem } from '../lib/activityView.js';
+import { useGatewayBalances, useWalletUsdc } from '../lib/balances.js';
+import { bumpBalances } from '../lib/balanceStore.js';
 
 // The wallet signs both engines, so there is no key here to gate on. A plain flag
 // is enough to hide the tab where a deployment does not want it.
@@ -243,10 +244,13 @@ export function BridgeTab({ session }: { session: Session }) {
    * Per chain, because that is what a transfer actually spends. Showing only the
    * total would tell someone with money on Arc that they can send from Base.
    */
-  const [gwOnSource, setGwOnSource] = useState<bigint | null>(null);
-  /** Every chain that holds something, so a refusal can point at the funded one
-   *  instead of asking for a deposit the user does not need to make. */
-  const [gwByChain, setGwByChain] = useState<Partial<Record<GatewayChain, bigint>>>({});
+  /*
+   * The Gateway balance comes from the shared store, not a per-tab read: switching
+   * to this tab shows the last-known figure at once and refreshes behind it, and a
+   * bridge that spends it bumps every screen watching the same balance. `gwOnSource`
+   * and `gwByChain` are derived from it below, once the source chain is known.
+   */
+  const gatewayBal = useGatewayBalances(session.address as Address);
   /** Deposited, on chain, but not yet counted by Circle. */
   const [gwPending, setGwPending] = useState<bigint>(0n);
   /**
@@ -276,20 +280,18 @@ export function BridgeTab({ session }: { session: Session }) {
    * actions, so they get two fields and two buttons.
    */
   const [depositAmount, setDepositAmount] = useState('');
-  /** USDC in the wallet on the source chain, so the deposit box can say what
-   *  there is to deposit. `null` while unread. */
-  const [walletOnChain, setWalletOnChain] = useState<bigint | null>(null);
-  /**
-   * Whether the wallet reads above have been attempted yet.
-   *
-   * `walletOnChain` is null both before a read and after one that could not be
-   * made, and the two want different placeholders: a shimmer says a number is
-   * coming, which is true of the first and a lie about the second. Off the source
-   * chain, or on a chain whose RPC did not answer, nothing is on its way.
+  /*
+   * The wallet's USDC on both ends, from the shared store. `walletOnChain` (source)
+   * and `toBalance` (destination) are `null` both before a read and after one that
+   * could not be made; `walletRead` is whether both have been attempted, which
+   * tells a shimmer ("a number is coming") from a dash ("nothing is on its way, the
+   * wallet is on another network").
    */
-  const [walletRead, setWalletRead] = useState(false);
-  /** The same, on the destination, for the card that says what arrives there. */
-  const [toBalance, setToBalance] = useState<bigint | null>(null);
+  const fromWallet = useWalletUsdc(from, session.chainId, session.address as Address);
+  const toWallet = useWalletUsdc(to, session.chainId, session.address as Address);
+  const walletOnChain = fromWallet.value ?? null;
+  const toBalance = toWallet.value ?? null;
+  const walletRead = fromWallet.resolved && toWallet.resolved;
   /**
    * Empty means "send it to myself", which is what a bridge normally is. Typing an
    * address here turns the transfer into a payment, and a payment to a hand-typed
@@ -357,6 +359,12 @@ export function BridgeTab({ session }: { session: Session }) {
    */
   const gwSource =
     engine === 'gateway' && isGatewayChain(from) ? (from as GatewayChain) : undefined;
+  // Derived from the shared store: what Gateway holds on every chain, and the
+  // figure on the chosen source. Null while the first read is still out, so the
+  // funding box can tell "loading" from "zero".
+  const gwByChain = gatewayBal.value ?? {};
+  const gwOnSource =
+    engine === 'gateway' && gwSource && gatewayBal.value ? (gwByChain[gwSource] ?? 0n) : null;
   const gwNeeded = gwCeiling != null ? BigInt(Math.round(amountValue * 1e6)) + gwCeiling : null;
   const depositNum = Number(depositAmount);
   const depositValue =
@@ -514,40 +522,31 @@ export function BridgeTab({ session }: { session: Session }) {
   const changeEngine = (e: BridgeEngine) => setEngine(e);
 
   /**
-   * Read the Gateway balance and what a spend of this size would cost.
+   * What a spend of this size would cost, and what is still uncredited.
    *
-   * Both come from Circle and neither needs the wallet, so this runs whenever the
-   * tab is on Gateway. The fee turns out to be flat, but it is asked for rather than
-   * assumed: a hardcoded fee that drifts becomes an intent Circle rejects.
+   * The balance itself is the shared store's job (`gatewayBal`); this asks Circle
+   * only for the fee, which is per-route and does not belong in the shared balance.
+   * The fee turns out to be flat, but it is asked for rather than assumed: a
+   * hardcoded fee that drifts becomes an intent Circle rejects. `gwPending` is what
+   * this browser has deposited that Circle has not yet counted, for the note under
+   * the box; the crediting itself is `useSettleDeposits`, app-level.
    */
   useEffect(() => {
     if (engine !== 'gateway' || !gwSource || !isGatewayChain(to)) return;
     let live = true;
     const read = async () => {
+      setGwPending(pendingOn(gwSource));
       try {
-        const [bal, quote] = await Promise.all([
-          gatewayBalance({ depositor: session.address }),
-          quoteGatewaySpend({
-            from: gwSource,
-            to: to as GatewayChain,
-            amount: 1_000_000n,
-            depositor: session.address,
-          }),
-        ]);
-        if (!live) return;
-        const here = bal.byChain[gwSource] ?? 0n;
-        // Clear anything Circle has caught up on before reading what is still out.
-        setGwOnSource(here);
-        setGwByChain(bal.byChain);
-        // What is still outstanding, for the note under the box. The crediting
-        // itself is `useSettleDeposits`, mounted once for the whole app: a deposit
-        // must finish whether or not this screen is the one being looked at, and
-        // two watchers of the same balance would credit the same rise twice.
-        setGwPending(pendingOn(gwSource));
-        setGwCeiling(quote.maxFee);
+        const quote = await quoteGatewaySpend({
+          from: gwSource,
+          to: to as GatewayChain,
+          amount: 1_000_000n,
+          depositor: session.address,
+        });
+        if (live) setGwCeiling(quote.maxFee);
       } catch {
-        // Leave the last known figures rather than blanking the screen on one
-        // failed poll. The button stays honest because it checks again before it acts.
+        // Leave the last known fee rather than blanking on one failed poll; the
+        // button checks again before it acts.
       }
     };
     void read();
@@ -557,33 +556,6 @@ export function BridgeTab({ session }: { session: Session }) {
       clearInterval(timer);
     };
   }, [engine, gwSource, to, session.address]);
-
-  /**
-   * The wallet's USDC on both ends of the route.
-   *
-   * One effect for both sides so the two figures can never describe different
-   * moments, and one read function so neither side can quietly learn a different
-   * rule about which chains are readable.
-   */
-  useEffect(() => {
-    let live = true;
-    const read = async () => {
-      const [a, b] = await Promise.all([
-        readUsdcOn(from, session.chainId, session.address as Address),
-        readUsdcOn(to, session.chainId, session.address as Address),
-      ]);
-      if (!live) return;
-      setWalletOnChain(a);
-      setToBalance(b);
-      setWalletRead(true);
-    };
-    void read();
-    const timer = setInterval(() => void read(), 20000);
-    return () => {
-      live = false;
-      clearInterval(timer);
-    };
-  }, [from, to, session.address, session.chainId]);
 
   /**
    * Everything that described the old source chain, forgotten.
@@ -600,10 +572,9 @@ export function BridgeTab({ session }: { session: Session }) {
    * the source is cleared here and is then correct in all three.
    */
   function forgetSourceReads() {
-    setGwOnSource(null);
+    // gwOnSource is derived from the shared store now, so it follows the source
+    // change on its own; only the fee, wallet read and deposit note reset here.
     setGwCeiling(null);
-    setWalletOnChain(null);
-    setWalletRead(false);
     setGwPending(0n);
     setDepositAmount('');
   }
@@ -1051,7 +1022,8 @@ export function BridgeTab({ session }: { session: Session }) {
           createdAt: Date.now(),
         });
         setBridges(loadBridges());
-        setGwOnSource(null);
+        // The spend moved money out of Gateway: refresh every screen watching it.
+        bumpBalances();
         toast.push(
           res.mintTxHash ? t('bridge.done') : t('bridge.forwardPending'),
           res.mintTxHash ? 'success' : 'info',
@@ -1225,45 +1197,44 @@ export function BridgeTab({ session }: { session: Session }) {
           mechanism -- burn here, attest, mint there -- which is worth having and is
           not what anyone opened this tab to read. The dot beside the tabs is a
           different question (which route should I pick) and stays with the tabs. */}
-      <Card
-        title={t(`bridge.${engine}.title`)}
-        infoLabel={t(`bridge.${engine}.title`)}
-        info={
-          <>
-            <p>{t(`bridge.${engine}.body`)}</p>
-            <ul className="hintlist">
-              <li>{t(`bridge.${engine}.point1`)}</li>
-              <li>{t(`bridge.${engine}.point2`)}</li>
-              <li>{t(`bridge.${engine}.point3`)}</li>
-            </ul>
-          </>
-        }
-        data-testid="bridge-tab"
-      >
+      <Card data-testid="bridge-tab">
         <div className="bridge-engine">
           <SegmentedTabs
             tabs={[
-              { id: 'cctp', label: t('bridge.engine.cctp') },
-              { id: 'gateway', label: t('bridge.engine.gateway') },
+              {
+                id: 'cctp',
+                label: t('bridge.engine.cctp'),
+                infoAria: t('bridge.info.aria'),
+                info: (
+                  <InfoBody
+                    lead={t('bridge.info.cctpBody')}
+                    points={[
+                      t('bridge.cctp.point1'),
+                      t('bridge.cctp.point2'),
+                      t('bridge.cctp.point3'),
+                    ]}
+                  />
+                ),
+              },
+              {
+                id: 'gateway',
+                label: t('bridge.engine.gateway'),
+                infoAria: t('bridge.info.aria'),
+                info: (
+                  <InfoBody
+                    lead={t('bridge.info.gatewayBody')}
+                    points={[
+                      t('bridge.gateway.point1'),
+                      t('bridge.gateway.point2'),
+                      t('bridge.gateway.point3'),
+                    ]}
+                  />
+                ),
+              },
             ]}
             value={engine}
             onChange={changeEngine}
           />
-          <InfoPopover label={t('bridge.info.aria')}>
-            <div className="infopop__item">
-              <span className="infopop__k">{t('bridge.info.cctpTitle')}</span>
-              <p>{t('bridge.info.cctpBody')}</p>
-            </div>
-            <div className="infopop__item">
-              <span className="infopop__k">{t('bridge.info.gatewayTitle')}</span>
-              <p>{t('bridge.info.gatewayBody')}</p>
-            </div>
-            {/* Why there is no token picker here, in the place someone would look
-                for one. Not a row on the screen: an absent control does not need
-                a line of its own explaining itself to everybody who was not
-                looking for it. */}
-            <p className="infopop__note">{t('bridge.info.usdcOnly')}</p>
-          </InfoPopover>
         </div>
 
         {/*
@@ -1276,13 +1247,7 @@ export function BridgeTab({ session }: { session: Session }) {
           to scroll past a form they are not filling in.
         */}
         {engine === 'gateway' && (
-          <Card
-            title={t('bridge.gwFundTitle')}
-            className="card--fund"
-            infoLabel={t('bridge.gwFundTitle')}
-            info={<p>{t('bridge.gwFundSummary')}</p>}
-            data-testid="bridge-fund"
-          >
+          <Card title={t('bridge.fundForBridgeTitle')} className="card--fund" data-testid="bridge-fund">
           <GatewayFundBox
             chain={from}
             chainOptions={chainOptions}

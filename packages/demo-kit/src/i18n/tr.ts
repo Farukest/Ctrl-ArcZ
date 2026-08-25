@@ -106,8 +106,6 @@ export const tr: Record<TranslationKey, string> = {
   'common.clear': 'Temizle',
   'common.loading': 'Yükleniyor…',
   'sub.createTitle': 'Yeni abonelik',
-  'sub.createSummary':
-    'Satıcı bu kadarını, bu sıklıkta çekebilir, fazlasını değil. İstediğin an iptal edersin.',
   'sub.label': 'Satıcı',
   'sub.labelPh': 'ör. Netflix',
   'sub.merchant': 'Satıcı adresi',
@@ -143,8 +141,6 @@ export const tr: Record<TranslationKey, string> = {
   'sub.quoteUnavailable': 'Circle ücreti okunamadı, bu yüzden fiyat henüz hesaplanamıyor.',
   'sub.createButton': 'Abonelik oluştur',
   'sub.fundTitle': 'Abonelik bakiyesi',
-  'sub.fundSummary':
-    'Abonelikler cüzdandan değil, Circle Gateway bakiyenden ödenir. Buradan yükleme seçtiğin zincirde tek bir işlem, ve o zincirin onay süresi kadar sürer.',
   'sub.step.machine': 'Satıcı kontrol ediliyor',
   'sub.step.create': 'Kutu oluşturuluyor',
   'sub.step.listing': 'Listede göster',
@@ -154,8 +150,6 @@ export const tr: Record<TranslationKey, string> = {
   'sub.pulledToast': 'Çekildi.',
   'sub.cancelledToast': 'Abonelik iptal edildi, kalan para geri döndü.',
   'sub.cancelConfirm': 'Bu abonelik iptal edilip kalan para iade edilsin mi?',
-  'sub.stealthNote':
-    'Abonelikleriniz, zincirde sizinle bağlantısı olmayan tek kullanımlık adreslere ait. Kendi kutularınızı bulmak yalnızca cüzdanınızın türetebileceği bir anahtar gerektiriyor, bu yüzden her ziyarette tek bir imza isteniyor. Hiçbir şey harcanmıyor ve anahtar bu tarayıcıdan çıkmıyor.',
   'sub.stealthLocked':
     'Gizli abonelikleriniz görünmüyor. Onları bulmak tek bir cüzdan imzasından türetilen bir anahtar gerektiriyor ve o imza reddedildi.',
   'sub.stealthUnlock': 'Aboneliklerimi bul',
@@ -209,18 +203,20 @@ export const tr: Record<TranslationKey, string> = {
   'nav.pay': 'Öde',
   'nav.activity': 'Hareketler',
   'nav.more': 'Diğer',
-  'pay.seg.standard': 'Standart',
+  'pay.seg.standard': 'Korumalı',
   'pay.seg.private': 'Gizli',
+  'pay.pick.aria': 'Korumalı ve Gizli, hangisi ne zaman',
+  'pay.pick.protected.lead':
+    'Yeni bir adres veya büyük bir tutar için en iyisi. Para, ona verdiğin kodla talep edilene kadar bekler.',
+  'pay.pick.protected.b1': 'Talep edilene kadar emanette tutulur, alıcının adresine hiç geçmez.',
+  'pay.pick.protected.b2': 'Talep edilmeden önce istediğin an iptal edip geri alırsın.',
+  'pay.pick.protected.b3': 'Hiç talep edilmezse kendiliğinden sana iade olur.',
 
   'ppay.title': 'Özel Ödeme',
   'ppay.body':
     'Bir satıcıya, geçmişinle ilişkilendiremeyeceği taze ve tek kullanımlık bir adresten öde, tek kullanımlık sanal kart gibi. Besleme transferi şeffaf zincirde görünür kalır.',
   'ppay.summary':
     'Satıcının geçmişinle ilişkilendiremeyeceği taze, tek kullanımlık bir adresten öde. Besleme transferi zincirde görünür kalır.',
-  'ppay.info.aria': 'Özel Ödeme nasıl çalışır',
-  'ppay.info.k1': 'Tek kullanımlık adres',
-  'ppay.info.k2': 'The Machine',
-  'ppay.info.k3': 'Tek yönlü vana',
   'ppay.newPayment': 'Yeni ödeme',
   'ppay.point1':
     'Her ödeme için yeni bir adres üretilir; bu satıcıya, bu tutara ve 15 dakikaya kilitli.',
@@ -245,24 +241,17 @@ export const tr: Record<TranslationKey, string> = {
   'ppay.successNote':
     'Satıcı, zincir üstünde sana dair hiçbir bağ tutmayan, geçmişi sıfır bir adres görür. Besleme transferinin kendisini gizlemek Arc Privacy Sector ile gelir.',
 
-  'bridge.cctp.title': 'USDC Köprüle (CCTP)',
-  'bridge.cctp.body': 'Circle CCTP ile USDC’yi zincirler arası taşı.',
   'bridge.cctp.point1': 'Kaynak zincirde yakılır, hedef zincirde basılır.',
   'bridge.cctp.point2': 'Yakma kesinleşince mint’i Circle attestation servisi yetkilendirir.',
   'bridge.cctp.point3': 'Hedef mint’i Circle sponsorlar, orada gas gerekmez.',
-  'bridge.gateway.title': 'USDC Köprüle (Gateway)',
-  'bridge.gateway.body': 'Circle Gateway ile USDC’yi zincirler arası taşı.',
   'bridge.gateway.point1': 'Birleşik USDC bakiyesine bir kez yatır.',
   'bridge.gateway.point2': 'Oradan istediğin zincire saniyeler içinde harca, işlem göndermeden.',
   'bridge.gateway.point3': 'Hedefte Circle’ın forwarder’ı basar, orada gas gerekmez.',
   'bridge.engine.cctp': 'CCTP',
   'bridge.engine.gateway': 'Gateway',
   'bridge.info.aria': 'CCTP ile Gateway farkı',
-  'bridge.info.cctpTitle': 'CCTP',
   'bridge.info.cctpBody':
     'Tek seferlik transfer için ideal. USDC diğer zincire yaklaşık bir dakikada ulaşır.',
-  'bridge.info.usdcOnly': 'İkisi de yalnız USDC taşıyor, o yüzden burada seçilecek bir şey yok.',
-  'bridge.info.gatewayTitle': 'Gateway',
   'bridge.info.gatewayBody':
     'Sık gönderiyorsan ideal. Bakiyeyi bir kez yükle, sonra her transfer yaklaşık bir saniyede ulaşır.',
   'bridge.gwstep.approve': 'USDC onaylanıyor...',
@@ -312,8 +301,7 @@ export const tr: Record<TranslationKey, string> = {
   'bridge.fixDeposit': '{amount} USDC yatır',
   'bridge.fixMax': 'Onun yerine {amount} USDC gönder',
   'bridge.gwFundTitle': 'Gateway bakiyesi',
-  'bridge.gwFundSummary':
-    'Gateway, bir kez yükleyip zincirler arası harcadığın ortak bir bakiyedir. Buradan yükleme seçtiğin zincirde tek bir işlem, ve o zincirin onay süresi kadar sürer.',
+  'bridge.fundForBridgeTitle': 'Köprü bakiyesi',
   'bridge.gwHere': 'Gönderilmeye hazır {amount} USDC',
   'bridge.swap': 'İki zinciri yer değiştir',
   'bridge.gwWalletLabel': 'Cüzdan bakiyesi',

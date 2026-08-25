@@ -244,7 +244,9 @@
   flex-wrap: nowrap;
   margin-bottom: 0;
 }
-.paytab__seg .segtab,
+/* Activity's Active|History stays the smaller, sunken sub-toggle. Pay's
+   Protected|Private is a peer of the bridge engine toggle, so it drops the shrink
+   and keeps the base .segtab size, identical to CCTP|Gateway. */
 .activitytab__seg .segtab {
   flex: 0 0 auto;
   min-height: 32px;

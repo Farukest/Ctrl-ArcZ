@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   formatUnits,
   isAddress,
@@ -30,7 +30,6 @@ import {
   assertBoxFundable,
   fundBoxFromGateway,
   awaitBoxFunded,
-  gatewayBalance,
   quoteGatewaySpend,
   maxDepositable,
   depositToGateway,
@@ -42,7 +41,6 @@ import {
 import {
   bridgeClients,
   getPublicClient,
-  readUsdcOn,
   supportsChain,
   switchWalletTo,
   useWalletChain,
@@ -86,6 +84,7 @@ import { displayLabel, localLabel, setLabel } from '../lib/subscriptionLabels.js
 import { startRun, useActivity, type RunHandle } from '../lib/activity.js';
 import { activityLabels, toActivityItem } from '../lib/activityView.js';
 import { pendingOn, rememberDeposit } from '../lib/pendingDeposits.js';
+import { useGatewayBalances, useWalletUsdc } from '../lib/balances.js';
 
 const PAGE_SIZE = 5;
 
@@ -195,8 +194,6 @@ export function SubscriptionsTab({
   const [frequency, setFrequency] = useState<FrequencyKey>('minute');
   const [charges, setCharges] = useState('5');
   const [phase, setPhase] = useState<CreatePhase>('idle');
-  /** What the chosen chain's Gateway balance holds. `null` while unread. */
-  const [gwOnSource, setGwOnSource] = useState<bigint | null>(null);
   const [gwCeiling, setGwCeiling] = useState<bigint | null>(null);
   /**
    * Whether Circle answered at all.
@@ -209,12 +206,6 @@ export function SubscriptionsTab({
    * because a shimmer is a promise, and this one was never going to be kept.
    */
   const [gwState, setGwState] = useState<'loading' | 'ready' | 'unavailable'>('loading');
-  /**
-   * The same question about the balance, which is a different endpoint and fails
-   * on its own. One flag answered for both while the two reads were joined, so a
-   * refused fee estimate made the balance cell claim it was still loading.
-   */
-  const [gwBalanceFailed, setGwBalanceFailed] = useState(false);
   /** Bumped to ask for the figures again after a failure. */
   const [gwRetry, setGwRetry] = useState(0);
   /**
@@ -229,7 +220,6 @@ export function SubscriptionsTab({
    * this properly; there is one mechanism and this is now wired to it.
    */
   const [gwPending, setGwPending] = useState<bigint>(0n);
-  const [walletOnGwChain, setWalletOnGwChain] = useState<bigint | null>(null);
   const [depositAmount, setDepositAmount] = useState('');
   const [depositing, setDepositing] = useState(false);
   /**
@@ -243,8 +233,6 @@ export function SubscriptionsTab({
   const activity = useActivity();
   /** The run this screen has just started, for the block below to point at once. */
   const [spotlight, setSpotlight] = useState<string | null>(null);
-  /** The Gateway balance at the previous poll, which is what a rise is measured from. */
-  const lastGwBalance = useRef<bigint | null>(null);
   const [switching, setSwitching] = useState(false);
   const [veto, setVeto] = useState<string | null>(null);
 
@@ -279,6 +267,19 @@ export function SubscriptionsTab({
     onChange: () => forgetGwReads(),
   });
   const gwSource = gw.value;
+
+  /*
+   * Gateway and wallet balances come from the shared store, so this tab shows the
+   * last-known figures at once on re-entry and refreshes behind them instead of
+   * blanking and re-reading each visit. `gwOnSource` null is "not read yet"
+   * (loading); `gwBalanceFailed` is "Circle answered with nothing"; `walletOnGwChain`
+   * null is loading or "the wallet is on another network".
+   */
+  const gatewayBal = useGatewayBalances(session.address as Address);
+  const walletBal = useWalletUsdc(gwSource, session.chainId, session.address as Address);
+  const gwOnSource = gwSource && gatewayBal.value ? (gatewayBal.value[gwSource] ?? 0n) : null;
+  const gwBalanceFailed = gatewayBal.resolved && !gatewayBal.value;
+  const walletOnGwChain = walletBal.value ?? null;
 
   /**
    * The chain the box lives on, which is the chain the wallet is on, because that
@@ -317,13 +318,13 @@ export function SubscriptionsTab({
   /** Everything read for the old chain describes the old chain, whether it changed
    *  in the picker or in MetaMask. */
   function forgetGwReads() {
-    setGwOnSource(null);
+    // The balances are derived from the shared store, keyed by chain, so they
+    // follow the source change on their own; only the fee, its state and the
+    // deposit field reset here.
     setGwCeiling(null);
-    setWalletOnGwChain(null);
     setDepositAmount('');
     // A new chain is a new read, not a continuation of the failed one.
     setGwState('loading');
-    setGwBalanceFailed(false);
   }
 
   // List controls
@@ -409,74 +410,48 @@ export function SubscriptionsTab({
   const gate = useRecipientGate(session, target);
 
   /**
-   * The Gateway balance on the chosen source chain, and what a spend of this size
-   * would cost, re-read whenever that chain changes.
+   * What a spend of this size would cost, and what is still uncredited.
    *
-   * The wallet balance is read only when the wallet is actually on that chain:
-   * every chain but Arc is reachable only through the wallet's own provider, so
-   * asking Base Sepolia's USDC while the wallet sits on Arc answers about Arc.
+   * The balance itself is the shared store's job (`gatewayBal`/`walletBal` above);
+   * this asks Circle only for the fee, which is per-route and priced to where the
+   * money is actually going -- quoting a route to Arc while funding one to Base put
+   * a fee on screen that belonged to a different transfer. `gwPending` is what this
+   * browser has deposited that Circle has not yet counted, for the note under the
+   * box; the crediting itself is `useSettleDeposits`, app-level.
    */
   useEffect(() => {
+    if (!gwSource) return;
     let live = true;
     const read = async () => {
-      // Settled rather than all-or-nothing. These are two independent reads of two
-      // different Circle endpoints, and joining them meant either failure threw
-      // away the other's answer. A refused estimate discarded a balance that had
-      // come back 200, which left `gwOnSource` null and disabled the create button
-      // for a reason that had nothing to do with the balance.
-      const [balance, quote] = await Promise.allSettled([
-        gatewayBalance({ depositor: session.address as Address }),
-        // Priced to where the money is actually going. Quoting a route to Arc while
-        // funding one to Base put a fee on screen that belonged to a different
-        // transfer, and the two are not the same number.
-        boxGatewayChain
-          ? quoteGatewaySpend({
-              from: gwSource,
-              to: boxGatewayChain,
-              amount: 1_000_000n,
-              depositor: session.address as Address,
-            })
-          : Promise.reject(new Error('Circle cannot mint on this chain.')),
-      ]);
-      if (!live) return;
-      if (balance.status === 'fulfilled') {
-        const now = balance.value.byChain[gwSource] ?? 0n;
-        /*
-         * Circle reports a total, so a deposit is known to have been counted only by
-         * watching that total rise. The comparison is against the previous poll, kept
-         * in a ref rather than in state: this runs inside an effect, and reading the
-         * figure it is about to replace out of a setter would run the comparison
-         * twice under StrictMode and credit the same rise to two deposits.
-         */
-        setGwPending(pendingOn(gwSource));
-        setGwOnSource(now);
+      setGwPending(pendingOn(gwSource));
+      if (!boxGatewayChain) {
+        setGwState((prev) => (prev === 'ready' ? 'ready' : 'unavailable'));
+        return;
       }
-      setGwBalanceFailed(balance.status !== 'fulfilled');
-      if (quote.status === 'fulfilled') setGwCeiling(quote.value.maxFee);
-      // Stale figures still beat blanking the form, so a later failure is quiet.
-      // The first one is not: there is nothing to fall back on and the form cannot
-      // price a subscription without a fee. This tracks the fee alone, because the
-      // line it drives names the fee.
-      setGwState((prev) =>
-        quote.status === 'fulfilled' || prev === 'ready' ? 'ready' : 'unavailable',
-      );
-      // Through the shared read, which picks the client that can actually answer
-      // for this chain. The copy that used to live here named the chain's USDC but
-      // always dialled Arc's RPC, so on any other network it read that address on
-      // Arc -- a figure belonging to no chain, shown as the wallet's holding.
-      const held = await readUsdcOn(gwSource, session.chainId, session.address as Address);
-      if (live) setWalletOnGwChain(held);
+      try {
+        const quote = await quoteGatewaySpend({
+          from: gwSource,
+          to: boxGatewayChain,
+          amount: 1_000_000n,
+          depositor: session.address as Address,
+        });
+        if (!live) return;
+        setGwCeiling(quote.maxFee);
+        setGwState('ready');
+      } catch {
+        if (!live) return;
+        // Stale figures still beat blanking; the first failure is not, because the
+        // form cannot price a subscription without a fee.
+        setGwState((prev) => (prev === 'ready' ? 'ready' : 'unavailable'));
+      }
     };
-    // A balance on a different chain is not a previous reading of this one, and
-    // comparing across the two would credit a deposit with someone else's rise.
-    lastGwBalance.current = null;
     void read();
     const timer = setInterval(() => void read(), 15000);
     return () => {
       live = false;
       clearInterval(timer);
     };
-  }, [session.address, session.chainId, gwSource, gwRetry]);
+  }, [session.address, gwSource, boxGatewayChain, gwRetry]);
 
   /**
    * Whether this subscription can be paid for out of the chosen chain's balance.
@@ -957,13 +932,7 @@ export function SubscriptionsTab({
         point is that it is a different thing, not that it is a more important one.
       */}
       {canActOnChain && (
-        <Card
-          title={t('sub.fundTitle')}
-          className="card--fund"
-          infoLabel={t('sub.fundTitle')}
-          info={<p>{t('sub.fundSummary')}</p>}
-          data-testid="sub-fund"
-        >
+        <Card title={t('sub.fundTitle')} className="card--fund" data-testid="sub-fund">
           <GatewayFundBox
             chain={gwSource}
             chainOptions={gwChainOptions}
@@ -1006,12 +975,7 @@ export function SubscriptionsTab({
       )}
 
       {/* CREATE */}
-      <Card
-        title={t('sub.createTitle')}
-        infoLabel={t('sub.createTitle')}
-        info={<p>{t('sub.createSummary')}</p>}
-        data-testid="sub-create"
-      >
+      <Card title={t('sub.createTitle')} data-testid="sub-create">
         {/* The form is the action, so the chain question belongs in front of it and
             not beside the list. It used to be answered only down there, which left a
             complete, fillable subscription form on a network that cannot create one:
@@ -1270,12 +1234,7 @@ export function SubscriptionsTab({
           list for everybody. The locked state below is not an explanation, it is
           the one thing standing between the user and their subscriptions, so that
           stays where it cannot be missed. */}
-      <Card
-        title={t('sub.listTitle')}
-        infoLabel={t('sub.listTitle')}
-        info={<p>{t('sub.stealthNote')}</p>}
-        data-testid="sub-list"
-      >
+      <Card title={t('sub.listTitle')} data-testid="sub-list">
         {/* No second copy of the chain notice here. It sits in front of the form
             above, which is the thing it stops. It also used to say the list's
             numbers "are true from anywhere", and they are not: a box is read on the

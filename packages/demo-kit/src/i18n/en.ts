@@ -127,10 +127,6 @@ export const en = {
   'common.clear': 'Clear',
   'common.loading': 'Loading…',
   'sub.createTitle': 'New subscription',
-  // One line. The form below already says what the numbers are; this only has to
-  // say what they buy, and the old version spent three clauses restating the
-  // fields the reader is looking at.
-  'sub.createSummary': 'The merchant can pull this much, this often, and no more. Cancel any time.',
   // Names the thing being picked rather than the field it fills in. "(optional)" went
   // with it: the control is a list with an escape hatch, so what it wants is obvious,
   // and nothing stops a box being created without one.
@@ -178,8 +174,6 @@ export const en = {
   'sub.quoteUnavailable': "Circle's fee could not be read, so this cannot be priced yet.",
   'sub.createButton': 'Create subscription',
   'sub.fundTitle': 'Balance for subscriptions',
-  'sub.fundSummary':
-    'Subscriptions are paid out of your Circle Gateway balance, not out of the wallet directly. Topping it up here is one transaction on the chain you choose, and it takes as long as that chain needs to confirm.',
   'sub.step.machine': 'Checking merchant',
   'sub.step.create': 'Creating box',
   'sub.step.listing': 'Show it in the list',
@@ -189,8 +183,6 @@ export const en = {
   'sub.pulledToast': 'Pulled.',
   'sub.cancelledToast': 'Subscription cancelled, funds returned.',
   'sub.cancelConfirm': 'Cancel this subscription and return the remaining funds?',
-  'sub.stealthNote':
-    'Your subscriptions are owned by one-time addresses with nothing on chain linking them to you. Finding your own takes a key only your wallet can derive, so it asks for one signature per visit. Nothing is spent, and the key never leaves this browser.',
   'sub.stealthLocked':
     'Your private subscriptions are hidden. Finding them needs a key derived from one wallet signature, and that signature was declined.',
   'sub.stealthUnlock': 'Find my subscriptions',
@@ -247,18 +239,20 @@ export const en = {
   'nav.pay': 'Pay',
   'nav.activity': 'Activity',
   'nav.more': 'More',
-  'pay.seg.standard': 'Standard',
+  'pay.seg.standard': 'Protected',
   'pay.seg.private': 'Private',
+  'pay.pick.aria': 'Protected and Private, and when to use each',
+  'pay.pick.protected.lead':
+    'Best for a new address or a larger amount. The money waits until they claim it with a code you give them.',
+  'pay.pick.protected.b1': 'Held in escrow, never on their address, until it is claimed.',
+  'pay.pick.protected.b2': 'Cancel any time before they claim, and get it straight back.',
+  'pay.pick.protected.b3': 'If it is never claimed, it refunds to you on its own.',
 
   'ppay.title': 'Private Pay',
   'ppay.body':
     'Pay a merchant from a fresh, single-use address they cannot tie to your history, like a disposable virtual card. The funding transfer stays visible on a transparent chain.',
   'ppay.summary':
     'Pay from a fresh, single-use address the merchant cannot tie to your history. The funding transfer stays visible on-chain.',
-  'ppay.info.aria': 'How Private Pay works',
-  'ppay.info.k1': 'Disposable address',
-  'ppay.info.k2': 'The Machine',
-  'ppay.info.k3': 'One-way valve',
   'ppay.newPayment': 'New payment',
   'ppay.point1':
     'A new address is created per payment, locked to this merchant, this amount, 15 minutes.',
@@ -283,24 +277,17 @@ export const en = {
   'ppay.successNote':
     'The merchant sees a zero-history address that stores no link to you on-chain. Hiding the funding transfer itself comes with Arc Privacy Sector.',
 
-  'bridge.cctp.title': 'Bridge USDC (CCTP)',
-  'bridge.cctp.body': 'Move USDC across chains with Circle CCTP.',
   'bridge.cctp.point1': 'Burned on the source chain, minted on the destination.',
   'bridge.cctp.point2': 'Circle attestation authorizes the mint once the burn is final.',
   'bridge.cctp.point3': 'Circle sponsors the destination mint, so you need no gas there.',
-  'bridge.gateway.title': 'Bridge USDC (Gateway)',
-  'bridge.gateway.body': 'Move USDC across chains with Circle Gateway.',
   'bridge.gateway.point1': 'Deposit once into a unified USDC balance.',
   'bridge.gateway.point2': 'Spend from it on any chain in seconds, with no transaction to send.',
   'bridge.gateway.point3': "Circle's forwarder mints on the destination, so you need no gas there.",
   'bridge.engine.cctp': 'CCTP',
   'bridge.engine.gateway': 'Gateway',
   'bridge.info.aria': 'How CCTP and Gateway differ',
-  'bridge.info.cctpTitle': 'CCTP',
   'bridge.info.cctpBody':
     'Best for a one-off transfer. Your USDC arrives on the other chain in about a minute.',
-  'bridge.info.usdcOnly': 'Both carry USDC only, so there is nothing to choose here.',
-  'bridge.info.gatewayTitle': 'Gateway',
   'bridge.info.gatewayBody':
     'Best if you send often. Fund a balance once, then each transfer lands in about a second.',
   'bridge.gwstep.approve': 'Approving USDC...',
@@ -353,8 +340,7 @@ export const en = {
   'bridge.fixDeposit': 'Deposit {amount} USDC',
   'bridge.fixMax': 'Send {amount} USDC instead',
   'bridge.gwFundTitle': 'Gateway balance',
-  'bridge.gwFundSummary':
-    'Gateway is a shared balance you top up once and then spend from across chains. Funding it here is one transaction on the chain you choose, and it takes as long as that chain needs to confirm.',
+  'bridge.fundForBridgeTitle': 'Balance for Bridge',
   'bridge.gwHere': '{amount} USDC ready to send',
   'bridge.swap': 'Swap the two chains',
   'bridge.gwWalletLabel': 'Wallet balance',

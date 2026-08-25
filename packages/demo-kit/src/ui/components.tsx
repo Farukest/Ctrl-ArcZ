@@ -31,6 +31,7 @@ import {
   IconMoon,
   IconSun,
   IconInfo,
+  IconInfoBadge,
   IconAlert,
   IconSearch,
   IconExternal,
@@ -143,10 +144,15 @@ export function Card({
   infoLabel,
   children,
   className,
+  bare,
   ...rest
 }: {
   title?: ReactNode;
   subtitle?: ReactNode;
+  /** Render only the children, without the card chrome (border, padding, title).
+   *  For a screen that is already inside another card, so its content joins that
+   *  one instead of drawing a second box. */
+  bare?: boolean;
   /**
    * What this card is, for the people who want to know, behind the `i` beside the
    * title.
@@ -166,6 +172,7 @@ export function Card({
   children: ReactNode;
   className?: string;
 } & { [k: `data-${string}`]: string }) {
+  if (bare) return <>{children}</>;
   return (
     <section className={['card', className].filter(Boolean).join(' ')} {...rest}>
       {title && (
@@ -782,24 +789,64 @@ export function SegmentedTabs<T extends string>({
   value,
   onChange,
 }: {
-  tabs: { id: T; label: ReactNode }[];
+  /** A tab may carry its own `info`: the explanation shows on an `i` that appears
+   *  inside the tab only while it is the active one, so the control never grows a
+   *  row of dots and each route speaks for itself in its own button. */
+  tabs: { id: T; label: ReactNode; info?: ReactNode; infoAria?: string }[];
   value: T;
   onChange: (id: T) => void;
 }) {
   return (
     <div className="segtabs" role="tablist">
-      {tabs.map((t) => (
-        <button
-          key={t.id}
-          role="tab"
-          aria-selected={value === t.id}
-          className={['segtab', value === t.id && 'is-active'].filter(Boolean).join(' ')}
-          onClick={() => onChange(t.id)}
-          data-testid={`tab-${t.id}`}
-        >
-          {t.label}
-        </button>
-      ))}
+      {tabs.map((t) => {
+        const active = value === t.id;
+        // No info: a plain tab button, exactly as before.
+        if (!t.info) {
+          return (
+            <button
+              key={t.id}
+              role="tab"
+              aria-selected={active}
+              className={['segtab', active && 'is-active'].filter(Boolean).join(' ')}
+              onClick={() => onChange(t.id)}
+              data-testid={`tab-${t.id}`}
+            >
+              {t.label}
+            </button>
+          );
+        }
+        // Has info: a div so a real info button may nest inside it without a
+        // button-in-button. The `i` renders only when this tab is active, pinned
+        // to the right while the label stays centred.
+        return (
+          <div
+            key={t.id}
+            role="tab"
+            aria-selected={active}
+            tabIndex={0}
+            className={['segtab', 'segtab--info', active && 'is-active'].filter(Boolean).join(' ')}
+            onClick={() => onChange(t.id)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onChange(t.id);
+              }
+            }}
+            data-testid={`tab-${t.id}`}
+          >
+            <span className="segtab__label">{t.label}</span>
+            {active && (
+              <span
+                className="segtab__info"
+                onClick={(e) => e.stopPropagation()}
+                onKeyDown={(e) => e.stopPropagation()}
+              >
+                <InfoPopover label={t.infoAria}>{t.info}</InfoPopover>
+              </span>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -831,9 +878,7 @@ export function InfoPopover({
         aria-label={label}
         data-testid="info-popover"
       >
-        <span className="infodot__glyph" aria-hidden>
-          i
-        </span>
+        <IconInfoBadge className="infodot__icon" width={20} height={20} aria-hidden />
       </button>
       <AnchoredLayer
         anchorRef={anchor}
@@ -844,6 +889,27 @@ export function InfoPopover({
       >
         <div className="infopop">{children}</div>
       </AnchoredLayer>
+    </>
+  );
+}
+
+/**
+ * The body of a tab's info popover: one line of why to pick this route, then the
+ * points of what it does as coloured dots so two routes never blur into a wall of
+ * prose. Passed as a tab's `info` to {@link SegmentedTabs}, which wraps it in the
+ * `i` that shows inside the active tab. Bridge's CCTP/Gateway and pay's
+ * Protected/Private use the exact same shape, so every route explains itself the
+ * same way and nothing else on the screen needs its own `i`.
+ */
+export function InfoBody({ lead, points }: { lead?: string; points: readonly string[] }) {
+  return (
+    <>
+      {lead && <p className="infopop__lead">{lead}</p>}
+      <ul className="infobullets">
+        {points.map((p, i) => (
+          <li key={i}>{p}</li>
+        ))}
+      </ul>
     </>
   );
 }

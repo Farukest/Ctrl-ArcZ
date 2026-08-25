@@ -66,6 +66,7 @@ export function SendTab({
   balanceMissing,
   onSent,
   onSwitchChain,
+  bare,
 }: {
   session: Session;
   balance: bigint | null;
@@ -73,6 +74,8 @@ export function SendTab({
   balanceMissing: 'loading' | 'unavailable';
   onSent: () => void;
   onSwitchChain: (chainId: number) => Promise<void>;
+  /** Render the fields without the outer card, for when a parent already draws one. */
+  bare?: boolean;
 }) {
   const toast = useToast();
   const t = useT();
@@ -296,7 +299,7 @@ export function SendTab({
   }
 
   return (
-    <Card>
+    <Card bare={bare ?? false}>
       {!onSupportedChain ? (
         <NeedsChain feature="protectedSend" onSwitch={onSwitchChain} chainId={session.chainId} />
       ) : (

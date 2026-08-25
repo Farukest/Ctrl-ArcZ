@@ -148,6 +148,28 @@ export const IconInfo = (p: SVGProps<SVGSVGElement>) => (
   </svg>
 );
 
+/** A bolder info glyph than {@link IconInfo}: thicker stroke and a filled dot so
+ *  it reads as an info control at tab size, where the thin default just looked
+ *  like a speck. Neutral by default (coloured via `currentColor`), never the
+ *  warning accent. */
+export const IconInfoBadge = (p: SVGProps<SVGSVGElement>) => (
+  <svg
+    width={16}
+    height={16}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth={2}
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    {...p}
+  >
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 11.5v4.5" />
+    <circle cx="12" cy="7.9" r="0.9" fill="currentColor" stroke="none" />
+  </svg>
+);
+
 /* The two off-site destinations in the footer. Both are read at 20px, where detail
    turns to mush: each is one closed silhouette plus one interior line, and nothing
    smaller. An earlier pair carried page-edge ticks that vanished at this size and
