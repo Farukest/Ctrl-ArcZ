@@ -1,3 +1,5 @@
+
+
 # Ctrl+ArcZ
 
 **Screened before it is signed. Recallable until it is claimed. Repeatable without handing over your wallet.**
@@ -464,7 +466,7 @@ pnpm install
 cp .env.example .env      # fill in throwaway testnet wallets
 ```
 
-USDC is both gas and the asset on Arc, so fund the wallets with Arc Testnet USDC from [faucet.circle.com](https://faucet.circle.com). Foundry is required for the contract: <https://getfoundry.sh>
+Node 20 or later is required. USDC is both gas and the asset on Arc, so fund the wallets with Arc Testnet USDC from [faucet.circle.com](https://faucet.circle.com). Foundry is required for the contract: <https://getfoundry.sh>
 
 | Command               | What it does                         |
 | --------------------- | ------------------------------------ |
