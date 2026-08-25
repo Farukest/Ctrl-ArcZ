@@ -8,11 +8,18 @@ The Android client is a separate native Kotlin application. It does not consume
 `@ctrl-arcz/sdk`; it is a hand-written port of the same protocol, and its source is
 not published here.
 
-![Confirming a send](/android/send-confirm.png)
-
-![Picking a merchant](/android/merchant-picker.png)
-
-![A bridge transfer returned](/android/bridge-returned.png)
+<table width="100%">
+  <tr>
+    <td width="33%" align="center"><img src="/android/send-confirm.png" alt="Confirming a send on Android" width="100%" /></td>
+    <td width="33%" align="center"><img src="/android/merchant-picker.png" alt="Picking a merchant on Android" width="100%" /></td>
+    <td width="33%" align="center"><img src="/android/bridge-returned.png" alt="A bridge transfer returned on Android" width="100%" /></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Confirming a send</sub></td>
+    <td align="center"><sub>Picking a merchant</sub></td>
+    <td align="center"><sub>A bridge transfer returned</sub></td>
+  </tr>
+</table>
 
 What is published is the file that holds it to this repository:
 [`ParityVectorsTest.kt`](https://github.com/Farukest/Ctrl-ArcZ/blob/main/docs/android/ParityVectorsTest.kt),
