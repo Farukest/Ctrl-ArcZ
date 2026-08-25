@@ -15,7 +15,8 @@ not published here.
 ![A bridge transfer returned](/android/bridge-returned.png)
 
 What is published is the file that holds it to this repository:
-[`ParityVectorsTest.kt`](./ParityVectorsTest.kt), a byte-identical copy of the test
+[`ParityVectorsTest.kt`](https://github.com/Farukest/Ctrl-ArcZ/blob/main/docs/android/ParityVectorsTest.kt),
+a byte-identical copy of the test
 that runs in the Android project's own suite. It contains no application code, no
 keys and no endpoints. It is the whole of what the two implementations promise each
 other, written as assertions rather than as a claim in a README.

@@ -64,7 +64,7 @@ Tarayıcının yapamadığı üç şey:
 
 **İddia edilen değil, test edilen eşitlik.** Gas rezervi hesabı, claim kodu kodlaması, stealth türetimi ve risk kuralları tek bir şartnamenin iki uygulaması. `packages/sdk/scripts/gen-parity-vectors.ts` tarafından üretilen `packages/sdk/parity-vectors.json` hem TypeScript hem Kotlin test takımı tarafından koşuluyor; sapan bir port bir ödemeyi değil bir testi düşürüyor.
 
-Android kaynağı açık değil; vektörlerin burada bir kolaylık olmamasının sebebi tam olarak bu. [`docs/android/ParityVectorsTest.kt`](./docs/android/ParityVectorsTest.kt), o projede koşan Kotlin testinin byte'ı byte'ına kopyası: uygulama kodu yok, anahtar yok, endpoint yok; yalnızca iki uygulamayı tek şartnameye bağlayan doğrulamalar. Okuyamadığın kısım, okuyabildiğin kısma sabitlenmiş durumda. [Neyi kapsıyor ve nasıl doğrulanır](./docs/android/README.md).
+Android kaynağı açık değil; vektörlerin burada bir kolaylık olmamasının sebebi tam olarak bu. [`docs/android/ParityVectorsTest.kt`](./docs/android/ParityVectorsTest.kt), o projede koşan Kotlin testinin byte'ı byte'ına kopyası: uygulama kodu yok, anahtar yok, endpoint yok; yalnızca iki uygulamayı tek şartnameye bağlayan doğrulamalar. Okuyamadığın kısım, okuyabildiğin kısma sabitlenmiş durumda. [Neyi kapsıyor ve nasıl doğrulanır](./docs/android/overview.md).
 
 ## Problem
 

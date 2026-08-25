@@ -55,7 +55,7 @@
           },
           {
             "group": "Clients",
-            "pages": ["android/README"]
+            "pages": ["android/overview"]
           }
         ]
       }
