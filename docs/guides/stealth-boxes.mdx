@@ -1,0 +1,211 @@
+---
+title: Stealth boxes
+description: "Bind a spend box to a fresh address only you can rediscover, using ERC-5564 stealth addresses. No server, no index, no account."
+---
+
+A spend box already stores no payer identity: there is no `owner()` getter, and the
+owner is bound only through `ownerHash`. But a hash is a commitment to *something*,
+and the payer still has to find their own boxes again later. Doing that by
+remembering "my wallet made these" puts the link back.
+
+Stealth boxes remove it. The box's owner and vault are a **fresh address derived
+for that box alone**, and only the payer's viewing key can recognise it. Nobody
+else can tell two of your boxes apart, or tell that either is yours.
+
+<Note>
+This is ERC-5564 (`schemeId` 1) over secp256k1, announced through a standalone
+registry (`STEALTH_ANNOUNCER_ADDRESS`). It does not touch the factory or the
+account, so a stealth box is an ordinary spend box that happens to be owned by an
+address nobody can attribute.
+</Note>
+
+## Keys, from one signature
+
+The payer signs one fixed message and both long-lived keys fall out of it
+deterministically. Same wallet, same signature (RFC 6979), so the keys are
+recoverable on any device with nothing stored anywhere.
+
+```ts
+import { deriveStealthKeys, STEALTH_KEY_MESSAGE } from '@ctrl-arcz/sdk';
+
+const signature = await walletClient.signMessage({
+  account,
+  message: STEALTH_KEY_MESSAGE,
+});
+
+const keys = deriveStealthKeys(signature);
+// { spendingKey, viewingKey, spendingPub, viewingPub }
+```
+
+<Warning>
+`STEALTH_KEY_MESSAGE` is compared character for character across implementations,
+and the mobile client's parity test asserts it. One character apart derives
+different keys from the same wallet signature, which loses **every box the other
+platform created**. Never retype it; import it.
+
+The private keys never leave the client. Signing this message costs no gas and
+moves no funds.
+</Warning>
+
+The two keys do different jobs, and that split is the whole point:
+
+- **Viewing key** scans announcements. It can recognise your boxes and nothing
+  else. Hand it to a watcher and it can see, not spend.
+- **Spending key** derives the private key that controls a stealth address. It
+  never touches a scan.
+
+## Creating a stealth box
+
+Three steps, because the box address does not exist until it is created.
+
+<Steps>
+
+<Step title="Derive a fresh owner">
+```ts
+import { newStealthOwner } from '@ctrl-arcz/sdk';
+
+const stealth = newStealthOwner(keys); // pass the meta-address (the two pub keys)
+// { stealthAddress, ephemeralPubKey, viewTag }
+```
+</Step>
+
+<Step title="Create the box owned and vaulted by it">
+```ts
+import { createEphemeral, MODE_PULL, ADDRESSES, SPEND_POLICY_FACTORY_ADDRESS } from '@ctrl-arcz/sdk';
+
+const policy = {
+  token: ADDRESSES.USDC,
+  owner: stealth.stealthAddress,   // ownerHash carries no link to the payer
+  vault: stealth.stealthAddress,   // and sweeps return to the same fresh address
+  cosigner: cosignerAddress,
+  target: merchant,
+  maxAmount,
+  perPullMax,
+  expiry,
+  interval,
+  mode: MODE_PULL,
+};
+
+const { account: box } = await createEphemeral(
+  clients,
+  SPEND_POLICY_FACTORY_ADDRESS,
+  salt,
+  policy,
+);
+```
+
+Use the stealth address as **both** owner and vault. Owner-only would leave the
+vault pointing at the payer's wallet, and `vaultHash` is a hash of a 20-byte
+address on a transparent chain, which is crackable. The stealth address closes
+both ends.
+</Step>
+
+<Step title="Announce it">
+```ts
+import { announceArgsFor, announceStealthBox, STEALTH_ANNOUNCER_ADDRESS } from '@ctrl-arcz/sdk';
+
+await announceStealthBox(
+  clients,
+  STEALTH_ANNOUNCER_ADDRESS,
+  announceArgsFor(stealth, box, 'Netflix'),
+);
+```
+
+The announcement ties the ephemeral public key to the box address, so a later scan
+lands straight on the box rather than on an address it then has to search for.
+</Step>
+
+</Steps>
+
+<Note>
+**The label rides in the announcement, on purpose.** A name kept in the payer's
+browser made a subscription called "Netflix" on one machine an unnamed address on
+every other one, and it was the only thing about a subscription not read live from
+chain. It is a plaintext string in the metadata, so name boxes the way you would
+name them out loud, not with anything you would not publish.
+</Note>
+
+## Rediscovery
+
+Nothing is stored. The payer signs the message again, and the announcements
+identify themselves.
+
+```ts
+import { discoverStealthBoxes, STEALTH_ANNOUNCER_ADDRESS } from '@ctrl-arcz/sdk';
+
+const boxes = await discoverStealthBoxes(publicClient, STEALTH_ANNOUNCER_ADDRESS, keys);
+// StealthBox[]: { stealthAddress, box, ephemeralPubKey, label }
+```
+
+An announcement is yours if, and only if, re-deriving the stealth address from its
+ephemeral key and your viewing and spending keys reproduces the announced address.
+A stranger cannot run that check without your viewing key, so the registry is
+public and the mapping is not.
+
+The scan starts at `STEALTH_ANNOUNCER_DEPLOY_BLOCK`, not at 0. Arc caps an
+`eth_getLogs` range at 10,000 blocks, so scanning from the deploy block keeps
+discovery to a couple of requests instead of walking the whole chain.
+
+For an offline or pre-fetched batch, the recognition step is pure:
+
+```ts
+import { recognizeAnnouncements } from '@ctrl-arcz/sdk';
+
+const mine = recognizeAnnouncements(keys, rawAnnouncements);
+```
+
+`viewTag` (the first byte of the shared secret) lets a scanner skip roughly 255 of
+every 256 non-matches without doing the full derivation.
+
+## Spending and sweeping
+
+To act as the box's owner or vault, derive the stealth address's private key:
+
+```ts
+import { computeStealthPrivateKey, sweepToVault } from '@ctrl-arcz/sdk';
+import { privateKeyToAccount } from 'viem/accounts';
+
+const stealthPk = computeStealthPrivateKey({
+  spendingKey: keys.spendingKey,
+  viewingKey: keys.viewingKey,
+  ephemeralPubKey: found.ephemeralPubKey,
+});
+
+const stealthAccount = privateKeyToAccount(stealthPk);
+```
+
+This matters more than it looks now that both sweeps require `msg.sender == vault`.
+The vault **is** the stealth address, so sweeping a stealth box means signing as
+`stealthAccount`, not as the payer's wallet:
+
+```ts
+const stealthClients = {
+  publicClient,
+  walletClient: createWalletClient({ account: stealthAccount, chain: arcTestnet, transport }),
+};
+
+await sweepToVault(stealthClients, found.box, found.stealthAddress);
+```
+
+<Warning>
+A fresh stealth address has no gas. On Arc gas is USDC and the box holds USDC, so
+fund the stealth address with a little before it sweeps, or route the call through
+the relayer. A box you cannot pay to sweep is a box you cannot close.
+</Warning>
+
+## What this does and does not hide
+
+**Hidden:** which boxes are yours, that two boxes share an owner, and the link from
+any box back to your wallet. The registry is public, the recognition is not.
+
+**Not hidden:** that a box exists, its merchant, its cap, and the funding
+transaction that paid into it. Funding is still a plain transfer on a transparent
+chain, so an observer who watches your wallet fund an address can follow that one
+hop. Stealth addresses break the *rediscovery* link, not the *funding* link. The
+funding leg is what Arc Privacy Sector closes.
+
+## Next
+
+- What a box does once it exists: [Subscriptions](/guides/subscriptions).
+- The identity model behind it: [Payer-side shield](/concepts/payer-shield).
+- The registry: [Contracts](/reference/contracts#stealthannouncer).

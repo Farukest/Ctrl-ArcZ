@@ -7,8 +7,8 @@ The payer-side shield is a disposable virtual card for crypto. Three primitives:
 
 <CardGroup cols={3}>
   <Card title="Vault" icon="vault">
-    Your main kasa. Holds USDC and funds disposable accounts. The funding leg is
-    the one that becomes confidential under Arc Privacy Sector.
+    Your main treasury. Holds USDC and funds disposable accounts. The funding leg
+    is the one that becomes confidential under Arc Privacy Sector.
   </Card>
   <Card title="Disposable account" icon="id-card">
     A single-purpose address, locked to one merchant, one cap, one expiry. Cloned
@@ -30,12 +30,21 @@ The payer-side shield is a disposable virtual card for crypto. Three primitives:
   push the exact payment you set up when you created and funded the account. It
   refuses a spend that fails policy or the firewall, so a bad payment is
   physically impossible, not merely warned against.
-- **Return to your own vault: gated by knowledge of the vault address.** The vault
-  is stored only as a commitment (`vaultHash`); a sweep passes the vault address
-  and the contract checks it against the commitment, so no signature is needed and
-  the vault stays hidden until that call. After `expiry`, anyone who knows the
-  vault can sweep. This is the liveness escape hatch: if the enclave ever goes
-  dark, funds are never stranded, they sweep home.
+- **Return to your own vault: gated on the vault itself.** The vault is stored only
+  as a commitment (`vaultHash`); a sweep passes the vault address, the contract
+  checks it against the commitment **and requires `msg.sender == vault`**, so the
+  vault stays hidden until it sweeps and only it can trigger one. No co-signer
+  signature is involved either way. After `expiry` the same call is open through
+  `sweepExpired`, which is the liveness escape hatch: if the enclave goes dark, the
+  payer still holds the vault key, so funds are never stranded.
+
+  <Note>
+  The sender gate is the point, not an inconvenience. `vaultHash` is a hash of a
+  20-byte address on a transparent chain, so it is crackable. Without the gate,
+  whoever cracked it could sweep an expired box and publish the vault-to-box link
+  the payer never chose to reveal. Bind the box to an address you can transact
+  from: your own wallet, or the stealth address for a stealth box.
+  </Note>
 
 You sign nothing blind. Your only on-chain action is a normal, readable USDC
 transfer to fund the account; your wallet shows "Send X USDC to 0x...", never an

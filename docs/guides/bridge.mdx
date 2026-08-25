@@ -1,66 +1,180 @@
 ---
 title: Bridge USDC
-description: "Move native USDC across chains with Circle CCTP and Gateway, plus a gas-sponsored claim, all signed server-side."
+description: "Move native USDC across chains from the user's own wallet with Circle CCTP and Gateway. No relayer, no custody, no server."
 ---
 
-Ctrl+ArcZ funds and settles in USDC on Arc, but the USDC often starts on another
-chain. The demo bridges it with **Circle CCTP** (burn-and-mint) and **Circle
-Gateway** (a unified balance with instant spend), and can sponsor the recipient's
-gas on claim with **Circle Gas Station**. All three run server-side, because the
-Circle kits that power them are Node-first and cannot run in the browser.
-
-## Why the bridge runs server-side
-
-Circle CCTP moves native USDC across chains by burning it on the source, waiting
-for a Circle-signed attestation, and minting the same amount on the destination.
-Circle's Bridge Kit performs that flow, but it is built for the server: it signs
-with a raw private key and calls Circle plus chain RPCs with a custom
-`x-user-agent` header that browser CORS forbids. So the bridge cannot run on the
-page.
-
-The pattern in the demo, and the one to reproduce in production:
-
-- The bridge helper (`bridgeUsdc`, `gatewayTransfer`) runs in a Node context. In
-  the demo that is a Vite dev endpoint (`/api/bridge`, `/api/gateway`); in
-  production it is a real backend or relayer.
-- The browser posts only `{ from, to, amount }` to that endpoint, same-origin.
-- The signing key lives in the server environment and never reaches the client.
-
-The gas-sponsored claim (`/api/gasless-claim`) follows the same rule for the same
-reason: Circle Gas Station sponsors the recipient's gas through a smart account
-owned by a **relayer key**, and that key must stay server-side.
+Ctrl+ArcZ funds and settles in USDC on Arc, but the USDC often starts somewhere
+else. The SDK brings it over with **Circle CCTP** (burn and mint) and **Circle
+Gateway** (one balance, spendable anywhere), and both run **in the browser, from
+the user's own wallet**.
 
 <Note>
-The keys are read only by the server endpoints. A `VITE_`-prefixed value is
-inlined into the client bundle only if client code reads it through
-`import.meta.env`; the demo reads `VITE_RELAYER_PK` and `VITE_CLIENT_KEY` only
-inside the Vite endpoints, so they never ship to the browser. A production build
-that would inline any signing key is refused by a build guard, see
-[Security posture](#security-posture) below.
+**Non-custodial, and that is the design, not a detail.** The USDC being burned is
+whatever the connected wallet holds, and the mint goes back to that same wallet by
+default. No operator balance stands behind anyone's transfer, so there is no
+liquidity to run out, no key on a server, and nothing to trust between the user and
+Circle. Nothing here can move funds belonging to anyone else.
 </Note>
+
+![The bridge screen, CCTP engine](/screens/10-bridge-cctp.png)
 
 ## Two engines
 
 <CardGroup cols={2}>
-<Card title="CCTP (Bridge Kit)">
-Burn on the source, fetch the Circle attestation, mint on the destination. Works
-across the widest set of testnets. Steps: `approve`, `burn`, `fetchAttestation`,
-`mint`.
+<Card title="CCTP" icon="fire">
+Burn on the source chain, Circle attests, Circle mints on the destination. Widest
+chain coverage. One source-chain transaction per transfer. Steps: `quote`,
+`approve`, `burn`, `attest`, `forward`.
 </Card>
-<Card title="Gateway (Unified Balance Kit)">
-Deposit USDC once into a unified balance, then spend instantly to any supported
-chain (Arc finality is about 0.5s). Repeat transfers skip the deposit. Steps:
-`deposit`, `sign`, `attestation`, `mint`.
+<Card title="Gateway" icon="wallet">
+Deposit once into a unified balance, then every spend is a signature: no
+source-chain transaction and no gas. Fewer chains, and the deposit has to confirm
+first. Steps: `approve`, `deposit`, `quote`, `sign`, `transfer`, `mint`.
 </Card>
 </CardGroup>
 
-Both use Circle's forwarder (`useForwarder: true`) to submit the destination mint,
-so the recipient needs no gas on the destination chain.
+The honest trade: CCTP costs a transaction every time but is ready immediately.
+Gateway costs a wait once and is nearly free every time after. Move money often
+between the same chains and Gateway wins; move it once and CCTP does.
 
-## Supported testnet chains
+![Choosing between the engines](/screens/11-bridge-engines.png)
 
-CCTP supports the full list; Gateway supports a smaller subset, so its From/To
-pickers are restricted to it.
+## CCTP: burn and mint
+
+Circle submits the destination mint itself through its forwarder
+(`FORWARDING_HOOK`), so the user needs **no gas on the destination chain**. That is
+what makes arriving on Arc with an empty wallet work at all.
+
+```ts
+import { quoteBridge, bridgeFromWallet } from '@ctrl-arcz/sdk';
+import { parseUnits } from 'viem';
+
+const amount = parseUnits('5', 6);
+
+// Price it first if you want to show the fee before anything is signed.
+const quote = await quoteBridge({ from: 'Base_Sepolia', to: 'Arc_Testnet', amount });
+// { amount, maxFee, total } - total is what leaves the wallet
+
+const result = await bridgeFromWallet(
+  { publicClient, walletClient },
+  {
+    from: 'Base_Sepolia',
+    to: 'Arc_Testnet',
+    amount,
+    onQuote: (q) => showFee(q.maxFee),
+    onStep: (step, txHash) => showProgress(step, txHash),
+  },
+);
+// { approveTxHash?, burnTxHash, forwardTxHash?, quote }
+```
+
+`walletClient` must be connected to `from`. `recipient` defaults to the sending
+wallet, which is what a bridge means; pass another address only when you
+deliberately intend to pay someone.
+
+<Warning>
+**Quote immediately before the burn, and never reuse a quote.** The forwarding fee
+is dynamic. A stale quote produces a `maxFee` too small for Circle to accept, which
+strands the transfer at exactly the step that cannot be undone.
+`bridgeFromWallet` quotes internally for this reason; `quoteBridge` is for showing
+a number, not for pre-computing one to pass in.
+</Warning>
+
+### A slow transfer is not a lost transfer
+
+The wait for Circle's attestation is the longest part of a CCTP transfer by far.
+`bridgeFromWallet` reports `attest` the moment the burn confirms so a UI is not
+silent through it, and it returns after `timeoutMs` whether or not the mint landed.
+
+Returning early costs nothing, because **the burn is on chain and the attestation
+does not expire**. The burn hash is the receipt, and anyone holding it can ask
+again later:
+
+```ts
+import { findForwardedMint, waitForForwardedMint, CCTP_CHAINS } from '@ctrl-arcz/sdk';
+
+// One shot: has Circle minted yet?
+const mint = await findForwardedMint({
+  sourceDomain: CCTP_CHAINS.Base_Sepolia.domain,
+  burnTxHash,
+});
+
+// Or keep watching, up to timeoutMs (default 180000).
+const mint2 = await waitForForwardedMint({ sourceDomain, burnTxHash, timeoutMs: 60_000 });
+```
+
+`undefined` means "not yet", never "gone". Persist the burn hash the moment you
+have it: a browser that reloaded, a phone that was closed or a support ticket can
+all recover the transfer from that one value.
+
+## Gateway: one balance, spendable anywhere
+
+![Depositing into the Gateway balance](/screens/12-bridge-gateway.png)
+
+```ts
+import {
+  depositToGateway,
+  gatewayBalance,
+  quoteGatewaySpend,
+  spendFromGateway,
+} from '@ctrl-arcz/sdk';
+
+// 1. Deposit, once, on whichever chain the USDC is on today.
+await depositToGateway({ publicClient, walletClient }, {
+  chain: 'Base_Sepolia',
+  amount: parseUnits('20', 6),
+  onStep: (step, txHash) => showProgress(step, txHash),
+});
+
+// 2. Read what is actually spendable.
+const balance = await gatewayBalance({ depositor: address });
+// { total, byChain: { Base_Sepolia: 20000000n, ... } }
+
+// 3. Spend it anywhere. A signature, no source-chain transaction, no gas.
+const spend = await spendFromGateway({ walletClient }, {
+  from: 'Base_Sepolia',
+  to: 'Arc_Testnet',
+  amount: parseUnits('5', 6),
+  onTransferId: (id) => persist(id),
+});
+// { transferId, mintTxHash?, quote }
+```
+
+<Warning>
+A plain ERC-20 transfer to the Gateway wallet does **not** deposit, and it does not
+fail loudly either: the USDC just sits at an address that will never credit it.
+`depositToGateway` calls the deposit method. Use it.
+</Warning>
+
+### The deposit wait is the whole cost, and it is uneven
+
+`gatewayBalance` counts only deposits that have reached the confirmations Circle
+requires, because reporting a pending deposit as spendable produces an intent the
+API rejects. How long that takes depends entirely on the chain:
+
+| Deposit chain | Confirmation wait |
+| --- | --- |
+| Arc Testnet | ~1s |
+| Sei Testnet | ~5s |
+| Avalanche Fuji, Polygon Amoy, Sonic Testnet | ~8s |
+| Ethereum, Base, OP, Arbitrum, Unichain, World Chain Sepolia | up to ~19 min |
+
+Read it from `DEPOSIT_CONFIRMATION_SECONDS` rather than showing one number for all
+of them. Half a second and nineteen minutes are not the same product, and a caller
+that averages them is lying about ten of the eleven chains.
+
+### Getting money back out
+
+`from === to` is not a mistake to refuse. Same-chain means Circle debits the
+balance and mints straight back to the wallet on that chain, which is the only
+quick exit a depositor has. `isGatewayWithdrawal({ from, to })` recognises it, so a
+UI can label it "withdraw" instead of "bridge".
+
+## Supported chains
+
+CCTP covers 20 testnets; Gateway covers 11 of them. Both lists live in the SDK
+(`CCTP_CHAINS`, `GATEWAY_CHAIN_NAMES`), so read them rather than copying this
+table.
 
 | Chain | CCTP | Gateway |
 | --- | :---: | :---: |
@@ -68,121 +182,126 @@ pickers are restricted to it.
 | Ethereum Sepolia | yes | yes |
 | Base Sepolia | yes | yes |
 | Avalanche Fuji | yes | yes |
+| OP Sepolia | yes | yes |
+| Arbitrum Sepolia | yes | yes |
+| Polygon Amoy | yes | yes |
+| Unichain Sepolia | yes | yes |
 | Sonic Testnet | yes | yes |
-| Arbitrum Sepolia | yes | no |
-| Optimism Sepolia | yes | no |
-| Polygon Amoy | yes | no |
-| Unichain Sepolia | yes | no |
+| World Chain Sepolia | yes | yes |
+| Sei Testnet | yes | yes |
 | Linea Sepolia | yes | no |
-| World Chain Sepolia | yes | no |
-
-Any two distinct chains from the same engine's list are a valid From/To pair. The
-allowlists are enforced on the server (`BRIDGE_CHAIN_IDS` and `GATEWAY_CHAIN_IDS`
-in `apps/sender/vite.config.ts`); a request naming a chain outside the set is
-rejected with `400`.
-
-## The server endpoint
-
-Both cross-chain endpoints share one handler. It validates identically, then loads
-the Node-only Circle module and runs the helper. This is the shape to lift into a
-real backend.
+| Codex Testnet | yes | no |
+| Monad Testnet | yes | no |
+| XDC Apothem | yes | no |
+| Ink Testnet | yes | no |
+| Plume Testnet | yes | no |
+| Injective Testnet | yes | no |
+| Morph Hoodi | yes | no |
+| Cronos Testnet | yes | no |
 
 ```ts
-// Runs in Node only. Loads Bridge Kit / Unified Balance Kit, never the browser.
-import { bridgeUsdc } from '@ctrl-arcz/demo-kit/cctp';       // or gatewayTransfer from '.../gateway'
+import {
+  CCTP_CHAINS,
+  GATEWAY_CHAIN_NAMES,
+  cctpChainByChainId,
+  chainExplorerTxUrl,
+  chainLabel,
+} from '@ctrl-arcz/sdk';
 
-// Inside the request handler, after validating from/to/amount:
-const result = await bridgeUsdc({
-  privateKey: process.env.DEMO_PK as `0x${string}`, // server-only signing key
-  from,   // e.g. 'Base_Sepolia'
-  to,     // e.g. 'Arc_Testnet'
-  amount, // decimal string, e.g. '2'
-});
-// result: { state, amount, steps: [{ name, state, txHash?, explorerUrl? }] }
+CCTP_CHAINS.Arc_Testnet;              // { domain: 26, chainId: 5042002, usdc, gasToken: 'usdc' }
+cctpChainByChainId(await walletClient.getChainId()); // which chain the wallet is on
+chainLabel('Base_Sepolia');           // 'Base Sepolia'
+chainExplorerTxUrl('Base_Sepolia', burnTxHash); // undefined where no explorer is known
 ```
 
-The helper returns only serializable primitives. Bridge Kit's raw steps carry viem
-receipts and `BigInt` gas that `JSON.stringify` cannot handle, so the helper picks
-out `name`, `state`, `txHash`, and `explorerUrl` and drops the rest before it
-crosses the HTTP boundary.
+<Note>
+A CCTP **domain** is not a chain id. They are unrelated numbers and Circle's API
+speaks domains, which is why `CCTP_CHAINS` carries both. Sonic Testnet and Morph
+Hoodi have no viem chain definition, so `chainExplorerTxUrl` returns `undefined`
+for them rather than guessing a URL that quietly goes somewhere else.
+</Note>
 
-## The browser call
+![Picking a Gateway chain](/screens/13-gateway-chains.png)
 
-The page never touches a key or a Circle SDK. It posts the three fields and renders
-the returned steps.
+## Refusing before the user signs
+
+The most useful thing a bridge UI does is refuse early, with the fix attached.
+`bridge/refusal` answers "can this transfer happen" and returns **what to do about
+it**, not just that it cannot.
 
 ```ts
-const res = await fetch('/api/bridge', {  // or '/api/gateway'
-  method: 'POST',
-  headers: { 'content-type': 'application/json' },
-  body: JSON.stringify({ from: 'Base_Sepolia', to: 'Arc_Testnet', amount: '2' }),
+import {
+  gatewayShortfall,
+  cctpShortfall,
+  maxGatewaySpendable,
+  maxDepositable,
+  usdc,
+} from '@ctrl-arcz/sdk';
+
+const refusal = gatewayShortfall({
+  here: balance.byChain[from] ?? 0n,  // the balance ON THE SOURCE CHAIN
+  byChain: balance.byChain,
+  from,
+  fromLabel: chainLabel(from),
+  committed: amount + quote.maxFee,
+  labelOf: chainLabel,
 });
-const outcome = await res.json();
-if (outcome.state === 'success') {
-  for (const step of outcome.steps) console.log(step.name, step.state, step.txHash);
+
+if (refusal) {
+  // refusal.code is a string key, so the SDK holds no English.
+  // refusal.fix is the action: switchSource | deposit | useMax
+  render(t(refusal.code, refusal.params), refusal.fix);
+  return;
 }
 ```
 
+Three things here are worth copying rather than reinventing:
+
+- **Check the source chain's balance, not the total.** Circle reads the balance as
+  one figure but spends it per chain: an intent carries a single source domain and
+  draws only on what was deposited there. Checking the sum lets the check pass, the
+  user sign, and Circle refuse afterwards, which is the exact opposite of what this
+  exists to prevent. When another chain does have enough, the refusal comes back
+  with a `switchSource` fix naming it.
+- **The fee comes off the top.** `maxGatewaySpendable(here, feeCeiling)` is the
+  real ceiling. Offering the raw balance as "max" produces an amount that cannot
+  pay its own fee.
+- **On Arc, gas is USDC.** The transfer and its gas come out of one balance, so
+  `cctpShortfall` checks them together (`gasInUsdc: true`) and `maxDepositable`
+  keeps a gas reserve behind. Checking them separately waves through a wallet that
+  can afford the transfer and then cannot afford to send it.
+
+`refusal.code` is a key into your own strings and `refusal.params` are already
+formatted for reading, so the SDK ships no user-facing English and your app keeps
+one voice.
+
 ## Gas-sponsored claim
 
-The receiver app exposes `/api/gasless-claim`, which lets a recipient claim a
-protected transfer while paying **zero gas**. Circle Gas Station sponsors the
-user-operation through a Circle Smart Account owned by the relayer key.
+Bridging is keyless, but the **gasless claim** is not: it is the one cross-chain
+flow that still needs a server, because Circle Gas Station sponsors the
+user-operation through a Circle Smart Account owned by a relayer key.
 
 ```ts
-const res = await fetch('/api/gasless-claim', {
+const res = await fetch('https://api.ctrlarcz.xyz/api/gasless-claim', {
   method: 'POST',
   headers: { 'content-type': 'application/json' },
-  body: JSON.stringify({ transferId: '42', code: '123456', salt: '0x...' }),
+  body: JSON.stringify({ transferId: '42', code: 'A4K79QMX2PR6TH8D', salt: '0x...' }),
 });
 const result = await res.json();
 // { ok: true, txHash } | { ok: false, error: { kind, attemptsRemaining?, reason?, message? } }
 ```
 
 The contract releases funds to the transfer's recorded recipient, never to
-`msg.sender`, so the sponsoring account is only a relayer: it pays the gas but
-cannot redirect the funds. The endpoint returns a plain, serializable result rather
-than throwing across HTTP; the same outcomes as `claim()` are encoded in the
-`error.kind` field. For the full result and error taxonomy, see
-[Errors and result shapes](/guides/errors-and-results).
+`msg.sender`, so the sponsoring account is only a relayer: it pays the gas and
+cannot redirect the money. The endpoint returns a serializable result rather than
+throwing across HTTP, encoding the same outcomes as `claim()` in `error.kind`.
 
-## Security posture
-
-The bridge signs with a funded key, so even though it is dev-only in the demo it is
-hardened. Reproduce every one of these controls if you deploy the pattern.
-
-<AccordionGroup>
-<Accordion title="Allowlisted chains">
-Only chains in `BRIDGE_CHAIN_IDS` / `GATEWAY_CHAIN_IDS` are accepted, and the
-source and destination must differ. Anything else is a `400`.
-</Accordion>
-<Accordion title="Hard amount cap">
-A per-request ceiling (`MAX_BRIDGE_AMOUNT`, 5 USDC in the demo) bounds the most a
-single call can move. Non-finite, zero, negative, or over-cap amounts are rejected.
-</Accordion>
-<Accordion title="Same-origin only">
-Requests are checked against `sec-fetch-site` and `origin`; cross-site callers get
-`403`. In production the allowed host is `PUBLIC_HOST`.
-</Accordion>
-<Accordion title="Body-size limit">
-The request body is capped (4 KB); a larger body returns `413` before it is parsed.
-</Accordion>
-<Accordion title="No leaked secrets">
-`VITE_`-prefixed keys must never ship to the client. An `assertNoLeakedSecrets`
-build guard refuses a production build while any signing key (`VITE_DEMO_PK`,
-`VITE_RELAYER_PK`, `VITE_CLIENT_KEY`) is present, unless the operator explicitly
-sets `VITE_ALLOW_DEMO_KEYS=1` (throwaway testnet keys only).
-</Accordion>
-</AccordionGroup>
-
-<Note>
-Never expose the dev server with `--host`. It signs with a real key; it is meant
-to be reached same-origin from the local demo only. In production, run the bridge
-behind a real backend with its own auth and rate limits.
-</Note>
+This route is relayer-funded, so it is authenticated and quota-limited. See
+[The API](/reference/api) for the signed-request headers, and
+[Errors and result shapes](/guides/errors-and-results) for the taxonomy.
 
 ## Next
 
 - Handle the outcomes: [Errors and result shapes](/guides/errors-and-results).
+- The server-side routes: [The API](/reference/api).
 - Run it yourself: [Local development](/guides/local-development).
-- Send a protected transfer: [Protected transfer](/guides/protected-transfer).

@@ -1,0 +1,177 @@
+---
+title: Subscriptions
+description: "Recurring, policy-bounded spending: a merchant pulls on an interval, capped per pull and in total, every pull vetoable."
+---
+
+The same disposable account that makes a one-off private payment expresses a
+subscription when you put it in **PULL** mode. The merchant draws from it on an
+interval; the contract enforces how much and how often, and the co-signer can
+refuse any individual pull.
+
+This is what replaces an infinite ERC-20 approval. An approval is a standing
+permission with no cap, no schedule and no revocation short of another
+transaction. A PULL box is a permission with all three written into the contract.
+
+![Creating a subscription](/screenshots/subscriptions-create.png)
+
+## The four guarantees
+
+Every one of these is enforced on chain, not by the co-signer:
+
+<CardGroup cols={2}>
+<Card title="Per-pull cap" icon="gauge">
+`perPullMax` bounds a single pull. This is the real subscription guarantee: even a
+**misbehaving co-signer** cannot drain the cumulative cap in one call.
+</Card>
+<Card title="Interval" icon="clock">
+`interval` seconds must pass between pulls. A merchant that tries to charge twice
+in a month reverts with `TooSoon`.
+</Card>
+<Card title="Cumulative cap" icon="wallet">
+`maxAmount` is the most the box will ever pay out in its lifetime, across all
+pulls. It cannot be raised.
+</Card>
+<Card title="Expiry" icon="calendar">
+After `expiry` no outbound payment is possible at all, whatever the co-signer
+signs.
+</Card>
+</CardGroup>
+
+<Note>
+Set `perPullMax` to the per-period amount, not to the total. A 5 USDC monthly
+subscription over a year is `maxAmount: 60 USDC, perPullMax: 5 USDC, interval:
+30 days`. Leaving `perPullMax` at `0` means "no tighter cap than `maxAmount`",
+which is legal and gives away the guarantee that matters most.
+</Note>
+
+## Creating one
+
+```ts
+import {
+  createEphemeral,
+  fundEphemeral,
+  MODE_PULL,
+  ADDRESSES,
+  SPEND_POLICY_FACTORY_ADDRESS,
+} from '@ctrl-arcz/sdk';
+import { parseUnits, toHex } from 'viem';
+
+const MONTH = 30 * 24 * 60 * 60;
+
+const policy = {
+  token: ADDRESSES.USDC,
+  owner,
+  vault: owner,                          // where a sweep returns, and the only sweeper
+  cosigner: cosignerAddress,
+  target: merchant,                      // locked on chain
+  maxAmount: parseUnits('60', 6),        // the whole year
+  perPullMax: parseUnits('5', 6),        // one month
+  interval: MONTH,                       // seconds between pulls
+  expiry: Math.floor(Date.now() / 1000) + 12 * MONTH,
+  mode: MODE_PULL,
+};
+
+const salt = toHex(crypto.getRandomValues(new Uint8Array(32)));
+const { account: box } = await createEphemeral(clients, SPEND_POLICY_FACTORY_ADDRESS, salt, policy);
+await fundEphemeral(clients, box, parseUnits('60', 6), policy);
+```
+
+<Warning>
+A PULL box **must** have `interval > 0`. `init` reverts with `ZeroInterval`
+otherwise, because a zero interval makes the rate limit always pass and lets
+several pulls land in one block, which defeats the only thing making it a
+subscription rather than an allowance. PUSH ignores `interval`, so this constrains
+PULL alone.
+</Warning>
+
+## Pulling
+
+The merchant (or a relayer on their behalf) asks the co-signer to authorize, then
+submits. The payer signs nothing, and is not required to be online.
+
+```ts
+import { readAccount, submitPull, ACTION_PULL } from '@ctrl-arcz/sdk';
+
+const state = await readAccount(publicClient, box);
+const chainId = await publicClient.getChainId();
+
+const auth = await cosigner.authorize({
+  account: box,
+  owner,
+  amount: parseUnits('5', 6),
+  action: ACTION_PULL,
+  target: state.target,
+  nonce: state.nonce,
+  chainId,
+  remaining: state.remaining,
+  expiry: state.expiry,
+});
+
+if (!auth.approved) {
+  console.warn('Vetoed:', auth.reason, auth.riskReasons);
+  return;
+}
+
+await submitPull(clients, box, parseUnits('5', 6), auth.signature);
+```
+
+`action` is `ACTION_PULL` (1), not `ACTION_PAY` (0), and the two are separate
+fields in the EIP-712 struct. That is deliberate: a pay authorization can never be
+replayed as a pull, or the reverse.
+
+![The subscription list](/screenshots/subscriptions-list.png)
+
+## Reading its state
+
+Everything a UI needs is a getter, so nothing depends on replaying events:
+
+```ts
+const state = await readAccount(publicClient, box);
+// { nonce, spent, remaining, target, perPullMax, expiry, mode }
+```
+
+`remaining` is what is left of the cumulative cap, `spent` is what has gone out,
+and `nonce` counts settled spends. There is deliberately **no owner and no vault
+getter**, so a merchant reading the box they are paid from learns nothing about who
+funded it.
+
+![A subscription's detail](/screenshots/subscriptions-detail.png)
+
+## Cancelling
+
+Sweep it. There is no separate revoke, because a box with no balance cannot pay
+anyone.
+
+```ts
+import { sweepToVault } from '@ctrl-arcz/sdk';
+
+await sweepToVault(clients, box, owner); // walletClient must be signing as `owner`
+```
+
+The money goes home immediately and the co-signer stops signing for the box. This
+is the difference from an infinite approval most worth stating plainly: cancelling
+is one transaction the payer can always make, needs no cooperation from the
+merchant, and cannot be front-run into a last charge, because a sweep and a pull
+cannot both spend the same balance.
+
+<Note>
+Both sweeps require `msg.sender == vault`. Bind the box to an address you can
+transact from. For a stealth subscription that address is the stealth address, so
+you sweep by deriving its key: see [Stealth boxes](/guides/stealth-boxes#spending-and-sweeping).
+</Note>
+
+## Agent wallets
+
+The same shape, pointed at software instead of a merchant. Hand an agent a
+tightly-scoped PULL box and it transacts autonomously inside a policy it cannot
+exceed, because the caps are on chain and the co-signer vetoes anything outside
+them.
+
+The keeper in this repository is exactly that, and it pays its own gas from a PULL
+box whose target is itself. See [The keeper](/guides/keeper).
+
+## Next
+
+- Make the box unattributable: [Stealth boxes](/guides/stealth-boxes).
+- The veto that gates every pull: [The co-signer](/guides/co-signer).
+- The model: [Payer-side shield](/concepts/payer-shield).

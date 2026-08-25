@@ -11,20 +11,36 @@ noted.
 <CardGroup cols={2}>
 <Card title="packages/sdk">
 `@ctrl-arcz/sdk`, the published TypeScript SDK: the risk firewall, protected
-transfers, and the payer-side shield.
+transfers, the payer-side shield, and the wallet-side CCTP and Gateway bridge.
 </Card>
 <Card title="packages/contracts">
 The Foundry project: the protected-transfer contract, the spend-policy account and
-factory, and the vault.
+factory, the vault, and the stealth announcer.
 </Card>
 <Card title="packages/demo-kit">
-Shared demo helpers, including the Node-only Circle bridge and gasless server
-modules the apps call server-side.
+The shared session and design system, plus the server-only helpers the API calls
+(`cosignServer`, `relayServer`, `gaslessServer`, `investigator`).
 </Card>
-<Card title="apps/sender + apps/receiver">
-Two Vite dev apps: the sender panel and the recipient claim panel.
+<Card title="apps/sender">
+The web app on port 5173. Everything the browser does, including the bridge, which
+is non-custodial and signs from the user's own wallet.
+</Card>
+<Card title="apps/api">
+`@ctrl-arcz/api` on port 8787: the co-signer, the gasless claim, the relayer
+routes, and the investigator. Every key in the system lives here.
+</Card>
+<Card title="apps/keeper">
+An autonomous agent that reclaims expired transfers and pays for its own gas out
+of a PULL box. See [The keeper](/guides/keeper).
 </Card>
 </CardGroup>
+
+<Note>
+There is no `apps/receiver` any more, and no Expo or React Native app in this
+repository. Receiving happens in the sender app's receive mode. The mobile client
+is a separate native Kotlin project, held to this repo by shared test vectors
+rather than by shared code.
+</Note>
 
 ## Install
 
@@ -53,44 +69,67 @@ pnpm --filter @ctrl-arcz/sdk dev     # tsup --watch
 You can also build every package at once with `pnpm build` (runs each package's
 `build`).
 
-## Run the demo apps
+## Run the apps
 
-The two apps run on fixed ports (the sender on 5173, the receiver on 5174). Run
-them in separate terminals.
+Two processes, two terminals. The web app is useful on its own; the API is what
+the co-signer, the gasless claim and the relayer routes need.
 
 ```bash
+pnpm dev:api        # http://127.0.0.1:8787
 pnpm dev:sender     # http://localhost:5173
-pnpm dev:receiver   # http://localhost:5174
 ```
 
-Each app needs a `.env.local` with dev-only, throwaway Arc-testnet keys. Copy
-`.env.example` for the full annotated list. The essentials:
+The keeper is optional and runs on demand:
 
 ```bash
-# apps/sender/.env.local
+pnpm --filter @ctrl-arcz/keeper once   # one tick, then exit
+pnpm --filter @ctrl-arcz/keeper dev    # keep polling
+```
+
+### Environment
+
+**Every signing key lives in `apps/api/.env`.** Copy `apps/api/.env.example`, which
+annotates each one:
+
+```bash
+PORT=8787
+COSIGNER_PK=0x...        # The Machine: signs Private Pay spends after the firewall
+RELAYER_PK=0x...         # pays gas for the gasless claim and the relayer routes
+CIRCLE_CLIENT_KEY=       # Circle Modular Wallets, optional
+CIRCLE_CLIENT_URL=
+ANTHROPIC_API_KEY=       # enables POST /api/investigate, optional
+CORS_ORIGINS=https://ctrlarcz.xyz,http://localhost:5173
+```
+
+<Warning>
+`CORS_ORIGINS` is fail-closed. An empty list allows **no** browser origin; it does
+not mean "any". Leaving it blank does not open the API up, it answers 403 to every
+web app, which is the safe direction to be wrong in. Running locally means adding
+`http://localhost:5173` to it, or the relayer-funded flows return 403 from a page
+that otherwise looks like it is working.
+</Warning>
+
+The web app's own `apps/sender/.env.local` holds no secret in production. In
+development it takes dev-only, throwaway Arc-testnet values:
+
+```bash
 VITE_DEMO_PK=0x...          # dev-only test-wallet signer (stands in for MetaMask)
 VITE_DEMO_RECEIVER=0x...    # the poisoning demo crafts a lookalike of this
-VITE_RECEIVER_URL=http://localhost:5174
-
-# apps/receiver/.env.local
-VITE_DEMO_PK=0x...          # dev-only test-wallet signer
-VITE_RELAYER_PK=0x...       # server-only: gasless relayer / Circle account owner
-VITE_CLIENT_KEY=TEST_CLIENT_KEY:...:...   # server-only: Circle Modular Wallets key
-VITE_CLIENT_URL=https://modular-sdk.circle.com/v1/rpc/w3s/buidl
 ```
 
 <Note>
-The co-signer key is server-only and is **not** `VITE_`-prefixed: it is read as
-`COSIGNER_PK` by the `/api/cosign` Vite endpoint, so it never reaches the client
-bundle. The `VITE_RELAYER_PK` and `VITE_CLIENT_KEY` values are `VITE_`-prefixed but
-read only inside the server endpoints, so they do not ship either. Use only
-throwaway testnet keys. A production build that would inline any signing key is
-refused unless you set `VITE_ALLOW_DEMO_KEYS=1`.
+A `VITE_`-prefixed value is inlined into the client bundle whenever client code
+reads it through `import.meta.env`, so a signing key must never be one. A
+production build that would inline `VITE_DEMO_PK`, `VITE_RELAYER_PK` or
+`VITE_CLIENT_KEY` is refused by an `assertNoLeakedSecrets` build guard unless you
+explicitly set `VITE_ALLOW_DEMO_KEYS=1`, and then only with throwaway testnet keys.
 </Note>
 
-The bridge, gateway, gasless, and co-signer flows are served by dev endpoints
-inside these Vite servers. See [Bridge USDC](/guides/bridge) and
-[The co-signer](/guides/co-signer) for why they run server-side.
+The bridge does **not** need a key. It is non-custodial and signs from the user's
+own wallet in the browser, so nothing about it lives on the server. See
+[Bridge USDC](/guides/bridge). The co-signer, the gasless claim and the relayer
+routes do run server-side; see [The co-signer](/guides/co-signer) and
+[The API](/reference/api).
 
 ## Unit tests
 

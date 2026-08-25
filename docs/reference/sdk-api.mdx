@@ -109,14 +109,29 @@ Ctrl+ArcZ and shield deployment addresses (Arc Testnet, chainId `5042002`):
 | --- | --- |
 | `CTRL_ARCZ_ADDRESS` | `0x8dAb7148cdc31DAcad6d7e12161AA3DEDb572Dca` |
 | `CODE_CLAIM_VERIFIER_ADDRESS` | `0x2C0f268DE2Aa8BB2ab27F2Ea5Ae8a0f9a0E068c4` |
-| `SPEND_POLICY_FACTORY_ADDRESS` | `0x1fe8f917adC5B37D8162eaCC44706528351f0639` |
-| `SPEND_POLICY_ACCOUNT_IMPL_ADDRESS` | `0xb90C1475939Ce136E370f30074ADc9169Be5ac2f` |
+| `SPEND_POLICY_FACTORY_ADDRESS` | `0x9B3b30573D7f1d65d1cFeeb52E3a6E69a5792161` |
+| `SPEND_POLICY_ACCOUNT_IMPL_ADDRESS` | `0x047870050bA2a20665F053797140044C004970c5` |
+| `STEALTH_ANNOUNCER_ADDRESS` | `0x9b9F9F8b98Dd7a74889725e79591B3E69BdC991D` |
 | `SHIELD_VAULT_ADDRESS` | `0xc8185AF46b882368b771E8E8a1C8abe1C8e4127f` |
+
+<Warning>
+Import these; do not copy them. `SPEND_POLICY_FACTORY_ADDRESS` was redeployed on
+2026-08-24 and the retired factory is still live on chain, so a hardcoded address
+keeps working while pointing at the wrong contract.
+`SPEND_POLICY_FACTORY_PRIOR_ADDRESSES` lists the retired ones, which is how
+`AccountOwnerIndex` still finds a box created under an older factory.
+</Warning>
 
 Other exported constants: `USDC_DECIMALS` (`6`), `ARC_CCTP_DOMAIN` (`26`),
 `BLOCKLISTED_TEST_ADDRESS` (a seeded address whose transfers always revert),
-`CTRL_ARCZ_DEPLOY_BLOCK` (`51326557n`, the block event scans start from), and
-`MAX_LOG_RANGE` (`10000n`, Arc's `eth_getLogs` block-range cap).
+`CTRL_ARCZ_DEPLOY_BLOCK` (`51326557n`) and `STEALTH_ANNOUNCER_DEPLOY_BLOCK`
+(`53756547n`, the blocks their event scans start from), and `MAX_LOG_RANGE`
+(`10000n`, Arc's `eth_getLogs` block-range cap).
+
+`RPC_URLS` and `SIGNING_RPC_URLS` carry the fallback endpoint lists;
+`TOKENS_BY_CHAIN`, `ARC_TOKENS`, `DEFAULT_TOKEN`, `tokenByAddress`,
+`tokenBySymbol` and `defaultTokenFor` are the token registry behind the pickers.
+`DEPLOYMENTS` is the raw registry map and `ChainDeployment` its entry type.
 
 ### Explorer helpers
 
@@ -255,9 +270,15 @@ The default risk data source, reading ArcScan's Blockscout REST API.
 ```ts
 class BlockscoutDataProvider implements IDataProvider {
   constructor(options?: BlockscoutProviderOptions);
-  getOutgoingCounterparties(sender: Address): Promise<Address[]>;
+  getOutgoingCounterparties(sender: Address): Promise<CounterpartyScan>;
   getAddressActivity(address: Address): Promise<AddressActivity>;
   countZeroValueTransfers(from: Address, to: Address): Promise<number>;
+}
+
+interface CounterpartyScan {
+  counterparties: Address[];
+  /** False when the scan hit its page cap before exhausting history. */
+  complete: boolean;
 }
 
 interface BlockscoutProviderOptions {
@@ -269,6 +290,120 @@ interface BlockscoutProviderOptions {
 
 Implement `IDataProvider` yourself to back the firewall with a different indexer,
 an internal exchange database or a cache, and pass it as `CheckOptions.provider`.
+
+<Warning>
+`getOutgoingCounterparties` **must reject** when the sender's history cannot be
+fetched. The firewall relies on that to fail closed; returning an empty list on an
+error would silently disable lookalike detection and report `safe`. The `complete`
+flag carries the softer case, a scan that ran but hit its page cap, which keeps the
+report from claiming `safe` without pretending the source was down.
+</Warning>
+
+### CachingDataProvider
+
+```ts
+class CachingDataProvider implements IDataProvider {
+  constructor(inner: IDataProvider, options?: CachingProviderOptions);
+}
+
+interface CachingProviderOptions {
+  ttlMs?: number;       // how long a successful, complete scan stays fresh. Default 60000
+  now?: () => number;   // injectable clock, for tests
+}
+```
+
+Wraps any provider and caches the counterparty scan, so a screen that re-checks as
+the user types does not re-hit the explorer on every keystroke. Concurrent calls
+for the same sender are de-duplicated into one request. Only a successful, complete
+scan is cached, which keeps the fail-closed contract intact.
+
+### VerifiedRecipientIndex
+
+```ts
+class VerifiedRecipientIndex {
+  // Everyone a sender has completed a protected transfer to, read from events.
+}
+```
+
+The contract's own known-good list, which feeds `VERIFIED_RECIPIENT` back into the
+firewall so a lookalike of someone you reached through a protected transfer is
+caught too. `GET /api/verified-recipients` is a server-side wrapper around the same
+data; both read public events, so neither is privileged.
+
+### Risk acknowledgement
+
+A `warning` a person looked at and chose to proceed past. The point is to let a
+user's decision stand **without letting it stand for something else**.
+
+```ts
+function acknowledgementCovers(
+  acknowledgement: RiskAcknowledgement,
+  actual: RiskReport,
+  now?: number,
+): boolean;
+
+const MAX_ACKNOWLEDGEMENT_AGE_MS = 900000; // 15 minutes
+
+interface RiskAcknowledgement {
+  report: RiskReport;  // exactly what was on screen when they decided
+  at: number;          // epoch ms of the decision itself
+}
+```
+
+The acknowledgement covers the new report only when **all** of these hold: same
+sender, same target, less than 15 minutes old, the new level is no worse than the
+acknowledged one, and every reason code in the new report was already in the
+acknowledged one.
+
+<Note>
+That last condition is the one that matters. A user who accepted "this address is
+new" has not accepted "this address just sent you a zero-value bait". A fresh code
+in the report voids the acknowledgement even when the level did not change, so
+proceeding past one warning can never carry a different warning through with it.
+</Note>
+
+### Dossier and the investigator
+
+`check` returns a verdict; a dossier is the evidence behind it, gathered for a
+second opinion (`POST /api/investigate`).
+
+```ts
+function buildDossier(report: RiskReport, opts: BuildDossierOptions): Promise<Dossier>;
+function findNearMisses(target: Address, counterparties: Address[]): Array<{
+  counterparty: Address;
+  sharedPrefix: number;
+  sharedSuffix: number;
+}>;
+function clampVerdict(ruleLevel: RiskLevel, advisory: Advisory): Advisory;
+
+interface BuildDossierOptions {
+  publicClient: PublicClient;
+  provider: IDataProvider;
+  usdcAddress: Address;
+  counterparties?: Address[];  // if the caller already has them
+  now?: Date;
+}
+
+interface Advisory {
+  level: RiskLevel;
+  headline: string;
+  points: string[];
+}
+```
+
+- `buildDossier` adds what no rule looks for, most usefully **whether the target is
+  a contract**: sending USDC to a contract that cannot forward it is a permanent
+  loss. Every lookup is best-effort and independently guarded, so a dossier missing
+  a field is still useful and a failed lookup can never change a verdict.
+- `findNearMisses` reports partial collisions (2 or more shared characters at both
+  ends, but not a full `AFFIX_LENGTH` match at both, which is the rule engine's
+  job). Evidence for a human or a model, not a verdict.
+- `clampVerdict` is the whole security argument for putting a language model near a
+  payment. The rule engine's verdict is a **floor**: the only operation available
+  is `max`. A wrong, confused or prompt-injected advisory can refuse a payment that
+  would have been fine, which is annoying, recoverable and the direction this
+  product already errs in. It cannot approve anything, cannot un-block a lookalike,
+  and cannot turn a caution into a green light.
 
 More: [The firewall](/guides/firewall).
 
@@ -282,21 +417,44 @@ expiry.
 
 ```ts
 function generateClaimCode(): ClaimSecret;
+function fromSecret(secret: string): ClaimSecret;   // rebuild from what a user typed
+function normaliseSecret(input: string): string | null;
+function formatSecret(secret: string): string;      // groups into fours for display
+function saltFromSecret(secret: string): Hex;
 function hashClaim(salt: Hex, code: string): Hex;
 
+const CLAIM_SECRET_BITS = 80;  // 16 chars x 5 bits
+
 interface ClaimSecret {
-  code: string;      // the 6-digit code a human reads out
-  salt: Hex;         // 32 secret bytes, delivered out-of-band, never published
+  secret: string;    // the one string a human carries: 'A4K7-9QMX-2PR6-TH8D'
+  code: string;      // the same value normalised; what `claim` sends
+  salt: Hex;         // derived from the secret, not separate entropy. Never transmitted
   claimHash: Hex;    // keccak256(abi.encodePacked(salt, code)) - the only on-chain part
 }
 ```
 
-<Note>
-The **salt is the secret**, the code is the human factor. A 6-digit code is ~20
-bits and brute-forceable offline if the salt leaks, so the salt must reach the
-recipient out of band (claim link / QR) while the code is spoken or typed. Never
-reuse a secret: a settled claim publishes both halves in its calldata forever.
-</Note>
+**All of the entropy is in the one string.** The secret is 16 Crockford base32
+characters, 80 bits, and the salt is `keccak256("ctrl-arcz:salt:v1" || secret)`
+rather than independent randomness. So there is exactly one thing to deliver, and
+`fromSecret(whatTheUserTyped)` reconstructs the rest.
+
+<Warning>
+**Deliver the secret to a person, never to an address.** In a poisoning attack the
+recipient recorded on chain *is* the attacker, and they can grind `claimHash`
+offline for as long as they like. 80 bits is not grindable; the ~20 bits of a
+6-digit code is. Any channel keyed to the address (on-chain ciphertext, a backend
+push, a wallet inbox) hands the secret to the attacker and collapses two factors
+into one, which is why the salt is derived rather than delivered. Send the string
+over the channel you would use to tell someone their table is ready.
+
+Never reuse a secret: a settled claim publishes it in calldata forever.
+</Warning>
+
+`normaliseSecret` accepts what people actually type, any grouping, any case, and
+the Crockford aliases (`I` and `L` for `1`, `O` for `0`), and returns `null` when
+the input is not a well-formed secret. The alphabet omits `I`, `L`, `O` and `U`:
+the first three because they are unreadable next to `1` and `0`, and `U` so that no
+random string spells something the sender has to read out loud.
 
 ### Allowance and approval
 
@@ -472,7 +630,57 @@ interface Permit2Signature {
 `approvePermit2` is the one-time approval (returns `null` when the allowance
 already covers `amount`); after it, every send needs only a signature.
 `signPermit2Transfer` signs a `PermitTransferFrom` authorising `spender` (CtrlArcZ)
-to pull `amount` once. The EIP-712 types are exported as `PERMIT2_TYPES`.
+to pull `amount` once.
+
+### Status helpers
+
+The chain records five statuses; a person sorts transfers into four groups. These
+translate, so every screen answers the question the same way.
+
+```ts
+const TERMINAL_STATUSES: ReadonlySet<TransferStatus>; // CLAIMED, CANCELLED, RECLAIMED
+
+function isTerminal(status: TransferStatus): boolean;
+function isOpen(status: TransferStatus): boolean;      // PENDING or LOCKED
+function statusBucket(status: TransferStatus): StatusBucket;
+
+function isClaimable(
+  transfer: Pick<ProtectedTransfer, 'status' | 'deadline'>,
+  now?: number,
+): boolean;   // PENDING and not past the deadline
+
+function isReturnable(
+  transfer: Pick<ProtectedTransfer, 'status' | 'deadline'>,
+  now?: number,
+): boolean;   // open and past the deadline
+
+type StatusBucket = 'pending' | 'claimed' | 'cancelled' | 'expired';
+```
+
+`LOCKED` buckets with `pending`, and that is the honest reading: the money is still
+in the contract and the sender can still cancel it. A locked transfer has lost its
+claim path, not its funds.
+
+### Gas reserve
+
+On Arc gas is USDC, so the balance a transfer spends is the balance that pays for
+it. Offering the whole balance as "max" produces an amount that cannot pay for its
+own transaction.
+
+```ts
+function gasReserve(gasPrice: bigint, gasLimit?: bigint): bigint;
+function readGasReserve(client: { getGasPrice(): Promise<bigint> }, gasLimit?: bigint): Promise<bigint>;
+function spendableAfterGas(balance: bigint, reserve: bigint): bigint;
+
+const SEND_GAS_LIMIT = 700000n;  // a protected send
+const PAY_GAS_LIMIT = 900000n;   // deploy + fund + pay, the three a private payment sends
+const MIN_GAS_RESERVE = 50000n;  // 0.05 USDC floor
+```
+
+The limits are measured on Arc rather than guessed: a private payment's three
+transactions came to 444,362 gas, and `PAY_GAS_LIMIT` is twice that.
+`readGasReserve` falls back to the floor instead of throwing, because a screen that
+cannot reach the node should still be able to offer a sane maximum.
 
 More: [Protected transfer](/guides/protected-transfer).
 
@@ -500,7 +708,9 @@ interface CleanHistory {
 interface HistoryEntry {
   txHash: `0x${string}`;
   direction: 'in' | 'out';
+  /** `0x0000...0000` when `kind` is not `transfer`. Read `kind` first. */
   counterparty: Address;
+  kind: EntryKind;      // 'transfer' | 'mint' | 'burn'
   amount: bigint;       // base units, in the token's own decimals
   decimals: number;
   tokenAddress: Address;
@@ -517,6 +727,16 @@ Two rules destroy the poisoning surface: drop 0-value transfers, and show only
 known tokens (an allowlist, since a poisoning campaign ships its own lookalike
 token). Nothing is deleted; `filtered` carries the hidden rows so a UI can still
 offer "show spam".
+
+![A clean history](/screens/14-received-history.png)
+
+`kind` is `'transfer' | 'mint' | 'burn'`, derived from the addresses rather than
+from the indexer's own label. It matters more than it sounds: a mint has no sender
+and a burn has no recipient, so both arrive with `0x0000...0000` on one side.
+Rendering that as an address tells the holder they were paid by nobody, when on Arc
+it is almost always their own money arriving over a bridge (CCTP settles as
+`receiveMessage`, Gateway as `gatewayMint`). **Read `kind` before showing
+`counterparty`.**
 
 ## Integrator config
 
@@ -595,8 +815,8 @@ address through it. The account surface reveals nothing; the funding leg does.
 function predictEphemeral(
   publicClient: PublicClient,
   factory: Address,
-  owner: Address,
   salt: Hex,
+  policy: EphemeralPolicy,
 ): Promise<Address>;
 
 function createEphemeral(
@@ -605,6 +825,13 @@ function createEphemeral(
   salt: Hex,
   policy: EphemeralPolicy,
 ): Promise<{ account: Address; txHash: Hex }>;
+
+function fundEphemeral(
+  clients: ShieldClients,
+  account: Address,
+  amount: bigint,
+  policy: EphemeralPolicy,
+): Promise<Hex>;
 
 function fundFromVault(
   clients: ShieldClients,
@@ -629,13 +856,19 @@ interface EphemeralPolicy {
 
 - `predictEphemeral` returns the deterministic address `createEphemeral` will
   occupy, so it can be funded before it exists. The address is bound to
-  `ownerHash(owner)` and the salt, not to `msg.sender`, so no one can front-run its
-  slot.
+  `ownerHash(policy.owner)`, the salt **and a hash of every policy field**, not to
+  `msg.sender`, so no one can front-run its slot and no two policies share an
+  address. That is why it takes the whole policy rather than just an owner.
 - `createEphemeral` deploys and initializes the account (a minimal-proxy clone).
   Anyone may submit it, so an integrator can deploy through a relayer to keep the
-  payer off the deployment transaction.
-- `fundFromVault` moves USDC from the vault into the account (owner only). This is
-  the leg that becomes APS-confidential in production.
+  payer off the deployment transaction. It reads the deployed policy back and
+  verifies it before returning.
+- `fundEphemeral` transfers USDC into the box from the connected wallet, but only
+  after re-reading the deployed policy and comparing every field against the one
+  you passed. Prefer it over a bare ERC-20 `transfer`: funding an address that
+  already exists always succeeds, so a direct transfer silently skips the check.
+- `fundFromVault` moves USDC from the `Vault` contract into the account (owner
+  only). This is the leg that becomes APS-confidential in production.
 
 ### Reads
 
@@ -670,9 +903,11 @@ function sweepExpired(clients: ShieldClients, account: Address, vault: Address):
   signature. Anyone may submit (relayer-safe); the funds are locked to the target
   and cap.
 - `sweepToVault` sends the account home to its vault at any time; `sweepExpired`
-  does the same after `expiry` (keeper / refund path). Both are gated by knowledge
-  of the vault address (its hash must match the account's stored `vaultHash`), not
-  by a signature, so the vault stays hidden until the sweep.
+  does the same once `expiry` has passed (the keeper / refund path). Both require
+  that the wallet client's account **is** the vault (`msg.sender == vault`) and
+  that its address match the stored `vaultHash`. No signature is involved, and the
+  vault stays hidden until it sweeps. Bind a box to an address you can transact
+  from, not to a contract with no callback.
 
 ### One-call checkout
 
@@ -783,6 +1018,154 @@ exists, so a bad payment is vetoed before anything is created or funded.
 `remaining`, not expired), re-runs the firewall on the chain `target`, then signs
 the exact EIP-712 spend the contract will verify.
 
+### Owner authentication
+
+A `RemoteCoSigner` can prove who is asking, so the server can rate-limit and audit
+per payer instead of answering anyone.
+
+```ts
+class RemoteCoSigner implements CoSigner {
+  constructor(
+    endpoint: string,
+    address: Address,
+    fetchImpl?: typeof fetch,
+    auth?: RemoteCoSignerAuth,
+  );
+}
+
+interface RemoteCoSignerAuth {
+  address: Address;
+  sign: (message: string) => Promise<Hex>;
+}
+
+function cosignAuthMessage(owner: Address, ts: number, scope: CosignAuthScope): string;
+
+interface CosignAuthScope {
+  target?: Address;   // precheck binds the intended target (no account exists yet)
+  account?: Address;  // authorize binds the account being spent from
+  amount: bigint;
+  action?: SpendAction; // authorize binds PAY vs PULL; precheck omits it
+}
+```
+
+The signature is bound to the **scope of this request**, not just to the owner and
+a timestamp. Binding only `owner + ts` would let a captured signature authorize a
+different spend for the same owner: a bigger amount, a PULL instead of a PAY, or
+another account entirely. Field order in the message is fixed so the server can
+reconstruct the exact string from the request body.
+
+### Counterfactual authorization
+
+Ask the co-signer to sign a PUSH pay for a box that **does not exist yet**, so
+create, fund and pay can be batched into one flow.
+
+```ts
+interface CounterfactualRequest {
+  factory: Address;
+  ownerHash: Hex;
+  salt: Hex;
+  policy: CounterfactualPolicy;
+  box: Address;      // client-predicted; the server recomputes and must match
+  owner: Address;
+  amount: bigint;
+  chainId: number;
+}
+```
+
+This is safe for one specific reason: the CREATE2 salt commits the full policy to
+the address. The box that can be deployed at `box` is only ever this exact box, and
+nonce 0 is valid for its first and only spend.
+
+<Warning>
+The server **must** recompute `box` from `(factory, ownerHash, salt, policy)` and
+reject a mismatch. Trusting the client's predicted address is what turns this from
+a batching optimisation into a signature for an arbitrary contract.
+</Warning>
+
+### settlePrivatePaymentBatched
+
+```ts
+function settlePrivatePaymentBatched(/* ... */): Promise<PrivatePayOutcome>;
+```
+
+The counterfactual path end to end: one authorization covering a box that is
+created, funded and spent in the same flow, instead of three round trips with a
+wallet prompt between each.
+
+### Funding a box from Gateway
+
+Funding a box with a plain transfer writes "this wallet paid that box" on chain.
+Funding it from the payer's Circle Gateway balance writes a **mint from Circle's
+minter** instead, so the box's funding transaction does not name the payer's
+wallet at all.
+
+```ts
+function assertBoxFundable(publicClient: PublicClient, account: Address, policy: EphemeralPolicy): Promise<void>;
+function fundBoxFromGateway(clients: { walletClient: WalletClient }, params: FundBoxParams): Promise<{ transferId?: string }>;
+function awaitBoxFunded(
+  publicClient: PublicClient,
+  account: Address,
+  amount: bigint,
+  usdc: Address,
+  opts?: { timeoutMs?: number; pollMs?: number; now?: () => number },
+): Promise<boolean>;
+function isBoxFunding(recipient: string | undefined, boxes: ReadonlySet<string>): boolean;
+
+interface FundBoxParams {
+  account: Address;
+  amount: bigint;
+  from: GatewayChain;  // which chain's Gateway balance pays
+  to: GatewayChain;    // which chain the box is on, and where Circle mints
+  onTransferId?: (id: string) => void;
+  timeoutMs?: number;
+}
+```
+
+- `assertBoxFundable` refuses a box that is not deployed, then re-reads and
+  compares every policy field. Call it first; funding an address that exists always
+  succeeds, so skipping the check fails silently.
+- `from` and `to` are both required and neither has a default. `from` matters
+  because Circle spends the balance per chain, so a box funded from a chain the
+  payer has nothing on is an intent Circle refuses **after** it is signed. `to`
+  matters because boxes are no longer only on Arc.
+- `awaitBoxFunded` polls the box's balance, since the mint arrives from Circle
+  rather than from a transaction the caller sent.
+- `isBoxFunding` lets a history view recognise its own box-funding transfers and
+  label them, instead of showing them as payments to a stranger.
+
+### Discovery indexes
+
+```ts
+class AnnouncementIndex { /* stealth announcements, cached and scanned in chunks */ }
+class AccountOwnerIndex { /* boxes by ownerHash, across current and prior factories */ }
+```
+
+`AccountOwnerIndex` is what lets a box created under a retired factory still be
+recognised: it scans `SPEND_POLICY_FACTORY_PRIOR_ADDRESSES` alongside the current
+one, so a redeploy does not orphan an existing subscription.
+
+### Explorer health
+
+```ts
+function explorerAnnouncements(/* ... */): Promise<IndexedAnnouncement[]>;
+function explorerAccountsCreated(/* ... */): Promise<CreatedAccount[]>;
+function explorerLogs(/* ... */): Promise<unknown[]>;
+function explorerUsable(): ExplorerHealth;
+function clearExplorerState(): void;
+
+const EXPLORER_MAX_LAG_BLOCKS: bigint;
+```
+
+`ExplorerOptions` configures the endpoint and timeouts, `ExplorerHealth` reports
+the lag, `IndexedAnnouncement` and `CreatedAccount` are the row shapes, and
+`clearExplorerState` resets the cached health between tests.
+
+Reading history from an explorer is faster than `eth_getLogs`, and an explorer that
+has fallen behind is worse than no explorer, because it answers confidently with a
+stale view. `explorerUsable` reports whether it is within
+`EXPLORER_MAX_LAG_BLOCKS` of the chain head, so a caller can fall back to logs
+instead of showing a user a list that is quietly missing their newest box.
+
 ### EIP-712 digest helpers
 
 ```ts
@@ -820,6 +1203,289 @@ nothing, and only someone who already knows the address can recompute the hash.
 
 More: [The co-signer](/guides/co-signer).
 
+## Stealth addresses (ERC-5564)
+
+Bind a box to a fresh address only the payer can rediscover. `schemeId` 1 over
+secp256k1. Full guide: [Stealth boxes](/guides/stealth-boxes).
+
+```ts
+const STEALTH_SCHEME_ID = 1;
+const STEALTH_KEY_MESSAGE: string;  // signed once; never retype it
+
+function deriveStealthKeys(signature: Hex): StealthKeys;
+function generateStealthAddress(meta: StealthMetaAddress, ephemeralKey?: Hex): StealthAnnouncement;
+function checkStealthAddress(params: {
+  viewingKey: Hex;
+  spendingPub: Hex;
+  ephemeralPubKey: Hex;
+  viewTag?: number;
+}): Address | null;
+function computeStealthPrivateKey(params: {
+  spendingKey: Hex;
+  viewingKey: Hex;
+  ephemeralPubKey: Hex;
+}): Hex;
+
+interface StealthMetaAddress {
+  spendingPub: Hex;   // compressed secp256k1 point; funds derive against this
+  viewingPub: Hex;    // compressed secp256k1 point; only this key scans
+}
+interface StealthKeys extends StealthMetaAddress {
+  spendingKey: Hex;
+  viewingKey: Hex;
+}
+interface StealthAnnouncement {
+  stealthAddress: Address;
+  ephemeralPubKey: Hex;
+  viewTag: number;    // first byte of the shared secret; skips non-matches cheaply
+}
+```
+
+The keys come from one signature over a fixed message, deterministically (RFC
+6979), so they are recoverable on any device with nothing stored. The private keys
+never leave the client.
+
+### Stealth boxes
+
+```ts
+function newStealthOwner(meta: StealthMetaAddress, ephemeralKey?: Hex): {
+  stealthAddress: Address;
+  ephemeralPubKey: Hex;
+  viewTag: number;
+};
+function announceArgsFor(
+  stealth: { stealthAddress: Address; ephemeralPubKey: Hex },
+  box: Address,
+  label?: string,
+): readonly [bigint, Address, Hex, Hex];
+function announceStealthBox(
+  clients: { publicClient: PublicClient; walletClient: WalletClient },
+  announcer: Address,
+  announceArgs: readonly [bigint, Address, Hex, Hex],
+): Promise<Hex>;
+function discoverStealthBoxes(
+  publicClient: PublicClient,
+  announcer: Address,
+  keys: Pick<StealthKeys, 'viewingKey' | 'spendingPub'>,
+  opts?: { fromBlock?: bigint },
+): Promise<StealthBox[]>;
+function recognizeAnnouncements(
+  keys: Pick<StealthKeys, 'viewingKey' | 'spendingPub'>,
+  announcements: RawAnnouncement[],
+): StealthBox[];
+
+function encodeStealthMetadata(box: Address, label?: string): Hex;
+function decodeStealthMetadata(metadata: Hex): StealthMetadata;
+
+interface StealthBox {
+  stealthAddress: Address;
+  box: Address;       // the SpendPolicyAccount this announcement points at
+  ephemeralPubKey: Hex;
+  label: string;      // the announced name, or empty
+}
+```
+
+Use the stealth address as **both** the box's owner and its vault, so neither
+`ownerHash` nor `vaultHash` carries a link to the payer. `recognizeAnnouncements`
+is pure, so recognition can run over a pre-fetched batch with no network.
+
+<Note>
+The label rides in the announcement rather than in the payer's browser. Kept
+locally, a subscription called "Netflix" on one machine was an unnamed address on
+every other one, and it was the only thing about a subscription not read live from
+chain. It is plaintext, so name boxes the way you would say them out loud.
+</Note>
+
+## Layer 5: Bridging USDC
+
+Non-custodial, wallet-side, no server. Full guide: [Bridge USDC](/guides/bridge).
+
+### CCTP
+
+```ts
+function quoteBridge(params: {
+  from: CctpChainName;
+  to: CctpChainName;
+  amount: bigint;
+  fetchImpl?: typeof fetch;
+}): Promise<BridgeQuote>;
+
+function bridgeFromWallet(
+  clients: { publicClient: PublicClient; walletClient: WalletClient },
+  params: {
+    from: CctpChainName;
+    to: CctpChainName;
+    amount: bigint;
+    recipient?: Address;               // defaults to the sending wallet
+    onQuote?: (quote: BridgeQuote) => void;
+    onStep?: (step: CctpStep, txHash?: Hex) => void;
+    timeoutMs?: number;
+  },
+): Promise<BridgeResult>;
+
+function findForwardedMint(params: { sourceDomain: number; burnTxHash: Hex }): Promise<Hex | undefined>;
+function waitForForwardedMint(params: {
+  sourceDomain: number;
+  burnTxHash: Hex;
+  timeoutMs?: number;
+}): Promise<Hex | undefined>;
+
+function chainLabel(name: CctpChainName): string;
+function chainExplorerTxUrl(chain: CctpChainName, txHash: string): string | undefined;
+function cctpChainByChainId(chainId: number | undefined): CctpChainName | undefined;
+
+const CCTP_CHAINS: Record<CctpChainName, CctpChain>;  // 20 testnets
+const CCTP_TOKEN_MESSENGER: Address;
+const IRIS_TESTNET: string;
+const FORWARDING_HOOK: Hex;   // ascii 'cctp-forward', padded to 32 bytes
+
+type CctpStep = 'quote' | 'approve' | 'burn' | 'attest' | 'forward';
+
+interface BridgeQuote { amount: bigint; maxFee: bigint; total: bigint }
+interface BridgeResult {          // exported as CctpBridgeResult
+  approveTxHash?: Hex;
+  burnTxHash: Hex;
+  forwardTxHash?: Hex;
+  quote: BridgeQuote;
+}
+interface CctpChain {
+  domain: number;      // a CCTP domain, NOT a chain id
+  chainId: number;
+  usdc: Address;
+  gasToken?: 'usdc';   // set only where gas is the same USDC being bridged (Arc)
+}
+```
+
+`undefined` from either mint lookup means "not yet", never "gone": the burn is on
+chain and the attestation does not expire. Persist `burnTxHash` the moment you have
+it, because it is the only thing needed to recover a transfer later.
+
+### Gateway
+
+```ts
+function depositToGateway(
+  clients: { publicClient: PublicClient; walletClient: WalletClient },
+  params: { chain: GatewayChain; amount: bigint; onStep?: (s: GatewayStep, h?: Hex) => void },
+): Promise<{ approveTxHash?: Hex; depositTxHash: Hex }>;
+
+function gatewayBalance(params: {
+  depositor: Address;
+  chains?: readonly GatewayChain[];
+}): Promise<GatewayBalance>;
+
+function quoteGatewaySpend(params: {
+  from: GatewayChain;
+  to: GatewayChain;
+  amount: bigint;
+  depositor: Address;
+  recipient?: Address;
+}): Promise<GatewayQuote>;
+
+function spendFromGateway(
+  clients: { walletClient: WalletClient },
+  params: {
+    from: GatewayChain;
+    to: GatewayChain;
+    amount: bigint;
+    recipient?: Address;
+    onTransferId?: (transferId: string) => void;
+    onStep?: (step: GatewayStep, txHash?: Hex) => void;
+    timeoutMs?: number;
+  },
+): Promise<GatewaySpendResult>;
+
+function findGatewayMint(params: { transferId: string }): Promise<GatewayTransferStatus>;
+function waitForGatewayMint(params: {
+  transferId: string;
+  timeoutMs?: number;
+}): Promise<GatewayTransferStatus>;
+function isGatewayChain(name: string): name is GatewayChain;
+function isGatewayWithdrawal(params: { from: GatewayChain; to: GatewayChain }): boolean;
+
+const GATEWAY_CHAIN_NAMES: readonly GatewayChain[];  // 11 of the CCTP chains
+const GATEWAY_WALLET: Address;
+const GATEWAY_MINTER: Address;
+const GATEWAY_API_TESTNET: string;
+const DEPOSIT_CONFIRMATION_SECONDS: Record<GatewayChain, number>;
+
+type GatewayStep = 'approve' | 'deposit' | 'quote' | 'sign' | 'transfer' | 'mint';
+
+interface GatewayBalance {
+  total: bigint;
+  byChain: Partial<Record<GatewayChain, bigint>>;  // spend against THIS, not total
+}
+interface GatewayQuote {
+  maxFee: bigint;      // what gets signed: Circle's quote plus headroom
+  quotedFee: bigint;   // Circle's unpadded figure, for showing a real fee
+  maxBlockHeight: bigint;
+  total: bigint;
+}
+interface GatewaySpendResult { transferId: string; mintTxHash?: Hex; quote: GatewayQuote }
+interface GatewayTransferStatus {
+  /** `pending` covers every non-terminal state, including a poll that failed. */
+  state: 'pending' | 'done' | 'failed';
+  mintTxHash?: Hex;
+  reason?: string;
+}
+```
+
+The `transferId` is the receipt, exactly as `burnTxHash` is for CCTP: recovering a
+spend needs it and nothing else, with no wallet and no signature. Persist it from
+`onTransferId`, which fires the instant Circle accepts the intent, not at the end.
+
+`gatewayBalance` counts only deposits that have reached Circle's required
+confirmations, which range from about a second on Arc to nineteen minutes on
+Ethereum. Read `DEPOSIT_CONFIRMATION_SECONDS` rather than showing one number for
+all of them.
+
+`from === to` is a withdrawal, not an error: Circle debits the balance and mints
+back on the same chain, which is the only quick exit a depositor has.
+
+### Refusing before a signature
+
+```ts
+function usdc(subunits: bigint, decimals?: number): string;
+function percentOf(maxSpendable: bigint, fraction: number, decimals?: number): string;
+function maxGatewaySpendable(here: bigint, feeCeiling: bigint): bigint;
+function maxDepositable(walletBalance: bigint, gasReserve: bigint): bigint;
+function gatewayShortfall(params: {
+  here: bigint;              // the balance ON THE SOURCE CHAIN
+  byChain: Record<string, bigint>;
+  from: string;
+  fromLabel: string;
+  committed: bigint;         // amount + fee ceiling
+  labelOf: (chain: string) => string;
+}): Refusal | null;
+function cctpShortfall(params: {
+  usdcBalance: bigint;
+  total: bigint;
+  maxFee: bigint;
+  gasCost: bigint;
+  nativeBalance: bigint;
+  chainLabel: string;
+  gasInUsdc: boolean;        // true on Arc: transfer and gas share one balance
+  nativePerUsdc?: bigint;
+}): Refusal | null;
+
+interface Refusal {
+  code: 'gwNoBalanceHere' | 'gwEnoughOn' | 'gwShort' | 'shortWithFee' | 'shortWithGas' | 'noGas';
+  params: Record<string, string>;  // already formatted for reading
+  fix?: RefusalFix;
+}
+type RefusalFix =
+  | { kind: 'switchSource'; chain: string; label: string }
+  | { kind: 'deposit'; amount: bigint; display: string }
+  | { kind: 'useMax'; amount: bigint; display: string };
+```
+
+`code` is a key into your own strings, so the SDK ships no user-facing English.
+`fix` is the point: a refusal names the action that resolves it, so a UI can offer
+a button rather than a paragraph.
+
+Check `here` (the source chain's balance), never `total`. Circle reads the balance
+as one figure but spends it per chain, so checking the sum lets the check pass, the
+user sign, and Circle refuse afterwards.
+
 ## Errors
 
 All SDK errors extend `CtrlArcZError`, so `catch (e) { if (e instanceof
@@ -845,6 +1511,7 @@ For direct contract calls, the SDK exports the ABIs it uses:
 - `ctrlArcZAbi`, `codeClaimVerifierAbi`, `memoAbi` - the protected-transfer stack.
 - `spendPolicyFactoryAbi`, `spendPolicyAccountAbi`, `vaultAbi` - the payer-side
   shield.
+- `stealthAnnouncerAbi` - the ERC-5564 announcement registry.
 
 ```ts
 import { spendPolicyAccountAbi, readAccount } from '@ctrl-arcz/sdk';

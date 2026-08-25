@@ -1,8 +1,18 @@
-# The Android client, and how to check it without its source
+---
+title: The Android client
+description: "A separate native Kotlin port, held to this repository by byte-identical parity vectors rather than by shared code."
+---
+
 
 The Android client is a separate native Kotlin application. It does not consume
 `@ctrl-arcz/sdk`; it is a hand-written port of the same protocol, and its source is
 not published here.
+
+![Confirming a send](/android/send-confirm.png)
+
+![Picking a merchant](/android/merchant-picker.png)
+
+![A bridge transfer returned](/android/bridge-returned.png)
 
 What is published is the file that holds it to this repository:
 [`ParityVectorsTest.kt`](./ParityVectorsTest.kt), a byte-identical copy of the test

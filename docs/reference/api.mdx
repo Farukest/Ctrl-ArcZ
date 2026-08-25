@@ -1,0 +1,195 @@
+---
+title: The API
+description: "The ten routes apps/api serves, which of them need a signed request, and why each one cannot run in the browser."
+---
+
+Almost everything in Ctrl+ArcZ runs client-side. The firewall is a pure rule engine
+over public data, the protected transfer is the user's own wallet talking to a
+contract, and the bridge is non-custodial. **The API exists only for the things
+that hold a key**, and it is deliberately small.
+
+`apps/api` listens on `127.0.0.1:8787` behind nginx, and is served publicly at
+`https://api.ctrlarcz.xyz` and under `/api/` on the app's own origin.
+
+## The routes
+
+| Route | Auth | Holds a key | What it is |
+| --- | --- | --- | --- |
+| `GET /api/health` | none | reads relayer | Liveness plus the relayer's balance |
+| `GET /api/cosign` | none | no | The co-signer's public address |
+| `POST /api/cosign` | none | `COSIGNER_PK` | Authorize or veto a spend |
+| `GET /api/verified-recipients` | none | no | Settled protected-transfer recipients |
+| `GET /api/announcements` | none | no | Raw stealth announcements to scan |
+| `POST /api/gasless-claim` | **signed** | `RELAYER_PK` | Claim with sponsored gas |
+| `POST /api/relay/create` | **signed** | `RELAYER_PK` | Deploy a box for the payer |
+| `POST /api/relay/announce` | **signed** | `RELAYER_PK` | Announce a stealth box |
+| `POST /api/relay/gas` | **signed** | `RELAYER_PK` | Seed a fresh address with gas |
+| `POST /api/investigate` | none | `ANTHROPIC_API_KEY` | A reasoned second opinion |
+
+## Signed requests
+
+The four relayer-funded routes spend the operator's money, so an anonymous caller
+must not be able to reach them. Each request carries three headers:
+
+| Header | Value |
+| --- | --- |
+| `X-Ctrl-Address` | The calling address |
+| `X-Ctrl-Timestamp` | Unix milliseconds, within 2 minutes of the server clock |
+| `X-Ctrl-Signature` | A personal-sign over the message below |
+
+```
+Ctrl+ArcZ API request
+path: /api/gasless-claim
+ts: 1756100000000
+body: 0x<keccak256 of the exact raw body>
+```
+
+The message binds the **path**, a fresh **timestamp** and a hash of the **body**,
+so a signature is single-use for that one call: it cannot be replayed onto a
+different endpoint, a different body, or twice. The server keeps used signatures
+for the length of the freshness window and rejects a repeat.
+
+<Note>
+Sign the raw body bytes you actually send, not a re-serialized copy. `keccak256` of
+`{"a":1}` and `{ "a": 1 }` are different, and the server hashes what arrived.
+</Note>
+
+### Quotas
+
+Authentication says who is calling; the quota bounds what that buys.
+
+- **50 units per address per day.** A gasless claim is 1 unit.
+- **2000 units per day across the whole process.** Addresses are free to mint, so a
+  per-address cap alone lets an attacker multiply spend across many wallets. The
+  global ceiling caps the relayer's total exposure regardless.
+- Over either limit the route answers `429 daily quota exceeded`.
+
+There is also a per-IP sliding window in front of everything, which blunts a single
+abuser but is not what bounds the bill.
+
+## Public routes
+
+### GET /api/health
+
+```json
+{
+  "ok": true,
+  "relayer": {
+    "address": "0x...",
+    "arcUsdc": 4.21,
+    "low": false
+  }
+}
+```
+
+`relayer` is `null` when no relayer key is configured. On Arc the USDC balance is
+also the gas balance, so one number covers both. `low: true` is a warning, not an
+error: the API is healthy, its wallet is not, and box deploys, announcements and
+gasless claims stop when it runs out.
+
+### GET and POST /api/cosign
+
+`GET` returns `{ address }`, the public address the browser locks into each new
+box. `POST` is The Machine: it reads the box's real policy from chain, runs the
+firewall, and returns a signature or a veto.
+
+```json
+{ "approved": true, "signature": "0x..." }
+{ "approved": false, "reason": "...", "riskReasons": ["LOOKALIKE_ADDRESS"] }
+```
+
+Unauthenticated on purpose. It spends nothing, and a veto is the safe default: the
+worst an anonymous caller gets is a signature for a spend the contract would have
+allowed anyway, since the funds are hard-locked to the box's target and cap. See
+[The co-signer](/guides/co-signer).
+
+### GET /api/verified-recipients
+
+`?sender=0x...&chainId=5042002`. Everyone this sender has completed a protected
+transfer to, which feeds the firewall's known-good list.
+
+Public and unauthenticated on purpose: it is derived from public events and anyone
+can read the same logs. Making the browser sign for it would buy nothing and add a
+wallet prompt to the send form's first render.
+
+### GET /api/announcements
+
+`?fromBlock=...&chainId=...`. Raw stealth announcements, for clients that would
+rather not run a chunked `eth_getLogs` scan themselves.
+
+The server cannot tell which of these belong to the caller, and neither can anyone
+else without the viewing key. Recognition happens on the client with
+`recognizeAnnouncements`. See [Stealth boxes](/guides/stealth-boxes).
+
+## Relayer routes
+
+### POST /api/gasless-claim
+
+```json
+{ "transferId": "42", "code": "A4K79QMX2PR6TH8D", "salt": "0x..." }
+```
+
+Circle Gas Station sponsors the user-operation through a Circle Smart Account owned
+by the relayer key, so a recipient with an empty wallet can still claim. The
+contract releases to the transfer's recorded recipient, never to `msg.sender`, so
+the sponsor is a relayer and cannot redirect the funds.
+
+```json
+{ "ok": true, "txHash": "0x..." }
+{ "ok": false, "error": { "kind": "wrong_code", "attemptsRemaining": 3 } }
+```
+
+Nothing throws across HTTP: the same outcomes `claim()` raises as typed errors are
+encoded in `error.kind`. See
+[Errors and result shapes](/guides/errors-and-results).
+
+### POST /api/relay/create and /api/relay/announce
+
+Deploy a box, and announce a stealth box, on the payer's behalf. Both exist for
+privacy rather than convenience: paying for your own box deploy puts your wallet on
+the deployment transaction, which is the one link the design otherwise removes.
+
+`create` validates the policy before it signs anything: the co-signer named must be
+this server, the mode must be PUSH or PULL, and the expiry must be in the future.
+`announce` refuses a box that does not exist.
+
+### POST /api/relay/gas
+
+Seeds a fresh address with enough USDC to send one transaction. A stealth address
+has no gas by definition, and on Arc gas is USDC, so without this a payer can
+create a box they cannot afford to sweep.
+
+## POST /api/investigate
+
+A reasoned second opinion on a recipient, on top of the rule engine.
+
+```json
+{ "rule": { "level": "warning", "reasons": [] }, "advisory": null, "dossier": null, "deep": "off" }
+```
+
+`deep` is `off` (no API key), `budget` (past the daily ceiling) or `ran`. Two
+properties are worth stating plainly:
+
+- **It can only ever tighten a verdict, never weaken one.** `clampVerdict` bounds
+  the advisory by the rule engine's own result, so a model that says "looks fine"
+  cannot unblock a lookalike.
+- **Running out degrades the advisory, not the check.** Past 1000 model calls a day
+  the route still answers with the rule verdict and a `null` advisory, which is
+  exactly how it behaves with no API key at all. The risk check that carries it
+  never fails because a budget ran out.
+
+## CORS
+
+`CORS_ORIGINS` is a comma-separated allowlist and it is **fail-closed**: an empty
+list allows no browser origin. It does not mean "any". A native client sends no
+`Origin` header and is always allowed.
+
+Running the apps locally means adding `http://localhost:5173` to it, or every
+relayer-funded flow answers 403 from a page that otherwise looks like it is
+working.
+
+## Next
+
+- The veto model: [The co-signer](/guides/co-signer).
+- Outcome shapes: [Errors and result shapes](/guides/errors-and-results).
+- Running it: [Local development](/guides/local-development).

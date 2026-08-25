@@ -1,0 +1,127 @@
+---
+title: The keeper
+description: "An autonomous agent that reclaims expired transfers and pays for its own gas out of a policy-bounded box."
+---
+
+`reclaimExpired` is permissionless: anyone may call it, and the money always goes
+back to the original sender. But permissionless is not automatic. Until something
+actually calls it, an unclaimed transfer just sits there, and the refund the
+product promises never arrives on its own.
+
+The keeper (`apps/keeper`) is that something. It is also the clearest working
+example of an agent wallet: it is not handed a funded key and trusted to be
+careful, it is **paid the way this product pays any recurring payee**, from a PULL
+box whose policy is on chain.
+
+## What it does each tick
+
+<Steps>
+
+<Step title="Scan">
+Read `Sent` events forward from where it last looked, and read back the current
+status of each transfer. Bounded by `KEEPER_MAX_READS` and `KEEPER_SCAN_SPAN_BLOCKS`,
+so a failed tick does not make the next request larger.
+</Step>
+
+<Step title="Decide">
+A pure function over the snapshot. No network, so every rule is testable without a
+chain, and the reasons it logs are the reasons it acted.
+</Step>
+
+<Step title="Act">
+Call `reclaimExpired` on what survived, highest amount first, until the tick limit
+or the budget runs out.
+</Step>
+
+<Step title="Get paid">
+If its balance has fallen below `KEEPER_LOW_WATER`, pull its salary back up to
+`KEEPER_TARGET_BALANCE` from its own box.
+</Step>
+
+</Steps>
+
+## The economics, which are the interesting part
+
+The keeper pays the gas and the money goes to somebody else, so **it never
+profits**. The question is not "is this profitable" but "does this leave the system
+better off":
+
+```
+gasPerAction < amount   ->  act
+gasPerAction >= amount  ->  skip: 'not-worth-the-gas'
+```
+
+Burning 0.02 USDC of gas to return 0.01 USDC destroys value, so the keeper
+declines. That same test is what stops a griefer from creating a swarm of dust
+transfers to drain the keeper's budget: each one fails it individually, and no
+special anti-spam rule is needed.
+
+Ordering is by amount, descending. When the budget only covers part of the queue,
+the money rescued first is the money that matters most, and the rest stay
+reclaimable on the next tick. Nothing expires a second time.
+
+The skip reasons are a closed set: `not-reclaimable`, `not-expired`,
+`not-worth-the-gas`, `over-tick-limit`, `out-of-budget`. Only `PENDING` and
+`LOCKED` are reclaimable; the contract reverts on the rest.
+
+<Note>
+On Arc gas is USDC, so the keeper's operating cost and the money it rescues are the
+same unit and the comparison above is a straight subtraction. On a chain with a
+separate gas token this rule needs a price oracle, which is one more reason the
+design fits here.
+</Note>
+
+## How it pays for itself
+
+The keeper's salary box is a `SpendPolicyAccount` in PULL mode whose target is the
+keeper's own address. The keeper proves control of that address to the co-signer,
+the co-signer re-reads the policy from chain and signs or vetoes, and the contract
+enforces the caps regardless of what either of them decided.
+
+```bash
+pnpm --filter @ctrl-arcz/keeper exec tsx scripts/create-salary-box.ts
+```
+
+Before it pulls, the keeper refuses a box that is not the one described: a PUSH box
+has no pull path at all, and a box whose target is not the keeper would mean the
+operator wired someone else's subscription in by mistake.
+
+**So the keeper's blast radius is a number the operator chose and can read back
+from chain.** Revoking it is one `sweepToVault` from the operator's wallet, a call
+the keeper cannot make, because that one is gated on `msg.sender == vault`.
+
+Without a salary box the keeper still reclaims; it just cannot refill itself and
+stops at its reserve.
+
+## Running it
+
+```bash
+pnpm --filter @ctrl-arcz/keeper once   # one tick, then exit
+pnpm --filter @ctrl-arcz/keeper dev    # keep polling
+```
+
+Copy `apps/keeper/.env.example`:
+
+| Variable | Meaning |
+| --- | --- |
+| `KEEPER_PK` | The keeper's own key. Throwaway testnet key only. |
+| `KEEPER_SALARY_BOX` | Its PULL box. Optional; without it the keeper cannot refill. |
+| `KEEPER_COSIGN_URL` | Where to ask for a pull signature, e.g. `http://127.0.0.1:8787/api/cosign`. |
+| `KEEPER_GAS_PER_ACTION` | Expected cost of one `reclaimExpired`, as USDC. Default `0.005`. |
+| `KEEPER_RESERVE` | Never spend below this, so it can still pull its next salary. Default `0.20`. |
+| `KEEPER_LOW_WATER` / `KEEPER_TARGET_BALANCE` | When to top up, and to what. Default `0.50` / `1.00`. |
+| `KEEPER_MAX_ACTIONS` / `KEEPER_MAX_READS` | Bounds on one tick. Default `5` / `40`. |
+| `KEEPER_POLL_MS` | Tick interval. Default `60000`. |
+| `KEEPER_BACKFILL_BLOCKS` / `KEEPER_SCAN_SPAN_BLOCKS` | How far back to look, and how much per request. |
+| `KEEPER_DRY_RUN` | `1` decides and logs, sends nothing. |
+
+<Tip>
+Start with `KEEPER_DRY_RUN=1`. The decision layer is pure, so a dry run tells you
+exactly what a live run would do, including which transfers it would skip and why.
+</Tip>
+
+## Next
+
+- The box that pays it: [Subscriptions](/guides/subscriptions).
+- The refund it automates: [Protected transfer](/guides/protected-transfer).
+- The co-signer it asks: [The co-signer](/guides/co-signer).

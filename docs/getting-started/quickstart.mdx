@@ -77,7 +77,7 @@ import {
 import { parseUnits } from 'viem';
 
 const { configId } = await registerConfig(clients, defineConfig({ recallWindow: 3600 }));
-const secret = generateClaimCode(); // { code, salt, claimHash }
+const secret = generateClaimCode(); // { secret, code, salt, claimHash }
 
 const amount = parseUnits('5', 6); // 5 USDC, 6 decimals
 await approveUsdc(clients, amount);
@@ -93,7 +93,10 @@ const { transferId, txHash } = await sendProtected(clients, {
 <Warning>
 `sendProtected` re-runs the firewall itself and throws `RiskBlockedError` on a
 block before it submits, so no funds move on a block even if you skip step 2.
-Deliver `secret.code` to the recipient through your normal channel. A wrong or
+
+Deliver **`secret.secret`**, the grouped string (`A4K7-9QMX-2PR6-TH8D`), to the
+recipient as a person, over a channel the recipient controls. It carries all 80
+bits; the salt is derived from it, so there is no second half to send. A wrong or
 poisoned recipient cannot claim without it, and you can `cancel` to reclaim.
 </Warning>
 </Step>

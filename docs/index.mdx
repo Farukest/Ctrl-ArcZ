@@ -37,7 +37,10 @@ with four layers that actually hold.
 4. **Payer-side shield (Private Pay).** Pay a merchant from a disposable,
    policy-bound address that stores no payer identity, with every spend authorized
    by an enclave co-signer that vetoes a drainer, a lookalike, or an over-policy
-   spend.
+   spend. The same box in PULL mode is a
+   [subscription](/guides/subscriptions) with a per-pull cap instead of an
+   infinite approval, and a [stealth address](/guides/stealth-boxes) makes it
+   unattributable.
 
 ## Start here
 
@@ -59,6 +62,14 @@ with four layers that actually hold.
   <Card title="Payer-side shield" icon="id-card" href="/concepts/payer-shield">
     The mental model behind disposable accounts, the co-signer veto, and the
     one-way valve.
+  </Card>
+  <Card title="Subscriptions" icon="repeat" href="/guides/subscriptions">
+    Recurring spending with a per-pull cap, an interval and an expiry on chain.
+    The replacement for an infinite approval.
+  </Card>
+  <Card title="Bridge USDC" icon="arrow-right-arrow-left" href="/guides/bridge">
+    CCTP and Gateway from the user's own wallet. Non-custodial, no relayer, no
+    server.
   </Card>
 </CardGroup>
 

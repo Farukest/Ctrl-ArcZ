@@ -9,14 +9,30 @@ funds are only ever with the user or the contract.
 
 ## Addresses
 
-| Contract | Address |
-| --- | --- |
-| `CtrlArcZ` | `0x8dAb7148cdc31DAcad6d7e12161AA3DEDb572Dca` |
-| `SpendPolicyFactory` | `0x1fe8f917adC5B37D8162eaCC44706528351f0639` |
-| `SpendPolicyAccount` (impl) | `0xb90C1475939Ce136E370f30074ADc9169Be5ac2f` |
-| `Vault` | `0xc8185AF46b882368b771E8E8a1C8abe1C8e4127f` |
-| USDC | `0x3600000000000000000000000000000000000000` |
-| Permit2 | `0x000000000022D473030F116dDEE9F6B43aC78BA3` |
+| Contract | Address | SDK constant |
+| --- | --- | --- |
+| `CtrlArcZ` | `0x8dAb7148cdc31DAcad6d7e12161AA3DEDb572Dca` | `CTRL_ARCZ_ADDRESS` |
+| `CodeClaimVerifier` | `0x2C0f268DE2Aa8BB2ab27F2Ea5Ae8a0f9a0E068c4` | `CODE_CLAIM_VERIFIER_ADDRESS` |
+| `SpendPolicyFactory` | `0x9B3b30573D7f1d65d1cFeeb52E3a6E69a5792161` | `SPEND_POLICY_FACTORY_ADDRESS` |
+| `SpendPolicyAccount` (impl) | `0x047870050bA2a20665F053797140044C004970c5` | `SPEND_POLICY_ACCOUNT_IMPL_ADDRESS` |
+| `StealthAnnouncer` | `0x9b9F9F8b98Dd7a74889725e79591B3E69BdC991D` | `STEALTH_ANNOUNCER_ADDRESS` |
+| `Vault` (demo) | `0xc8185AF46b882368b771E8E8a1C8abe1C8e4127f` | `SHIELD_VAULT_ADDRESS` |
+| USDC | `0x3600000000000000000000000000000000000000` | `ADDRESSES.USDC` |
+| Permit2 | `0x000000000022D473030F116dDEE9F6B43aC78BA3` | `ADDRESSES.PERMIT2` |
+
+`CtrlArcZ` was deployed at block `51326557` (`CTRL_ARCZ_DEPLOY_BLOCK`) and
+`StealthAnnouncer` at `53756547` (`STEALTH_ANNOUNCER_DEPLOY_BLOCK`); event scans
+start there rather than at 0, because Arc caps an `eth_getLogs` range at 10,000
+blocks.
+
+<Warning>
+`SpendPolicyFactory` was redeployed on 2026-08-24 to add the `msg.sender == vault`
+gate on `sweepExpired`. The superseded factory is still deployed and still answers,
+so a hardcoded address silently keeps working against the old contract. Import
+`SPEND_POLICY_FACTORY_ADDRESS` instead. Boxes created under the retired factory keep
+working: their pay and pull calldata is unchanged, and the co-signer's owner index
+scans `SPEND_POLICY_FACTORY_PRIOR_ADDRESSES` too.
+</Warning>
 
 ## CtrlArcZ: protected transfer
 
@@ -39,11 +55,29 @@ account enforces the policy and gates every spend on the co-signer.
 | Function | Purpose |
 | --- | --- |
 | `createAccount(ownerHash, userSalt, params)` | Clone + init a disposable account; salt bound to `ownerHash = keccak256(abi.encode(owner))`, not the owner address. Anyone (a relayer) may submit it. |
-| `predictAddress(ownerHash, userSalt)` | The deterministic address, so you can fund it first. |
+| `predictAddress(ownerHash, userSalt, params)` | The deterministic address, so you can fund it first. |
 | `pay(amount, cosignerSig)` | PUSH: spend to the locked target, authorized by the co-signer alone. |
 | `pull(amount, cosignerSig)` | PULL: co-signer-gated recurring spend; enforces `perPullMax`, `interval`, the cumulative cap and expiry. |
-| `sweepToVault(vault)` | Return the balance to the vault. Gated by knowledge of the vault (its hash must match `vaultHash`), no signature. |
-| `sweepExpired(vault)` | After expiry, anyone who knows the vault returns the account home. Liveness escape hatch. |
+| `sweepToVault(vault)` | Return the balance to the vault. `msg.sender` must be `vault`, and its hash must match `vaultHash`. |
+| `sweepExpired(vault)` | The same, allowed only after `expiry`. Liveness escape hatch when the co-signer goes dark. |
+
+The CREATE2 salt is `keccak256(abi.encode(ownerHash, userSalt, keccak256(abi.encode(params))))`,
+so the address commits to the entire policy. Change the target, the cap or the
+expiry and it is a different address, which is what lets a funder check that the
+box it is about to pay into is the box it specified.
+
+<Warning>
+**Both sweeps require `msg.sender == vault`.** Passing the vault address is not
+enough; the transaction has to come from it. Earlier builds gated only on the
+commitment, and that was wrong: the vault address is crackable from `vaultHash` on
+a transparent chain, so anyone who cracked it could call `sweepExpired(vault)` and
+write the vault-to-box link on chain that the payer never chose to reveal. It is
+still an escape hatch, because the payer holds the vault key.
+
+The practical consequence: **bind a box to an address you can transact from.** In
+the reference app the vault is the payer's own wallet, or the stealth address for a
+stealth box, not the `Vault` contract, which has no function that calls a box back.
+</Warning>
 
 A spend needs only the co-signer's signature. The funds are hard-locked to the
 pre-set `target` and capped by `maxAmount`, so the co-signer can only push the
@@ -67,8 +101,28 @@ account's `spendDigest(amount, action)` getter.
 
 ## Vault
 
-Holds the owner's USDC, funds accounts, receives sweeps. Owner-only outflows; the
-`_moveOut` seam is where the APS confidential transfer will slot in.
+Holds the owner's USDC, funds accounts, receives sweeps. `deposit(amount)` pulls in
+against an approval, `fundAccount(account, amount)` and `withdraw(to, amount)` are
+owner-only, and `balance()` reads the holding. Every outflow goes through one
+private `_moveOut` seam, which is where the APS confidential transfer slots in.
+
+<Note>
+The `Vault` contract is the vault-funded flow, not a requirement. A box binds its
+return address through `vaultHash`, and since both sweeps now need `msg.sender ==
+vault`, the bound address has to be one that can send a transaction. The reference
+app binds the payer's own wallet for a private payment and the stealth address for a
+subscription. Use the `Vault` contract when you want one shared treasury that funds many
+boxes, and bind sweeps to an address you control.
+</Note>
+
+## StealthAnnouncer
+
+An ERC-5564 announcement registry (`schemeId` 1), standalone from the factory and
+the account. A payer publishes a box's ephemeral public key here so only their own
+viewing key can rediscover it later. Nothing in the announcement identifies the
+payer to anyone else, and the SDK scans it from
+`STEALTH_ANNOUNCER_DEPLOY_BLOCK` forward. See
+[Stealth boxes](/guides/stealth-boxes).
 
 <Note>
 On Arc a USDC ERC-20 transfer moves the recipient's native balance, so the account

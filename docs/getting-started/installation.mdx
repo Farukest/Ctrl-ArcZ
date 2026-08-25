@@ -72,17 +72,30 @@ import {
   RPC_URL,                       // https://rpc.testnet.arc.network
   ADDRESSES,                     // USDC, Memo, Permit2, CCTP, Gateway, ...
   CTRL_ARCZ_ADDRESS,             // protected-transfer contract
+  CODE_CLAIM_VERIFIER_ADDRESS,   // the code-claim verifier behind it
   SPEND_POLICY_FACTORY_ADDRESS,  // payer-shield account factory
-  SHIELD_VAULT_ADDRESS,          // demo vault
+  STEALTH_ANNOUNCER_ADDRESS,     // ERC-5564 announcement registry
+  SHIELD_VAULT_ADDRESS,          // demo vault contract
 } from '@ctrl-arcz/sdk';
 ```
 
 | Contract | Arc Testnet address |
 | --- | --- |
 | CtrlArcZ (protected transfer) | `0x8dAb7148cdc31DAcad6d7e12161AA3DEDb572Dca` |
-| SpendPolicyFactory | `0x1fe8f917adC5B37D8162eaCC44706528351f0639` |
-| Vault | `0xc8185AF46b882368b771E8E8a1C8abe1C8e4127f` |
+| CodeClaimVerifier | `0x2C0f268DE2Aa8BB2ab27F2Ea5Ae8a0f9a0E068c4` |
+| SpendPolicyFactory | `0x9B3b30573D7f1d65d1cFeeb52E3a6E69a5792161` |
+| SpendPolicyAccount (implementation) | `0x047870050bA2a20665F053797140044C004970c5` |
+| StealthAnnouncer (ERC-5564) | `0x9b9F9F8b98Dd7a74889725e79591B3E69BdC991D` |
+| Vault (demo) | `0xc8185AF46b882368b771E8E8a1C8abe1C8e4127f` |
 | USDC (native gas token) | `0x3600000000000000000000000000000000000000` |
+
+<Note>
+Read these from the SDK rather than copying them. `SPEND_POLICY_FACTORY_ADDRESS`
+was redeployed on 2026-08-24 and the superseded factory is still live on chain, so
+a hardcoded address keeps working while pointing at the wrong contract.
+`SPEND_POLICY_FACTORY_PRIOR_ADDRESSES` lists the retired ones, which is how the
+co-signer still recognises a box created under an older factory.
+</Note>
 
 ## About Arc Testnet
 

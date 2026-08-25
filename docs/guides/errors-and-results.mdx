@@ -99,7 +99,7 @@ whole report, so you can render the same explanation the pre-send UI would show.
 import { sendProtected, RiskBlockedError } from '@ctrl-arcz/sdk';
 
 try {
-  await sendProtected(clients, { to, amount, code });
+  await sendProtected(clients, { configId, to, amount, claimHash: secret.claimHash });
 } catch (e) {
   if (e instanceof RiskBlockedError) {
     console.warn('Blocked before any funds moved.');

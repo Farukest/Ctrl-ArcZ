@@ -31,19 +31,31 @@
               "guides/firewall",
               "guides/protected-transfer",
               "guides/private-pay",
+              "guides/subscriptions",
+              "guides/stealth-boxes",
               "guides/co-signer",
               "guides/bridge",
+              "guides/keeper",
               "guides/errors-and-results",
               "guides/local-development"
             ]
           },
           {
             "group": "Concepts",
-            "pages": ["concepts/overview", "concepts/poisoning", "concepts/payer-shield"]
+            "pages": [
+              "concepts/overview",
+              "concepts/poisoning",
+              "concepts/payer-shield",
+              "privacy"
+            ]
           },
           {
             "group": "Reference",
-            "pages": ["reference/sdk-api", "reference/contracts"]
+            "pages": ["reference/sdk-api", "reference/contracts", "reference/api"]
+          },
+          {
+            "group": "Clients",
+            "pages": ["android/README"]
           }
         ]
       }

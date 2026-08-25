@@ -4,9 +4,11 @@ description: "Escrowed, code-claimed USDC transfers that make a wrong send recov
 ---
 
 A protected transfer locks USDC in a contract instead of sending it straight to an
-address. The recipient claims it with a short code; if the address was wrong or
+address. The recipient claims it with a secret; if the address was wrong or
 poisoned, the wrong party cannot claim and you reclaim. It replaces the "send $1
 first and wait" ritual.
+
+![The send form](/screens/02-send-form.png)
 
 ## Send
 
@@ -15,7 +17,7 @@ import { approveUsdc, sendProtected, generateClaimCode } from '@ctrl-arcz/sdk';
 import { parseUnits } from 'viem';
 
 const amount = parseUnits('5', 6);
-const secret = generateClaimCode(); // { code, salt, claimHash }
+const secret = generateClaimCode(); // { secret, code, salt, claimHash }
 
 await approveUsdc(clients, amount);
 const { transferId, txHash, deadline } = await sendProtected(clients, {
@@ -23,21 +25,40 @@ const { transferId, txHash, deadline } = await sendProtected(clients, {
 });
 ```
 
-Give the recipient the `code`. Anyone can submit the claim, but the funds always
-go to the recorded recipient, so a claim is front-run-safe.
+Give the recipient `secret.secret`, the grouped 16-character string. It carries all
+80 bits and the salt is derived from it, so that one string is the whole
+credential. Anyone can submit the claim, but the funds always go to the recorded
+recipient, so a claim is front-run-safe.
+
+![The money locked, waiting for the secret](/screens/06-send-locked.png)
+
+Every open transfer stays visible and cancellable while it waits.
+
+![Active transfers](/screens/07-active-transfers.png)
 
 ## Claim
 
-```ts
-import { claim } from '@ctrl-arcz/sdk';
+The recipient types the string; `fromSecret` turns it back into the pair the
+contract wants.
 
-const claimed = await claim(clients, transferId, code, salt);
+![Entering the secret](/screens/08-claim.png)
+
+```ts
+import { claim, fromSecret } from '@ctrl-arcz/sdk';
+
+const { code, salt } = fromSecret(whatTheUserTyped); // null-safe via normaliseSecret
+const txHash = await claim(clients, transferId, code, salt);
 ```
 
+![Claimed](/screens/09-claim-received.png)
+
 <Warning>
-A wrong code does **not** revert; it returns `false` and counts an attempt. After
-5 wrong attempts the transfer locks (anti-brute-force). The SDK `claim` throws on
-a failed attempt, so check its result rather than treating a mined tx as success.
+A wrong code does **not** revert on chain; the contract returns `false` and counts
+an attempt, because the attempt counter has to survive for the five-guess lockout
+to bind. So a mined transaction is not proof of success. The SDK's `claim` reads
+the receipt and **throws** `WrongClaimCodeError` (carrying `attemptsRemaining`) or
+`TransferLockedError`; on success it returns the transaction hash. Never treat a
+mined tx as a claim.
 </Warning>
 
 ## Cancel and refund

@@ -33,17 +33,15 @@ Pre-flight the firewall on the intended merchant, before anything is created. A
 veto here means nothing is deployed and no funds ever move.
 
 ```ts
-import { predictEphemeral, RemoteCoSigner, SPEND_POLICY_FACTORY_ADDRESS } from '@ctrl-arcz/sdk';
-import { parseUnits } from 'viem';
+import { RemoteCoSigner } from '@ctrl-arcz/sdk';
+import { parseUnits, toHex } from 'viem';
 
 const amount = parseUnits('0.02', 6);
-const salt = randomSalt(); // 32 random bytes
+const salt = toHex(crypto.getRandomValues(new Uint8Array(32))); // the user salt
 const expiry = Math.floor(Date.now() / 1000) + 900; // 15 minutes
 
 // The co-signer's public address (served by your backend, see below).
 const { address: cosignerAddress } = await fetch('/api/cosign').then((r) => r.json());
-
-const account = await predictEphemeral(publicClient, SPEND_POLICY_FACTORY_ADDRESS, owner, salt);
 
 const cosigner = new RemoteCoSigner('/api/cosign', cosignerAddress);
 const pre = await cosigner.precheck({ owner, target: merchant, amount });
@@ -54,30 +52,55 @@ if (!pre.approved) {
   return;
 }
 ```
+
+<Note>
+`precheck` runs before the address is even derived, because the derivation commits
+to the policy: a box's address is a hash of the owner, the salt and every policy
+field. There is nothing to predict until the target is settled, and nothing worth
+predicting for a target The Machine will refuse.
+</Note>
 </Step>
 
 <Step title="Create the disposable address">
 ```ts
-import { createEphemeral, MODE_PUSH, ADDRESSES, SHIELD_VAULT_ADDRESS } from '@ctrl-arcz/sdk';
+import {
+  createEphemeral,
+  predictEphemeral,
+  MODE_PUSH,
+  ADDRESSES,
+  SPEND_POLICY_FACTORY_ADDRESS,
+} from '@ctrl-arcz/sdk';
 
-await createEphemeral(clients, SPEND_POLICY_FACTORY_ADDRESS, salt, {
+const policy = {
   token: ADDRESSES.USDC,
   owner,
   cosigner: cosignerAddress,
-  vault: SHIELD_VAULT_ADDRESS,
+  vault: owner,       // sweeps return here, and only this address may trigger one
   target: merchant,   // the address is locked to this merchant on-chain
   maxAmount: amount,  // cumulative cap, enforced on-chain
   expiry,
   interval: 0,
   mode: MODE_PUSH,
-});
+};
+
+// Optional: the address exists as a prediction before it exists on chain.
+const account = await predictEphemeral(
+  publicClient,
+  SPEND_POLICY_FACTORY_ADDRESS,
+  salt,
+  policy,
+);
+
+await createEphemeral(clients, SPEND_POLICY_FACTORY_ADDRESS, salt, policy);
 ```
 
-The account is a minimal-proxy clone at a deterministic address bound to
-`ownerHash` (the salt), not to your address, so it can be funded before it exists
-and no one can front-run its slot. Anyone may submit `createEphemeral`, so an
-integrator can deploy it through a relayer to keep you off the deployment
-transaction entirely.
+The account is a minimal-proxy clone at a deterministic address. Its CREATE2 salt
+commits to `ownerHash`, your salt and a hash of every policy field, so the address
+is bound to the policy rather than to your address or to `msg.sender`: it can be
+funded before it exists, nobody can front-run its slot, and a different target or
+cap is simply a different address. Anyone may submit `createEphemeral`, so an
+integrator can deploy through a relayer to keep you off the deployment transaction
+entirely.
 </Step>
 
 <Step title="Fund it">
@@ -85,18 +108,19 @@ Move USDC into the disposable address. In production this leg is confidential
 (Arc Privacy Sector); today it is a plain transfer.
 
 ```ts
-import { erc20Abi } from 'viem';
+import { fundEphemeral } from '@ctrl-arcz/sdk';
 
-const fundHash = await walletClient.writeContract({
-  address: ADDRESSES.USDC, abi: erc20Abi, functionName: 'transfer',
-  args: [account, amount], account: walletClient.account, chain: arcTestnet,
-});
-await publicClient.waitForTransactionReceipt({ hash: fundHash });
+await fundEphemeral(clients, account, amount, policy);
 ```
 
 <Note>
+`fundEphemeral` re-reads the deployed policy and compares every field before it
+transfers, then throws rather than paying into a box that does not match. Use it
+instead of a bare ERC-20 `transfer`: a transfer to an address that already exists
+always succeeds, so the direct path skips the check silently.
+
 On Arc a USDC ERC-20 transfer moves native balance, so the account and vault
-implement `receive()`. This is handled by the deployed contracts.
+implement `receive()`. The deployed contracts handle that.
 </Note>
 </Step>
 
@@ -153,21 +177,31 @@ else console.log('Paid:', outcome.result.txHash);
 The disposable address is a one-way valve: funds can only go to the locked
 merchant or back to your vault.
 
-Both sweeps are gated by knowledge of the vault address (its hash must match the
-account's stored `vaultHash`), not by a signature, so the vault stays hidden until
-the sweep and only someone who knows it can call these.
+Both sweeps require `msg.sender == vault` and that the address match the account's
+stored `vaultHash`. No signature is involved, and the vault stays hidden until it
+sweeps. Because the vault has to send the transaction, bind the box to an address
+you can transact from: above, that is the payer's own wallet.
 
-- **Enclave down / abandoned:** after `expiry`, anyone who knows the vault may call
-  `sweepExpired(vault)` to return the balance. No co-signer needed.
+- **Enclave down / abandoned:** after `expiry`, the vault calls `sweepExpired(vault)`
+  and the balance comes home. No co-signer needed.
 - **Refund:** the merchant refunds to the disposable address; a sweep takes it home.
 - **Cancel early:** call `sweepToVault(vault)` any time.
 
 ```ts
 import { sweepExpired, sweepToVault } from '@ctrl-arcz/sdk';
 
-await sweepToVault(clients, account, SHIELD_VAULT_ADDRESS); // any time, needs the vault
-await sweepExpired(clients, account, SHIELD_VAULT_ADDRESS); // after expiry, needs the vault
+// `clients.walletClient` must be signing as `vault` itself; passing the address is
+// not enough. Here the vault is the payer's own wallet.
+await sweepToVault(clients, account, owner); // any time
+await sweepExpired(clients, account, owner); // only after expiry
 ```
+
+<Warning>
+Do not bind a box to a contract that cannot call it back. `SHIELD_VAULT_ADDRESS` is
+the demo `Vault`, which funds accounts but has no function that calls
+`sweepToVault` on one, so a box bound to it can never be swept. Use it as a funding
+source, and bind the return address to a wallet.
+</Warning>
 
 ## Next
 

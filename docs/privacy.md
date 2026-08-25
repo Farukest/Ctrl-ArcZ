@@ -1,4 +1,8 @@
-# What a subscription reveals, and what it does not
+---
+title: What a subscription reveals
+description: "Every public transaction in a stealth box's life, and exactly which of them still name the payer."
+---
+
 
 A stealth subscription box is owned and vaulted by a one-time address. The
 cryptography is only half the story: a box also has to be deployed, funded, told

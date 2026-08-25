@@ -7,6 +7,8 @@ The firewall is the real anti-poisoning defense: a victim sends to a lookalike
 *on purpose*, so locking funds afterwards does not help. Only refusing does. It
 runs before anything is signed.
 
+![A blocked recipient](/screens/04-firewall-block.png)
+
 ## Check a recipient
 
 ```ts
@@ -44,6 +46,12 @@ firewall that degrades to "looks fine" when its data source is down is worse tha
 none.
 </Info>
 
+A `warning` looks different from a block on purpose: it explains and lets the user
+decide, because a brand-new recipient is the most common legitimate payment there
+is.
+
+![A caution verdict](/screens/03-risk-caution.png)
+
 ## Gate a send on it
 
 ```ts
@@ -64,5 +72,13 @@ throws `RiskBlockedError` on a block. Opt out per call only if you already gated
 
 ```ts
 await sendProtected(clients, params, { skipRiskCheck: true }); // you already ran check()
-await sendProtected(clients, params, { onWarning: 'block' });  // also stop warnings
+await sendProtected(clients, params, { config });              // its onWarning decides
 ```
+
+## It runs everywhere money leaves
+
+The same `check` gates every outbound path, not just the send form: a protected
+send, a private payment's target, each subscription pull the co-signer authorizes,
+and the bridge's destination. One rule engine, one verdict, one explanation.
+
+![The firewall across every screen](/screens/15-firewall-everywhere.png)

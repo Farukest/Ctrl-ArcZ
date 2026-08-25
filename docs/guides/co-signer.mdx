@@ -78,8 +78,10 @@ const auth = await machine.authorize(request); // { approved, signature } | { ap
 
 <Warning>
 The co-signer is a trust point. If it is unreachable, funds are never stranded:
-after `expiry`, anyone who knows the vault address can call `sweepExpired(vault)`
-to return the account home to the vault. No co-signer signature and no owner
-signature are needed, only knowledge of the vault (the preimage of the stored
-`vaultHash`). Design your key management around that escape hatch.
+after `expiry`, the vault calls `sweepExpired(vault)` and the account goes home. No
+co-signer signature is involved. The call requires `msg.sender == vault` **and**
+that the address match the stored `vaultHash`, so the escape hatch belongs to
+whoever holds the vault key, and to nobody else who merely cracked the commitment.
+Design your key management around that: bind a box to an address you can still
+transact from when the enclave is down.
 </Warning>
