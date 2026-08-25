@@ -49,7 +49,7 @@ is the bug.
 comes from `packages/sdk/scripts/gen-parity-vectors.ts`, and a test fails if the
 committed file is not what the code currently produces. Change `claimCode.ts` or
 `stealth.ts` and you must regenerate it, because a second implementation asserts
-against that file. See [docs/android](./docs/android/overview.md).
+against that file. See [docs/android](./docs/android/overview.mdx).
 
 **Never commit an `.env`.** `.env`, `.env.*` and `*.pem` / `*.key` are ignored, and
 so are a few files that hold throwaway private keys in the clear. Stage the files you
