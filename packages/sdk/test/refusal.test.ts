@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
+  allocate,
   cctpShortfall,
   gatewayShortfall,
+  maxDeliverable,
   maxDepositable,
-  maxGatewaySpendable,
   percentOf,
   usdc,
+  type SourceBalance,
 } from '../src/index.js';
 
 /**
@@ -38,28 +40,6 @@ describe('usdc', () => {
   });
 });
 
-describe('maxGatewaySpendable', () => {
-  it('takes the fee off the top', () => {
-    expect(maxGatewaySpendable(10n * M, 55_000n)).toBe(9_945_000n);
-  });
-
-  it('is zero rather than negative when the fee exceeds the balance', () => {
-    // A negative max would be formatted into the amount field as "-0.05".
-    expect(maxGatewaySpendable(10_000n, 55_000n)).toBe(0n);
-  });
-
-  it('is zero at exactly the fee', () => {
-    expect(maxGatewaySpendable(55_000n, 55_000n)).toBe(0n);
-  });
-
-  it('leaves nothing behind that the ceiling does not need', () => {
-    // What it returns has to be sendable: spendable + ceiling == balance exactly.
-    const balance = 3_342_506n;
-    const ceiling = 55_447n;
-    expect(maxGatewaySpendable(balance, ceiling) + ceiling).toBe(balance);
-  });
-});
-
 describe('maxDepositable', () => {
   it('keeps back the gas reserve', () => {
     expect(maxDepositable(100n * M, 10_000n)).toBe(99_990_000n);
@@ -76,161 +56,146 @@ describe('maxDepositable', () => {
 });
 
 describe('gatewayShortfall', () => {
-  const labelOf = (c: string) => c.replace(/_/g, ' ');
+  /**
+   * Driven through `allocate` rather than fed hand-written figures.
+   *
+   * The refusal and the allocator have to agree, because the screen shows one and
+   * the button obeys the other; a test that hands the refusal a shortfall the
+   * allocator would never produce proves only that arithmetic works. So each case
+   * below is a balance sheet, and the numbers that reach `gatewayShortfall` are
+   * the ones the app would really pass it.
+   *
+   * Forwarding is fixed at Arc's measured 0.016 so the cases stay readable.
+   */
+  const FWD = 16_000n;
+  const ask = (amount: bigint, balances: SourceBalance[]) => {
+    const a = allocate({ amount, balances, forwarding: FWD });
+    return gatewayShortfall({
+      shortfall: a.shortfall,
+      total: balances.reduce((s, b) => s + b.balance, 0n),
+      amount,
+      deliverable: maxDeliverable({ balances, forwarding: FWD }),
+    });
+  };
 
-  it('passes when the balance covers the commitment exactly', () => {
+  it('says nothing when the split works', () => {
+    // 5 out of 17.2 on one chain, comfortably.
+    expect(ask(5n * M, [{ chain: 'Arc_Testnet', balance: 17_200_000n }])).toBeNull();
+  });
+
+  it('says nothing when the split works only by using two chains', () => {
+    // Arc alone cannot pay 17.2 + 0.0035 + 0.016; with Base it can, and a screen
+    // that refused this would be refusing a transfer that goes through.
     expect(
-      gatewayShortfall({
-        here: 5n * M,
-        byChain: { Arc_Testnet: 5n * M },
-        from: 'Arc_Testnet',
-        fromLabel: 'Arc Testnet',
-        committed: 5n * M,
-        labelOf,
-      }),
+      ask(17_200_000n, [
+        { chain: 'Arc_Testnet', balance: 17_202_570n },
+        { chain: 'Base_Sepolia', balance: 12_890_000n },
+      ]),
     ).toBeNull();
   });
 
-  it('refuses one subunit short', () => {
-    // The case a check against the amount alone would let through: the balance
-    // covers the transfer and not the fee, and Circle refuses after signing.
-    const r = gatewayShortfall({
-      here: 5n * M - 1n,
-      byChain: { Arc_Testnet: 5n * M - 1n },
-      from: 'Arc_Testnet',
-      fromLabel: 'Arc Testnet',
-      committed: 5n * M,
-      labelOf,
-    });
-    expect(r?.code).toBe('gwShort');
-    expect(r?.params.amount).toBe('0.000001');
-    expect(r?.fix).toEqual({ kind: 'deposit', amount: 1n, display: '0.000001' });
-  });
-
-  it('offers the chain that holds the money instead of a deposit', () => {
-    // Depositing would be the wrong advice: the money exists, it is one tap away.
-    const r = gatewayShortfall({
-      here: 0n,
-      byChain: { Arc_Testnet: 0n, Base_Sepolia: 3n * M },
-      from: 'Arc_Testnet',
-      fromLabel: 'Arc Testnet',
-      committed: M,
-      labelOf,
-    });
-    expect(r?.code).toBe('gwNoBalanceHere');
-    expect(r?.fix).toEqual({ kind: 'switchSource', chain: 'Base_Sepolia', label: 'Base Sepolia' });
-  });
-
-  it('offers the richest other chain, not the first one found', () => {
-    const r = gatewayShortfall({
-      here: 0n,
-      byChain: { Arc_Testnet: 0n, Base_Sepolia: M, Sonic_Testnet: 9n * M },
-      from: 'Arc_Testnet',
-      fromLabel: 'Arc Testnet',
-      committed: M,
-      labelOf,
-    });
-    expect((r?.fix as { chain: string }).chain).toBe('Sonic_Testnet');
-  });
-
-  it('does not offer a chain that cannot cover the transfer either', () => {
-    // The case that makes a fix actively harmful: 3.34 here, 1.55 there, and the
-    // transfer needs 5. Switching loses the larger balance and refuses again.
-    const r = gatewayShortfall({
-      here: 3_342_506n,
-      byChain: { Arc_Testnet: 3_342_506n, Base_Sepolia: 1_550_000n },
-      from: 'Arc_Testnet',
-      fromLabel: 'Arc Testnet',
-      committed: 5n * M,
-      labelOf,
-    });
+  it('asks for a deposit when there is not enough anywhere', () => {
+    const r = ask(10n * M, [
+      { chain: 'Arc_Testnet', balance: 2n * M },
+      { chain: 'Base_Sepolia', balance: 3n * M },
+    ]);
     expect(r?.code).toBe('gwShort');
     expect(r?.fix?.kind).toBe('deposit');
   });
 
-  it('says "short here" rather than "none here" when there is some', () => {
-    // Claiming no balance on a chain holding 3.34 is simply false, and the reader
-    // checks it against the figure shown one line above.
-    const r = gatewayShortfall({
-      here: 3n * M,
-      byChain: { Arc_Testnet: 3n * M, Base_Sepolia: 9n * M },
-      from: 'Arc_Testnet',
-      fromLabel: 'Arc Testnet',
-      committed: 5n * M,
-      labelOf,
-    });
-    expect(r?.code).toBe('gwEnoughOn');
-    expect(r?.params.missing).toBe('2');
-    expect(r?.params.amount).toBe('9');
-    expect((r?.fix as { chain: string }).chain).toBe('Base_Sepolia');
-  });
-
-  it('offers the switch at exactly enough on the other chain', () => {
-    const r = gatewayShortfall({
-      here: 0n,
-      byChain: { Arc_Testnet: 0n, Base_Sepolia: 5n * M },
-      from: 'Arc_Testnet',
-      fromLabel: 'Arc Testnet',
-      committed: 5n * M,
-      labelOf,
-    });
-    expect(r?.code).toBe('gwNoBalanceHere');
-    expect(r?.fix?.kind).toBe('switchSource');
-  });
-
-  it('asks for a deposit when the other chain is one subunit short', () => {
-    const r = gatewayShortfall({
-      here: 0n,
-      byChain: { Arc_Testnet: 0n, Base_Sepolia: 5n * M - 1n },
-      from: 'Arc_Testnet',
-      fromLabel: 'Arc Testnet',
-      committed: 5n * M,
-      labelOf,
-    });
-    expect(r?.code).toBe('gwShort');
-    expect(r?.fix?.kind).toBe('deposit');
-  });
-
-  it('does not offer an empty chain', () => {
-    // Switching to another empty chain fixes nothing and costs a round trip.
-    const r = gatewayShortfall({
-      here: 0n,
-      byChain: { Arc_Testnet: 0n, Base_Sepolia: 0n },
-      from: 'Arc_Testnet',
-      fromLabel: 'Arc Testnet',
-      committed: M,
-      labelOf,
-    });
-    expect(r?.code).toBe('gwShort');
-    expect(r?.fix?.kind).toBe('deposit');
-  });
-
-  it('never offers the source chain back to itself', () => {
-    // The source has some money, just not enough. Suggesting a switch to where the
-    // user already is would be a fix that changes nothing.
-    const r = gatewayShortfall({
-      here: 2n * M,
-      byChain: { Arc_Testnet: 2n * M },
-      from: 'Arc_Testnet',
-      fromLabel: 'Arc Testnet',
-      committed: 5n * M,
-      labelOf,
-    });
-    expect(r?.fix).toEqual({ kind: 'deposit', amount: 3n * M, display: '3' });
-  });
-
-  it('asks for exactly what is missing, fee included', () => {
-    const r = gatewayShortfall({
-      here: 3_342_506n,
-      byChain: { Arc_Testnet: 3_342_506n },
-      from: 'Arc_Testnet',
-      fromLabel: 'Arc Testnet',
-      committed: 5n * M + 55_447n,
-      labelOf,
-    });
-    // Depositing this much and no more has to make the transfer possible.
+  it('asks for exactly what would make it possible', () => {
+    // Depositing this much and no more has to clear the refusal. Anything less is
+    // a second refusal after a second wait; anything more is money moved for
+    // nothing.
+    const balances: SourceBalance[] = [{ chain: 'Arc_Testnet', balance: 2n * M }];
+    const r = ask(10n * M, balances);
     const missing = (r?.fix as { amount: bigint }).amount;
-    expect(3_342_506n + missing).toBe(5n * M + 55_447n);
+    const after = allocate({
+      amount: 10n * M,
+      balances: [{ chain: 'Arc_Testnet', balance: 2n * M + missing }],
+      forwarding: FWD,
+    });
+    expect(after.shortfall).toBe(0n);
+  });
+
+  it('does not tell someone with enough money to deposit more', () => {
+    /*
+     * The case the old source-chain rule got wrong in the other direction. 20 USDC
+     * spread over four chains, and a 20 USDC payment cannot go: four base fees and
+     * one forwarding fee come out of the same 20. "Deposit 0.03" is technically a
+     * fix and reads as an insult to someone looking at a 20 USDC balance, so the
+     * offer is to send what fits instead.
+     */
+    const balances: SourceBalance[] = [
+      { chain: 'Arc_Testnet', balance: 5n * M },
+      { chain: 'Base_Sepolia', balance: 5n * M },
+      { chain: 'OP_Sepolia', balance: 5n * M },
+      { chain: 'Unichain_Sepolia', balance: 5n * M },
+    ];
+    const r = ask(20n * M, balances);
+    expect(r?.code).toBe('gwStranded');
+    expect(r?.fix?.kind).toBe('useMax');
+    expect(r?.params.total).toBe('20');
+  });
+
+  it('offers a Max that actually goes through', () => {
+    const balances: SourceBalance[] = [
+      { chain: 'Arc_Testnet', balance: 5n * M },
+      { chain: 'Base_Sepolia', balance: 5n * M },
+      { chain: 'OP_Sepolia', balance: 5n * M },
+      { chain: 'Unichain_Sepolia', balance: 5n * M },
+    ];
+    const offered = (ask(20n * M, balances)?.fix as { amount: bigint }).amount;
+    expect(allocate({ amount: offered, balances, forwarding: FWD }).shortfall).toBe(0n);
+    // And one subunit more must not, or the offer is leaving money unsendable.
+    expect(allocate({ amount: offered + 1n, balances, forwarding: FWD }).shortfall).toBeGreaterThan(
+      0n,
+    );
+  });
+
+  it('asks for a deposit, not a smaller amount, when nothing can be delivered', () => {
+    // Every chain is dust: there is no smaller amount to offer, so "send less" is
+    // not a fix and the honest answer is that the money is not there.
+    const r = ask(M, [
+      { chain: 'Sei_Testnet', balance: 400n },
+      { chain: 'Unichain_Sepolia', balance: 900n },
+    ]);
+    expect(r?.code).toBe('gwShort');
+    expect(r?.fix?.kind).toBe('deposit');
+  });
+
+  it('refuses one subunit short', () => {
+    /*
+     * The boundary a check against the amount alone would let through: the balance
+     * covers the transfer and not the fee, and Circle refuses after signing.
+     *
+     * 5 + the reserve. The reserve is the ceiling that gets signed, so the line
+     * sits well above the 5.0195 that Circle actually charges: twice the gas part,
+     * with the forwarding fee allowed to drift.
+     *
+     * One subunit under it the answer is `gwStranded` rather than `gwShort`, and
+     * that is the right one: someone holding more than they are trying to send is
+     * not short of money, and "deposit 0.000001 USDC" would be a fix nobody could
+     * carry out. The offer is to send what fits.
+     */
+    // The quote plus the gas part again, with the forwarding fee allowed half as
+    // much again to drift between being read and being signed.
+    const gas = 3_500n + (FWD * 3n) / 2n;
+    const reserve = gas + gas;
+    expect(ask(5n * M, [{ chain: 'Arc_Testnet', balance: 5n * M + reserve - 1n }])?.code).toBe(
+      'gwStranded',
+    );
+    expect(ask(5n * M, [{ chain: 'Arc_Testnet', balance: 5n * M + reserve }])).toBeNull();
+  });
+
+  it('calls it short, not stranded, when the balance is under the amount', () => {
+    // One subunit the other side of the line that tells the two sentences apart.
+    expect(ask(5n * M, [{ chain: 'Arc_Testnet', balance: 5n * M - 1n }])?.code).toBe('gwShort');
+    expect(ask(5n * M, [{ chain: 'Arc_Testnet', balance: 5n * M }])?.code).toBe('gwStranded');
+  });
+
+  it('says nothing at zero, so a blank field is not an error', () => {
+    expect(ask(0n, [])).toBeNull();
   });
 });
 

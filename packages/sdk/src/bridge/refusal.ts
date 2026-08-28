@@ -13,15 +13,21 @@
 
 import { spendableAfterGas } from '../transfer/gas.js';
 
-/** The one change that would make this transfer possible. */
+/**
+ * The one change that would make this transfer possible.
+ *
+ * `switchSource` used to be here, back when a Gateway spend drew on one chain
+ * and the fix for money sitting elsewhere was to go and stand on that chain.
+ * A spend now draws on every chain at once, so there is nothing left to switch
+ * to: whatever the allocator could reach, it already reached.
+ */
 export type RefusalFix =
-  | { kind: 'switchSource'; chain: string; label: string }
   | { kind: 'deposit'; amount: bigint; display: string }
   | { kind: 'useMax'; amount: bigint; display: string };
 
 export interface Refusal {
   /** A key into the app's own strings, so this module holds no English. */
-  code: 'gwNoBalanceHere' | 'gwEnoughOn' | 'gwShort' | 'shortWithFee' | 'shortWithGas' | 'noGas';
+  code: 'gwShort' | 'gwStranded' | 'shortWithFee' | 'shortWithGas' | 'noGas';
   /** Filled into the string for `code`. Amounts are already formatted for reading. */
   params: Record<string, string>;
   fix?: RefusalFix;
@@ -37,23 +43,15 @@ export function usdc(subunits: bigint, decimals = 6): string {
   return `${neg ? '-' : ''}${whole}${frac ? `.${frac}` : ''}`;
 }
 
-/**
- * The most a Gateway balance on one chain can actually send.
- *
- * The fee comes off the top because the balance has to cover the amount *and* the
- * fee, so offering the whole balance as Max produces the one figure guaranteed to
- * be refused. What comes off is the signed ceiling rather than the quoted fee: the
- * signature authorises the ceiling, so subtracting the quote leaves a figure still
- * short by the margin, and Max would fill in an amount that trips the very warning
- * it exists to avoid.
- *
- * This is only sound because Circle prices a Gateway spend flat, the same fee for 1
- * USDC as for 200 on the same route. A proportional fee would make it circular.
+/*
+ * `maxGatewaySpendable(here, feeCeiling)` used to live here: one chain's balance
+ * less one fee. It is gone rather than deprecated, because a Gateway spend now
+ * draws on every chain at once and the honest ceiling has to hold back a base
+ * fee per chain and one forwarding fee for the transfer. That is
+ * `maxDeliverable()` in `allocate.ts`, and keeping a second, smaller answer
+ * exported beside it is how a Max button ends up offering a figure the allocator
+ * would refuse.
  */
-export function maxGatewaySpendable(here: bigint, feeCeiling: bigint): bigint {
-  const max = here - feeCeiling;
-  return max > 0n ? max : 0n;
-}
 
 /**
  * The most that can be moved into Gateway from a chain's wallet balance.
@@ -66,69 +64,60 @@ export function maxDepositable(walletBalance: bigint, gasReserve: bigint): bigin
 }
 
 /**
- * Whether a Gateway balance can cover the transfer.
+ * Whether a Gateway balance can cover the transfer, across every chain it sits on.
  *
- * The comparison is against the source chain's deposit, not the total across
- * chains. Circle reads the balance as one figure but spends it per chain: an intent
- * carries a single source domain and draws only on what was deposited there.
- * Checking the sum lets the check pass, the user sign, and Circle refuse
- * afterwards, which is the exact opposite of what this exists to prevent.
+ * This used to compare the amount against the source chain's deposit alone,
+ * because a spend drew on one chain and money elsewhere was money the transfer
+ * could not reach. It can reach it now: `allocate()` splits the payment over as
+ * many chains as it needs and they are signed together as one `BurnIntentSet`.
+ * So the question changed from "is there enough here" to "is there enough
+ * anywhere", and the answer comes from the allocator rather than being worked
+ * out a second time here -- two places deciding whether a transfer is possible
+ * is how a disabled button ends up under an encouraging sentence.
  *
- * When the money is simply on another chain the fix is to switch, not to deposit:
- * "you have 50 USDC" and "you have 50 USDC somewhere this transfer cannot reach"
- * are different problems.
+ * Two ways to be short, and they need different sentences because they need
+ * different actions:
+ *
+ *   - **Short outright.** The balance across every chain does not add up.
+ *     Deposit the difference.
+ *   - **Spread too thin.** The balance adds up, but each chain pays its own base
+ *     fee and one of them pays the forwarding fee, so what can actually be
+ *     delivered is less than what the balance screen shows. Telling this user to
+ *     deposit would be telling them to solve a problem they do not have; the fix
+ *     is to send what fits.
  */
 export function gatewayShortfall(params: {
-  /** The Gateway balance on the source chain. */
-  here: bigint;
-  /** Every chain that holds something, keyed the way the app keys chains. */
-  byChain: Record<string, bigint>;
-  from: string;
-  fromLabel: string;
-  /** amount + fee ceiling: what the balance has to cover. */
-  committed: bigint;
-  labelOf: (chain: string) => string;
+  /** What `allocate()` could not cover, in subunits. Zero means the split works. */
+  shortfall: bigint;
+  /** The Gateway balance across every chain, for telling the two cases apart. */
+  total: bigint;
+  /** What the recipient is meant to receive. */
+  amount: bigint;
+  /** `maxDeliverable()`: everything that can be sent once every fee is held back. */
+  deliverable: bigint;
 }): Refusal | null {
-  const { here, byChain, from, fromLabel, committed, labelOf } = params;
-  if (here >= committed) return null;
+  const { shortfall, total, amount, deliverable } = params;
+  if (shortfall <= 0n) return null;
 
   /*
-   * The switch is only offered when the other chain can actually cover this
-   * transfer. Offering the richest chain that merely holds *something* is how a
-   * user with 3.34 here and 1.55 there is told to move to the 1.55, which does not
-   * fix the refusal and undoes a choice they made. A fix that does not fix it is
-   * worse than no fix, because it is the one thing on screen that looks like a way
-   * out.
+   * "You hold enough and still cannot send it" is a sentence nobody believes
+   * without the reason attached, so it carries both figures: what is there and
+   * what survives the fees. The deposit fix is deliberately absent -- depositing
+   * more into a balance already large enough is the one action that does not
+   * help.
    */
-  let best: string | null = null;
-  let most = 0n;
-  for (const [chain, amount] of Object.entries(byChain)) {
-    if (chain === from || amount < committed) continue;
-    if (amount > most) {
-      most = amount;
-      best = chain;
-    }
-  }
-  if (best) {
+  if (total >= amount && deliverable > 0n) {
     return {
-      // Two sentences, because "you have none here" and "you are short here" are
-      // different facts and only one of them is true at a time.
-      code: here === 0n ? 'gwNoBalanceHere' : 'gwEnoughOn',
-      params: {
-        chain: fromLabel,
-        other: labelOf(best),
-        amount: usdc(most),
-        missing: usdc(committed - here),
-      },
-      fix: { kind: 'switchSource', chain: best, label: labelOf(best) },
+      code: 'gwStranded',
+      params: { total: usdc(total), amount: usdc(deliverable) },
+      fix: { kind: 'useMax', amount: deliverable, display: usdc(deliverable) },
     };
   }
 
-  const missing = committed - here;
   return {
     code: 'gwShort',
-    params: { chain: fromLabel, amount: usdc(missing) },
-    fix: { kind: 'deposit', amount: missing, display: usdc(missing) },
+    params: { amount: usdc(shortfall) },
+    fix: { kind: 'deposit', amount: shortfall, display: usdc(shortfall) },
   };
 }
 

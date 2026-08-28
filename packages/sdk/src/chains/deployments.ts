@@ -1,4 +1,9 @@
-import { CCTP_CHAINS, chainExplorerUrl, type CctpChainName } from '../bridge/cctp.js';
+import {
+  CCTP_CHAINS,
+  chainExplorerUrl,
+  publicReadRpcs,
+  type CctpChainName,
+} from '../bridge/cctp.js';
 import {
   ADDRESSES,
   ARC_TESTNET_CHAIN_ID,
@@ -299,4 +304,30 @@ export function deploymentFor(chainId: number | undefined): ChainDeployment | un
 /** Every chain with a deployment. The screens' chain guards are built from this. */
 export function deployedChainIds(): readonly number[] {
   return Object.values(DEPLOYMENTS).map((d) => d.chainId);
+}
+
+/**
+ * Endpoints that answer public reads for a chain, deployed on or not.
+ *
+ * The one place to ask "can this app reach that chain by itself", which is a
+ * different question from "did we deploy there" and was being answered by it.
+ * `DEPLOYMENTS` only knows the five chains carrying our contracts, so the other
+ * six Gateway chains looked unreachable and their balances were reported as
+ * unreadable -- on chains whose endpoints answer perfectly well, holding real
+ * money.
+ *
+ * A deployment's own list wins where there is one: those endpoints were verified
+ * when the contracts went up and are the ones the event readers already lean on.
+ *
+ * Empty means nothing here can reach it, which callers must render as "cannot be
+ * read" rather than as a zero.
+ */
+export function readRpcUrls(chainId: number | undefined): readonly string[] {
+  if (chainId === undefined) return [];
+  const deployed = DEPLOYMENTS[chainId]?.rpcUrls;
+  if (deployed?.length) return deployed;
+  const chain = (Object.keys(CCTP_CHAINS) as CctpChainName[]).find(
+    (c) => CCTP_CHAINS[c].chainId === chainId,
+  );
+  return chain ? publicReadRpcs(chain) : [];
 }

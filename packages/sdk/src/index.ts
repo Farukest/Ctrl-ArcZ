@@ -16,6 +16,7 @@ export {
   DEPLOYMENTS,
   deploymentFor,
   deployedChainIds,
+  readRpcUrls,
   type ChainDeployment,
 } from './chains/deployments.js';
 export { ctrlArcZAbi, codeClaimVerifierAbi, memoAbi } from './abi/ctrlArcZ.js';
@@ -291,14 +292,26 @@ export {
   DEPOSIT_CONFIRMATION_SECONDS,
   type GatewayChain,
   type GatewayStep,
+  type GatewaySource,
+  type GatewayLegQuote,
   type GatewayQuote,
   type GatewayBalance,
   type GatewaySpendResult,
   type GatewayTransferStatus,
 } from './bridge/gateway.js';
 export {
+  allocate,
+  maxDeliverable,
+  GATEWAY_BASE_FEE,
+  COSTLY_BASE_FEE,
+  MAX_INTENTS,
+  type SourceBalance,
+  type AllocationLeg,
+  type Allocation,
+  type AllocateOptions,
+} from './bridge/allocate.js';
+export {
   usdc,
-  maxGatewaySpendable,
   maxDepositable,
   gatewayShortfall,
   cctpShortfall,

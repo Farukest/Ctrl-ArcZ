@@ -177,6 +177,51 @@ export function cctpChainByChainId(chainId: number | undefined): CctpChainName |
 }
 
 /**
+ * Public read endpoints for chains this project has NOT deployed on.
+ *
+ * Read endpoints belong to a chain, not to our deployment on it. That distinction
+ * was missing: `rpcUrls` lived only inside `DEPLOYMENTS`, so the five chains
+ * carrying our contracts could be read from anywhere and the other six could only
+ * be read while the wallet happened to be standing on them. Gateway serves all
+ * eleven, so the app was calling money unreadable on six chains for a reason that
+ * had nothing to do with those chains.
+ *
+ * Every endpoint below was probed on 2026-08-27 before being written down, on the
+ * same terms as the USDC addresses above: it must report the expected chain id,
+ * have code at that chain's USDC address, and answer a real `balanceOf`. Polygon's
+ * own `rpc-amoy.polygon.technology` did not answer at all and is deliberately
+ * absent; the two that did are here instead.
+ *
+ * More than one where more than one answered, so a single throttled endpoint
+ * cannot blank a balance.
+ */
+const READ_RPCS: Partial<Record<CctpChainName, readonly string[]>> = {
+  OP_Sepolia: ['https://sepolia.optimism.io', 'https://optimism-sepolia-rpc.publicnode.com'],
+  Polygon_Amoy: [
+    'https://polygon-amoy-bor-rpc.publicnode.com',
+    'https://polygon-amoy.drpc.org',
+  ],
+  Unichain_Sepolia: ['https://sepolia.unichain.org', 'https://unichain-sepolia-rpc.publicnode.com'],
+  Sonic_Testnet: ['https://rpc.testnet.soniclabs.com'],
+  World_Chain_Sepolia: [
+    'https://worldchain-sepolia.g.alchemy.com/public',
+    'https://worldchain-sepolia.gateway.tenderly.co',
+  ],
+  Sei_Testnet: ['https://evm-rpc-testnet.sei-apis.com'],
+};
+
+/**
+ * Endpoints that can answer public reads for a chain we have not deployed on.
+ *
+ * Empty for a chain nothing here can reach, which is a real answer: the caller
+ * has to say it cannot read rather than read the wrong chain. Chains we did
+ * deploy on carry their own list in `DEPLOYMENTS` and do not appear here.
+ */
+export function publicReadRpcs(chain: CctpChainName): readonly string[] {
+  return READ_RPCS[chain] ?? [];
+}
+
+/**
  * Block explorers, read out of viem's own chain registry rather than typed from
  * memory. They are inlined instead of imported because reaching them needs
  * `import * as chains from 'viem/chains'`, which defeats tree-shaking and drags the

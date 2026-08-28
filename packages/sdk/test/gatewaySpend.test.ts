@@ -239,14 +239,18 @@ describe('the spend is authorised by the sender signature, not by a server', () 
         { domain: 6, balance: '0' },
       ],
     });
+    // Named as a fact rather than as an instruction. A spend can draw on several
+    // chains at once now, so "go and stand on Arc" is no longer the advice; what
+    // the reader needs to know is that each leg spends only its own chain's
+    // deposit, which is why 50 elsewhere did not save this one.
     await expect(run(a, wallet(), { from: 'Base_Sepolia', to: 'Arc_Testnet' })).rejects.toThrow(
-      /You hold 50 on other chains, but a transfer spends only the balance on its source chain/i,
+      /You hold 50 on other chains; a transfer can draw on several of them at once/i,
     );
   });
 
   it('refuses a non-positive spend', async () => {
     const w = wallet();
-    await expect(run(api(), w, { amount: 0n })).rejects.toThrow(/positive/i);
+    await expect(run(api(), w, { amount: 0n })).rejects.toThrow(/moves nothing/i);
     expect(w.signTypedData).not.toHaveBeenCalled();
   });
 
