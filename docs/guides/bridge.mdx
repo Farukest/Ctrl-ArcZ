@@ -146,6 +146,52 @@ fail loudly either: the USDC just sits at an address that will never credit it.
 `depositToGateway` calls the deposit method. Use it.
 </Warning>
 
+### Drawing on several chains at once
+
+`from` above is the single-chain shorthand. A Gateway balance is one figure spread
+over several chains and a transfer spends it per chain, so a wallet with enough in
+total can still be unable to pay from any one of them. Circle accepts up to 16
+intents in a single request and EVM signs them together as a `BurnIntentSet`, so
+`sources` draws on as many chains as it takes and the user still signs once.
+
+```ts
+import { allocate, maxDeliverable, spendFromGateway, gatewayBalance } from '@ctrl-arcz/sdk';
+
+const { byChain } = await gatewayBalance({ depositor: address });
+const balances = Object.entries(byChain).map(([chain, balance]) => ({ chain, balance }));
+
+// Which chains to draw from, and how much from each. Pure, no network calls.
+const plan = allocate({ amount: parseUnits('12', 6), balances, forwarding: quote.forwardingFee });
+if (plan.shortfall > 0n) return tellTheUser(plan.shortfall);
+
+await spendFromGateway({ walletClient }, {
+  sources: plan.legs,        // [{ chain, value }, ...]
+  to: 'Arc_Testnet',
+  onTransferId: (id) => persist(id),
+});
+```
+
+`allocate` is a pure function over a snapshot, so the same balances always give the
+same split and a client can price a route without asking anyone. Its order is not
+arbitrary: one leg beats two because an extra leg is an extra base fee for nothing,
+the cheaper chain wins among equals because base fees run from 0.001 to 1.00 USDC,
+and the roomiest leg goes first because Circle deducts the forwarding fee from the
+intents in the order they are passed, so a small leg placed first can end up owing
+more than it holds.
+
+It returns two figures and they are not interchangeable. `fee` is what Circle
+charges and what a user should be shown. `ceiling` is what the signature
+authorises, close to twice that, and it is what feasibility has to be judged
+against; `maxDeliverable` reserves at the ceiling for the same reason, so a Max
+button never fills in an amount the next check refuses.
+
+<Note>
+Every one of these figures is USDC. Circle takes its fee out of the amount being
+sent rather than out of the source chain's gas token, which is why a spend needs no
+gas on any chain. The deposit is the only step that costs gas, and only there does
+the chain's own token matter.
+</Note>
+
 ### The deposit wait is the whole cost, and it is uneven
 
 `gatewayBalance` counts only deposits that have reached the confirmations Circle

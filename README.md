@@ -2,7 +2,7 @@
 
 **Screened before it is signed. Recallable until it is claimed. Repeatable without handing over your wallet.**
 
-[![Watch the demo](https://img.shields.io/badge/Watch_the_demo-FF0000?style=flat-square&logo=youtube&logoColor=white)](https://www.youtube.com/watch?v=fcgyqBUbkcg) [![Live app](https://img.shields.io/badge/Live-ctrlarcz.xyz-4b9fff?style=flat-square)](https://ctrlarcz.xyz) [![npm](https://img.shields.io/badge/npm-%40ctrl--arcz%2Fsdk-cb3837?style=flat-square&logo=npm&logoColor=white)](https://www.npmjs.com/package/@ctrl-arcz/sdk) [![Android app](https://img.shields.io/badge/Android_app-Google_Play-3ddc84?style=flat-square&logo=googleplay&logoColor=white)](https://play.google.com/store/apps/details?id=com.xyz.ctrlarcz) [![Watch the Android demo](https://img.shields.io/badge/Watch_the_Android_demo-FF0000?style=flat-square&logo=youtube&logoColor=white)](https://www.youtube.com/watch?v=DnSkbgBZaM8) [![Docs](https://img.shields.io/badge/Docs-docs.ctrlarcz.xyz-8b93a1?style=flat-square)](https://docs.ctrlarcz.xyz) [![Arc Testnet](https://img.shields.io/badge/Arc_Testnet-5042002-2fbf71?style=flat-square)](https://testnet.arcscan.app/address/0x8dAb7148cdc31DAcad6d7e12161AA3DEDb572Dca) [![Tests](https://img.shields.io/badge/tests-747_passing-2fbf71?style=flat-square)](#tech-stack) [![Custody](https://img.shields.io/badge/custody-none-8b93a1?style=flat-square)](#security)
+[![Watch the demo](https://img.shields.io/badge/Watch_the_demo-FF0000?style=flat-square&logo=youtube&logoColor=white)](https://www.youtube.com/watch?v=fcgyqBUbkcg) [![Live app](https://img.shields.io/badge/Live-ctrlarcz.xyz-4b9fff?style=flat-square)](https://ctrlarcz.xyz) [![npm](https://img.shields.io/badge/npm-%40ctrl--arcz%2Fsdk-cb3837?style=flat-square&logo=npm&logoColor=white)](https://www.npmjs.com/package/@ctrl-arcz/sdk) [![Android app](https://img.shields.io/badge/Android_app-Google_Play-3ddc84?style=flat-square&logo=googleplay&logoColor=white)](https://play.google.com/store/apps/details?id=com.xyz.ctrlarcz) [![Watch the Android demo](https://img.shields.io/badge/Watch_the_Android_demo-FF0000?style=flat-square&logo=youtube&logoColor=white)](https://www.youtube.com/watch?v=DnSkbgBZaM8) [![Docs](https://img.shields.io/badge/Docs-docs.ctrlarcz.xyz-8b93a1?style=flat-square)](https://docs.ctrlarcz.xyz) [![Arc Testnet](https://img.shields.io/badge/Arc_Testnet-5042002-2fbf71?style=flat-square)](https://testnet.arcscan.app/address/0x8dAb7148cdc31DAcad6d7e12161AA3DEDb572Dca) [![Tests](https://img.shields.io/badge/tests-850_passing-2fbf71?style=flat-square)](#tech-stack) [![Custody](https://img.shields.io/badge/custody-none-8b93a1?style=flat-square)](#security)
 
 USDC payments on Arc with the three things a plain transfer does not have: a firewall that refuses a bad recipient before anything is signed, a lock the sender can undo until the recipient proves the money was meant for them, and a bounded spend box that lets a merchant or an agent charge you again without ever touching your wallet. One SDK, one contract, no custody.
 
@@ -44,7 +44,7 @@ npm install @ctrl-arcz/sdk viem
 | **Protection** | Pre-send risk firewall, code-gated claim, sender cancel, automatic expiry refund                                                                   |
 | **Custody**    | None. Funds are with the user or in the contract. No owner, no pause, no upgrade path                                                              |
 | **Product**    | An SDK any wallet, exchange or payments app embeds. Not another wallet                                                                             |
-| **Tests**      | 747 in total: 123 Foundry, 388 SDK, 146 demo-kit, 57 api, 33 keeper, plus live testnet runs                                                        |
+| **Tests**      | 850 in total: 124 Foundry, 439 SDK, 186 demo-kit, 57 api, 33 keeper, 11 sender, plus live testnet runs                                             |
 
 ## Two clients: web and Android
 
@@ -328,6 +328,7 @@ A protected transfer needs USDC on Arc. Both of Circle's cross-chain routes are 
 | Repeat transfers  | About a minute, every time                  | Seconds, no deposit                                     |
 | Best for          | A one-off move                              | Sending often                                           |
 | Chains on testnet | 20                                          | 11                                                      |
+| Sources per transfer | One chain                                | Up to 16, under one signature                           |
 | Destination gas   | None needed, Circle forwards the mint       | None needed, Circle forwards the mint                   |
 
 ```mermaid
@@ -343,16 +344,24 @@ flowchart LR
 
 The Gateway deposit is the whole cost of using it, and it is wildly uneven: a deposit on Arc counts in about a second, one from Base takes up to nineteen minutes by Circle's own confirmation counts. The app says which it is before you commit, and offers the cheaper source when your balance is already on one. After that, spending is the same few seconds from any chain, including one your wallet has never had a transaction on.
 
-Gateway supports fewer chains than CCTP, so the pickers narrow themselves when you switch to it rather than offering a route that cannot run.
+Gateway supports fewer chains than CCTP, so the pickers narrow themselves when you switch to it rather than offering a route that cannot run. Every picker in the app works that way: it is told what job it is for and offers only the networks that can do it, so a chain that would lead to a dead end is not on the list at all.
+
+### One transfer, several networks
+
+A Gateway balance is one figure spread over several chains, but a transfer spends it per chain: every burn intent names one source and draws only on what was deposited there. A wallet holding enough in total could still be unable to pay. Circle accepts up to 16 intents in one request and EVM signs them together, so a transfer can draw on several networks at once and the user still signs once.
+
+The division is the app's job, not the user's. Type what you are sending and the networks below say which carries what; add one and the payment re-divides around it, or type into a row to fix that chain and let the rest settle around your number. Which network to add is not a guess either. Each candidate is priced by running the split it would produce, because the useful order is not the cheapest per leg: a cheap chain holding too little forces a third leg and ends up dearer than one that costs more and finishes the job in two.
+
+Every figure here is USDC, fees included. Circle takes its fee out of the amount being sent rather than out of the chain's own gas token, which is why a Gateway spend needs no gas on any chain and the deposit is the only step that does.
 
 <table>
 <tr>
-<td width="50%"><img src="docs/screens/12-bridge-gateway.png" alt="The bridge tab with Gateway selected"></td>
-<td width="50%"><img src="docs/screens/13-gateway-chains.png" alt="The Gateway chain picker"></td>
+<td width="50%"><img src="docs/screens/12-bridge-gateway.png" alt="A Gateway transfer drawing on two networks, with the fee broken down per network"></td>
+<td width="50%"><img src="docs/screens/13-gateway-chains.png" alt="The Gateway network picker, showing the balance and the per-leg fee on each chain"></td>
 </tr>
 <tr>
-<td>Gateway selected. The step list changes with the route.</td>
-<td>Only the chains Gateway actually supports, searchable, with real network logos.</td>
+<td>Four USDC carried by two networks under one signature, with the fee opened into what each one costs.</td>
+<td>Every network Gateway serves, with what is on it and what a leg there costs. A chain that cannot cover its own fee is shown and refused rather than hidden.</td>
 </tr>
 </table>
 
@@ -390,7 +399,7 @@ Deploy block `51326557`. Everything here is Arc Testnet. Mainnet follows the aud
 | `reclaimExpired(id)`                        | Anyone      | Refund an expired transfer. Only ever to the sender              |
 | `isVerifiedRecipient(sender, recipient)`    | Anyone      | Layer 3, read by the firewall                                    |
 
-The contract is **ownerless**: no owner, no pause, no proxy, no upgrade path, no admin function that can touch a locked transfer. A protected-transfer contract that an admin can drain protects nobody. There are 63 Foundry tests on this contract alone and 114 across the contract suite, including fuzz tests for value conservation, the fee split, cancel, and the property that a valid proof only ever pays the recorded recipient. Coverage across every contract is 100 percent of lines, statements, branches and functions; `pnpm --filter @ctrl-arcz/contracts coverage` prints the table.
+The contract is **ownerless**: no owner, no pause, no proxy, no upgrade path, no admin function that can touch a locked transfer. A protected-transfer contract that an admin can drain protects nobody. There are 63 Foundry tests on this contract alone and 124 across the contract suite, including fuzz tests for value conservation, the fee split, cancel, and the property that a valid proof only ever pays the recorded recipient. Coverage across every contract is 100 percent of lines, statements, branches and functions; `pnpm --filter @ctrl-arcz/contracts coverage` prints the table.
 
 ## Security
 

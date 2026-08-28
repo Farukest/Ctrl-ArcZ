@@ -181,7 +181,9 @@ export function GatewaySources({
       if (!r) return null;
       return (
         <>
-          <span>{usdc(r.balance)}</span>
+          <span className="chainrow__have">
+            {t('bridge.src.hasAmount', { amount: usdc(r.balance) })}
+          </span>
           <span className={`chainrow__tone chainrow__tone--${r.tone}`}>
             {r.room <= 0n
               ? t('bridge.src.tooSmall')
@@ -208,8 +210,27 @@ export function GatewaySources({
     const held = balanceOf(chain);
     return (
       <>
-        <span>{loaded ? usdc(held) : ''}</span>
-        <span className={feeOf(chain) >= COSTLY_BASE_FEE ? 'chainrow__fee--costly' : undefined}>
+        {/* What is there, and what a leg on it costs. Both name their unit and
+            they are separated, because side by side and unlabelled they read as
+            one number followed by another number: "3.068709 fee 0.0035" is two
+            answers to two different questions wearing the same clothes.
+
+            The fee is USDC on every chain, not the chain's own gas token: Circle
+            takes it out of the amount being sent, which is why a Gateway spend
+            needs no gas anywhere. Saying "USDC" is therefore a fact and not a
+            guess -- and the one worth stating, since a per-chain fee is exactly
+            where a reader would expect to see ETH. */}
+        <span className="chainrow__have">
+          {loaded ? t('bridge.src.hasAmount', { amount: usdc(held) }) : ''}
+        </span>
+        <span
+          className={[
+            'chainrow__fee',
+            feeOf(chain) >= COSTLY_BASE_FEE && 'chainrow__fee--costly',
+          ]
+            .filter(Boolean)
+            .join(' ')}
+        >
           {t('bridge.src.legFee', { fee: usdc(feeOf(chain)) })}
         </span>
       </>

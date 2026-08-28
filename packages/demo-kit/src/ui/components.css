@@ -1097,10 +1097,32 @@
 .chainrow__meta {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   font-size: var(--fs-sm);
   color: var(--text-mid);
   white-space: nowrap;
+}
+/* Two answers to two questions, so they are told apart before they are read.
+
+   Unseparated and at one weight they ran together as a single string -- "3.068709
+   fee 0.0035" reads as one number trailing another, and neither said what it was
+   counted in. The balance is what the row is about, so it carries the weight and
+   the brighter tier; the fee is a consequence of picking it, so it steps back and
+   is fenced off by a hairline. */
+.chainrow__have {
+  color: var(--text-hi);
+  font-variant-numeric: tabular-nums;
+}
+.chainrow__fee,
+.chainrow__tone {
+  padding-left: 10px;
+  border-left: 1px solid var(--border-subtle);
+  font-size: var(--fs-xs);
+  font-variant-numeric: tabular-nums;
+}
+/* A disabled row is quiet all the way through, including the figures. */
+.menu__item:disabled .chainrow__have {
+  color: var(--text-mid);
 }
 /* A token that exists and cannot be picked. Muted rather than hidden, and the
    reason sits where its balance would have been. */

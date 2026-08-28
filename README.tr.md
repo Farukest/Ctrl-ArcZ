@@ -2,7 +2,7 @@
 
 **İmzalanmadan taranır. Claim edilene kadar geri alınabilir. Cüzdanını vermeden tekrarlanır.**
 
-[![Demoyu izle](https://img.shields.io/badge/Demoyu_izle-FF0000?style=flat-square&logo=youtube&logoColor=white)](https://www.youtube.com/watch?v=fcgyqBUbkcg) [![Canlı uygulama](https://img.shields.io/badge/Canl%C4%B1-ctrlarcz.xyz-4b9fff?style=flat-square)](https://ctrlarcz.xyz) [![npm](https://img.shields.io/badge/npm-%40ctrl--arcz%2Fsdk-cb3837?style=flat-square&logo=npm&logoColor=white)](https://www.npmjs.com/package/@ctrl-arcz/sdk) [![Android uygulaması](https://img.shields.io/badge/Android_uygulamas%C4%B1-Google_Play-3ddc84?style=flat-square&logo=googleplay&logoColor=white)](https://play.google.com/store/apps/details?id=com.xyz.ctrlarcz) [![Android demosunu izle](https://img.shields.io/badge/Android_demosunu_izle-FF0000?style=flat-square&logo=youtube&logoColor=white)](https://www.youtube.com/watch?v=DnSkbgBZaM8) [![Dokümanlar](https://img.shields.io/badge/Dok%C3%BCmanlar-docs.ctrlarcz.xyz-8b93a1?style=flat-square)](https://docs.ctrlarcz.xyz) [![Arc Testnet](https://img.shields.io/badge/Arc_Testnet-5042002-2fbf71?style=flat-square)](https://testnet.arcscan.app/address/0x8dAb7148cdc31DAcad6d7e12161AA3DEDb572Dca) [![Testler](https://img.shields.io/badge/test-654_ge%C3%A7iyor-2fbf71?style=flat-square)](#teknoloji) [![Emanet](https://img.shields.io/badge/emanet-yok-8b93a1?style=flat-square)](#g%C3%BCvenlik)
+[![Demoyu izle](https://img.shields.io/badge/Demoyu_izle-FF0000?style=flat-square&logo=youtube&logoColor=white)](https://www.youtube.com/watch?v=fcgyqBUbkcg) [![Canlı uygulama](https://img.shields.io/badge/Canl%C4%B1-ctrlarcz.xyz-4b9fff?style=flat-square)](https://ctrlarcz.xyz) [![npm](https://img.shields.io/badge/npm-%40ctrl--arcz%2Fsdk-cb3837?style=flat-square&logo=npm&logoColor=white)](https://www.npmjs.com/package/@ctrl-arcz/sdk) [![Android uygulaması](https://img.shields.io/badge/Android_uygulamas%C4%B1-Google_Play-3ddc84?style=flat-square&logo=googleplay&logoColor=white)](https://play.google.com/store/apps/details?id=com.xyz.ctrlarcz) [![Android demosunu izle](https://img.shields.io/badge/Android_demosunu_izle-FF0000?style=flat-square&logo=youtube&logoColor=white)](https://www.youtube.com/watch?v=DnSkbgBZaM8) [![Dokümanlar](https://img.shields.io/badge/Dok%C3%BCmanlar-docs.ctrlarcz.xyz-8b93a1?style=flat-square)](https://docs.ctrlarcz.xyz) [![Arc Testnet](https://img.shields.io/badge/Arc_Testnet-5042002-2fbf71?style=flat-square)](https://testnet.arcscan.app/address/0x8dAb7148cdc31DAcad6d7e12161AA3DEDb572Dca) [![Testler](https://img.shields.io/badge/test-850_ge%C3%A7iyor-2fbf71?style=flat-square)](#teknoloji) [![Emanet](https://img.shields.io/badge/emanet-yok-8b93a1?style=flat-square)](#g%C3%BCvenlik)
 
 Arc üzerinde USDC ödemeleri, düz bir transferde olmayan üç şeyle: hiçbir şey imzalanmadan kötü alıcıyı reddeden bir firewall, alıcı paranın kendisine ait olduğunu kanıtlayana kadar gönderenin geri alabildiği bir kilit ve bir satıcının ya da bir ajanın cüzdanınıza hiç dokunmadan tekrar tekrar çekim yapabildiği sınırlı bir harcama kutusu. Tek SDK, tek kontrat, custody yok.
 
@@ -44,7 +44,7 @@ npm install @ctrl-arcz/sdk viem
 | **Koruma**  | Gönderim öncesi risk firewall'u, kodla claim, gönderen iptali, süre dolunca otomatik iade       |
 | **Custody** | Yok. Para ya kullanıcıda ya kontratta. Owner yok, pause yok, upgrade yolu yok                   |
 | **Ürün**    | Herhangi bir cüzdanın, borsanın veya ödeme uygulamasının gömdüğü bir SDK. Yeni bir cüzdan değil |
-| **Testler** | Toplam 654: 114 Foundry, 365 SDK, 86 demo-kit, 56 api, 33 keeper, artı canlı testnet koşuları |
+| **Testler** | Toplam 850: 124 Foundry, 439 SDK, 186 demo-kit, 57 api, 33 keeper, 11 sender, artı canlı testnet koşuları |
 
 ## Web ve Android: iki istemci
 
@@ -325,6 +325,7 @@ Korumalı transfer için Arc'ta USDC gerekir. Circle'ın iki zincirler arası yo
 | Tekrarlı transferler | Her seferinde yaklaşık bir dakika | Saniyeler, yatırma yok                              |
 | En uygun             | Tek seferlik taşıma               | Sık gönderim                                        |
 | Testnet zinciri      | 20                                | 11                                                  |
+| Transfer başına kaynak | Tek zincir                      | 16'ya kadar, tek imzayla                            |
 | Hedefte gas          | Gerekmez, mint'i Circle iletir    | Gerekmez, mint'i Circle iletir                      |
 
 ```mermaid
@@ -340,16 +341,24 @@ flowchart LR
 
 Gateway'in tüm maliyeti yatırmada ve bu maliyet zincirden zincire uçurum kadar farklı: Arc'ta yatırma yaklaşık bir saniyede sayılıyor, Base'ten yapılan yatırma Circle'ın kendi onay sayılarına göre on dokuz dakikaya kadar çıkabiliyor. Uygulama, siz taahhüt etmeden önce hangisi olduğunu söylüyor ve bakiyeniz zaten uygun bir zincirdeyse ucuz olanı öneriyor. Ondan sonrası her zincirden aynı: birkaç saniye, cüzdanınızın hiç işlem yapmadığı bir zincirden bile.
 
-Gateway, CCTP'den daha az zincir destekler; bu yüzden ona geçtiğinizde seçiciler kendini daraltır ve çalışamayacak bir rota önermez.
+Gateway, CCTP'den daha az zincir destekler; bu yüzden ona geçtiğinizde seçiciler kendini daraltır ve çalışamayacak bir rota önermez. Uygulamadaki her seçici böyle çalışır: hangi iş için olduğunu bilir ve yalnızca o işi yapabilen ağları sunar, dolayısıyla çıkmaza götürecek bir zincir listede hiç görünmez.
+
+### Tek transfer, birden çok ağ
+
+Gateway bakiyesi birkaç zincire yayılmış tek bir rakamdır, ama transfer onu zincir zincir harcar: her burn niyeti tek bir kaynak adı taşır ve yalnızca oraya yatırılanı çeker. Toplamda yeterli parası olan bir cüzdan yine de ödeyemeyebilir. Circle tek istekte 16 niyete kadar kabul ediyor ve EVM bunları birlikte imzalayabiliyor; böylece bir transfer aynı anda birkaç ağdan çekebiliyor ve kullanıcı yine tek imza atıyor.
+
+Bölme işi kullanıcının değil, uygulamanın. Göndereceğiniz tutarı yazın, altındaki ağlar hangisinin ne taşıdığını söyler; bir ağ eklerseniz ödeme onun etrafında yeniden bölünür, ya da bir satıra rakam yazıp o zinciri sabitler, gerisini kendi girdiğiniz sayının etrafında bırakırsınız. Hangi ağın ekleneceği de tahmin değil. Her aday, eklenmesi hâlinde ortaya çıkacak bölünme çalıştırılarak fiyatlanır; çünkü işe yarayan sıralama bacak başına en ucuz olan değildir: ucuz ama az bakiyeli bir zincir üçüncü bir bacağı zorunlu kılar ve işi iki bacakta bitiren daha pahalı bir zincirden pahalıya gelir.
+
+Buradaki bütün rakamlar USDC, ücretler dahil. Circle ücreti zincirin kendi gas token'ından değil, gönderilen tutarın içinden alır; Gateway harcamasının hiçbir zincirde gas'a ihtiyaç duymamasının ve gas gerektiren tek adımın yatırma olmasının sebebi budur.
 
 <table>
 <tr>
-<td width="50%"><img src="docs/screens/12-bridge-gateway.png" alt="Gateway seçili köprü sekmesi"></td>
-<td width="50%"><img src="docs/screens/13-gateway-chains.png" alt="Gateway zincir seçici"></td>
+<td width="50%"><img src="docs/screens/12-bridge-gateway.png" alt="İki ağdan çeken bir Gateway transferi, ücret ağ ağ açılmış"></td>
+<td width="50%"><img src="docs/screens/13-gateway-chains.png" alt="Gateway ağ seçici, her zincirde bakiye ve bacak ücreti"></td>
 </tr>
 <tr>
-<td>Gateway seçili. Adım listesi rotaya göre değişir.</td>
-<td>Yalnız Gateway'in gerçekten desteklediği zincirler; aranabilir, gerçek ağ logolarıyla.</td>
+<td>Tek imzayla iki ağın taşıdığı dört USDC; ücret, hangi ağın ne kadarını götürdüğüne açılmış hâlde.</td>
+<td>Gateway'in hizmet verdiği bütün ağlar; üzerinde ne olduğu ve orada bir bacağın ne tuttuğuyla. Kendi ücretini karşılayamayan zincir gizlenmez, gösterilir ve seçtirilmez.</td>
 </tr>
 </table>
 
@@ -387,7 +396,7 @@ Deploy bloğu `51326557`. Buradaki her şey Arc Testnet. Mainnet, denetimden son
 | `reclaimExpired(id)`                        | Herkes          | Süresi dolan transferi iade eder. Yalnızca gönderene  |
 | `isVerifiedRecipient(gönderen, alıcı)`      | Herkes          | Katman 3, firewall tarafından okunur                  |
 
-Kontrat **sahipsizdir**: owner yok, pause yok, proxy yok, upgrade yolu yok, kilitli bir transfere dokunabilecek admin fonksiyonu yok. Admin'in drenajlayabildiği bir korumalı transfer kontratı kimseyi korumaz. Bu kontrat için 63, tüm kontrat paketinde 114 Foundry testi var; içinde değer korunumu, fee bölüşümü, iptal ve geçerli bir kanıtın yalnızca kayıtlı alıcıya ödeme yaptığı özelliği için fuzz testleri de bulunuyor. Bütün kontratlarda kapsam satır, ifade, dal ve fonksiyon olarak yüzde 100; tabloyu `pnpm --filter @ctrl-arcz/contracts coverage` basıyor.
+Kontrat **sahipsizdir**: owner yok, pause yok, proxy yok, upgrade yolu yok, kilitli bir transfere dokunabilecek admin fonksiyonu yok. Admin'in drenajlayabildiği bir korumalı transfer kontratı kimseyi korumaz. Bu kontrat için 63, tüm kontrat paketinde 124 Foundry testi var; içinde değer korunumu, fee bölüşümü, iptal ve geçerli bir kanıtın yalnızca kayıtlı alıcıya ödeme yaptığı özelliği için fuzz testleri de bulunuyor. Bütün kontratlarda kapsam satır, ifade, dal ve fonksiyon olarak yüzde 100; tabloyu `pnpm --filter @ctrl-arcz/contracts coverage` basıyor.
 
 ## Güvenlik
 

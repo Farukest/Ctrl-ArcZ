@@ -337,8 +337,9 @@ export const en = {
   'bridge.src.spendable': 'Spendable',
   'bridge.src.count': '{n} networks',
   'bridge.src.heldOn': '{amount} USDC in Gateway',
-  'bridge.src.ready': '{amount} available',
-  'bridge.src.legFee': 'fee {fee}',
+  'bridge.src.ready': '{amount} USDC available',
+  'bridge.src.legFee': 'fee {fee} USDC',
+  'bridge.src.hasAmount': '{amount} USDC',
   'bridge.src.auto': 'split for you',
   'bridge.src.pinned': 'set by you',
   'bridge.src.legAria': 'Amount from {chain}',
@@ -348,7 +349,7 @@ export const en = {
   'bridge.src.add': 'Add a network',
   // Beside each network in the add list. The fee is the whole transfer's, not this
   // network's share: what somebody is choosing between is two complete plans.
-  'bridge.src.totalFee': '{fee} total fee',
+  'bridge.src.totalFee': '{fee} USDC total fee',
   'bridge.src.stillShort': '{amount} short',
   'bridge.src.tooSmall': 'too small to use',
   'bridge.src.cover': 'Take the other {amount} from {chain}',
