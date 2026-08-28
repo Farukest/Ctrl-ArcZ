@@ -49,6 +49,11 @@ type Entry<A, V> = {
   state: Resolved<V>;
   /** Generation of the last successful read; below the store's means stale. */
   readAt: number;
+  /**
+   * The conditions the held value was read under (see `contextOf`). Different
+   * from the current conditions means stale, however recent the read was.
+   */
+  readContext: string;
   reading: boolean;
   missed: boolean;
   listeners: Set<() => void>;
@@ -62,8 +67,31 @@ export interface BalanceStore<A, V> {
 export function createBalanceStore<A, V>(opts: {
   keyOf: (args: A) => string;
   read: (args: A) => Promise<V>;
+  /**
+   * What, besides the key, the value depended on when it was read.
+   *
+   * Some balances can only be read from certain vantage points: the wallet's USDC
+   * on Base can only be asked for while the wallet is on Base, and from anywhere
+   * else the honest answer is "cannot be read from here". That answer is a
+   * successful read of a real condition, so it gets cached like any other -- and
+   * then the condition changes, the key does not, and the cache serves an answer
+   * that stopped being true.
+   *
+   * Which is exactly what happened: switch the wallet to Base Sepolia and the
+   * deposit box went on saying it could not read a balance it could now read
+   * perfectly well, under a note promising a retry that was never going to come,
+   * because `generation` only advances when money moves and changing networks is
+   * not money moving.
+   *
+   * So the key stays the identity of the value -- the Base balance is the Base
+   * balance wherever you stand, and keeping it keyed that way is what lets the
+   * last-known figure survive a switch instead of blanking -- and this carries the
+   * conditions. When they change, the entry is stale.
+   */
+  contextOf?: (args: A) => string;
 }): BalanceStore<A, V> {
   const entries = new Map<string, Entry<A, V>>();
+  const contextOf = opts.contextOf ?? (() => '');
   // A counter, not a clock: staleness is "money moved since this was read", an
   // event, not a duration.
   let generation = 0;
@@ -73,9 +101,10 @@ export function createBalanceStore<A, V>(opts: {
   };
 
   const read = async (e: Entry<A, V>): Promise<void> => {
-    // Stamped before the read: a bump that lands mid-read leaves this stale, which
-    // is correct -- the figure was taken before the money moved.
+    // Both stamped before the read: a bump or a network switch that lands mid-read
+    // leaves this stale, which is correct -- the figure was taken before it moved.
     const at = generation;
+    const ctx = contextOf(e.args);
     let value: V | undefined;
     let ok = false;
     try {
@@ -87,12 +116,15 @@ export function createBalanceStore<A, V>(opts: {
     e.state = { value: ok ? value : e.state.value, resolved: true };
     // Only a read that came back counts as done, so a failure stays stale and the
     // next subscribe or bump asks again instead of the dash sitting forever.
-    if (ok && at > e.readAt) e.readAt = at;
+    if (ok) {
+      if (at > e.readAt) e.readAt = at;
+      e.readContext = ctx;
+    }
     emit(e);
   };
 
   const ensureFresh = (e: Entry<A, V>): void => {
-    if (e.readAt >= generation) return;
+    if (e.readAt >= generation && e.readContext === contextOf(e.args)) return;
     if (e.reading) {
       e.missed = true;
       return;
@@ -114,7 +146,15 @@ export function createBalanceStore<A, V>(opts: {
     const key = opts.keyOf(args);
     let e = entries.get(key);
     if (!e) {
-      e = { args, state: UNKNOWN, readAt: -1, reading: false, missed: false, listeners: new Set() };
+      e = {
+        args,
+        state: UNKNOWN,
+        readAt: -1,
+        readContext: '',
+        reading: false,
+        missed: false,
+        listeners: new Set(),
+      };
       entries.set(key, e);
     } else {
       // Same key can arrive with equal-but-new args (address cased differently);

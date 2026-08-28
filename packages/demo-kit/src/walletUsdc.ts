@@ -1,20 +1,35 @@
 import { erc20Abi, type Address } from 'viem';
-import { ARC_TESTNET_CHAIN_ID, CCTP_CHAINS, cctpChainByChainId, type CctpChainName } from '@ctrl-arcz/sdk';
+import {
+  ARC_TESTNET_CHAIN_ID,
+  CCTP_CHAINS,
+  cctpChainByChainId,
+  readRpcUrls,
+  type CctpChainName,
+} from '@ctrl-arcz/sdk';
 import { bridgeClients, getPublicClient } from './session.js';
 
 /**
  * USDC a wallet holds on a chain, when it can be read from here at all.
  *
- * Arc has its own RPC list in this app, so it can be read from anywhere. Every
- * other chain is reachable only through the wallet's own provider, which answers
- * for the network the wallet is currently on: asking it about Base Sepolia while
- * the wallet sits on Arc runs the call against Arc, where that address is not a
- * token, and comes back with something that is not a balance.
+ * What decides that is whether this app can reach the chain on its own, not where
+ * the wallet happens to be standing. A balance is a fact about an address on a
+ * chain; it does not become unknowable because the wallet is pointed elsewhere.
  *
- * That last part is the bug this file exists to have exactly one copy of. Two
- * screens had grown their own version, and one of them read the connected chain's
- * USDC address against Arc's RPC whenever the wallet was off Arc -- a number
- * rendered under the right chain's name that belonged to no chain at all.
+ * This used to refuse every non-Arc chain unless the wallet was already on it,
+ * and the reasoning it carried had gone stale: reads for other chains did once go
+ * through the wallet's provider, which answers only for its current network, so
+ * asking it about Base Sepolia from Arc ran the call against Arc and returned
+ * something that was not a balance. `bridgeClients` has since routed reads to
+ * each chain's own published endpoints, and the refusal outlived the reason for
+ * it. The cost was not theoretical: the deposit box showed no wallet balance for
+ * Ethereum Sepolia or Arbitrum Sepolia, both of which have endpoints this app
+ * dials perfectly well.
+ *
+ * Every one of the eleven Gateway chains has endpoints this app can dial, so in
+ * practice the refusal below is now reserved for chains outside that set. It is
+ * kept rather than dropped because the list is data: a chain can be added to the
+ * app before anyone has found a public endpoint for it, and then the wallet's own
+ * provider really is the only way in.
  *
  * Null means "cannot be read from where we are standing", and every caller renders
  * that as a held placeholder. Zero would be a claim about someone's money.
@@ -26,7 +41,9 @@ export async function readUsdcOn(
 ): Promise<bigint | null> {
   const entry = CCTP_CHAINS[chain];
   const isArc = entry.chainId === ARC_TESTNET_CHAIN_ID;
-  if (!isArc && connectedChainId !== entry.chainId) return null;
+  // Endpoints of its own mean the read does not need the wallet to be there.
+  const reachable = readRpcUrls(entry.chainId).length > 0;
+  if (!reachable && connectedChainId !== entry.chainId) return null;
   try {
     const client = isArc ? getPublicClient() : bridgeClients(entry.chainId, address).publicClient;
     return (await client.readContract({

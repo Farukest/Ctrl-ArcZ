@@ -16,6 +16,7 @@ import {
   arcTestnet,
   ARC_TESTNET_CHAIN_ID,
   deploymentFor,
+  readRpcUrls,
   RPC_URL,
   RPC_URLS,
   SIGNING_RPC_URLS,
@@ -150,8 +151,11 @@ const readTransports = new Map<number, Transport>();
 function chainReadTransport(chainId: number): Transport | undefined {
   const cached = readTransports.get(chainId);
   if (cached) return cached;
-  const urls = deploymentFor(chainId)?.rpcUrls;
-  if (!urls?.length) return undefined;
+  // Every chain we can reach on our own, not only the ones we deployed on. Those
+  // are different questions, and answering the first with the second left six of
+  // Gateway's eleven chains readable only through the wallet's own provider.
+  const urls = readRpcUrls(chainId);
+  if (!urls.length) return undefined;
   /*
    * One transport per chain, not one per read. `bridgeClients` runs on every read,
    * so the transport it built was new every time and kept no connection.

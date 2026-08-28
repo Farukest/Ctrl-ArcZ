@@ -33,13 +33,13 @@ import {
   quoteGatewaySpend,
   maxDepositable,
   depositToGateway,
-  GATEWAY_CHAIN_NAMES,
   DEPOSIT_CONFIRMATION_SECONDS,
   CCTP_CHAINS,
   type GatewayChain,
 } from '@ctrl-arcz/sdk';
 import {
   bridgeClients,
+  chainsFor,
   getPublicClient,
   supportsChain,
   switchWalletTo,
@@ -52,7 +52,6 @@ import {
   AmountField,
   Button,
   Card,
-  ChainLogo,
   MerchantLogo,
   MERCHANTS,
   CostBlock,
@@ -256,7 +255,7 @@ export function SubscriptionsTab({
    * works from whichever network the user is on.
    */
   const gw = useWalletChain<GatewayChain>({
-    options: GATEWAY_CHAIN_NAMES,
+    options: chainsFor('gatewayDeposit') as readonly GatewayChain[],
     chainIdOf: (name) => CCTP_CHAINS[name].chainId,
     walletChainId: session.chainId,
     fallback: 'Arc_Testnet',
@@ -465,12 +464,6 @@ export function SubscriptionsTab({
   const gwNeeded = gwCeiling == null ? null : capAmt + gwCeiling;
   const gwShort = gwOnSource != null && gwNeeded != null && capAmt > 0n && gwOnSource < gwNeeded;
   const gwMissing = gwShort && gwOnSource != null && gwNeeded != null ? gwNeeded - gwOnSource : 0n;
-  const gwChainOptions = GATEWAY_CHAIN_NAMES.map((id) => ({
-    value: id,
-    label: chainLabel(id),
-    text: chainLabel(id),
-    icon: <ChainLogo id={id} size={20} />,
-  }));
   const gwWaitSecs = DEPOSIT_CONFIRMATION_SECONDS[gwSource];
   const gwWaitLabel = gwWaitSecs < 60 ? `${gwWaitSecs}s` : `${Math.round(gwWaitSecs / 60)}m`;
 
@@ -497,6 +490,11 @@ export function SubscriptionsTab({
     setDepositing(true);
     const on = gwSource;
     const amountText = depositAmount;
+    /* What this chain holds before any of this happens, so the wait afterwards has
+       an absolute figure to watch for. Undefined rather than zero when the balance
+       has not been read: zero is a target this deposit could reach without having
+       been counted. See `pendingDeposits.ts`. */
+    const before = gatewayBal.value ? (gatewayBal.value[on] ?? 0n) : undefined;
     /*
      * The record opens before the wallet prompt does.
      *
@@ -542,7 +540,7 @@ export function SubscriptionsTab({
        */
       run.begin('counted');
       run.waiting();
-      rememberDeposit(on, amount);
+      rememberDeposit(on, amount, before);
       setGwPending(pendingOn(on));
       setDepositAmount('');
       toast.push(t('bridge.deposited', { amount: fmtUsdc(amount), wait: gwWaitLabel }), 'success');
@@ -935,7 +933,7 @@ export function SubscriptionsTab({
         <Card title={t('sub.fundTitle')} className="card--fund" data-testid="sub-fund">
           <GatewayFundBox
             chain={gwSource}
-            chainOptions={gwChainOptions}
+            balances={gatewayBal.value ?? undefined}
             onChainChange={(v) => gw.select(v as GatewayChain)}
             balance={gwOnSource}
             balanceMissing={gwBalanceFailed ? 'unavailable' : 'loading'}

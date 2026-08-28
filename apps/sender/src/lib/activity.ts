@@ -16,7 +16,7 @@
  * Everything lands in the same store as the bridge history because it is the same
  * question; `kind` is what tells a deposit from a transfer from a subscription.
  */
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { classifyFailure, type BridgeEngine } from '@ctrl-arcz/demo-kit';
 import type { Address } from 'viem';
 import {
@@ -27,7 +27,13 @@ import {
   type GatewayChain,
 } from '@ctrl-arcz/sdk';
 import { loadPendingDeposits, pendingOn, reconcile } from './pendingDeposits.js';
-import { loadBridges, saveBridge, type StoredBridge, type StoredBridgeStep } from '../store.js';
+import {
+  dropBridge,
+  loadBridges,
+  saveBridge,
+  type StoredBridge,
+  type StoredBridgeStep,
+} from '../store.js';
 
 /**
  * How long a run may go without a write before a record left behind by a closed
@@ -146,6 +152,19 @@ export interface RunHandle {
   fail(step: string, cause?: unknown): void;
   /** Anything the run learns about itself after it starts, such as a recipient. */
   amend(patch: Partial<StoredBridge>): void;
+  /**
+   * Take the identity the run turned out to have.
+   *
+   * A Gateway spend is written down before the wallet prompt, under an id invented
+   * here, because that is the moment the row is most needed and Circle has not been
+   * asked yet. When Circle answers it returns a transferId, and that is the name the
+   * mint is looked up by for as long as the transfer exists. So the row moves to it,
+   * carrying its steps, and the invented name is dropped.
+   *
+   * `id` on this handle follows, so a caller holding the handle keeps pointing at
+   * the row rather than at where it used to be.
+   */
+  rekey(nextId: string): void;
 }
 
 export interface StartRun {
@@ -177,7 +196,7 @@ function newId(): string {
  * transferId, passes it in so recovery can still find it later.
  */
 export function startRun(input: StartRun): RunHandle {
-  const id = input.id ?? newId();
+  let id = input.id ?? newId();
   const base: StoredBridge = {
     id,
     engine: input.engine,
@@ -209,7 +228,11 @@ export function startRun(input: StartRun): RunHandle {
   };
 
   return {
-    id,
+    // A getter, not a snapshot: `rekey` moves the row and every caller reading
+    // `record.id` afterwards has to arrive at the row, not at its former address.
+    get id() {
+      return id;
+    },
     begin: (step) => write({ name: step, state: 'active' }),
     done: (step, txHash) => write({ name: step, ...link(txHash) }),
     skip: (step) => write({ name: step, state: 'noop' }),
@@ -227,6 +250,13 @@ export function startRun(input: StartRun): RunHandle {
       });
     },
     amend: (patch) => put({ ...current(), ...patch }),
+    rekey: (nextId) => {
+      if (!nextId || nextId === id) return;
+      const b = current();
+      dropBridge(id);
+      id = nextId;
+      put({ ...b, id: nextId });
+    },
   };
 }
 
@@ -274,11 +304,9 @@ export function settleCountedDeposits(chain: CctpChainName): boolean {
 const SETTLE_POLL_MS = 12_000;
 
 export function useSettleDeposits(address: Address | undefined): void {
-  const lastSeen = useRef(new Map<string, bigint>());
   useEffect(() => {
     if (!address) return;
     let live = true;
-    lastSeen.current.clear();
     const tick = async () => {
       const waiting = loadPendingDeposits();
       if (waiting.length === 0) return;
@@ -291,12 +319,16 @@ export function useSettleDeposits(address: Address | undefined): void {
       }
       if (!live) return;
       for (const chain of new Set(waiting.map((w) => w.chain))) {
-        const now = byChain[chain] ?? 0n;
-        const before = lastSeen.current.get(chain);
-        lastSeen.current.set(chain, now);
-        // Circle reports a total, so a credit is only visible as a rise, and a
-        // rise needs something to be measured against.
-        if (before != null) reconcile(chain, now, before);
+        /*
+         * Judged on this reading alone, against the figure each deposit is
+         * waiting for. It used to be judged on the difference from the previous
+         * reading, which meant the very first poll could only establish a
+         * baseline -- and on Arc, where Circle credits in about a second against
+         * a twelve second poll, the credit was already inside that baseline. No
+         * later poll saw a rise, so the row waited for good on money it already
+         * had. A reload re-took the baseline and reproduced it exactly.
+         */
+        reconcile(chain, byChain[chain] ?? 0n);
         if (pendingOn(chain) === 0n) settleCountedDeposits(chain);
       }
     };

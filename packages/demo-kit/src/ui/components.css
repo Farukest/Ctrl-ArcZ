@@ -349,12 +349,15 @@
   margin-top: var(--sp-4);
 }
 /* The card that moves money into the balance, as opposed to the ones that spend it.
-   A tinted edge and a bar down the leading side rather than a louder heading: the
-   point is that it is a different act, not a more important one. Logical properties
-   so the bar is on the reading side in either direction. */
+   A bar down the leading side rather than a louder heading: the point is that it is
+   a different act, not a more important one. Logical property so the bar is on the
+   reading side in either direction.
+
+   The tint that used to fill it as well made a liar of that sentence. An amber
+   panel with an amber border and an amber bar was the loudest object on the Bridge
+   screen, louder than the button that sends the transfer, for a step most visits
+   skip entirely. The bar alone says "different", which is all it was ever for. */
 .card--fund {
-  border-color: var(--accent-ring);
-  background: linear-gradient(var(--accent-soft), var(--accent-soft)), var(--surface-1);
   border-inline-start: 3px solid var(--accent);
 }
 /* A flex row so the info dot centres on the title's optical middle. It used to be
@@ -549,18 +552,35 @@
   display: flex;
   align-items: center;
 }
+/* One field treatment, defined once and worn by every control a person types
+   into: text inputs, the search field, the select trigger, date fields.
+
+   Two things were wrong and they were the same thing. The fill was --surface-2,
+   the fill of the card the field sat in, so an empty field was a rectangle with a
+   hairline round it that you had to click to find out was a field. And focus
+   answered that by overcorrecting: an accent border plus a 3px soft ring outside
+   it, four pixels of amber chrome appearing at once, which reads as an alert
+   rather than as a cursor landing.
+
+   A field is now a well: a fill BELOW the card, and a shadow cast inward from its
+   top edge, which is what every physical inset looks like. That reads as somewhere
+   to put something before anything is typed. Focus then sharpens the edge that is
+   already there -- accent border, one inset pixel doubling it -- and the box does
+   not change size. */
 .input {
   width: 100%;
   min-height: 46px;
   padding: 0 var(--sp-4);
-  background: var(--surface-2);
-  border: 1px solid var(--border-strong);
+  background: var(--field-bg);
+  border: 1px solid var(--field-border);
   border-radius: var(--r-md);
+  box-shadow: var(--field-inset);
   color: var(--text-hi);
   font-family: inherit;
   font-size: var(--fs-body);
   transition:
     border-color var(--dur-2) var(--ease),
+    background-color var(--dur-2) var(--ease),
     box-shadow var(--dur-2) var(--ease);
 }
 .input--sm {
@@ -615,13 +635,19 @@
   gap: var(--sp-2);
   min-height: 40px;
   padding: 0 var(--sp-3);
-  background: var(--surface-2);
-  border: 1px solid var(--border-strong);
+  background: var(--field-bg);
+  border: 1px solid var(--field-border);
   border-radius: var(--r-md);
-  transition: border-color var(--dur-2) var(--ease);
+  box-shadow: var(--field-inset);
+  transition:
+    border-color var(--dur-2) var(--ease),
+    box-shadow var(--dur-2) var(--ease);
 }
+/* The same sharpening as `.input`, on the wrapper, because here the wrapper is
+   the field and the input inside it has no border of its own. */
 .searchfield:focus-within {
-  border-color: var(--accent-ring);
+  border-color: var(--accent);
+  box-shadow: var(--field-inset), inset 0 0 0 1px var(--accent);
 }
 .searchfield__icon {
   color: var(--text-lo);
@@ -663,14 +689,18 @@
   color: var(--text-lo);
 }
 @media (hover: hover) {
-  .input:hover {
-    border-color: var(--text-lo);
+  .input:hover:not(:focus) {
+    border-color: var(--field-border-hover);
+    background: var(--field-bg-hover);
   }
 }
+/* The edge sharpens; nothing grows. `inset` keeps the second pixel inside the
+   border box, so a focused field occupies exactly the space it did a moment ago
+   and a column of them does not shuffle. */
 .input:focus {
   outline: none;
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-ring);
+  box-shadow: var(--field-inset), inset 0 0 0 1px var(--accent);
 }
 .input--mono {
   font-family: var(--font-mono);
@@ -681,7 +711,8 @@
   border-color: var(--block);
 }
 .input.is-invalid:focus {
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--block) 30%, transparent);
+  border-color: var(--block);
+  box-shadow: var(--field-inset), inset 0 0 0 1px var(--block);
 }
 .field__error {
   font-size: var(--fs-xs);
@@ -701,15 +732,27 @@
   gap: var(--sp-2);
   min-height: 46px;
   padding: 0 var(--sp-3) 0 var(--sp-4);
-  background: var(--surface-2);
-  border: 1px solid var(--border-strong);
+  /* Same well as `.input`: it stands in a form row beside text fields, and two
+     controls doing the same job on one line must not be two different surfaces. */
+  background: var(--field-bg);
+  border: 1px solid var(--field-border);
   border-radius: var(--r-md);
+  box-shadow: var(--field-inset);
   color: var(--text-hi);
   font-family: inherit;
   font-size: var(--fs-body);
   cursor: pointer;
   touch-action: manipulation;
-  transition: border-color var(--dur-2) var(--ease);
+  transition:
+    border-color var(--dur-2) var(--ease),
+    background-color var(--dur-2) var(--ease),
+    box-shadow var(--dur-2) var(--ease);
+}
+@media (hover: hover) {
+  .select-trigger:hover:not(:disabled) {
+    border-color: var(--field-border-hover);
+    background: var(--field-bg-hover);
+  }
 }
 .select-trigger--full {
   width: 100%;
@@ -736,6 +779,56 @@
     color: var(--text-hi);
   }
 }
+/* Adds a row to a list rather than changing a value, so it has no selection to
+   show and no chevron: the plus is the whole affordance. Same dashed pill the
+   Gateway source list already used as a plain button, now the trigger for the
+   list of what could be added. */
+.select-trigger--ghost {
+  align-self: center;
+  /* Not the 46px of a field -- this is a secondary control and a full-height pill
+     in a gap reads as another row. 36px is comfortable to hit and still clearly
+     lighter than the rows above it. It was 32px with 7px of vertical padding,
+     which had the label sitting against the dashed edge. */
+  min-height: 36px;
+  gap: 8px;
+  padding: 9px 16px;
+  border: 1px dashed var(--border-subtle);
+  border-radius: 999px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-mid);
+  font-size: 13px;
+}
+@media (hover: hover) {
+  .select-trigger--ghost:hover:not(:disabled) {
+    background: var(--surface-3);
+    border-color: var(--border-subtle);
+    color: var(--text-hi);
+  }
+}
+.select-trigger--ghost:focus,
+.select-trigger--ghost:focus-visible,
+.select-trigger--ghost[aria-expanded='true'] {
+  box-shadow: none;
+  border-style: solid;
+  border-color: var(--accent);
+}
+.select-trigger__plus {
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--accent);
+}
+/* When the payment has outgrown its networks this is the way forward, so it stops
+   being a quiet option and becomes the obvious next thing to press. Accent, not
+   danger: nothing has gone wrong. */
+.select-trigger--ghost.is-wanted {
+  border-style: solid;
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  color: var(--text-hi);
+}
+
 /* Below 480px the name goes and the logo carries it. A network name is up to 17
    characters ("Ethereum Sepolia"), and on a 360px screen that pushed the wordmark
    out of the header. The full name is still one tap away, and the aria-label
@@ -748,14 +841,19 @@
     display: none;
   }
 }
-@media (hover: hover) {
-  .select-trigger:hover {
-    border-color: var(--text-lo);
-  }
-}
+/* Both of these draw their own focus on the edge they already have, so the global
+   outline would be a second ring around a control that is already showing one. */
+.select-trigger:focus,
+.select-trigger:focus-visible,
 .select-trigger[aria-expanded='true'] {
+  outline: none;
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-ring);
+  box-shadow: var(--field-inset), inset 0 0 0 1px var(--accent);
+}
+.input:focus-visible,
+.amountf--boxed:focus-within,
+.searchfield:focus-within {
+  outline: none;
 }
 .select-trigger__value {
   display: inline-flex;
@@ -848,7 +946,10 @@
   padding: var(--sp-1);
   max-height: min(60vh, 420px);
   overflow-y: auto;
-  animation: pop var(--dur-2) var(--ease-emph);
+  animation: pop var(--dur-1) var(--ease-emph);
+  /* Promotes the panel for the duration of the open, so the scale does not force
+     a repaint of what is behind it on every frame. */
+  will-change: transform, opacity;
 }
 .layer--sheet .menu {
   position: static;
@@ -971,6 +1072,32 @@
 }
 .tokenrow__right {
   font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  color: var(--text-mid);
+  white-space: nowrap;
+}
+
+/* A network row with its figures beside it. Same shape as `.tokenrow`, because it
+   is the same job: a list of names asks the reader to remember where their money
+   is, and a list with the numbers on it answers instead. */
+.chainrow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  width: 100%;
+  min-width: 0;
+}
+.chainrow__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chainrow__meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   font-size: var(--fs-sm);
   color: var(--text-mid);
   white-space: nowrap;
@@ -2626,14 +2753,25 @@
     transform: translateY(0) scale(1);
   }
 }
+/* Opens from the corner it is anchored to, not from its own middle.
+
+   `transform-origin` is set inline by `AnchoredLayer`, which is the only thing
+   that knows whether the panel went up or down and which edge it hangs from. With
+   the default centre origin the panel grew outward in every direction while its
+   anchored corner stayed put, so for 160ms its painted edges disagreed with the
+   position that had just been computed for it: the "grows out of the middle then
+   snaps to the trigger" flicker.
+
+   Shorter and shallower than it was, because a menu is a response to a click and
+   should feel like one. 160ms of scale on a 420px panel is long enough to watch. */
 @keyframes pop {
   from {
     opacity: 0;
-    transform: scale(0.97);
+    transform: scale(0.985) translateY(-2px);
   }
   to {
     opacity: 1;
-    transform: scale(1);
+    transform: scale(1) translateY(0);
   }
 }
 @keyframes sheet-up {
@@ -2941,12 +3079,30 @@ a.hstep__go:hover {
 /* The panel variant. Same tokens as `.gwfund`, because on the one screen that
    uses both they sit one above the other and any difference in radius or surface
    reads as a mistake rather than as a distinction. */
+/* The boxed variant is the amount field standing on its own, which makes it a
+   form field rather than part of a card, so it wears the same well as every other
+   one. On --surface-2 it was the same fill as the card holding it. */
 .amountf--boxed {
   gap: 10px;
   padding: 14px;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--field-border);
   border-radius: 14px;
-  background: var(--surface-2);
+  background: var(--field-bg);
+  box-shadow: var(--field-inset);
+  transition:
+    border-color var(--dur-2) var(--ease),
+    box-shadow var(--dur-2) var(--ease);
+}
+/* The input inside has no border of its own, so the box shows the focus. */
+.amountf--boxed:focus-within {
+  border-color: var(--accent);
+  box-shadow: var(--field-inset), inset 0 0 0 1px var(--accent);
+}
+.amountf--boxed.amountf--invalid {
+  border-color: var(--block);
+}
+.amountf--boxed.amountf--invalid:focus-within {
+  box-shadow: var(--field-inset), inset 0 0 0 1px var(--block);
 }
 /* Wraps rather than clips. At 360px "Amount" plus "Gateway balance 3.285952 USDC"
    does not fit on one line, and the balance is information: an ellipsis through
@@ -3102,6 +3258,24 @@ a.hstep__go:hover {
   display: flex;
   flex-direction: column;
 }
+/* A direction marker rather than a control, for the Gateway split. Same slot, same
+   size, so the two cards keep the gap and the rhythm they have on CCTP; it just
+   does not offer to swap ends that cannot be swapped. */
+.swapstack__flip--static {
+  pointer-events: none;
+}
+.swapstack__flip--static span {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: var(--bg-base);
+  color: var(--text-lo);
+  font-size: 18px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
 .swapcard {
   display: flex;
   flex-direction: column;
@@ -3131,6 +3305,7 @@ a.hstep__go:hover {
 .swapcard__head .select-trigger {
   background: transparent;
   border-color: transparent;
+  box-shadow: none;
   padding: 2px 6px;
   min-height: 0;
   font-weight: 700;
@@ -3140,6 +3315,7 @@ a.hstep__go:hover {
 .swapcard__head .select-trigger:hover:not(:disabled) {
   background: var(--surface-3);
   border-color: var(--border-subtle);
+  box-shadow: none;
 }
 /* In the gap between the cards, painted in the page background so it reads as a
    cut-out rather than as a third element stacked between them. */
@@ -3228,6 +3404,83 @@ a.hstep__go:hover {
 .cost__sep {
   height: 1px;
   background: var(--border-subtle);
+}
+/* A cost made of parts. The row itself is the control, so there is one thing to
+   press rather than a figure and a caret competing for the gesture. */
+.cost__group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.cost__row--open {
+  width: 100%;
+  border: 0;
+  padding: 0;
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.cost__row--open .cost__k {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.cost__row--open:hover .cost__k,
+.cost__row--open:hover .cost__caret {
+  color: var(--text-hi);
+}
+.cost__caret {
+  width: 0;
+  height: 0;
+  margin-top: 1px;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid var(--text-lo);
+  transition:
+    transform var(--dur-2) var(--ease),
+    border-top-color var(--dur-2) var(--ease);
+}
+.cost__row--open:hover .cost__caret {
+  border-top-color: var(--text-hi);
+}
+.cost__caret--up {
+  transform: rotate(180deg);
+}
+/* Indented and quieter than the total it belongs to: these are its parts, not
+   four more costs. */
+.cost__break {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 0 2px 10px;
+  border-left: 1px solid var(--border-subtle);
+  margin-left: 2px;
+}
+.cost__brow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.cost__bk {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--text-mid);
+}
+.cost__bk > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cost__bv {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-mid);
+  white-space: nowrap;
 }
 .cost__warn {
   margin: 0;
@@ -4087,4 +4340,559 @@ a.hstep__go:hover {
 /* The kind goes to the trailing edge, under the amount and the status. */
 .arow__kind {
   margin-left: auto;
+}
+
+/* Where a Gateway payment is drawn from.
+   A receipt line under the amount, and the sheet behind "change". Sized as a
+   secondary line rather than a field: the app has already chosen, and the reader
+   is being shown the choice, not asked to make one. */
+.srcline {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+  margin-top: var(--sp-3);
+  font-size: 0.9rem;
+  color: var(--text-mid);
+}
+.srcline__sep {
+  opacity: 0.5;
+  margin: 0 0.15em;
+}
+.srcline__short {
+  color: var(--danger, #e5484d);
+}
+.srcline__edit {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--link, #4f8cff);
+  cursor: pointer;
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+/* The one place the user is asked anything: an Ethereum leg can cost more than
+   the payment it is funding. Tinted so it reads as a question, not a receipt. */
+.srcline--ask {
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--line, rgba(255, 255, 255, 0.12));
+  border-radius: var(--radius-2, 8px);
+  background: rgba(255, 176, 32, 0.06);
+}
+.srcpick {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.srcpick__row {
+  padding: var(--sp-1) 0;
+}
+.srcpick__label {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+}
+.srcpick__chain {
+  min-width: 9ch;
+}
+.srcpick__bal {
+  color: var(--text-hi);
+  font-variant-numeric: tabular-nums;
+}
+.srcpick__fee {
+  color: var(--text-lo);
+  font-size: 0.85em;
+}
+.srcpick__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  margin-top: var(--sp-3);
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--line, rgba(255, 255, 255, 0.08));
+  font-size: 0.9rem;
+  color: var(--text-mid);
+}
+
+/* Where a Gateway payment is drawn from, as blocks.
+   Each one is a chain and an amount, deliberately shaped like the deposit box
+   above it: same picker, same field, the same idea pointed the other way. A row
+   with an input glued to the front was the first attempt and read as a list item
+   with a field bolted on rather than as "this much, from there". */
+.srcb {
+  margin-top: var(--sp-4);
+  padding: var(--sp-3);
+  border: 1px solid var(--line, rgba(255, 255, 255, 0.1));
+  border-radius: var(--radius-3, 12px);
+  background: var(--surface-2, rgba(255, 255, 255, 0.02));
+}
+.srcb__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-3);
+}
+.srcb__title {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+.srcb__auto {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--link, #4f8cff);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.85rem;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.srcb__block {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 11ch) auto;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) 0;
+}
+.srcb__block + .srcb__block {
+  border-top: 1px solid var(--line, rgba(255, 255, 255, 0.06));
+}
+.srcb__pick {
+  min-width: 0;
+}
+/* The figures line up under each other, which is most of what makes a column of
+   money readable. */
+.srcb__block input {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.srcb__drop {
+  background: none;
+  border: 0;
+  padding: 0 var(--sp-1);
+  color: var(--text-lo);
+  cursor: pointer;
+  font-size: 1.2rem;
+  line-height: 1;
+}
+.srcb__drop:hover {
+  color: var(--danger, #e5484d);
+}
+/* Spans the whole block, under both controls: it describes the pair, not one
+   of them. */
+.srcb__meta {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  color: var(--text-lo);
+  font-size: 0.8rem;
+}
+.srcb__pinned {
+  padding: 0 0.4em;
+  border-radius: 999px;
+  background: var(--accent-soft, rgba(255, 176, 32, 0.14));
+  color: var(--accent, #ffb020);
+  font-size: 0.75rem;
+}
+.srcb__add {
+  margin-top: var(--sp-2);
+}
+/* The one place the user is asked anything, so it is tinted to read as a
+   question rather than as another block. */
+.srcb__ask {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+  margin-top: var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--line, rgba(255, 255, 255, 0.12));
+  border-radius: var(--radius-2, 8px);
+  background: rgba(255, 176, 32, 0.06);
+  font-size: 0.9rem;
+}
+.srcb__sum {
+  margin-top: var(--sp-3);
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--line, rgba(255, 255, 255, 0.1));
+  font-size: 0.9rem;
+  color: var(--text-mid);
+}
+.srcb__sumrow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  padding: 2px 0;
+}
+.srcb__sumrow--total {
+  margin-top: var(--sp-1);
+  padding-top: var(--sp-2);
+  border-top: 1px solid var(--line, rgba(255, 255, 255, 0.06));
+  color: var(--text-hi);
+  font-weight: 600;
+}
+.srcb__sumrow--bad {
+  color: var(--danger, #e5484d);
+}
+.srcb__num {
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 520px) {
+  /* The remove button keeps its column; the picker and the field stack, because
+     an 11ch amount beside a chain name is not 11ch on a phone. */
+  .srcb__block {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .srcb__block input {
+    grid-column: 1 / 2;
+  }
+}
+
+/* Gateway sources: one From block, however many networks it takes ------------ */
+
+/* The head names the networks rather than a chain, because on this engine there
+   is no single one. Overlapped logos so four of them still fit on the line. */
+.gwfrom__stack {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 2px;
+}
+.gwfrom__chip {
+  display: inline-flex;
+  border-radius: 50%;
+  background: var(--surface-2);
+  box-shadow: 0 0 0 2px var(--surface-2);
+}
+/* Enough overlap to read as one group, little enough that a wordmark logo (OP,
+   Sei) is still legible under the one in front of it. */
+.gwfrom__chip + .gwfrom__chip {
+  margin-left: -5px;
+}
+.gwfrom__count {
+  margin-left: auto;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-hi);
+  white-space: nowrap;
+}
+
+/* The networks carrying the amount above. Inset and hairlined so it reads as the
+   inside of the From block rather than as a second panel stacked under it: the
+   version this replaces drew a full card per chain, each labelled From, and a
+   three-way split looked like the page had rendered itself three times. */
+.gwlegs {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-subtle);
+}
+.gwlegs__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 0 2px 2px;
+}
+.gwlegs__title {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text-mid);
+}
+.gwlegs__held {
+  font-size: 12px;
+  color: var(--text-lo);
+  white-space: nowrap;
+}
+
+/* One network. Two optical lines: the choice and its share on top, what that
+   choice costs and what it has underneath. */
+.gwleg {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-areas:
+    'pick amount drop'
+    'meta meta meta';
+  align-items: center;
+  column-gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--field-border);
+  border-radius: 12px;
+  /* A row holding an editable share is a field, so it wears the field well. On the
+     light theme the card behind it is white too, and `--surface-1` left the row
+     invisible apart from its hairline. */
+  background: var(--field-bg);
+  transition:
+    border-color var(--dur-2) var(--ease),
+    background var(--dur-2) var(--ease);
+}
+.gwleg__pick {
+  grid-area: pick;
+  min-width: 0;
+}
+.gwleg__pick .select {
+  min-width: 0;
+}
+.gwleg__pick .select-trigger {
+  background: transparent;
+  border-color: transparent;
+  /* The row is already the well; a second inset inside it draws a box around the
+     chain name that is not a control boundary. */
+  box-shadow: none;
+  padding: 2px 6px 2px 2px;
+  min-height: 0;
+  font-weight: 600;
+  font-size: 14px;
+  max-width: 100%;
+}
+.gwleg__pick .select-trigger:hover:not(:disabled) {
+  background: var(--surface-3);
+  border-color: var(--border-subtle);
+  box-shadow: none;
+}
+/* The share this network carries. Right-aligned under the amount above it, and
+   in the same tabular figures, so the parts line up with the whole. */
+.gwleg__input {
+  grid-area: amount;
+  width: 106px;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  padding: 2px 0;
+  background: transparent;
+  color: var(--text-hi);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  transition: border-color var(--dur-2) var(--ease);
+}
+.gwleg__input:focus {
+  outline: none;
+  border-bottom-color: var(--accent);
+}
+/* An automatic row shows the allocator's figure as a placeholder: present, not
+   claimed to be the user's, and replaced by typing rather than by a mode. */
+.gwleg__input::placeholder {
+  color: var(--text-mid);
+  opacity: 1;
+}
+.gwleg--pinned {
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border-subtle));
+}
+.gwleg--over {
+  border-color: var(--warn-border);
+}
+.gwleg__drop {
+  grid-area: drop;
+  margin-left: 4px;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-lo);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    background var(--dur-2) var(--ease),
+    color var(--dur-2) var(--ease);
+}
+.gwleg__drop:hover {
+  background: var(--surface-3);
+  color: var(--text-hi);
+}
+.gwleg__meta {
+  grid-area: meta;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 2px;
+  padding-left: 2px;
+  font-size: 11px;
+  line-height: 15px;
+  color: var(--text-lo);
+}
+.gwleg__have {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.gwleg__fee {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+/* A subtle dot between two facts on one line, never a filled badge. */
+.gwleg__dot {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.55;
+}
+/* Ethereum charges a thousand times Unichain for the same leg, so the network
+   that costs a whole USDC says so where it is chosen. */
+.gwleg__fee--costly {
+  color: var(--warn);
+}
+/* Under about 520px the three things on the row stop fitting on two lines, and
+   the one that gave way was the chain name: "Arc Te..." beside a 106px amount
+   field, which is the wrong thing to truncate on a control whose whole job is
+   choosing a chain. So the name takes the first line to itself and the share
+   moves under it, still right-aligned and still the largest figure in the row. */
+@media (max-width: 520px) {
+  .gwleg {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'pick drop'
+      'amount amount'
+      'meta meta';
+  }
+  .gwleg__input {
+    width: 100%;
+    margin-top: 2px;
+  }
+  /* Two facts on one line, and at this width one of them was being ellipsed to
+     "3.687096 availa...". They wrap instead: a balance cut off mid-word is worse
+     than a row one line taller. */
+  .gwleg__meta {
+    flex-wrap: wrap;
+    gap: 2px 10px;
+  }
+  .gwleg__have {
+    white-space: normal;
+    overflow: visible;
+  }
+}
+
+/* On a row asking for more than its chain holds. A hint, not an error: the chain
+   has a ceiling and pressing this takes it. */
+.gwleg__cap {
+  border: 0;
+  padding: 0;
+  background: none;
+  font: inherit;
+  color: var(--warn);
+  cursor: pointer;
+  text-align: left;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+.gwleg__cap:hover {
+  color: var(--text-hi);
+}
+/* A chain with nothing to spare has no action attached, so it is not underlined
+   as though it were pressable. */
+.gwleg__cap--none {
+  text-decoration: none;
+  cursor: default;
+}
+
+/* A statement about the state of a form, and the button that answers it.
+
+   These were bare paragraphs: a sentence at body weight under a card, with
+   nothing around it and its remedy somewhere else on the screen. A container, a
+   dot in the tone's colour, and the action inline. */
+.notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  margin-top: 10px;
+  padding: 9px 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  background: var(--surface-2);
+  font-size: 12px;
+  line-height: 17px;
+  color: var(--text-mid);
+}
+/* A dot rather than a filled badge: a solid colour block beside a sentence reads
+   as decoration, and none of these are decoration. Nudged onto the first line's
+   optical centre so it sits with the text and not above it. */
+.notice__dot {
+  flex-shrink: 0;
+  margin-top: 5px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-lo);
+}
+.notice__text {
+  min-width: 0;
+  flex: 1;
+}
+.notice__act {
+  flex-shrink: 0;
+  border: 0;
+  padding: 0;
+  background: none;
+  font: inherit;
+  font-weight: 600;
+  color: var(--accent);
+  cursor: pointer;
+  white-space: nowrap;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1px;
+}
+.notice__act:hover {
+  color: var(--text-hi);
+}
+.notice--warn {
+  border-color: var(--warn-border);
+  background: var(--warn-soft);
+  color: var(--text-hi);
+}
+.notice--warn .notice__dot {
+  background: var(--warn);
+}
+.notice--ok .notice__dot {
+  background: var(--safe);
+}
+
+/* Sits where the next row would go, so adding one reads as continuing the list
+   rather than as operating a control about the list -- but it is not a row, so it
+   does not take the 4px seam the rows share. The gap belongs here rather than on
+   the variant, which has no idea what list it has been dropped into. */
+.gwlegs > .select-trigger--ghost {
+  margin: 8px 0 2px;
+}
+
+
+/* A network that costs a hundred times its neighbour says so where it is chosen,
+   not only in the total afterwards. */
+.chainrow__fee--costly {
+  color: var(--warn);
+}
+
+/* How good a choice a network is, as a colour, ranked rather than thresholded.
+   Base fees run from a thousandth of a cent to a whole USDC, so any absolute
+   number picked as "expensive" is wrong on most balance sheets; position against
+   the cheapest working plan is not. */
+.chainrow__tone--best {
+  color: var(--safe);
+}
+.chainrow__tone--good {
+  color: var(--text-mid);
+}
+.chainrow__tone--costly {
+  color: var(--warn);
+}
+.chainrow__tone--short {
+  color: var(--text-lo);
 }

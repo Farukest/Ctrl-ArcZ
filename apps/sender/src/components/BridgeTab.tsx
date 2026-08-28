@@ -3,7 +3,6 @@ import type { Session } from '@ctrl-arcz/demo-kit';
 import { isAddress, parseUnits, type Address } from 'viem';
 import {
   bridgeFromWallet,
-  chainLabel,
   chainExplorerTxUrl,
   findForwardedMint,
   findGatewayMint,
@@ -13,11 +12,10 @@ import {
   quoteGatewaySpend,
   isGatewayChain,
   CCTP_CHAINS,
-  GATEWAY_CHAIN_NAMES,
   DEPOSIT_CONFIRMATION_SECONDS,
   usdc,
   percentOf,
-  maxGatewaySpendable,
+  maxDeliverable,
   maxDepositable,
   gatewayShortfall,
   cctpShortfall,
@@ -26,6 +24,7 @@ import {
   type CctpStep,
   type GatewayChain,
   type GatewayStep,
+  type SourceBalance,
 } from '@ctrl-arcz/sdk';
 import {
   bridgeClients,
@@ -35,7 +34,8 @@ import {
 } from '@ctrl-arcz/demo-kit';
 import { knownBoxes } from '../lib/useSubscriptions.js';
 import {
-  bridgeChainLabel,
+  chainsFor,
+  labelOf,
   ownedBy,
   stepIndexFor,
   stepsForEngine,
@@ -47,14 +47,19 @@ import {
   Button,
   Card,
   ChainLogo,
+  ChainSelect,
   CostBlock,
   Field,
   GatewayFundBox,
   InfoBody,
   Input,
   SegmentedTabs,
+  GatewaySources,
+  Notice,
+  gatewayFeeLines,
+  gatewayPlan,
+  type GatewaySource,
   ActivityBlock,
-  Select,
   HistoryList,
   HistoryRow,
   Address as AddressChip,
@@ -192,14 +197,17 @@ export function BridgeTab({ session }: { session: Session }) {
   /** Set while the wallet is being asked to move to the source chain. */
   const [switching, setSwitching] = useState(false);
 
-  /** Every chain this engine can serve. Gateway's list is the shorter one. */
-  const engineChains: readonly CctpChainName[] =
-    engine === 'gateway' ? GATEWAY_CHAIN_NAMES : (Object.keys(CCTP_CHAINS) as CctpChainName[]);
+  /**
+   * Every chain this engine can serve, asked of the catalog rather than spelled
+   * out here. Gateway's list is the shorter one, and which chains are on it is not
+   * a fact this screen should be holding a copy of.
+   */
+  const engineChains: readonly CctpChainName[] = chainsFor(
+    engine === 'gateway' ? 'gatewayDeposit' : 'cctpSource',
+  );
 
-  // Prefer the demo-kit label where one exists (it carries the brand spelling);
-  // fall back to the SDK's, so a newly added chain still reads properly.
-  const labelFor = (id: string) =>
-    bridgeChainLabel(id) === id ? chainLabel(id as CctpChainName) : bridgeChainLabel(id);
+  /** One label rule for the whole app; this screen used to carry a second. */
+  const labelFor = (id: string) => labelOf(id);
 
   /**
    * The source chain and the wallet, on the same network in both directions.
@@ -237,7 +245,20 @@ export function BridgeTab({ session }: { session: Session }) {
    * follow. It defaults to Arc, because bringing money to Arc is what this app is
    * for, and steps aside when the source is already Arc.
    */
-  const to = destinationChain(engineChains, from, toChoice, 'Arc_Testnet');
+  /**
+   * Where the money lands.
+   *
+   * CCTP has to keep the two ends apart: it burns on one chain and mints on
+   * another, and a bridge to the chain you are standing on does nothing. Gateway
+   * does not, and the rule was quietly breaking it -- `from` there is only the
+   * chain the deposit box is pointed at, so picking Arc as the destination while
+   * the box happened to be on Arc silently bounced the choice back to Ethereum.
+   * Same-chain is a real Gateway transfer besides: it is how money comes back out.
+   */
+  const to =
+    engine === 'gateway'
+      ? ((toChoice && engineChains.includes(toChoice) ? toChoice : 'Arc_Testnet') as CctpChainName)
+      : destinationChain(engineChains, from, toChoice, 'Arc_Testnet');
   /** Which half of the bridge records the history is showing. */
   const [histKind, setHistKind] = useState<'bridge' | 'subs'>('bridge');
   /**
@@ -263,7 +284,32 @@ export function BridgeTab({ session }: { session: Session }) {
    * balance check. The ceiling is the one every other part of the screen already
    * uses, so it is the one the screen says out loud.
    */
-  const [gwCeiling, setGwCeiling] = useState<bigint | null>(null);
+  /**
+   * The destination's forwarding fee, which is the only part of the cost that has
+   * to be asked for.
+   *
+   * Base fees per chain are a measured table in the SDK, but forwarding is set by
+   * the chain being paid into and moves with its gas: about 0.016 into Arc against
+   * 0.054 into Avalanche, and two percent between two reads minutes apart. So the
+   * poll below asks Circle for it and everything else on this screen is arithmetic
+   * over the balances the app already has.
+   */
+  const [gwForwarding, setGwForwarding] = useState<bigint | null>(null);
+  /**
+   * Which networks the spend draws from, and how much of it each carries.
+   *
+   * A Gateway balance is one figure spread over several chains and a transfer can
+   * draw on any number of them under a single signature. So "From" is a list of
+   * networks rather than one chain -- but not a list of amounts: the payment is
+   * still one figure, typed once, and an empty `amount` here means the allocator
+   * divides it. A row typed into overrules the allocator for that chain.
+   *
+   * Starts as one network on whichever chain the route already named, so someone
+   * who only ever sends from one place never learns that any of this exists.
+   */
+  const [gwSources, setGwSources] = useState<GatewaySource[]>(() => [
+    { chain: (isGatewayChain(from) ? from : 'Arc_Testnet') as GatewayChain, amount: '' },
+  ]);
   const [depositing, setDepositing] = useState(false);
   /**
    * The deposit's own amount, and the reason this field exists at all.
@@ -339,8 +385,28 @@ export function BridgeTab({ session }: { session: Session }) {
 
   const risk = useRecipientGate(session, recipient);
   const recipientBad = recipient.trim() !== '' && !isAddress(recipient.trim());
+  /**
+   * What is being sent, whichever engine is asking. One field, both engines.
+   *
+   * It was two for a while: Gateway put an amount on every source card and summed
+   * them, which meant the fix a refusal offered ("send 3.62 instead") wrote to a
+   * state Gateway no longer read, and the percentage chips filled in a field that
+   * was not on screen. A payment is one figure; how many chains carry it is a
+   * separate question, answered below by `gwSources`.
+   */
   const amountValue = Number(amount);
-  const sameChain = from === to;
+  /**
+   * Both ends the same chain.
+   *
+   * On CCTP that is the From picker matching the To picker, and it is refused.
+   * On Gateway there is no single "from" any more, so the question becomes
+   * whether the only chain paying is also the one being paid -- which is not a
+   * mistake there but a withdrawal, and the note below says so.
+   */
+  const sameChain =
+    engine === 'gateway'
+      ? gwSources.length === 1 && gwSources[0]?.chain === (to as string)
+      : from === to;
 
   /**
    * CCTP burns the connected wallet's own USDC, so the source is whichever chain
@@ -365,7 +431,82 @@ export function BridgeTab({ session }: { session: Session }) {
   const gwByChain = gatewayBal.value ?? {};
   const gwOnSource =
     engine === 'gateway' && gwSource && gatewayBal.value ? (gwByChain[gwSource] ?? 0n) : null;
-  const gwNeeded = gwCeiling != null ? BigInt(Math.round(amountValue * 1e6)) + gwCeiling : null;
+  const gwTotal = gatewayBal.value
+    ? Object.values(gwByChain).reduce((sum, v) => sum + v, 0n)
+    : null;
+
+  /**
+   * Every chain that holds something, as the allocator wants it.
+   *
+   * Confirmed balances only. `useGatewayBalances` reads Circle's own figure, which
+   * counts a deposit once it has the confirmations Circle requires, so a deposit
+   * made seconds ago on a slow chain is simply not in here. That is the honest
+   * reading: counting it would produce an intent Circle refuses, after the
+   * signature.
+   */
+  const gwBalances = useMemo<SourceBalance[]>(
+    () =>
+      (Object.entries(gwByChain) as [GatewayChain, bigint][])
+        .filter(([, balance]) => balance > 0n)
+        .map(([chain, balance]) => ({ chain, balance })),
+    [gwByChain],
+  );
+
+  /**
+   * What the source cards add up to, and whether it can be sent.
+   *
+   * Derived on every keystroke, never stored: a kept allocation is one that
+   * survives a change to the cards, the destination or the balance, and each of
+   * those makes it wrong in a way that only surfaces at signing time.
+   *
+   * The same function the cards themselves render from, so the screen and the
+   * button cannot come to different conclusions about the same payment.
+   */
+  const gwWanted = Number.isFinite(amountValue) && amountValue > 0
+    ? BigInt(Math.round(amountValue * 1e6))
+    : 0n;
+  const gwPlan = useMemo(
+    () =>
+      engine === 'gateway' && gwForwarding != null
+        ? gatewayPlan({
+            amount: gwWanted,
+            sources: gwSources,
+            balances: gwBalances,
+            forwarding: gwForwarding,
+          })
+        : null,
+    [engine, gwWanted, gwSources, gwBalances, gwForwarding],
+  );
+  const gwAmount = gwPlan?.amount ?? 0n;
+  const gwAlloc = gwPlan?.allocation ?? null;
+
+  /**
+   * What actually arrives at the other end.
+   *
+   * Not `amount - shortfall`, which was the first attempt and went NEGATIVE on
+   * screen: the shortfall counts the fees that could not be covered either, so
+   * asking a chain holding 0.03 for 7 reported a shortfall of 7.022626 and the
+   * largest figure on the page read "-0.022626".
+   *
+   * Asked of the same function the Max button uses instead, over the chains the
+   * cards actually name, and never more than was asked for.
+   */
+  const gwDeliverable = useMemo(() => {
+    if (gwAmount <= 0n || gwForwarding == null) return 0n;
+    if (gwAlloc && gwAlloc.shortfall === 0n) return gwAmount;
+    const listed = new Set(gwSources.map((s) => s.chain));
+    const reach = maxDeliverable({
+      balances: gwBalances,
+      forwarding: gwForwarding,
+      allow: (c) => listed.has(c),
+    });
+    return reach < gwAmount ? reach : gwAmount;
+  }, [gwAmount, gwAlloc, gwSources, gwBalances, gwForwarding]);
+
+  // What Circle charges, and what the balance has to cover, which are not the
+  // same number: the signature authorises a ceiling near twice the charge so a
+  // doubling of gas between quoting and settling still goes through.
+  const gwCeiling = gwAlloc && gwAlloc.legs.length > 0 ? gwAlloc.ceiling : null;
   const depositNum = Number(depositAmount);
   const depositValue =
     Number.isFinite(depositNum) && depositNum > 0 ? BigInt(Math.round(depositNum * 1e6)) : 0n;
@@ -396,22 +537,24 @@ export function BridgeTab({ session }: { session: Session }) {
    * money in the wallet is not, and a screen that showed one as the other would
    * offer transfers the signature cannot cover.
    */
-  const spendable = engine === 'gateway' ? gwOnSource : walletOnChain;
+  const spendable = engine === 'gateway' ? gwTotal : walletOnChain;
   /**
    * The most that balance can send, fee included.
    *
-   * On Gateway the fee comes out of the same balance, so the whole balance is the
-   * one figure guaranteed to be refused. Null while the fee is unknown, which
-   * disables the percentage chips rather than letting them offer that figure.
+   * On Gateway this is not the balance and not the balance less one fee: every
+   * chain the split touches pays its own base fee and the transfer pays one
+   * forwarding fee, all at the ceiling that gets signed rather than at what is
+   * charged. Held back any less generously and Max fills in the one amount the
+   * next check refuses, which reads as the app disagreeing with itself over
+   * money. Null while the forwarding fee is unknown, which disables the
+   * percentage chips rather than letting them offer a figure.
    */
   const maxSpendable =
-    spendable == null
-      ? null
-      : engine === 'gateway'
-        ? gwCeiling == null
-          ? null
-          : maxGatewaySpendable(spendable, gwCeiling)
-        : spendable;
+    engine === 'gateway'
+      ? gwForwarding == null || gatewayBal.value == null
+        ? null
+        : maxDeliverable({ balances: gwBalances, forwarding: gwForwarding })
+      : walletOnChain;
 
   function fillPercent(fraction: number) {
     if (maxSpendable == null) return;
@@ -441,12 +584,6 @@ export function BridgeTab({ session }: { session: Session }) {
   const fromLabel = labelFor(from);
   const toLabel = labelFor(to);
 
-  const chainOptions = engineChains.map((id) => ({
-    value: id,
-    label: labelFor(id),
-    text: labelFor(id),
-    icon: <ChainLogo id={id} size={20} />,
-  }));
 
   /** A fee larger than the transfer is not a rounding detail, it is the reason to
    *  pick another route or to send more at once. */
@@ -465,15 +602,13 @@ export function BridgeTab({ session }: { session: Session }) {
     amountValue <= 0
       ? null
       : engine === 'gateway'
-        ? gwOnSource == null || gwNeeded == null
+        ? gwAlloc == null || gwTotal == null || gwForwarding == null
           ? null
           : gatewayShortfall({
-              here: gwOnSource,
-              byChain: gwByChain as Record<string, bigint>,
-              from,
-              fromLabel,
-              committed: gwNeeded,
-              labelOf: labelFor,
+              shortfall: gwAlloc.shortfall,
+              total: gwTotal,
+              amount: gwAmount,
+              deliverable: maxDeliverable({ balances: gwBalances, forwarding: gwForwarding }),
             })
         : // CCTP: guard the source USDC balance up front, the same way Gateway does,
           // so an amount over the balance disables the button instead of only failing
@@ -505,8 +640,7 @@ export function BridgeTab({ session }: { session: Session }) {
   function applyFix() {
     const fix = refusal?.fix;
     if (!fix) return;
-    if (fix.kind === 'switchSource') selectSource(fix.chain as CctpChainName);
-    else if (fix.kind === 'useMax') setAmount(fix.display);
+    if (fix.kind === 'useMax') setAmount(fix.display);
     else setDepositAmount(fix.display);
   }
 
@@ -543,7 +677,10 @@ export function BridgeTab({ session }: { session: Session }) {
           amount: 1_000_000n,
           depositor: session.address,
         });
-        if (live) setGwCeiling(quote.maxFee);
+        // Only the forwarding fee is kept. It belongs to the destination and is
+        // the same from every source, so a nominal one-chain quote is enough to
+        // read it; everything else is per-leg arithmetic the allocator does.
+        if (live) setGwForwarding(quote.forwarding);
       } catch {
         // Leave the last known fee rather than blanking on one failed poll; the
         // button checks again before it acts.
@@ -573,8 +710,9 @@ export function BridgeTab({ session }: { session: Session }) {
    */
   function forgetSourceReads() {
     // gwOnSource is derived from the shared store now, so it follows the source
-    // change on its own; only the fee, wallet read and deposit note reset here.
-    setGwCeiling(null);
+    // change on its own; only the wallet read and deposit note reset here. The
+    // forwarding fee belongs to the destination and does not move with the
+    // source, so it deliberately stays.
     setGwPending(0n);
     setDepositAmount('');
   }
@@ -590,13 +728,49 @@ export function BridgeTab({ session }: { session: Session }) {
 
   /** The destination. Cheaper to invalidate: only the quote depends on it, but it
    *  does depend on it, and a fee quoted for the previous destination is wrong. */
+  /**
+   * The destination.
+   *
+   * Everything priced against the old one is wrong now, and not by a rounding
+   * margin: forwarding is destination-driven, about 0.016 into Arc against 0.054
+   * into Avalanche. So the fee is dropped and re-read, which recomputes the split
+   * with it. A pinned set of sources goes too: agreeing to pay for a chain was
+   * agreeing at the old price.
+   *
+   * What does NOT change is the amount. Quietly reducing what someone typed
+   * because they switched networks is how people send the wrong figure.
+   */
   function selectDest(chain: CctpChainName) {
     if (chain === to) return;
     setToChoice(chain);
-    setGwCeiling(null);
+    setGwForwarding(null);
+    /*
+     * The source cards stay. They are amounts somebody typed, and a destination
+     * that costs more to reach is not a reason to quietly rewrite them -- that is
+     * how people send a figure they did not choose. What the new fee does change
+     * is whether those amounts still fit, and the plus below them says so.
+     */
   }
 
   function swapRoute() {
+    /*
+     * On Gateway the source is the one row in the list, not `from` -- `from` only
+     * says which chain the deposit box is aimed at. Swapping has to move the row,
+     * or the arrow reverses a route the spend is not using.
+     *
+     * Only offered on one row; with several there is no single end for the
+     * destination to trade places with, and the marker below is inert.
+     */
+    if (engine === 'gateway') {
+      const only = gwSources.length === 1 ? gwSources[0] : undefined;
+      if (!only || !isGatewayChain(to) || only.chain === to) return;
+      const dest = to as GatewayChain;
+      setGwSources([{ chain: dest, amount: '' }]);
+      setToChoice(only.chain);
+      // Keeps the deposit box pointed at the chain that now pays.
+      selectSource(dest);
+      return;
+    }
     if (from === to) return;
     // The old source becomes an explicit destination, so the default rule stops
     // answering for it -- the user has now said where this ends.
@@ -839,6 +1013,16 @@ export function BridgeTab({ session }: { session: Session }) {
     if (!gwSource || depositValue <= 0n) return;
     setDepositing(true);
     const on = gwSource;
+    /*
+     * What Circle reports for this chain right now, before any of this happens, so
+     * the wait afterwards has an absolute figure to watch for rather than a rise it
+     * has to be looking at the exact moment it happens. Read here rather than after
+     * the transaction, because after it the reading may already include the credit.
+     *
+     * Null when the balance has not been read at all, which is not zero: recording
+     * zero would set a target this deposit could reach without having been counted.
+     */
+    const before = gatewayBal.value ? (gwByChain[on] ?? 0n) : undefined;
     const record = startRun({
       kind: 'deposit',
       engine: 'gateway',
@@ -878,7 +1062,7 @@ export function BridgeTab({ session }: { session: Session }) {
       // confirmations, and that wait is the run's last step rather than its end.
       record.begin('counted');
       record.waiting();
-      rememberDeposit(on, depositValue);
+      rememberDeposit(on, depositValue, before);
       setGwPending(pendingOn(on));
       setDepositAmount('');
       toast.push(
@@ -924,6 +1108,18 @@ export function BridgeTab({ session }: { session: Session }) {
         dispatch.release();
         return;
       }
+      /*
+       * The split is decided here, once, from the same allocation the source line
+       * has been showing. Re-deriving it inside the spend would let the button do
+       * something the screen never said, which is the one thing a receipt line
+       * exists to rule out.
+       */
+      if (!gwAlloc || gwAlloc.legs.length === 0) {
+        toast.push(t('bridge.gwChainMissing'), 'error');
+        dispatch.release();
+        return;
+      }
+      const sources = gwAlloc.legs.map((l) => ({ chain: l.chain, value: l.value }));
       /**
        * A spend does not fund anything.
        *
@@ -938,44 +1134,63 @@ export function BridgeTab({ session }: { session: Session }) {
       // What the runner has reported, in order, so the row written while Circle
       // still has the intent carries the steps that actually happened.
       const reported: StoredBridgeStep[] = [];
+      /**
+       * The row exists before the signature is asked for.
+       *
+       * It used to be written in `onTransferId`, which is after the wallet prompt
+       * and after Circle has accepted the intent -- so pressing Bridge, signing,
+       * and then watching nothing appear anywhere was the normal experience, and
+       * the row turned up at the end looking like a receipt rather than like
+       * something that had been happening. CCTP fixed exactly this for itself and
+       * says so in its own comment; the Gateway path never got the same treatment.
+       *
+       * The id is invented here because Circle has not been asked yet. When it
+       * answers, the row takes the transferId as its name (see `rekey`), which is
+       * what the mint is looked up by afterwards.
+       */
+      const record = startRun({
+        engine: 'gateway',
+        from,
+        to,
+        amount,
+        ...(isAddress(recipient.trim()) ? { recipient: recipient.trim() } : {}),
+      });
+      setSpotlight(record.id);
+      record.begin('sign');
       try {
         // No wallet client bound to a chain: a spend is a signature, so it works
         // wherever the wallet happens to be.
         const res = await spendFromGateway(
           { walletClient: session.clients.walletClient },
           {
-            from: gwSource,
+            sources,
             to: to as GatewayChain,
-            amount: parseUnits(amount, 6),
             ...(isAddress(recipient.trim()) ? { recipient: recipient.trim() as Address } : {}),
             onStep: (step, txHash) => {
               const name = GW_STEP_TO_UI[step];
               if (!name) return;
               reported.push(stepRow(name, txHash, from));
+              // Onto the row as well as into the list, so what is on screen moves
+              // while the transfer does rather than all at once at the end.
+              record.done(name, txHash);
+              const next = activeSteps[stepIndexFor(name, activeSteps) + 1];
+              if (next) record.begin(next);
             },
             // Write the receipt down the moment Circle accepts the intent, not when
             // the mint lands. The wait in between is where a tab gets closed, and
             // without this the transferId would be gone with it.
             onTransferId: (transferId) => {
               dispatch.release();
-              saveBridge({
-                id: transferId,
-                engine: 'gateway',
-                from,
-                to,
+              /*
+               * The row takes the name Circle gave it, keeping the steps it has
+               * already collected. It is the same row the user has been watching
+               * since the button was pressed, not a second one appearing beside it.
+               */
+              record.rekey(transferId);
+              record.amend({
                 fromLabel,
                 toLabel,
-                amount,
-                ...(isAddress(recipient.trim()) ? { recipient: recipient.trim() } : {}),
                 state: 'pending',
-                /*
-                 * What this transfer has done so far. A spend from the balance
-                 * makes no deposit, so no deposit is written down; the rows that
-                 * were reported are, with their hashes, and the ones still to come
-                 * are drawn as such by the shared step rules.
-                 */
-                steps: reported.length > 0 ? [...reported] : [{ name: 'sign' }],
-                createdAt: Date.now(),
                 /**
                  * What the balance was before this spend, written now because now
                  * is the only time it is knowable.
@@ -988,7 +1203,13 @@ export function BridgeTab({ session }: { session: Session }) {
                  * released figure and the row could never reach it. It sat on
                  * `returning` for good.
                  */
-                ...(gwOnSource != null ? { returnBaseline: gwOnSource.toString() } : {}),
+                /*
+                 * Across every chain, not the source chain. A spend can draw on
+                 * several at once, so a baseline taken from one of them would sit
+                 * below the released figure for good and the row would never
+                 * reach it.
+                 */
+                ...(gwTotal != null ? { returnBaseline: gwTotal.toString() } : {}),
                 // The same figure the card above this form calls the fee: the
                 // ceiling that was signed, not a quote that can drift from it.
                 ...(gwCeiling != null ? { fee: usdc(gwCeiling) } : {}),
@@ -1029,6 +1250,17 @@ export function BridgeTab({ session }: { session: Session }) {
           res.mintTxHash ? 'success' : 'info',
         );
       } catch (e) {
+        /*
+         * The row says what happened to it, rather than vanishing.
+         *
+         * Before there was a row to fail, a declined signature left nothing at
+         * all behind: a toast that scrolls away, and a Recent list with no trace
+         * of the transfer that had just been attempted. The step named is the one
+         * the run had reached, so "you declined the signature" and "Circle refused
+         * the intent" are not the same line.
+         */
+        record.fail(reported.length > 0 ? 'attestation' : 'sign', e);
+        setBridges(loadBridges());
         toast.fail(e);
       } finally {
         dispatch.release();
@@ -1250,7 +1482,7 @@ export function BridgeTab({ session }: { session: Session }) {
           <Card title={t('bridge.fundForBridgeTitle')} className="card--fund" data-testid="bridge-fund">
           <GatewayFundBox
             chain={from}
-            chainOptions={chainOptions}
+            balances={gwByChain}
             onChainChange={(v) => selectSource(v as CctpChainName)}
             balance={gwOnSource}
             maxDeposit={maxDeposit}
@@ -1294,75 +1526,110 @@ export function BridgeTab({ session }: { session: Session }) {
           on is on the same line, and the second card shows what arrives.
         */}
         <div className="swapstack" style={{ marginTop: 16 }}>
-          <div className="swapcard" data-testid="bridge-from-card">
-            <div className="swapcard__head">
-              <span className="swapcard__label">{t('bridge.from')}</span>
-              <Select
-                value={from}
-                options={chainOptions}
-                onChange={(v) => selectSource(v as CctpChainName)}
-                ariaLabel={t('bridge.from')}
-                searchable
-                searchPlaceholder={t('bridge.searchChain')}
-                noResultsText={t('common.noResults')}
+          {/*
+            One From either way. What differs is what is inside it.
+
+            CCTP burns the wallet's own USDC on one named chain, so the card holds
+            a chain picker and an amount. A Gateway spend draws on a balance spread
+            over several chains under a single signature, so the same card holds
+            the amount and, under it, the networks carrying it. One block, one
+            amount, one label saying From, whichever engine is on.
+          */}
+          {engine === 'gateway' ? (
+            <GatewaySources
+              amount={amount}
+              onAmount={setAmount}
+              sources={gwSources}
+              onSources={setGwSources}
+              balances={gwBalances}
+              forwarding={gwForwarding ?? 0n}
+              loaded={gatewayBal.value != null && gwForwarding != null}
+              onDeposit={(need) => setDepositAmount(usdc(need))}
+            />
+          ) : (
+            <div className="swapcard" data-testid="bridge-from-card">
+              <div className="swapcard__head">
+                <span className="swapcard__label">{t('bridge.from')}</span>
+                <ChainSelect
+                  purpose="cctpSource"
+                  value={from}
+                  onChange={selectSource}
+                  ariaLabel={t('bridge.from')}
+                />
+              </div>
+              <AmountField
+                value={amount}
+                onChange={setAmount}
+                chain={from}
+                balance={spendable}
+                balanceMissing={!walletRead || walletOnChain !== null ? 'loading' : 'unavailable'}
+                balanceLabel={t('bridge.balance')}
+                onMax={fillPercent}
+                percents={[0.25, 0.5]}
+                data-testid="bridge-amount"
               />
             </div>
-            <AmountField
-              value={amount}
-              onChange={setAmount}
-              chain={from}
-              // The balance, not the spendable figure. Labelling "Gateway balance"
-              // over a number that already had the fee taken out of it contradicts
-              // the box above, which shows the real one. What the label says and
-              // what tapping it fills in are allowed to differ; what the label says
-              // and what it is are not.
-              balance={spendable}
-              // Gateway's figure comes from Circle and always arrives; the wallet's
-              // is a chain read that may have nothing to report.
-              balanceMissing={
-                engine === 'gateway' || !walletRead || walletOnChain !== null
-                  ? 'loading'
-                  : 'unavailable'
-              }
-              balanceLabel={engine === 'gateway' ? t('bridge.gwBalanceLabel') : t('bridge.balance')}
-              onMax={fillPercent}
-              percents={[0.25, 0.5]}
-              data-testid="bridge-amount"
-            />
-          </div>
+          )}
 
           {/* In the gap between the cards, painted in the page background so it
-              reads as a cut-out rather than a third element. */}
-          <div className="swapstack__flip">
-            <button
-              type="button"
-              onClick={swapRoute}
-              title={t('bridge.swap')}
-              aria-label={t('bridge.swap')}
-              data-testid="bridge-swap-route"
-            >
-              &darr;
-            </button>
-          </div>
+              reads as a cut-out rather than a third element.
+
+              Always present, because it is what holds the two cards apart and
+              says which way the money goes; dropping it on Gateway left them
+              meeting on a shared edge, reading as one panel with a seam.
+
+              What it does depends on whether there are two ends to swap. One
+              source and it trades places with the destination. Several, and there
+              is no single end the destination could change places with, so the
+              same shape stays as a direction marker and stops being a button
+              rather than becoming a button that does nothing. */}
+          {engine !== 'gateway' || gwSources.length === 1 ? (
+            <div className="swapstack__flip">
+              <button
+                type="button"
+                onClick={swapRoute}
+                title={t('bridge.swap')}
+                aria-label={t('bridge.swap')}
+                data-testid="bridge-swap-route"
+              >
+                &darr;
+              </button>
+            </div>
+          ) : (
+            <div className="swapstack__flip swapstack__flip--static" aria-hidden>
+              <span>&darr;</span>
+            </div>
+          )}
 
           <div className="swapcard" data-testid="bridge-to-card">
             <div className="swapcard__head">
               <span className="swapcard__label">{t('bridge.to')}</span>
-              <Select
+              {/* The destination's list is the engine's, and it is a different
+                  question from the source's: Gateway mints on eleven chains and
+                  CCTP on twenty, and nothing is signed at this end either way. */}
+              <ChainSelect
+                purpose={engine === 'gateway' ? 'gatewayDestination' : 'cctpDestination'}
                 value={to}
-                options={chainOptions}
-                onChange={(v) => selectDest(v as CctpChainName)}
+                onChange={selectDest}
                 ariaLabel={t('bridge.to')}
-                searchable
-                searchPlaceholder={t('bridge.searchChain')}
-                noResultsText={t('common.noResults')}
               />
             </div>
             {/* What arrives, not a second thing to fill in. Gateway takes its fee
                 out of the balance rather than out of the transfer, and CCTP's comes
                 off the sender's side too, so the figure is the same one. */}
             <AmountField
-              value={amount}
+              /*
+               * What actually arrives, which is not always what the cards add up
+               * to. A card may hold more than its chain can pay -- people type the
+               * figure they have in mind -- and summing those gave this, the
+               * largest number on the screen, a value nobody was ever going to
+               * receive: 124.001142 out of chains holding 4.76 between them.
+               *
+               * So the shortfall comes off. The cards still show what was asked
+               * for, each over-reaching one says what its chain can really do, and
+               * this says what lands at the other end.
+               */
+              value={engine === 'gateway' ? usdc(gwDeliverable) : amount}
               onChange={() => {}}
               readOnly
               chain={to}
@@ -1378,18 +1645,22 @@ export function BridgeTab({ session }: { session: Session }) {
           </div>
         </div>
 
+        {/* All three were bare paragraphs under the cards: a red line, a grey line
+            and another grey line, at three weights, none of them looking like the
+            screen addressing the reader. Same container, tone carrying the
+            difference. */}
         {sameChain && !gwWithdraw && (
-          <p className="gwfund__err" data-testid="bridge-samechain">
+          <Notice tone="warn" testId="bridge-samechain">
             {t('bridge.sameChain')}
-          </p>
+          </Notice>
         )}
-        {gwWithdraw && <p className="hint">{t('bridge.withdrawHint')}</p>}
+        {gwWithdraw && <Notice tone="info">{t('bridge.withdrawHint')}</Notice>}
         {/* Whose money moves is the thing that changed, so say it plainly rather
             than leaving the user to infer it from a MetaMask prompt. */}
         {engine === 'cctp' && !walletOnSource && (
-          <p className="hint" data-testid="bridge-selfnote">
+          <Notice tone="info" testId="bridge-selfnote">
             {t('bridge.wrongSourceChain').replace('{chain}', fromLabel)}
-          </p>
+          </Notice>
         )}
 
         {/*
@@ -1400,22 +1671,51 @@ export function BridgeTab({ session }: { session: Session }) {
           the balance afterwards is not an acceptable way to learn it.
         */}
         {/*
-          The fee shown is the ceiling, not the quote, and the two used to differ
-          here: the line said what Circle would charge while the total below it
-          added the padded figure the signature authorises. Anyone who subtracted
-          got a third number. A block whose parts do not sum to its own bottom line
-          invites the arithmetic and then fails it, so both are the ceiling. It is
-          the safe direction to be wrong in -- nobody is charged more than this --
-          and it is the figure the balance actually has to cover.
+          The fee here and the fee on the source line above are the same number,
+          and it is what Circle charges: the base fee of every chain the split
+          touches, plus one forwarding fee. Measured, and reported by Circle
+          itself as `fees.total`.
+
+          It is not the ceiling. The signature authorises close to twice this, so
+          that a doubling of gas between quoting and settling still goes through,
+          and Circle then takes what the transfer cost and ignores the rest. That
+          headroom is the app's problem and it is what the balance is checked
+          against; it is not what leaves the account, so it is not what the
+          account holder is told. Two numbers one line apart, only one of which
+          they are ever charged, is how a screen loses somebody's trust in its
+          arithmetic.
         */}
-        {gwCeiling != null && engine === 'gateway' && (
+        {gwCeiling != null && (
           <CostBlock
             testId="bridge-fee-card"
             lines={[
               {
                 label: t('cost.circleFee'),
-                value: `${usdc(gwCeiling)} USDC`,
+                value: `${usdc(gwAlloc?.fee ?? 0n)} USDC`,
                 testId: 'bridge-fee',
+                /*
+                 * The same total, in the pieces it is made of: one base fee per
+                 * network the split touches, plus the forwarding fee the
+                 * destination charges. Those pieces differ by a factor of a
+                 * thousand -- Ethereum is 1.00 a leg and Unichain 0.001 -- so a
+                 * split that suddenly costs a USDC has, on one line, no way of
+                 * saying which network made it cost that.
+                 *
+                 * Built from the allocation rather than beside it, so it cannot
+                 * add up to a different number than the line it unfolds from.
+                 */
+                breakdown: gatewayFeeLines(gwAlloc, gwForwarding ?? 0n).map((part) => ({
+                  label: part.chain ? (
+                    <>
+                      <ChainLogo id={part.chain} size={16} />
+                      <span>{labelFor(part.chain)}</span>
+                    </>
+                  ) : (
+                    <span>{t('cost.forwarding', { chain: toLabel })}</span>
+                  ),
+                  value: `${usdc(part.fee)} USDC`,
+                  testId: part.chain ? `bridge-fee-${part.chain}` : 'bridge-fee-forwarding',
+                })),
               },
             ]}
             // Only once there is an amount to total up. The quote is asked for with
@@ -1423,10 +1723,10 @@ export function BridgeTab({ session }: { session: Session }) {
             // for the fee; printing a total here would tell someone what they are
             // about to pay for a transfer they have not entered.
             total={
-              amountValue > 0 && gwNeeded != null
+              amountValue > 0 && gwAlloc && gwAlloc.legs.length > 0
                 ? {
                     label: t('cost.youPay'),
-                    value: `${usdc(gwNeeded)} USDC`,
+                    value: `${usdc(gwAmount + gwAlloc.fee)} USDC`,
                     testId: 'bridge-youpay',
                   }
                 : null
@@ -1435,20 +1735,26 @@ export function BridgeTab({ session }: { session: Session }) {
           />
         )}
 
-        {/* One line, and the button that fixes it. Naming the problem and leaving
-            the user to find the chain picker is most of the way to not saying it. */}
-        {refusal && (
+        {/*
+          One line, and the button that fixes it. Naming the problem and leaving
+          the user to find the chain picker is most of the way to not saying it.
+
+          CCTP only. On Gateway the plus between the cards already says what is
+          missing and offers the chain that would cover it, so this printed the
+          same figure again a few pixels lower -- in red, under an offer that was
+          not an alarm. Two voices for one fact, and the louder one was the less
+          useful.
+        */}
+        {engine !== 'gateway' && refusal && (
           <div className="refusal" data-testid="bridge-refusal">
             <p className="refusal__msg">
               {t(`bridge.refusal.${refusal.code}` as never, refusal.params)}
             </p>
             {refusal.fix && (
               <Button variant="ghost" onClick={applyFix} data-testid="bridge-refusal-fix">
-                {refusal.fix.kind === 'switchSource'
-                  ? t('bridge.fixSwitch').replace('{chain}', refusal.fix.label)
-                  : refusal.fix.kind === 'deposit'
-                    ? t('bridge.fixDeposit').replace('{amount}', refusal.fix.display)
-                    : t('bridge.fixMax').replace('{amount}', refusal.fix.display)}
+                {refusal.fix.kind === 'deposit'
+                  ? t('bridge.fixDeposit').replace('{amount}', refusal.fix.display)
+                  : t('bridge.fixMax').replace('{amount}', refusal.fix.display)}
               </Button>
             )}
           </div>

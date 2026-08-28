@@ -72,6 +72,28 @@
   --seg-thumb-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 1px 2px rgba(0, 0, 0, 0.5),
     0 0 0 1px var(--border-strong);
+
+  /* Form fields. A tier of their own, because a field is the one surface a person
+     is meant to put something INTO, and it was borrowing --surface-2: the same
+     fill as the card around it, so an empty input was a rectangle you had to
+     click to discover.
+
+     A field is recessed, not raised. Everything else in this system steps toward
+     the viewer with a lighter fill and a top highlight; a well steps away, with a
+     fill below the card it sits in and a shadow cast inward from its top edge.
+     That is the whole signal, and it works before anything is typed and without
+     a placeholder.
+
+     The ring is inset for the same reason it is not 3px: focus should sharpen the
+     edge that is already there, not grow a halo around it. The old
+     `0 0 0 3px accent-ring` put a soft amber band outside a field that was also
+     changing its border colour, so a focused input gained four pixels of chrome
+     and read as an alert. */
+  --field-bg: #0c0f14;
+  --field-bg-hover: #0e1218;
+  --field-border: #2d3542;
+  --field-border-hover: #414c5c;
+  --field-inset: inset 0 1px 2px rgba(0, 0, 0, 0.32);
 }
 
 :root[data-theme='light'] {
@@ -128,6 +150,15 @@
   --seg-track: #dbe1ea;
   --seg-thumb: #ffffff;
   --seg-thumb-shadow: 0 1px 3px rgba(15, 20, 30, 0.18), 0 0 0 1px #b9c3d2;
+
+  /* Same idea, inverted: here the cards are white, so a white field is invisible
+     and the well has to be the grey one. This is where GitHub and Stripe put
+     theirs, and for the same reason. */
+  --field-bg: #f5f7fa;
+  --field-bg-hover: #eef2f7;
+  --field-border: #c3ccda;
+  --field-border-hover: #a8b3c4;
+  --field-inset: inset 0 1px 2px rgba(15, 20, 30, 0.05);
 }
 
 :root {
@@ -251,8 +282,20 @@ a:hover {
 ::selection {
   background: var(--accent-soft);
 }
+/* The keyboard focus ring, for everything that does not draw its own.
+
+   It was `box-shadow: 0 0 0 3px` plus `border-radius: var(--r-sm)`, and both
+   halves were wrong. A box-shadow ring is painted in the element's own box, so on
+   a text input it landed under the field's border and on top of nothing else,
+   stacking with the field's own focus style into four pixels of amber; and
+   rewriting `border-radius` meant a pill button turned into a rounded rectangle
+   for as long as it was focused, which is the ring reshaping the thing it is
+   supposed to be pointing at.
+
+   `outline` is the property for this. It follows the element's real radius, it is
+   drawn outside the box so it never touches text, and it takes no space, so
+   nothing shifts. The offset keeps it clear of borders. */
 :focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 3px var(--accent-ring);
-  border-radius: var(--r-sm);
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }

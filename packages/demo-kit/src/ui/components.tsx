@@ -342,6 +342,7 @@ export function Select({
   id,
   variant = 'field',
   align = 'start',
+  className,
   'data-testid': testId,
 }: {
   value: string;
@@ -357,10 +358,15 @@ export function Select({
    * `field` is the form control. `chip` is the same control sized to sit in a row
    * of 38px header buttons: shorter, no chevron gap to spare, and it drops its
    * label under 480px so a long network name cannot push the wordmark off screen.
+   * `ghost` is a dashed pill that adds something to a list rather than changing a
+   * value: it has no current selection to show, so it shows its placeholder and no
+   * chevron, and it sits in the gap where the next row would go.
    */
-  variant?: 'field' | 'chip';
+  variant?: 'field' | 'chip' | 'ghost';
   /** Which edge of the trigger the panel hangs from. See {@link AnchoredLayer}. */
   align?: 'start' | 'center' | 'end';
+  /** Extra class on the trigger, for a state the variant does not cover. */
+  className?: string | undefined;
   'data-testid'?: string;
   /** What the trigger says before anything is chosen. Without it an unset select is
    *  an empty box, which reads as broken rather than as waiting. */
@@ -375,12 +381,25 @@ export function Select({
   const current = options.find((o) => o.value === value);
 
   const q = query.trim().toLowerCase();
-  const filtered = q ? options.filter((o) => optionText(o).toLowerCase().includes(q)) : options;
+  const filtered = useMemo(
+    () => (q ? options.filter((o) => optionText(o).toLowerCase().includes(q)) : options),
+    [q, options],
+  );
 
-  const close = () => {
+  /**
+   * Stable, and that is not a micro-optimisation.
+   *
+   * This is handed to `AnchoredLayer` as `onClose`, which built its `reposition`
+   * from it. A fresh arrow on every render therefore produced a fresh
+   * `reposition`, which re-ran the layer's layout effect AND its listener effect
+   * on every render of this component -- including every keystroke in the search
+   * box. That effect ends by moving focus to the first row, so typing a second
+   * letter took the caret out of the field and scrolled the list back to the top.
+   */
+  const close = useCallback(() => {
     setOpen(false);
     setQuery('');
-  };
+  }, []);
 
   return (
     <>
@@ -391,7 +410,9 @@ export function Select({
         className={[
           'select-trigger',
           variant === 'chip' && 'select-trigger--chip',
+          variant === 'ghost' && 'select-trigger--ghost',
           full && 'select-trigger--full',
+          className,
         ]
           .filter(Boolean)
           .join(' ')}
@@ -403,7 +424,13 @@ export function Select({
         data-testid={testId}
       >
         <span className="select-trigger__value">
-          {current?.icon}
+          {variant === 'ghost' ? (
+            <span className="select-trigger__plus" aria-hidden>
+              +
+            </span>
+          ) : (
+            current?.icon
+          )}
           <span
             className={
               current ? 'select-trigger__text' : 'select-trigger__text select-trigger__text--ph'
@@ -412,7 +439,12 @@ export function Select({
             {current ? (current.triggerLabel ?? current.label) : (placeholder ?? '')}
           </span>
         </span>
-        <IconChevron className={open ? 'select-trigger__chev is-open' : 'select-trigger__chev'} />
+        {/* A ghost trigger is an "add" affordance and carries its own leading
+            glyph; a chevron beside it would be a second thing to read as the
+            control's meaning. */}
+        {variant !== 'ghost' && (
+          <IconChevron className={open ? 'select-trigger__chev is-open' : 'select-trigger__chev'} />
+        )}
       </button>
       <AnchoredLayer
         anchorRef={anchor}
@@ -420,7 +452,7 @@ export function Select({
         onClose={close}
         label={ariaLabel}
         align={align}
-        cap={variant === 'chip' ? 380 : undefined}
+        cap={variant === 'field' ? undefined : 380}
       >
         {searchable && (
           <div className="menu__search">
@@ -545,11 +577,22 @@ function AnchoredLayer({
    */
   const pinnedWidth = useRef<number | null>(null);
 
+  /**
+   * The latest `onClose`, reachable from a callback that must not change identity.
+   *
+   * `reposition` needs to close the layer when the anchor scrolls away, and the
+   * listeners need to close on Escape and on a click outside. Taking `onClose` as
+   * a dependency made all three change on every render of the parent; reading it
+   * through a ref keeps the behaviour and makes the effects stable.
+   */
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
   const reposition = useCallback(() => {
     if (isMobile || !anchorRef.current) return;
     const r = anchorRef.current.getBoundingClientRect();
     if (r.bottom < 0 || r.top > window.innerHeight) {
-      onClose();
+      onCloseRef.current();
       return;
     }
     // Measure the panel rather than assume it. The old guess of 200 was smaller
@@ -580,23 +623,93 @@ function AnchoredLayer({
     // holds every network; it scrolls, and the search box is right above it.
     const room = Math.max(160, (openUp ? above : below) - 14);
     const maxHeight = cap ? Math.min(room, cap) : room;
-    setStyle(
-      openUp
-        ? { bottom: window.innerHeight - r.top + 6, left, width, maxHeight }
-        : { top: r.bottom + 6, left, width, maxHeight },
+    /*
+     * The corner the panel grows out of.
+     *
+     * The open animation scales from 0.97, and with the default centre origin the
+     * panel expanded from its own middle while its top-left was pinned to the
+     * trigger -- so for the length of the animation its painted edges did not
+     * match the box the position had been computed for, which reads as a jump.
+     * Growing from the corner it is anchored to is the same animation without the
+     * mismatch.
+     */
+    const transformOrigin = `${openUp ? 'bottom' : 'top'} ${
+      align === 'center' ? 'center' : align === 'end' ? 'right' : 'left'
+    }`;
+    const next: React.CSSProperties = openUp
+      ? { bottom: window.innerHeight - r.top + 6, left, width, maxHeight, transformOrigin }
+      : { top: r.bottom + 6, left, width, maxHeight, transformOrigin };
+    /*
+     * Only when something actually moved. Scroll repositions synchronously (see
+     * the listener below for why it is not rAF'd), and a fresh object every scroll
+     * event is a re-render every scroll event even when the numbers are identical,
+     * which is most of them once the panel has been clamped.
+     */
+    setStyle((prev) =>
+      prev &&
+      prev.top === next.top &&
+      prev.bottom === next.bottom &&
+      prev.left === next.left &&
+      prev.width === next.width &&
+      prev.maxHeight === next.maxHeight
+        ? prev
+        : next,
     );
-  }, [isMobile, anchorRef, onClose, align, cap]);
+  }, [isMobile, anchorRef, align, cap]);
 
   useLayoutEffect(() => {
-    if (open) reposition();
-    // A closed panel forgets its width, so the next thing to open in this layer
-    // measures itself rather than inheriting the last menu's shape.
-    else pinnedWidth.current = null;
+    if (open) {
+      reposition();
+      return;
+    }
+    /*
+     * A closed panel forgets where and how wide it was, so the next thing to open
+     * in this layer measures itself rather than inheriting the last menu's shape.
+     *
+     * The position used to be kept, and that was the second half of the flicker:
+     * `AnchoredLayer` stays mounted while only its portal returns null, so the
+     * next open re-created the panel carrying the PREVIOUS open's `left`/`top`
+     * for one commit. Worse, it also carried the previous `width`, so the
+     * `offsetWidth` measurement that is supposed to find the natural width read
+     * that stale inline width back -- a menu whose list had changed (switching the
+     * bridge from CCTP to Gateway, say) kept the old list's width for good.
+     */
+    pinnedWidth.current = null;
+    setStyle(undefined);
   }, [open, reposition]);
+
+  /**
+   * Whether the panel is still waiting to be told where it goes.
+   *
+   * Only ever true for the one commit between mounting and the layout effect
+   * below, and only on desktop, where the position is computed. A sheet has no
+   * position to wait for.
+   */
+  const unplaced = !isMobile && style === undefined;
+
+  /*
+   * Focus, once the panel is somewhere.
+   *
+   * Two things had to be right here and each broke the other. It used to share an
+   * effect with the listeners below, whose dependencies changed on every render of
+   * the parent, so every keystroke in a search box re-ran it and it moves focus to
+   * the first row: the caret left the field and the list scrolled to the top on
+   * the second letter of every search. Splitting it out fixed that and broke
+   * focus entirely, because a panel that has not been placed yet is
+   * `visibility: hidden`, and `focus()` on an invisible element is a no-op the
+   * browser does not report. So it waits for the placement rather than for the
+   * open, which is one commit later and still before anyone can type.
+   */
+  useEffect(() => {
+    if (!open || unplaced) return;
+    panelRef.current
+      ?.querySelector<HTMLElement>('.menu__search-input, [role="option"], button')
+      ?.focus();
+  }, [open, unplaced]);
 
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onCloseRef.current();
     document.addEventListener('keydown', onKey);
 
     let onDocDown: ((e: MouseEvent) => void) | undefined;
@@ -606,22 +719,20 @@ function AnchoredLayer({
       // scroll container (nested ones included, since scroll does not bubble but
       // capture listeners still see it); resize handles viewport changes. We call
       // reposition synchronously rather than via rAF, which browsers throttle on
-      // hidden/background tabs (and headless test runs).
+      // hidden/background tabs (and headless test runs). What made that
+      // affordable is that `reposition` now returns the same style object when
+      // nothing moved, so a scroll costs a layout read and not a render.
       onMove = () => reposition();
       window.addEventListener('scroll', onMove, true);
       window.addEventListener('resize', onMove);
       onDocDown = (e) => {
         const target = e.target as Node;
         if (panelRef.current?.contains(target) || anchorRef.current?.contains(target)) return;
-        onClose();
+        onCloseRef.current();
       };
       document.addEventListener('mousedown', onDocDown, true);
     }
 
-    const focusTarget = panelRef.current?.querySelector<HTMLElement>(
-      '.menu__search-input, [role="option"], button',
-    );
-    focusTarget?.focus();
     return () => {
       document.removeEventListener('keydown', onKey);
       if (onMove) {
@@ -630,7 +741,7 @@ function AnchoredLayer({
       }
       if (onDocDown) document.removeEventListener('mousedown', onDocDown, true);
     };
-  }, [open, isMobile, onClose, reposition, anchorRef]);
+  }, [open, isMobile, reposition, anchorRef]);
 
   if (!open) return null;
   return createPortal(
@@ -641,7 +752,15 @@ function AnchoredLayer({
       <div
         ref={panelRef}
         className="menu"
-        style={isMobile ? undefined : style}
+        /*
+         * Hidden until it has been placed. The measurement happens in a layout
+         * effect, which is before paint in the ordinary case -- but the panel's
+         * first commit has no `top`/`left` at all, so it is laid out at the
+         * viewport corner, and anything that lets a frame through between the two
+         * (a concurrent yield, a slow layout pass) paints it there. `visibility`
+         * rather than `display` because the measurement needs it laid out.
+         */
+        style={isMobile ? undefined : unplaced ? { visibility: 'hidden' } : style}
         role="listbox"
         aria-label={label}
         onClick={(e) => e.stopPropagation()}

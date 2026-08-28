@@ -27,15 +27,8 @@ export { makeTestProvider, installTestProvider } from './testProvider.js';
 // circleGaslessClaim, and their Node-first Circle/Bridge-Kit imports are reached
 // via the './cctp' and './gasless' subpaths, never the browser barrel.
 export {
-  BRIDGE_CHAINS,
   BRIDGE_STEPS,
   GATEWAY_STEPS,
-  GATEWAY_CHAINS,
-  GATEWAY_CHAIN_IDS,
-  chainsForEngine,
-  bridgeChainLabel,
-  type BridgeChainName,
-  type GatewayChainName,
   type BridgeStepName,
   type GatewayStepName,
   type BridgeEngine,
@@ -43,6 +36,7 @@ export {
   type BridgeOutcome,
 } from './bridgeChains.js';
 export { supportsChain, preferredChainFor, type ChainFeature } from './chainSupport.js';
+export { chainsFor, labelOf, needsWalletOn, type ChainPurpose } from './chainCatalog.js';
 export { useToken } from './useToken.js';
 export {
   DEPOSIT_STEPS,

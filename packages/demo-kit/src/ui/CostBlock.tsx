@@ -1,10 +1,29 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 
 /** One line of a {@link CostBlock}: what it is on the left, what it comes to on the right. */
 export type CostLine = {
   label: ReactNode;
   value: ReactNode;
   /** Hook for a test that needs this particular figure rather than the block. */
+  testId?: string;
+  /**
+   * What this line is made of, revealed on request. Absent means it is not
+   * divisible and the row is plain text rather than a control.
+   *
+   * A Gateway fee is the sum of a base fee per network plus one forwarding fee,
+   * and those numbers differ by a factor of a thousand: a split across Ethereum
+   * and Unichain came to 1.017, of which Unichain was 0.001. Totalled, that reads
+   * as an expensive transfer with no way to see which network made it one. It is
+   * still a total by default, because most transfers touch one network and a fee
+   * that unfolds every time is a fee that asks to be read every time.
+   */
+  breakdown?: CostBreakdown[];
+};
+
+/** One component of a divisible cost, with room for a logo in the label. */
+export type CostBreakdown = {
+  label: ReactNode;
+  value: ReactNode;
   testId?: string;
 };
 
@@ -47,17 +66,68 @@ export type CostBlockProps = {
  * what goes in both places and the label says so.
  */
 export function CostBlock({ lines, total = null, warning = null, testId }: CostBlockProps) {
+  // Which divisible lines are open, by index. Local because it is a way of looking
+  // at the block rather than anything the form is holding.
+  const [open, setOpen] = useState<Set<number>>(() => new Set());
   if (lines.length === 0 && !total) return null;
   return (
     <div className={`cost ${warning ? 'cost--warn' : ''}`} data-testid={testId}>
-      {lines.map((line, i) => (
-        <div className="cost__row" key={i}>
-          <span className="cost__k">{line.label}</span>
-          <span className="cost__v" data-testid={line.testId}>
-            {line.value}
-          </span>
-        </div>
-      ))}
+      {lines.map((line, i) => {
+        const parts = line.breakdown ?? [];
+        if (parts.length === 0) {
+          return (
+            <div className="cost__row" key={i}>
+              <span className="cost__k">{line.label}</span>
+              <span className="cost__v" data-testid={line.testId}>
+                {line.value}
+              </span>
+            </div>
+          );
+        }
+        const shown = open.has(i);
+        return (
+          <div className="cost__group" key={i}>
+            {/* The whole row is the control, not a separate caret: a figure with a
+                disclosure beside it invites two guesses about what is pressable. */}
+            <button
+              type="button"
+              className="cost__row cost__row--open"
+              aria-expanded={shown}
+              onClick={() =>
+                setOpen((prev) => {
+                  const next = new Set(prev);
+                  if (!next.delete(i)) next.add(i);
+                  return next;
+                })
+              }
+              data-testid={line.testId ? `${line.testId}-toggle` : undefined}
+            >
+              <span className="cost__k">
+                {line.label}
+                {/* Drawn in CSS rather than set as a character: at this size the
+                    glyphs for a chevron render as a smudge, and which smudge you
+                    get depends on the font that resolved. */}
+                <span className={`cost__caret ${shown ? 'cost__caret--up' : ''}`} aria-hidden />
+              </span>
+              <span className="cost__v" data-testid={line.testId}>
+                {line.value}
+              </span>
+            </button>
+            {shown && (
+              <div className="cost__break" data-testid={line.testId ? `${line.testId}-break` : undefined}>
+                {parts.map((p, j) => (
+                  <div className="cost__brow" key={j}>
+                    <span className="cost__bk">{p.label}</span>
+                    <span className="cost__bv" data-testid={p.testId}>
+                      {p.value}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
       {total && (
         <>
           <div className="cost__sep" />

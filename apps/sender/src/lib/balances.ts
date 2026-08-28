@@ -36,8 +36,17 @@ const walletUsdcStore = createBalanceStore<
   bigint | null
 >({
   // Keyed by chain and address, not the connected network: which network the
-  // wallet is on decides whether the read succeeds, not which balance it is.
+  // wallet is on decides whether the read succeeds, not which balance it is. The
+  // Base balance is the Base balance wherever the wallet stands, so keying it
+  // this way is what lets the last-known figure survive a network switch.
   keyOf: (a) => `${a.chain}:${a.address.toLowerCase()}`,
+  // But it does decide whether the read succeeds, so it belongs in the freshness.
+  // "Cannot be read from here" is a successful read of a real condition and gets
+  // cached like any other; without this the cache went on serving it after the
+  // wallet had moved onto the very chain being asked about, and the note under it
+  // promised a retry that could not happen -- `generation` advances when money
+  // moves, and switching networks is not money moving.
+  contextOf: (a) => String(a.connectedChainId),
   read: (a) => readUsdcOn(a.chain, a.connectedChainId, a.address),
 });
 

@@ -6,10 +6,26 @@ export * from './icons.js';
 export { RiskCard } from './RiskCard.js';
 export { RiskPanel, type CheckState, type PanelCheck, type PanelLevel } from './RiskPanel.js';
 export { ChainLogo } from './ChainLogo.js';
+export { ChainSelect, type ChainSelectProps } from './ChainSelect.js';
 export { MerchantLogo, MERCHANTS, merchantByName, type Merchant } from './MerchantLogo.js';
 export { AmountField, type AmountFieldProps } from './AmountField.js';
+export { Notice, type NoticeProps, type NoticeTone } from './Notice.js';
 export { GatewayFundBox, type GatewayFundBoxProps } from './GatewayFundBox.js';
-export { CostBlock, type CostBlockProps, type CostLine } from './CostBlock.js';
+export { CostBlock, type CostBlockProps, type CostBreakdown, type CostLine } from './CostBlock.js';
+export {
+  GatewaySources,
+  gatewayFeeLines,
+  gatewayPlan,
+  type GatewaySourcesProps,
+} from './GatewaySources.js';
+export {
+  capacityOf,
+  formatSubunits,
+  residualAfterAll,
+  pinsOf,
+  typedSubunits,
+  type GatewaySource,
+} from './sourceCards.js';
 export {
   sanitizeAmount,
   parseAmount,

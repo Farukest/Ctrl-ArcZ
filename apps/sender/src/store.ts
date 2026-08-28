@@ -254,3 +254,20 @@ export function saveBridge(bridge: StoredBridge): void {
     /* private mode or a full quota; the transfer itself is unaffected */
   }
 }
+
+/**
+ * Forget a record entirely.
+ *
+ * For the one case where a transfer changes its own name: a Gateway spend is
+ * written down before the wallet prompt, under an id made up on the spot, and then
+ * takes Circle's transferId as its identity when Circle answers -- because that is
+ * the id the mint is looked up by afterwards. Without this the row would be in the
+ * list twice, once under a name nothing will ever ask about again.
+ */
+export function dropBridge(id: string): void {
+  try {
+    localStorage.removeItem(BRIDGE_PREFIX + id);
+  } catch {
+    /* nothing to do: the record is a note about a transfer, not the transfer */
+  }
+}

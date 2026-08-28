@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
-import { useSession } from '@ctrl-arcz/demo-kit';
+import { useSession, type ChainPurpose } from '@ctrl-arcz/demo-kit';
 import {
   ConnectBar,
   IconHistory,
@@ -20,6 +20,7 @@ import { ActivityTab } from './components/ActivityTab.js';
 import { BridgeTab } from './components/BridgeTab.js';
 import { SubscriptionsTab } from './components/SubscriptionsTab.js';
 import { ReceiveTab } from './components/ReceiveTab.js';
+import { SourceLab } from './components/SourceLab.js';
 import { usePendingClaims } from './lib/usePendingClaims.js';
 
 // Primary destinations, kept to a handful of real places. Bridge is a secondary
@@ -48,6 +49,8 @@ export function App() {
   // the secret has to reach a person, not an address.
   const params = useMemo(() => new URLSearchParams(window.location.search), []);
   const linkTid = params.get('tid') ?? undefined;
+  // A harness for UI that needs balances the live account cannot be made to hold.
+  const lab = params.get('lab');
 
   const [mode, setMode] = useState<Mode>(linkTid ? 'receive' : 'send');
   const [tab, setTab] = useState<Tab>('pay');
@@ -122,16 +125,48 @@ export function App() {
    */
   useSettleDeposits(state.session?.address);
 
+  /**
+   * Which networks the header chip offers, which is a question about this page.
+   *
+   * Switching the wallet from the header used to be able to land anywhere in
+   * Circle's twenty testnets, and on fifteen of them the tab underneath turned
+   * into "not available on this network". The chip still says where the wallet is,
+   * whatever chain that is; what it offers is where the thing you are looking at
+   * can be done.
+   *
+   * Bridge asks for the CCTP list rather than the Gateway one because the tab
+   * holds both engines and CCTP is the wider of the two, so narrowing to Gateway's
+   * eleven would refuse nine chains that bridge perfectly well. Activity acts on
+   * nothing, so it offers the same wide list: it is where you land after a bridge.
+   */
+  const headerPurpose: ChainPurpose =
+    mode === 'receive'
+      ? 'receive'
+      : tab === 'pay'
+        ? 'protectedSend'
+        : tab === 'subscriptions'
+          ? 'subscriptions'
+          : 'cctpSource';
+
   const primaryTabs: { id: Exclude<Tab, 'activity'>; label: string }[] = [
     { id: 'pay', label: t('nav.pay') },
     { id: 'bridge', label: t('nav.bridge') },
     { id: 'subscriptions', label: t('nav.subscriptions') },
   ];
 
+  if (lab === 'sources') {
+    return (
+      <main className="app-shell">
+        <TopBar actions={<NetworkMenu state={state} purpose={headerPurpose} />} />
+        <SourceLab />
+      </main>
+    );
+  }
+
   return (
     <>
       <main className="app-shell">
-        <TopBar actions={<NetworkMenu state={state} />} />
+        <TopBar actions={<NetworkMenu state={state} purpose={headerPurpose} />} />
         <p className="subtitle">{t('app.subtitle')}</p>
 
         <ConnectBar state={state} />

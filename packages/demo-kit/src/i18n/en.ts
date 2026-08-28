@@ -12,6 +12,7 @@ export const en = {
   'cost.amount': 'Amount',
   'cost.networkMax': 'Network fee (max)',
   'cost.circleFee': 'Circle fee',
+  'cost.forwarding': 'Forwarding to {chain}',
   'cost.youPay': 'You pay',
 
   'common.appName': 'Ctrl+ArcZ',
@@ -328,26 +329,61 @@ export const en = {
   'bridge.gwBalanceLabel': 'Gateway balance',
   'bridge.feeOverAmount':
     'The fee is larger than the transfer. Another route, or one bigger transfer, costs less.',
-  'bridge.refusal.gwNoBalanceHere':
-    'No Gateway balance on {chain}. You have {amount} USDC on {other}.',
-  'bridge.refusal.gwEnoughOn':
-    'Short {missing} USDC on {chain}. {other} has {amount} USDC, enough for this.',
-  'bridge.refusal.gwShort': 'Short {amount} USDC on {chain}, fee included.',
+  // Where a Gateway payment comes from. One From block, the networks carrying it
+  // listed inside, plus the one control that adds another. Phrased as offers
+  // throughout: a payment that has outgrown one chain is not a mistake somebody
+  // made, so nothing here scolds.
+  'bridge.src.title': 'Networks',
+  'bridge.src.spendable': 'Spendable',
+  'bridge.src.count': '{n} networks',
+  'bridge.src.heldOn': '{amount} USDC in Gateway',
+  'bridge.src.ready': '{amount} available',
+  'bridge.src.legFee': 'fee {fee}',
+  'bridge.src.auto': 'split for you',
+  'bridge.src.pinned': 'set by you',
+  'bridge.src.legAria': 'Amount from {chain}',
+  'bridge.src.short': 'Still {amount} USDC short of this transfer.',
+  'bridge.src.overfill': 'The networks add up to {amount} USDC more than you are sending.',
+  'bridge.src.costlyNote': 'One leg runs over Ethereum, which charges about 1 USDC on its own.',
+  'bridge.src.add': 'Add a network',
+  // Beside each network in the add list. The fee is the whole transfer's, not this
+  // network's share: what somebody is choosing between is two complete plans.
+  'bridge.src.totalFee': '{fee} total fee',
+  'bridge.src.stillShort': '{amount} short',
+  'bridge.src.tooSmall': 'too small to use',
+  'bridge.src.cover': 'Take the other {amount} from {chain}',
+  'bridge.src.coverCostly': 'Take the other {amount} from {chain}, {fee} in fees',
+  'bridge.src.topUp': 'Top up {amount} USDC',
+  'bridge.src.remove': 'Remove {chain}',
+  // On the card that is asking for more than its chain holds. Pressing it takes
+  // the ceiling. Not an error: the chain has a limit, and this is what it is.
+  'bridge.src.overCapacity': '{chain} can send {amount} of this',
+  'bridge.src.raise': '{chain} can carry {amount} more',
+  'bridge.src.nothingHere': 'Nothing spare on {chain} for this',
+  'bridge.src.costlyAsk': 'Finishing this on {chain} means {amount} USDC in fees',
+  'bridge.src.costlyUse': 'Use {chain}',
+  'bridge.src.reduce': 'Send {amount} instead',
+  'bridge.refusal.gwShort': 'Short {amount} USDC across every chain, fee included.',
+  'bridge.refusal.gwStranded':
+    '{total} USDC in Gateway, but each chain pays its own fee. {amount} USDC is what reaches the other end.',
   'bridge.refusal.shortWithFee': 'Short {amount} USDC on {chain}, fee included.',
   'bridge.refusal.shortWithGas': 'Short {amount} USDC on {chain}, gas included.',
   'bridge.refusal.noGas': '{chain} charges gas in {symbol} and this wallet has none.',
-  'bridge.fixSwitch': 'Use {chain} instead',
   'bridge.fixDeposit': 'Deposit {amount} USDC',
   'bridge.fixMax': 'Send {amount} USDC instead',
   'bridge.gwFundTitle': 'Gateway balance',
+  'bridge.gwOnChain': 'On {chain}',
   'bridge.fundForBridgeTitle': 'Balance for Bridge',
   'bridge.gwHere': '{amount} USDC ready to send',
   'bridge.swap': 'Swap the two chains',
   'bridge.gwWalletLabel': 'Wallet balance',
   'bridge.gwWalletBalance': '{amount} USDC in your wallet on {chain}.',
   'bridge.gwWalletLoading': 'Reading your wallet balance...',
-  'bridge.gwWalletOtherChain':
-    'Your wallet is on another network, so what it holds on {chain} cannot be read yet.',
+  // Reading a balance no longer needs the wallet to be standing on that chain, so
+  // this stopped being about reading. What is still true is that a deposit is an
+  // on-chain transaction and has to happen there -- and the button handles that
+  // itself, so this says what will happen rather than what cannot.
+  'bridge.gwWalletOtherChain': 'Depositing here will switch your wallet to {chain} first.',
   'bridge.gwWalletUnreadable':
     'Your wallet did not answer for what it holds on {chain}. Retrying; the deposit field still works.',
   'bridge.gwDepositCta': 'Deposit',

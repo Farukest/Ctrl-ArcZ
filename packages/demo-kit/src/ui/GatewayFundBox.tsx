@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react';
 import { Button, Skeleton } from './components.js';
 import { Input } from './components.js';
-import { Select, type SelectOption } from './components.js';
+import { ChainSelect } from './ChainSelect.js';
+import { labelOf } from '../chainCatalog.js';
 import { useT } from '../i18n/context.js';
 import { sanitizeAmount } from './amount.js';
 
@@ -22,8 +23,17 @@ import { sanitizeAmount } from './amount.js';
 export interface GatewayFundBoxProps {
   /** Chain the deposit lands on, and the caller's source chain. */
   chain: string;
-  chainOptions: SelectOption[];
   onChainChange: (chain: string) => void;
+  /**
+   * What the Gateway balance already holds on each chain, for the picker.
+   *
+   * The list used to be eleven bare names, which asks the reader to remember
+   * where their balance already is in order to decide where to add to it. It is
+   * the balance rather than the wallet's USDC because that is the figure the app
+   * has for every chain: reading eleven wallets would be eleven RPC round trips
+   * for a dropdown.
+   */
+  balances?: Partial<Record<string, bigint>> | undefined;
   /** Gateway balance on `chain`, in USDC subunits. `null` while unread. */
   balance: bigint | null;
   /**
@@ -54,8 +64,8 @@ export interface GatewayFundBoxProps {
 
 export function GatewayFundBox({
   chain,
-  chainOptions,
   onChainChange,
+  balances,
   balance,
   balanceMissing = 'loading',
   maxDeposit,
@@ -80,7 +90,14 @@ export function GatewayFundBox({
   return (
     <div className="gwfund" data-testid="gateway-deposit-box">
       <div className="gwfund__head">
-        <span className="gwfund__title">{t('bridge.gwFundTitle')}</span>
+        {/* Named for the chain rather than "Gateway balance", which is what the
+            card around it is already called and, on the bridge, what the From
+            block calls a different and larger number two rows down. Two figures
+            one screen apart under the same words is how a person decides the app
+            cannot count. */}
+        <span className="gwfund__title">
+          {t('bridge.gwOnChain', { chain: labelOf(chain) })}
+        </span>
         <output className="gwfund__figure" data-testid="gateway-balance">
           {balance == null ? (
             <Skeleton width={92} height={17} still={balanceMissing === 'unavailable'} />
@@ -90,14 +107,25 @@ export function GatewayFundBox({
         </output>
       </div>
       <div className="gwfund__pickrow">
-        <Select
+        {/* Every chain Circle runs Gateway on, asked for by name rather than
+            handed in as a list. Both callers used to build that array themselves,
+            and one of them used a different label rule than the other. */}
+        <ChainSelect
+          purpose="gatewayDeposit"
           value={chain}
-          options={chainOptions}
           onChange={onChainChange}
+          meta={
+            balances
+              ? (c) => {
+                  const held = balances[c] ?? 0n;
+                  // Nothing rather than a zero: a row saying "0" for every chain
+                  // you have not used is noise, and the ones that matter stop
+                  // standing out.
+                  return held > 0n ? <span>{format(held)}</span> : null;
+                }
+              : undefined
+          }
           ariaLabel={t('bridge.from')}
-          searchable
-          searchPlaceholder={t('bridge.searchChain')}
-          noResultsText={t('common.noResults')}
         />
         {/* The figure is the button: pressing a balance fills the field it belongs
             to. What it shows is rounded for reading and what it fills in is exact,
@@ -149,13 +177,23 @@ export function GatewayFundBox({
       {/* Two different reasons the figure above is missing, and until now only one
           of them was on screen. The other showed a held placeholder and nothing
           else: on a light background that is a blank space beside a label, which
-          reads as a bug in the page rather than a wallet that did not answer. The
-          read repeats on a timer, so this clears itself when the wallet recovers. */}
-      {!walletOnChain ? (
-        <span className="gwfund__note">{t('bridge.gwWalletOtherChain', { chain: chainLabelOf(chainOptions, chain) })}</span>
-      ) : maxDeposit == null ? (
+          reads as a bug in the page rather than a wallet that did not answer.
+
+          Order matters and used to be the other way round: the deposit note came
+          first and hid the unreadable one, so a missing figure got an explanation
+          about depositing. No figure is the more urgent fact, so it speaks first.
+
+          The retry the second one promises is real, but it is not the timer this
+          comment used to claim: a read that failed leaves its entry stale, and the
+          store asks again the next time the value is subscribed to, which is every
+          render. Worth being exact about, because the promise is on screen. */}
+      {maxDeposit == null ? (
         <span className="gwfund__note" data-testid="gateway-wallet-unreadable">
-          {t('bridge.gwWalletUnreadable', { chain: chainLabelOf(chainOptions, chain) })}
+          {t('bridge.gwWalletUnreadable', { chain: labelOf(chain) })}
+        </span>
+      ) : !walletOnChain ? (
+        <span className="gwfund__note">
+          {t('bridge.gwWalletOtherChain', { chain: labelOf(chain) })}
         </span>
       ) : null}
       {pending > 0n && (
@@ -167,11 +205,4 @@ export function GatewayFundBox({
       {children}
     </div>
   );
-}
-
-/** The picker already knows every chain's name; asking the caller for it again is
- *  one more thing two screens could answer differently. */
-function chainLabelOf(options: SelectOption[], value: string): string {
-  const found = options.find((o) => o.value === value);
-  return found ? (found.text ?? (typeof found.label === 'string' ? found.label : value)) : value;
 }

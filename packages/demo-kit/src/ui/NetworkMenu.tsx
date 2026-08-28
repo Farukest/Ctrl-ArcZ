@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
-import { ARC_TESTNET_CHAIN_ID, CCTP_CHAINS, chainLabel, type CctpChainName } from '@ctrl-arcz/sdk';
-import { bridgeChainLabel } from '../bridgeChains.js';
+import { CCTP_CHAINS } from '@ctrl-arcz/sdk';
+import { chainsFor, labelOf, type ChainPurpose } from '../chainCatalog.js';
 import { useT } from '../i18n/context.js';
 import { ChainLogo } from './ChainLogo.js';
 import { Select } from './components.js';
@@ -24,30 +24,43 @@ import type { SessionState } from '../useSession.js';
  * A chain we have no entry for still renders, as its number. The chip's whole job
  * is to state where the wallet is; a chip that goes blank on an unknown network
  * would be silent exactly when the user is somewhere unexpected.
+ *
+ * What it OFFERS follows the page. It used to offer all twenty CCTP testnets from
+ * everywhere, and on fifteen of them every feature tab collapsed into "not
+ * available here" -- twenty doors, five of which opened. Now the page says what it
+ * can do and the chip offers the networks that can do it, so switching from here
+ * lands somewhere that works.
+ *
+ * This one keeps building its own options rather than using `ChainSelect`, and the
+ * reason is its value space: it is keyed by chain id, including ids no registry
+ * knows, because the wallet can be anywhere. Every other picker is keyed by a chain
+ * name that by definition exists.
  */
-export function NetworkMenu({ state }: { state: SessionState }) {
+export function NetworkMenu({
+  state,
+  purpose = 'cctpSource',
+}: {
+  state: SessionState;
+  /** What the page under this chip does, which decides what switching can reach. */
+  purpose?: ChainPurpose;
+}) {
   const t = useT();
   const [switching, setSwitching] = useState(false);
   const { session, switchTo } = state;
 
-  const options = useMemo(() => {
-    const names = Object.keys(CCTP_CHAINS) as CctpChainName[];
-    // Arc first: it is where every contract lives, so it is the answer to "put me
-    // back". The rest keep the registry's order, which is Circle's domain order.
-    const ordered = [
-      ...names.filter((n) => CCTP_CHAINS[n].chainId === ARC_TESTNET_CHAIN_ID),
-      ...names.filter((n) => CCTP_CHAINS[n].chainId !== ARC_TESTNET_CHAIN_ID),
-    ];
-    return ordered.map((name) => {
-      const label = bridgeChainLabel(name) === name ? chainLabel(name) : bridgeChainLabel(name);
-      return {
+  // Arc-first ordering and the label rule both come from the catalog now; this
+  // used to hold its own copy of each, and its label rule was one of the two that
+  // could disagree about what a network is called.
+  const options = useMemo(
+    () =>
+      chainsFor(purpose).map((name) => ({
         value: String(CCTP_CHAINS[name].chainId),
-        label,
-        text: label,
+        label: labelOf(name),
+        text: labelOf(name),
         icon: <ChainLogo id={name} size={18} />,
-      };
-    });
-  }, []);
+      })),
+    [purpose],
+  );
 
   if (!session) return null;
 

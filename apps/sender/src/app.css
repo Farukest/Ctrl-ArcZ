@@ -38,20 +38,27 @@
     grid-template-columns: 1fr;
   }
 }
+/* Points at the shared field tokens rather than picking its own fill and border:
+   it stands in the same forms as `.input` and `.select-trigger`, and three
+   controls on one screen with three ideas of what a field looks like is what the
+   tokens exist to stop. */
 .sub-select {
   width: 100%;
   appearance: none;
-  background: var(--bg-sunken, #070809);
-  color: var(--text-hi, #e9edf2);
-  border: 1px solid var(--border-subtle, #262d38);
+  background: var(--field-bg);
+  color: var(--text-hi);
+  border: 1px solid var(--field-border);
   border-radius: 10px;
+  box-shadow: var(--field-inset);
   padding: 10px 12px;
   font: inherit;
   cursor: pointer;
 }
-.sub-select:focus {
+.sub-select:focus,
+.sub-select:focus-visible {
   outline: none;
-  border-color: var(--accent, #f5a524);
+  border-color: var(--accent);
+  box-shadow: var(--field-inset), inset 0 0 0 1px var(--accent);
 }
 
 /* margin-top matters: both users of this put a search control directly above it,
@@ -386,3 +393,29 @@
   flex: 1 0 auto;
   width: 100%;
 }
+
+/* The source picker itself lives in demo-kit now, styles and all. What is
+   left here is the lab that drives it through scenarios a live account cannot
+   be made to hold. */
+.lab { max-width: 720px; margin: var(--sp-4) auto; }
+.lab__scenarios { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.lab__state {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+  margin: var(--sp-3) 0;
+}
+.lab__muted { color: var(--text-lo); font-size: 0.85rem; }
+.lab__amount { display: flex; align-items: center; gap: var(--sp-2); margin-top: var(--sp-2); }
+.lab__amount input {
+  flex: 1;
+  padding: var(--sp-2);
+  border-radius: var(--radius-2, 8px);
+  border: 1px solid var(--line, rgba(255, 255, 255, 0.12));
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+}
+
