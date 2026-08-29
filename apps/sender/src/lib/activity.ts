@@ -235,7 +235,6 @@ export function startRun(input: StartRun): RunHandle {
   ): Pick<StoredBridgeStep, 'txHash' | 'explorerUrl'> => {
     if (!txHash) return {};
     const chain = chainForStep(step, {
-      engine: input.engine,
       from: input.from,
       to: input.to,
       ...(input.kind ? { kind: input.kind } : {}),

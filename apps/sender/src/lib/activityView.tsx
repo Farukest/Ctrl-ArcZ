@@ -7,7 +7,13 @@
  * are not a transfer's and that `pending` means two different waits depending on
  * which of them it is.
  */
-import { deriveStepStatuses, stepsForRun, type BridgeEngine } from '@ctrl-arcz/demo-kit';
+import {
+  deriveStepStatuses,
+  stepExplorerUrl,
+  stepsForRun,
+  type BridgeEngine,
+} from '@ctrl-arcz/demo-kit';
+import type { CctpChainName } from '@ctrl-arcz/sdk';
 import { ChainLogo, relativeTime, type ActivityItem, type RowTone } from '@ctrl-arcz/demo-kit/ui';
 import { failureNote, isStalled } from './activity.js';
 import type { StoredBridge } from '../store.js';
@@ -127,7 +133,17 @@ export function toActivityItem(b: StoredBridge, t: T): ActivityItem {
         label: t(stepKey(b, name)),
         status: statuses[i] ?? 'pending',
         ...(reported?.txHash ? { txHash: reported.txHash } : {}),
-        ...(reported?.explorerUrl ? { explorerUrl: reported.explorerUrl } : {}),
+        // Derived, so a row written before an explorer existed still links now.
+        ...(() => {
+          const url = reported
+            ? stepExplorerUrl(reported, {
+                from: b.from as CctpChainName,
+                to: b.to as CctpChainName,
+                ...(b.kind ? { kind: b.kind } : {}),
+              })
+            : undefined;
+          return url ? { explorerUrl: url } : {};
+        })(),
       };
     }),
     ...(attentionOf(b) ? { attention: attentionOf(b) } : {}),

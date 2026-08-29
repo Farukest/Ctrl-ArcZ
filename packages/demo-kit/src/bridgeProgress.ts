@@ -13,6 +13,7 @@
  * renders progress that belongs to the engine it is showing. That is a rule about
  * data, not about React, so it lives here where it can be tested without a DOM.
  */
+import { chainExplorerTxUrl, type CctpChainName } from '@ctrl-arcz/sdk';
 import { BRIDGE_STEPS, GATEWAY_STEPS, type BridgeEngine } from './bridgeChains.js';
 
 /**
@@ -223,10 +224,15 @@ export function stepIndexFor(name: string, list: readonly string[]): number {
  *
  * Undefined is a real answer and the right one twice over: for a step with no
  * transaction, and for a chain with no explorer. Neither is a link to nowhere.
+ *
+ * The engine is deliberately not an input. A burn only happens on CCTP and a sign
+ * only on Gateway, so the step name already says which route it belongs to, and
+ * asking for the engine as well would be a second chance to disagree with it --
+ * on rows old enough not to carry one at all.
  */
 export function chainForStep<T extends string>(
   step: string,
-  route: { engine: BridgeEngine; from: T; to: T; kind?: string },
+  route: { from: T; to: T; kind?: string },
 ): T | undefined {
   /*
    * A deposit and a subscription happen entirely on one chain, and both record
@@ -252,4 +258,28 @@ export function chainForStep<T extends string>(
     default:
       return undefined;
   }
+}
+
+/**
+ * Where to look a step's transaction up, worked out when the row is drawn.
+ *
+ * The URL used to be computed once and stored on the step, which meant a row could
+ * never be told anything new. A transfer to Sonic Testnet was written while the
+ * registry had no Sonic explorer, so its mint kept a hash and no link; adding the
+ * explorer fixed every transfer made afterwards and did nothing at all for the one
+ * already on screen, which is the one the reader was looking at. The same was true
+ * of the chain being wrong: rewriting the step's chain only moved links on rows
+ * that had not been written yet.
+ *
+ * A link is derived from the hash and the route, both of which the row already
+ * carries, so there is nothing to migrate and nothing to go stale. Old rows pick
+ * up every correction the moment they are rendered.
+ */
+export function stepExplorerUrl(
+  step: { name: string; txHash?: string | undefined },
+  route: { from: CctpChainName; to: CctpChainName; kind?: string },
+): string | undefined {
+  if (!step.txHash) return undefined;
+  const chain = chainForStep(step.name, route);
+  return chain ? chainExplorerTxUrl(chain, step.txHash) : undefined;
 }

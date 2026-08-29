@@ -22,6 +22,7 @@ import {
 } from '@ctrl-arcz/sdk';
 import {
   deriveStepStatuses,
+  stepExplorerUrl,
   stepsForRun,
   type ActivityEntry,
   type ActivityFact,
@@ -245,13 +246,22 @@ function stepsOf(b: StoredBridge, t: T): ActivityStep[] {
   const names = stepsForRun(engine, b);
   const statuses = deriveStepStatuses(names, isStalled(b) ? { ...b, state: 'failed' } : b);
   const prefix = b.kind === 'subscription' ? 'sub.step.' : 'bridge.rowstep.';
+  const route = {
+    from: b.from as CctpChainName,
+    to: b.to as CctpChainName,
+    ...(b.kind ? { kind: b.kind } : {}),
+  };
   return names.map((name, i) => {
     const reported = b.steps.find((s) => s.name === name);
+    // Derived rather than read back: a row written before its chain had an
+    // explorer, or before the step knew which end it ran on, carries a stale
+    // answer for good otherwise. See `stepExplorerUrl`.
+    const href = reported ? stepExplorerUrl(reported, route) : undefined;
     return {
       label: t(`${prefix}${name}`),
       state: (statuses[i] ?? 'pending') as ActivityStep['state'],
       ...(reported?.txHash ? { txHash: reported.txHash } : {}),
-      ...(reported?.explorerUrl ? { href: reported.explorerUrl } : {}),
+      ...(href ? { href } : {}),
     };
   });
 }
@@ -286,6 +296,14 @@ export function bridgeEntries(bridges: readonly StoredBridge[], t: T): ActivityE
     ].filter(Boolean);
 
     const receipt = b.steps.find((s) => s.txHash);
+    // The same derivation as the steps: the receipt is one of them.
+    const receiptHref = receipt
+      ? stepExplorerUrl(receipt, {
+          from: b.from as CctpChainName,
+          to: b.to as CctpChainName,
+          ...(b.kind ? { kind: b.kind } : {}),
+        })
+      : undefined;
     return {
       id: b.id,
       at: b.createdAt,
@@ -342,7 +360,7 @@ export function bridgeEntries(bridges: readonly StoredBridge[], t: T): ActivityE
                 display: short(receipt.txHash),
                 copy: true,
                 mono: true,
-                ...(receipt.explorerUrl ? { href: receipt.explorerUrl } : {}),
+                ...(receiptHref ? { href: receiptHref } : {}),
               },
             ]
           : []),

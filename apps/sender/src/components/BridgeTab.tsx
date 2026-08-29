@@ -36,6 +36,7 @@ import { knownBoxes } from '../lib/useSubscriptions.js';
 import {
   chainForStep,
   chainsFor,
+  stepExplorerUrl,
   labelOf,
   ownedBy,
   stepIndexFor,
@@ -149,7 +150,7 @@ function stepRow(name: string, txHash?: string, chain?: CctpChainName) {
 function routedStep(
   name: string,
   txHash: string | undefined,
-  route: { engine: BridgeEngine; from: CctpChainName; to: CctpChainName },
+  route: { from: CctpChainName; to: CctpChainName },
 ) {
   return stepRow(name, txHash, chainForStep(name, route));
 }
@@ -162,13 +163,25 @@ function routedStep(
  * so the attestation never appeared at all, and on the two chains with no explorer
  * in the registry a completed transfer looked like it had done nothing.
  */
-function rowStep(s: StoredBridgeStep, t: (k: 'bridge.rowstep.mint') => string): RowStep {
+function rowStep(
+  s: StoredBridgeStep,
+  t: (k: 'bridge.rowstep.mint') => string,
+  route: { from: CctpChainName; to: CctpChainName; kind?: string },
+): RowStep {
   // A row is a record, not a progress bar. The live stepper says "Minting on the
   // destination chain"; a finished row only needs the noun.
   return {
     label: t(`bridge.rowstep.${s.name}` as 'bridge.rowstep.mint'),
     ...(s.txHash ? { txHash: s.txHash } : {}),
-    ...(s.explorerUrl ? { explorerUrl: s.explorerUrl } : {}),
+    /*
+     * Derived now, not read back from the record. A row written before its
+     * chain had an explorer, or before the step knew which end it ran on,
+     * carries a stale answer for good otherwise.
+     */
+    ...(() => {
+      const url = stepExplorerUrl(s, route);
+      return url ? { explorerUrl: url } : {};
+    })(),
   };
 }
 
@@ -1186,7 +1199,7 @@ export function BridgeTab({ session }: { session: Session }) {
             onStep: (step, txHash) => {
               const name = GW_STEP_TO_UI[step];
               if (!name) return;
-              reported.push(routedStep(name, txHash, { engine: 'gateway', from, to }));
+              reported.push(routedStep(name, txHash, { from, to }));
               // Onto the row as well as into the list, so what is on screen moves
               // while the transfer does rather than all at once at the end.
               record.done(name, txHash);
@@ -1326,7 +1339,7 @@ export function BridgeTab({ session }: { session: Session }) {
           onStep: (step, txHash) => {
             const name = SDK_STEP_TO_UI[step];
             if (!name) return; // quoting is instant; it has no row of its own
-            reported.push(routedStep(name, txHash, { engine: 'cctp', from, to }));
+            reported.push(routedStep(name, txHash, { from, to }));
             /*
              * The approval, written down the moment it lands.
              *
@@ -1874,15 +1887,21 @@ export function BridgeTab({ session }: { session: Session }) {
 
         {shownResult?.state === 'success' && (
           <div className="row wrap" style={{ marginTop: 14 }} data-testid="bridge-success">
+            {/* Derived here too, so this block and the row below it cannot end up
+                pointing at different explorers for the same transaction. */}
             {shownResult.steps
-              .filter((s) => s.txHash && safeHttpUrl(s.explorerUrl))
-              .map((s) => (
+              .map((s) => ({
+                step: s,
+                href: safeHttpUrl(stepExplorerUrl(s, { from, to })),
+              }))
+              .filter(({ step, href }) => step.txHash && href)
+              .map(({ step, href }) => (
                 <TxLink
-                  key={s.name}
-                  href={safeHttpUrl(s.explorerUrl)}
-                  label={s.name}
-                  copyValue={s.txHash ?? ''}
-                  title={reportedLabel(s.name)}
+                  key={step.name}
+                  href={href}
+                  label={step.name}
+                  copyValue={step.txHash ?? ''}
+                  title={reportedLabel(step.name)}
                 />
               ))}
           </div>
@@ -2006,7 +2025,15 @@ export function BridgeTab({ session }: { session: Session }) {
                     )}
                   </HistoryRow.Facts>
                 )}
-                <HistoryRow.Steps steps={b.steps.map((s) => rowStep(s, t))} />
+                <HistoryRow.Steps
+                  steps={b.steps.map((s) =>
+                    rowStep(s, t, {
+                      from: b.from as CctpChainName,
+                      to: b.to as CctpChainName,
+                      ...(b.kind ? { kind: b.kind } : {}),
+                    }),
+                  )}
+                />
               </HistoryRow>
             )}
           />

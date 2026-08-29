@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   chainForStep,
+  stepExplorerUrl,
   deriveStepStatuses,
   jobForEngine,
   ownedBy,
@@ -370,8 +371,8 @@ describe('chainForStep', () => {
    * the destination the link vanished instead of moving, because Sonic had no
    * explorer in the registry at all. Two defects reading as one symptom.
    */
-  const gw = { engine: 'gateway' as const, from: 'Ethereum_Sepolia', to: 'Sonic_Testnet' };
-  const cctp = { engine: 'cctp' as const, from: 'Arc_Testnet', to: 'Base_Sepolia' };
+  const gw = { from: 'Ethereum_Sepolia', to: 'Sonic_Testnet' };
+  const cctp = { from: 'Arc_Testnet', to: 'Base_Sepolia' };
 
   it('puts the mint at the far end, which is the whole point of a bridge', () => {
     expect(chainForStep('mint', gw)).toBe('Sonic_Testnet');
@@ -399,7 +400,7 @@ describe('chainForStep', () => {
   it('keeps a deposit on its one chain, whatever the step is called', () => {
     // A deposit and a subscription happen entirely on one chain and record
     // from === to, so no step of theirs can be sent to the wrong end.
-    const dep = { engine: 'gateway' as const, from: 'Base_Sepolia', to: 'Base_Sepolia', kind: 'deposit' };
+    const dep = { from: 'Base_Sepolia', to: 'Base_Sepolia', kind: 'deposit' };
     for (const step of ['approve', 'deposit', 'counted', 'mint']) {
       expect(chainForStep(step, dep)).toBe('Base_Sepolia');
     }
@@ -412,5 +413,44 @@ describe('chainForStep', () => {
         expect(answer === undefined || answer === route.from || answer === route.to).toBe(true);
       }
     }
+  });
+});
+
+describe('stepExplorerUrl', () => {
+  /**
+   * A link has to be derived, not remembered.
+   *
+   * The URL used to be computed once and written onto the step, so a row could
+   * never be told anything new. The transfer that exposed it went to Sonic Testnet
+   * while the registry had no Sonic explorer: its mint kept a hash and no link,
+   * and adding the explorer afterwards fixed every transfer made later and did
+   * nothing for the one already on screen.
+   */
+  const sonic = { from: 'Ethereum_Sepolia' as const, to: 'Sonic_Testnet' as const };
+  const hash = '0xb9118aad3abcdff21b17fc034f2baccf05f87bff026866b45d78951c2f680697';
+
+  it('sends the mint to the destination chain’s explorer', () => {
+    expect(stepExplorerUrl({ name: 'mint', txHash: hash }, sonic)).toBe(
+      `https://testnet.sonicscan.org/tx/${hash}`,
+    );
+  });
+
+  it('sends the source chain’s transactions to the source chain’s explorer', () => {
+    const r = { from: 'Arc_Testnet' as const, to: 'Base_Sepolia' as const };
+    expect(stepExplorerUrl({ name: 'burn', txHash: hash }, r)).toContain('testnet.arcscan.app');
+    expect(stepExplorerUrl({ name: 'mint', txHash: hash }, r)).toContain('sepolia.basescan.org');
+  });
+
+  it('offers nothing for a step that has no transaction', () => {
+    expect(stepExplorerUrl({ name: 'sign' }, sonic)).toBeUndefined();
+    expect(stepExplorerUrl({ name: 'attestation', txHash: hash }, sonic)).toBeUndefined();
+  });
+
+  it('offers nothing rather than a link that will not resolve', () => {
+    // Morph Hoodi has no explorer anyone could confirm, so the row keeps the hash
+    // and offers to copy it instead of pointing somewhere that 404s.
+    expect(
+      stepExplorerUrl({ name: 'mint', txHash: hash }, { from: 'Arc_Testnet', to: 'Morph_Hoodi' }),
+    ).toBeUndefined();
   });
 });

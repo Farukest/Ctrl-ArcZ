@@ -41,6 +41,7 @@ export { useToken } from './useToken.js';
 export {
   DEPOSIT_STEPS,
   chainForStep,
+  stepExplorerUrl,
   stepsForEngine,
   stepsForRun,
   ownedBy,
