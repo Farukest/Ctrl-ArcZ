@@ -19,7 +19,6 @@ import {
   maxDepositable,
   gatewayShortfall,
   cctpShortfall,
-  isBoxFunding,
   type CctpChainName,
   type CctpStep,
   type GatewayChain,
@@ -32,7 +31,7 @@ import {
   switchWalletTo,
   useWalletChain,
 } from '@ctrl-arcz/demo-kit';
-import { knownBoxes } from '../lib/useSubscriptions.js';
+import { hrefFor, type ActivityView } from '../lib/route.js';
 import {
   chainForStep,
   chainsFor,
@@ -62,23 +61,16 @@ import {
   gatewayPlan,
   type GatewaySource,
   ActivityBlock,
-  HistoryList,
-  HistoryRow,
-  Address as AddressChip,
-  Copyable,
-  relativeTime,
-  short,
   TxLink,
   useSubmitGuard,
   useT,
   useToast,
-  type RowStep,
 } from '@ctrl-arcz/demo-kit/ui';
-import { loadBridges, saveBridge, type StoredBridge, type StoredBridgeStep } from '../store.js';
+import { loadBridges, saveBridge, type StoredBridgeStep } from '../store.js';
 import { useRecipientGate } from '../lib/useRecipientGate.js';
 import { RiskGate } from './RiskGate.js';
 import { pendingOn, rememberDeposit } from '../lib/pendingDeposits.js';
-import { failureNote, startRun, useActivity } from '../lib/activity.js';
+import { refreshActivity, startRun, useActivity } from '../lib/activity.js';
 import { activityLabels, toActivityItem } from '../lib/activityView.js';
 import { useGatewayBalances, useWalletUsdc } from '../lib/balances.js';
 import { bumpBalances } from '../lib/balanceStore.js';
@@ -86,7 +78,6 @@ import { bumpBalances } from '../lib/balanceStore.js';
 // The wallet signs both engines, so there is no key here to gate on. A plain flag
 // is enough to hide the tab where a deployment does not want it.
 const bridgeEnabled = import.meta.env.VITE_BRIDGE_ENABLED !== 'false';
-const HISTORY_PAGE_SIZE = 5;
 
 /**
  * The SDK names its steps after what CCTP does; the stepper is labelled for what a
@@ -155,35 +146,6 @@ function routedStep(
   return stepRow(name, txHash, chainForStep(name, route));
 }
 
-/**
- * A stored step as the shared row wants it.
- *
- * Every step is shown, including the ones with no transaction of their own. The
- * previous row rendered a step only when it had both a hash and an https explorer,
- * so the attestation never appeared at all, and on the two chains with no explorer
- * in the registry a completed transfer looked like it had done nothing.
- */
-function rowStep(
-  s: StoredBridgeStep,
-  t: (k: 'bridge.rowstep.mint') => string,
-  route: { from: CctpChainName; to: CctpChainName; kind?: string },
-): RowStep {
-  // A row is a record, not a progress bar. The live stepper says "Minting on the
-  // destination chain"; a finished row only needs the noun.
-  return {
-    label: t(`bridge.rowstep.${s.name}` as 'bridge.rowstep.mint'),
-    ...(s.txHash ? { txHash: s.txHash } : {}),
-    /*
-     * Derived now, not read back from the record. A row written before its
-     * chain had an explorer, or before the step knew which end it ran on,
-     * carries a stale answer for good otherwise.
-     */
-    ...(() => {
-      const url = stepExplorerUrl(s, route);
-      return url ? { explorerUrl: url } : {};
-    })(),
-  };
-}
 
 /**
  * Only allow https links to be rendered. Explorer URLs are persisted in
@@ -194,22 +156,15 @@ function safeHttpUrl(url?: string): string | undefined {
   return url && /^https:\/\//i.test(url) ? url : undefined;
 }
 
-/** Everything a bridge row can be searched by, as one lowercased haystack. */
-function bridgeHaystack(b: StoredBridge): string {
-  return [
-    b.fromLabel,
-    b.toLabel,
-    b.from,
-    b.to,
-    `${b.amount} usdc`,
-    b.state,
-    ...b.steps.map((s) => s.txHash ?? ''),
-  ]
-    .join(' ')
-    .toLowerCase();
-}
 
-export function BridgeTab({ session }: { session: Session }) {
+export function BridgeTab({
+  session,
+  onOpenActivity,
+}: {
+  session: Session;
+  /** Take the reader to the Activity screen, on the row set named. */
+  onOpenActivity?: (view: ActivityView) => void;
+}) {
   const t = useT();
   const toast = useToast();
   const guard = useSubmitGuard();
@@ -289,8 +244,6 @@ export function BridgeTab({ session }: { session: Session }) {
     engine === 'gateway'
       ? ((toChoice && engineChains.includes(toChoice) ? toChoice : 'Arc_Testnet') as CctpChainName)
       : destinationChain(engineChains, from, toChoice, 'Arc_Testnet');
-  /** Which half of the bridge records the history is showing. */
-  const [histKind, setHistKind] = useState<'bridge' | 'subs'>('bridge');
   /**
    * Per chain, because that is what a transfer actually spends. Showing only the
    * total would tell someone with money on Arc that they can send from Base.
@@ -392,7 +345,6 @@ export function BridgeTab({ session }: { session: Session }) {
    * and wipe the other one's live progress, which reads as a transfer that stopped
    * happening. A finisher now only clears the slot if the slot is still its own.
    */
-  const [bridges, setBridges] = useState<StoredBridge[]>(() => loadBridges());
   /**
    * The row this screen has just created, for the block to point at once.
    *
@@ -402,7 +354,6 @@ export function BridgeTab({ session }: { session: Session }) {
    * followed.
    */
   const [spotlight, setSpotlight] = useState<string | null>(null);
-  const [histEngine, setHistEngine] = useState<'all' | BridgeEngine>('all');
   /*
    * The same records, read the live way, for the block at the bottom.
    *
@@ -854,7 +805,6 @@ export function BridgeTab({ session }: { session: Session }) {
    * has been recognised yet, and every record lands in the ordinary half, which is
    * the honest answer when we do not know.
    */
-  const { boxes: myBoxes, names: boxNames } = knownBoxes(session.address, session.chainId);
 
   /** The five rows at the top of the block, unfiltered: recent means recent. */
   const activityItems = useMemo(
@@ -862,19 +812,6 @@ export function BridgeTab({ session }: { session: Session }) {
     [activity, t],
   );
 
-  /** Only the engine filter stays here; search, date and paging are the list's. */
-  const filteredByEngine = useMemo(
-    () =>
-      bridges.filter(
-        (b) =>
-          (histEngine === 'all' || (b.engine ?? 'cctp') === histEngine) &&
-          // The two halves are one list filtered twice, and complementary on
-          // purpose: a record belongs to exactly one, so nothing shows up twice and
-          // nothing falls out of both.
-          isBoxFunding(b.recipient, myBoxes) === (histKind === 'subs'),
-      ),
-    [bridges, histEngine, histKind, myBoxes],
-  );
 
   /**
    * Finish transfers that were interrupted between the burn and the mint.
@@ -918,7 +855,7 @@ export function BridgeTab({ session }: { session: Session }) {
              */
             if (back >= BigInt(b.returnBaseline)) {
               saveBridge({ ...b, state: 'returned' });
-              setBridges(loadBridges());
+              refreshActivity();
               toast.push(t('bridge.returnedToast').replace('{amount}', b.amount), 'success');
             }
             continue;
@@ -939,7 +876,7 @@ export function BridgeTab({ session }: { session: Session }) {
                   ]
                 : b.steps,
             });
-            setBridges(loadBridges());
+            refreshActivity();
             toast.push(t('bridge.recovered').replace('{amount}', b.amount), 'success');
             continue;
           }
@@ -958,7 +895,7 @@ export function BridgeTab({ session }: { session: Session }) {
             state: 'returning',
             ...(status.reason ? { failureReason: status.reason } : {}),
           });
-          setBridges(loadBridges());
+          refreshActivity();
           continue;
         }
         const burnTxHash = b.steps.find((s) => s.name === 'burn')?.txHash;
@@ -981,7 +918,7 @@ export function BridgeTab({ session }: { session: Session }) {
             stepRow('mint', forward, b.to as CctpChainName),
           ],
         });
-        setBridges(loadBridges());
+        refreshActivity();
         toast.push(t('bridge.recovered').replace('{amount}', b.amount), 'success');
       }
     };
@@ -1245,7 +1182,7 @@ export function BridgeTab({ session }: { session: Session }) {
                 ...(gwCeiling != null ? { fee: usdc(gwCeiling) } : {}),
               });
               setSpotlight(transferId);
-              setBridges(loadBridges());
+              refreshActivity();
             },
           },
         );
@@ -1272,7 +1209,7 @@ export function BridgeTab({ session }: { session: Session }) {
           ...(gwCeiling != null ? { fee: usdc(gwCeiling) } : {}),
           createdAt: Date.now(),
         });
-        setBridges(loadBridges());
+        refreshActivity();
         // The spend moved money out of Gateway: refresh every screen watching it.
         bumpBalances();
         toast.push(
@@ -1290,7 +1227,7 @@ export function BridgeTab({ session }: { session: Session }) {
          * the intent" are not the same line.
          */
         record.fail(reported.length > 0 ? 'attestation' : 'sign', e);
-        setBridges(loadBridges());
+        refreshActivity();
         toast.fail(e);
       } finally {
         dispatch.release();
@@ -1392,7 +1329,7 @@ export function BridgeTab({ session }: { session: Session }) {
                 ...(quotedFee ? { fee: quotedFee } : {}),
                 createdAt: Date.now(),
               });
-              setBridges(loadBridges());
+              refreshActivity();
             }
           },
         },
@@ -1426,7 +1363,7 @@ export function BridgeTab({ session }: { session: Session }) {
         fee: usdc(res.quote.maxFee),
         createdAt: Date.now(),
       });
-      setBridges(loadBridges());
+      refreshActivity();
       toast.push(
         res.forwardTxHash ? t('bridge.done') : t('bridge.forwardPending'),
         res.forwardTxHash ? 'success' : 'info',
@@ -1446,7 +1383,7 @@ export function BridgeTab({ session }: { session: Session }) {
       const names = stepsForEngine('cctp');
       const last = names.find((name) => !done.has(name)) ?? names[names.length - 1] ?? 'approve';
       record.fail(last, e);
-      setBridges(loadBridges());
+      refreshActivity();
       toast.fail(e, { step: `bridge.rowstep.${last}` });
     } finally {
       dispatch.release();
@@ -1923,121 +1860,16 @@ export function BridgeTab({ session }: { session: Session }) {
           items={activityItems}
           labels={activityLabels(t as never, t('activity.title'))}
           spotlight={spotlight}
+          /*
+           * The whole list lives on the Activity screen, so `All` goes there
+           * rather than unfolding a second copy of it here. What was in this
+           * block was the same rows the reader was already looking at with a
+           * search box and a date filter under them, on a screen that has its
+           * own search box and date filter.
+           */
+          all={{ href: hrefFor('activity', 'bridge'), onNavigate: () => onOpenActivity?.('bridge') }}
           data-testid="bridge-activity"
-        >
-          {/* Two halves of one list. Written as a second component they would be two
-              copies of the filtering, paging and day grouping below, and the first
-              change to either is where they would start disagreeing. */}
-          <div className="bridge-engine" style={{ marginBottom: 12 }}>
-            <SegmentedTabs
-              tabs={[
-                { id: 'bridge', label: t('bridge.historyKindBridge') },
-                { id: 'subs', label: t('bridge.historyKindSubs') },
-              ]}
-              value={histKind}
-              onChange={(v) => setHistKind(v as 'bridge' | 'subs')}
-            />
-          </div>
-          <HistoryList
-            items={filteredByEngine}
-            data-testid="bridge-history-list"
-            reserveId="bridge-history"
-            searchText={bridgeHaystack}
-            timestamp={(b) => b.createdAt}
-            rowKey={(b) => b.id}
-            searchPlaceholder={t('bridge.historySearch')}
-            emptyText={t('bridge.historyEmpty')}
-            noMatchText={t('bridge.historyNoMatch')}
-            pageSize={HISTORY_PAGE_SIZE}
-            control={{
-              value: histEngine,
-              ariaLabel: t('bridge.filterEngine'),
-              onChange: (v) => setHistEngine(v as 'all' | BridgeEngine),
-              options: [
-                { value: 'all', label: t('bridge.filterAll') },
-                { value: 'cctp', label: t('bridge.engine.cctp') },
-                { value: 'gateway', label: t('bridge.engine.gateway') },
-              ],
-            }}
-            renderRow={(b) => (
-              <HistoryRow data-testid="bridge-history-row">
-                <HistoryRow.Head
-                  lead={
-                    <>
-                      <ChainLogo id={b.from} size={18} />
-                      {b.fromLabel}
-                      <span className="hrow__arrow" aria-hidden>
-                        &rarr;
-                      </span>
-                      <ChainLogo id={b.to} size={18} />
-                      {b.toLabel}
-                      {/* On a funding row the destination chain is always Arc and
-                          always the same, so what the row is actually about is
-                          which subscription it paid for. */}
-                      {histKind === 'subs' && b.recipient && (
-                        <span className="hrow__for">
-                          {boxNames.get(b.recipient.toLowerCase()) ?? short(b.recipient)}
-                        </span>
-                      )}
-                    </>
-                  }
-                  amount={`${b.amount} USDC`}
-                  status={{
-                    /* `returning` reads as in-flight rather than as a failure,
-                       because that is what it is: the mint did not happen and the
-                       money is on its way back. A red cross next to an amount that
-                       is coming back is the one thing this row must not say. */
-                    tone:
-                      b.state === 'success' || b.state === 'returned'
-                        ? 'ok'
-                        : b.state === 'error'
-                          ? 'err'
-                          : 'idle',
-                    label: t(`bridge.state.${b.state}` as 'bridge.state.success'),
-                  }}
-                  time={relativeTime(b.createdAt)}
-                />
-                {/* One line, and only what is known. Why the mint failed is true
-                    for this transfer and not for every ON_CHAIN_FAILURE, so the
-                    row says what happened and Circle's own words go in the facts
-                    below rather than being turned into an explanation. */}
-                {(b.state === 'returning' || b.state === 'returned') && (
-                  <p className="hrow__note" data-testid="bridge-return-note">
-                    {t(b.state === 'returning' ? 'bridge.returnNote' : 'bridge.returnedNote')}
-                  </p>
-                )}
-                {/* A recipient is only shown when the money went to someone else.
-                    Printing the sender's own address as a "to" is noise. */}
-                {(b.recipient || b.id) && (
-                  <HistoryRow.Facts>
-                    {b.recipient && (
-                      <HistoryRow.Fact label={t('bridge.rowTo')}>
-                        <AddressChip address={b.recipient} />
-                      </HistoryRow.Fact>
-                    )}
-                    <HistoryRow.Fact label={t('bridge.rowReceipt')}>
-                      <Copyable value={b.id} display={short(b.id)} />
-                    </HistoryRow.Fact>
-                    {failureNote(b, t as never) && (
-                      <HistoryRow.Fact label={t('bridge.rowReason')}>
-                        <span>{failureNote(b, t as never)}</span>
-                      </HistoryRow.Fact>
-                    )}
-                  </HistoryRow.Facts>
-                )}
-                <HistoryRow.Steps
-                  steps={b.steps.map((s) =>
-                    rowStep(s, t, {
-                      from: b.from as CctpChainName,
-                      to: b.to as CctpChainName,
-                      ...(b.kind ? { kind: b.kind } : {}),
-                    }),
-                  )}
-                />
-              </HistoryRow>
-            )}
-          />
-        </ActivityBlock>
+        />
       </div>
     </>
   );

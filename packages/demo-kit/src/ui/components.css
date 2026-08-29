@@ -3564,6 +3564,9 @@ a.hstep__go:hover {
   font: inherit;
   font-size: 12px;
   color: var(--accent);
+  /* An anchor now, so it carries the underline a link would and gives it up
+     until hover, which is how it read as a button before. */
+  text-decoration: none;
 }
 .ablock__all:hover {
   text-decoration: underline;
@@ -3574,12 +3577,6 @@ a.hstep__go:hover {
   gap: 8px;
   min-width: 0;
 }
-.ablock__all-list {
-  margin-top: 6px;
-  padding-top: 12px;
-  border-top: 1px solid var(--border-subtle);
-}
-
 .arow {
   display: flex;
   flex-direction: column;

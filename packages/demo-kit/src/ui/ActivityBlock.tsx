@@ -22,6 +22,7 @@
  * because it already spoke about the attempt is worse.
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { isPlainClick } from '../isPlainClick.js';
 import { IconCheck, IconExternal } from './icons.js';
 import { CopyButton, short } from './components.js';
 import type { StepStatus } from '../bridgeProgress.js';
@@ -62,7 +63,6 @@ export interface ActivityLabels {
   title: string;
   empty: string;
   all: string;
-  collapse: string;
   /** All three carry `{n}`. */
   running: string;
   failed: string;
@@ -156,7 +156,7 @@ export function ActivityBlock({
   labels,
   limit = 5,
   spotlight,
-  children,
+  all,
   ...rest
 }: {
   /** Newest first. */
@@ -173,13 +173,23 @@ export function ActivityBlock({
    * is not, and either way it is finished with as soon as it has been followed.
    */
   spotlight?: string | null;
-  /** The full list, revealed behind `All`. Omitted where there is nothing more. */
-  children?: ReactNode;
+  /**
+   * Where the whole list lives, as a link.
+   *
+   * `All` used to unfold a second copy of that list inside this block: the same
+   * rows the reader was already looking at, with a search box and a date filter
+   * bolted underneath them. Two lists of one thing on one screen, and the fuller
+   * one had a screen of its own the whole time.
+   *
+   * A link rather than a handler, so it can be middle-clicked into a new tab and
+   * copied like any other address. `onNavigate` is only for the plain left click,
+   * which stays inside the page.
+   */
+  all?: { href: string; onNavigate: () => void } | undefined;
 } & { [k: `data-${string}`]: string }) {
   const blockRef = useRef<HTMLDivElement | null>(null);
   const [onScreen, setOnScreen] = useState(true);
   const [lit, setLit] = useState<readonly string[]>([]);
-  const [expanded, setExpanded] = useState(false);
   /**
    * Runs already followed, keyed by the state they were in when they were.
    *
@@ -359,19 +369,26 @@ export function ActivityBlock({
       <div className="ablock" ref={blockRef} {...rest}>
         <div className="ablock__head">
           <span className="ablock__title">{labels.title}</span>
-          {/* Offered whenever there is a fuller list behind it, even when the rows
-              above already show everything: that list carries the search and the
+          {/* Offered whenever there is a fuller list to go to, even when the rows
+              above already show everything: that screen carries the search and the
               filters, and "there are only four rows today" is not a reason to put
               them out of reach. */}
-          {children && (
-            <button
-              type="button"
+          {all && (
+            <a
               className="ablock__all"
-              onClick={() => setExpanded((v) => !v)}
+              href={all.href}
+              onClick={(e) => {
+                // Only the plain click is ours. A middle click, or one with a
+                // modifier, is the reader asking for a new tab and the browser
+                // does that better than we can.
+                if (!isPlainClick(e)) return;
+                e.preventDefault();
+                all.onNavigate();
+              }}
               data-testid="activity-all"
             >
-              {expanded ? labels.collapse : labels.all}
-            </button>
+              {labels.all}
+            </a>
           )}
         </div>
 
@@ -387,7 +404,6 @@ export function ActivityBlock({
           </div>
         )}
 
-        {expanded && children && <div className="ablock__all-list">{children}</div>}
       </div>
     </>
   );

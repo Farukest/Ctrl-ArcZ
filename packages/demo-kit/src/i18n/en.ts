@@ -447,7 +447,6 @@ export const en = {
   'activity.fundingTitle': 'Recent funding',
   'activity.empty': 'Nothing from this browser yet.',
   'activity.all': 'All',
-  'activity.collapse': 'Show less',
   'activity.running': '{n} in progress',
   'activity.failed': '{n} needs a look',
   'activity.fresh': 'Just now',

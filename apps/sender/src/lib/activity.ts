@@ -100,6 +100,20 @@ function announce(): void {
   for (const fn of listeners) fn();
 }
 
+/**
+ * Tell every list on screen to look again.
+ *
+ * For the writes that go straight to the store rather than through a run handle:
+ * the recovery pass and the completion handlers call `saveBridge` directly, and
+ * without this their rows would only appear on the fifteen second sweep. It used
+ * to be a `setState` in the screen that made the write, which worked while that
+ * screen drew its own copy of the list and stopped meaning anything when the list
+ * moved to the Activity screen.
+ */
+export function refreshActivity(): void {
+  announce();
+}
+
 /** Write, then tell every list on screen. */
 function put(bridge: StoredBridge): void {
   saveBridge({ ...bridge, updatedAt: Date.now() });

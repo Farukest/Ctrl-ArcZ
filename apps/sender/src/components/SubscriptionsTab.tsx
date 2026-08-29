@@ -47,6 +47,7 @@ import {
   type Session,
 } from '@ctrl-arcz/demo-kit';
 import { getStealthKeys } from '../lib/stealthKeys.js';
+import { hrefFor, type ActivityView } from '../lib/route.js';
 import { relayCreateBox, relayStealthGas } from '../lib/relay.js';
 import {
   AmountField,
@@ -161,9 +162,12 @@ function subHaystack(s: Subscription): string {
 export function SubscriptionsTab({
   session,
   onSwitchChain,
+  onOpenActivity,
 }: {
   session: Session;
   onSwitchChain: (chainId: number) => Promise<void>;
+  /** Take the reader to the Activity screen, on the row set named. */
+  onOpenActivity?: (view: ActivityView) => void;
 }) {
   const t = useT();
   /**
@@ -1456,6 +1460,7 @@ export function SubscriptionsTab({
           items={activityItems}
           labels={activityLabels(t as never, t('activity.fundingTitle'))}
           spotlight={spotlight}
+          all={{ href: hrefFor('activity', 'subs'), onNavigate: () => onOpenActivity?.('subs') }}
           data-testid="sub-activity"
         />
       </div>

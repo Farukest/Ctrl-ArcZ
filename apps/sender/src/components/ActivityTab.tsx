@@ -37,11 +37,20 @@ type View = 'sent' | 'history' | 'bridge' | 'subs';
 
 const PAGE_SIZE = 8;
 
-export function ActivityTab({ session, onChange }: { session: Session; onChange: () => void }) {
+export function ActivityTab({
+  session,
+  onChange,
+  initialView,
+}: {
+  session: Session;
+  onChange: () => void;
+  /** Which row set to open on, when the address named one. */
+  initialView?: View;
+}) {
   const t = useT();
   const toast = useToast();
   const guard = useSubmitGuard();
-  const [view, setView] = useState<View>('sent');
+  const [view, setView] = useState<View>(initialView ?? 'sent');
   const [busy, setBusy] = useState<string | null>(null);
 
   const sent = useSentTransfers(session);

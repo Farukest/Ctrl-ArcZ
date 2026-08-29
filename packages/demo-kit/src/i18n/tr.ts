@@ -394,7 +394,6 @@ export const tr: Record<TranslationKey, string> = {
   'activity.fundingTitle': 'Son yüklemeler',
   'activity.empty': 'Bu tarayıcıdan henüz bir işlem yok.',
   'activity.all': 'Tümü',
-  'activity.collapse': 'Daha az',
   'activity.running': '{n} işlem sürüyor',
   'activity.failed': '{n} işleme bakman lazım',
   'activity.fresh': 'Az önce',

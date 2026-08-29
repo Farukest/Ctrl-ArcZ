@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
-import { useSession, type ChainPurpose } from '@ctrl-arcz/demo-kit';
+import { useSession, isPlainClick, type ChainPurpose } from '@ctrl-arcz/demo-kit';
+import { hrefFor, pushRoute, readRoute, type ActivityView } from './lib/route.js';
 import {
   ConnectBar,
   IconHistory,
@@ -53,7 +54,15 @@ export function App() {
   const lab = params.get('lab');
 
   const [mode, setMode] = useState<Mode>(linkTid ? 'receive' : 'send');
-  const [tab, setTab] = useState<Tab>('pay');
+  /*
+   * The tab is in the address, so it can be linked to, opened in a new tab and
+   * gone back to. Read once for the first render and kept in step with the
+   * browser's own history below.
+   */
+  const [tab, setTab] = useState<Tab>(() => readRoute(window.location.search).tab ?? 'pay');
+  const [activityView, setActivityView] = useState(
+    () => readRoute(window.location.search).view,
+  );
 
   /*
    * A tab switch is a transition, not an urgent update. Mounting a tab is a heavy
@@ -66,7 +75,30 @@ export function App() {
    * fully rendered. This is how a router keeps navigation responsive.
    */
   const [, startTabSwitch] = useTransition();
-  const selectTab = (next: Tab) => startTabSwitch(() => setTab(next));
+  const selectTab = (next: Tab, view?: ActivityView) => {
+    pushRoute(next, view);
+    startTabSwitch(() => {
+      setTab(next);
+      setActivityView(view);
+    });
+  };
+
+  /*
+   * The back and forward arrows. Without this the address changes and the screen
+   * does not, which is worse than having no addresses at all: the URL would be
+   * telling the truth about somewhere the reader is not.
+   */
+  useEffect(() => {
+    const onPop = () => {
+      const r = readRoute(window.location.search);
+      startTabSwitch(() => {
+        setTab(r.tab ?? 'pay');
+        setActivityView(r.view);
+      });
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
 
   const { pending, claimable, reload } = usePendingClaims(state.session);
   const pendingCount = claimable?.length ?? 0;
@@ -187,18 +219,25 @@ export function App() {
                       value={tab === 'activity' ? ('' as Exclude<Tab, 'activity'>) : tab}
                       onChange={selectTab}
                     />
-                    <button
-                      type="button"
+                    {/* A link, not a button, so it can be middle-clicked into a
+                        new tab and copied like any other address. The plain click
+                        is still handled here and never reloads the page. */}
+                    <a
                       className={['tab-more', tab === 'activity' && 'is-active']
                         .filter(Boolean)
                         .join(' ')}
-                      aria-pressed={tab === 'activity'}
-                      onClick={() => selectTab('activity')}
+                      href={hrefFor('activity')}
+                      aria-current={tab === 'activity' ? 'page' : undefined}
+                      onClick={(e) => {
+                        if (!isPlainClick(e)) return;
+                        e.preventDefault();
+                        selectTab('activity');
+                      }}
                       data-testid="tab-activity"
                     >
                       <IconHistory width={16} height={16} aria-hidden />
                       {t('nav.activity')}
-                    </button>
+                    </a>
                   </div>
                   {tab === 'pay' && (
                     <PayTab
@@ -210,12 +249,25 @@ export function App() {
                     />
                   )}
                   {tab === 'activity' && (
-                    <ActivityTab session={state.session} onChange={state.refreshBalance} />
+                    <ActivityTab
+                      session={state.session}
+                      onChange={state.refreshBalance}
+                      {...(activityView ? { initialView: activityView } : {})}
+                    />
                   )}
                   {tab === 'subscriptions' && (
-                    <SubscriptionsTab session={state.session} onSwitchChain={state.switchTo} />
+                    <SubscriptionsTab
+                      session={state.session}
+                      onSwitchChain={state.switchTo}
+                      onOpenActivity={(v) => selectTab('activity', v)}
+                    />
                   )}
-                  {tab === 'bridge' && <BridgeTab session={state.session} />}
+                  {tab === 'bridge' && (
+                    <BridgeTab
+                      session={state.session}
+                      onOpenActivity={(v) => selectTab('activity', v)}
+                    />
+                  )}
                 </>
               ) : (
                 <ReceiveTab
