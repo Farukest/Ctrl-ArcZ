@@ -4899,9 +4899,15 @@ a.hstep__go:hover {
 /* Sits where the next row would go, so adding one reads as continuing the list
    rather than as operating a control about the list -- but it is not a row, so it
    does not take the 4px seam the rows share. The gap belongs here rather than on
-   the variant, which has no idea what list it has been dropped into. */
+   the variant, which has no idea what list it has been dropped into.
+
+   The bottom margin is doing a second job. The direction marker between the two
+   cards is a 38px circle sitting in a 10px slot, so it reaches 14px back up into
+   this card, and it is centred -- which is exactly where this pill is. Everything
+   else in the card is left-aligned and never meets it; this was landing 3px under
+   it. The clearance is the overhang plus a real gap. */
 .gwlegs > .select-trigger--ghost {
-  margin: 8px 0 2px;
+  margin: 8px 0 14px;
 }
 
 
