@@ -242,6 +242,7 @@ const EXPLORERS: Partial<Record<CctpChainName, string>> = {
   Unichain_Sepolia: 'https://sepolia.uniscan.xyz',
   Linea_Sepolia: 'https://sepolia.lineascan.build',
   Codex_Testnet: 'https://explorer.codex-stg.xyz',
+  Sonic_Testnet: 'https://testnet.sonicscan.org',
   World_Chain_Sepolia: 'https://sepolia.worldscan.org',
   Monad_Testnet: 'https://testnet.monadexplorer.com',
   Sei_Testnet: 'https://testnet.seiscan.io',

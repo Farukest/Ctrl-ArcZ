@@ -34,6 +34,7 @@ import {
 } from '@ctrl-arcz/demo-kit';
 import { knownBoxes } from '../lib/useSubscriptions.js';
 import {
+  chainForStep,
   chainsFor,
   labelOf,
   ownedBy,
@@ -135,6 +136,22 @@ const GW_STEP_TO_UI: Record<GatewayStep, string | undefined> = {
 function stepRow(name: string, txHash?: string, chain?: CctpChainName) {
   const url = txHash && chain ? chainExplorerTxUrl(chain, txHash) : undefined;
   return { name, ...(txHash ? { txHash } : {}), ...(url ? { explorerUrl: url } : {}) };
+}
+
+/**
+ * The same row, with the chain worked out from what the step is rather than
+ * handed in.
+ *
+ * Every call site used to pass the transfer's source for every step, which put a
+ * mint on the source chain's explorer. `chainForStep` is the one place that knows
+ * an approval is on the source and a mint is at the far end.
+ */
+function routedStep(
+  name: string,
+  txHash: string | undefined,
+  route: { engine: BridgeEngine; from: CctpChainName; to: CctpChainName },
+) {
+  return stepRow(name, txHash, chainForStep(name, route));
 }
 
 /**
@@ -1169,7 +1186,7 @@ export function BridgeTab({ session }: { session: Session }) {
             onStep: (step, txHash) => {
               const name = GW_STEP_TO_UI[step];
               if (!name) return;
-              reported.push(stepRow(name, txHash, from));
+              reported.push(routedStep(name, txHash, { engine: 'gateway', from, to }));
               // Onto the row as well as into the list, so what is on screen moves
               // while the transfer does rather than all at once at the end.
               record.done(name, txHash);
@@ -1309,7 +1326,7 @@ export function BridgeTab({ session }: { session: Session }) {
           onStep: (step, txHash) => {
             const name = SDK_STEP_TO_UI[step];
             if (!name) return; // quoting is instant; it has no row of its own
-            reported.push(stepRow(name, txHash, from));
+            reported.push(routedStep(name, txHash, { engine: 'cctp', from, to }));
             /*
              * The approval, written down the moment it lands.
              *

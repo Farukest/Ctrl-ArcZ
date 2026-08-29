@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  chainForStep,
   deriveStepStatuses,
   jobForEngine,
   ownedBy,
@@ -355,5 +356,61 @@ describe('stepsForEngine', () => {
   it('shares exactly one step name between the engines, which is why this is here', () => {
     const shared = BRIDGE_STEPS.filter((s) => (GATEWAY_STEPS as readonly string[]).includes(s));
     expect(shared).toEqual(['mint']);
+  });
+});
+
+describe('chainForStep', () => {
+  /**
+   * Which chain a step's transaction is on, which is the question every caller
+   * used to answer with "the source" regardless of the step.
+   *
+   * Measured on a real transfer: Ethereum Sepolia to Sonic Testnet over Gateway,
+   * mint 0xb9118aad...80697, which is on Sonic. The row offered it on
+   * sepolia.etherscan.io, and when the finished row was later rewritten against
+   * the destination the link vanished instead of moving, because Sonic had no
+   * explorer in the registry at all. Two defects reading as one symptom.
+   */
+  const gw = { engine: 'gateway' as const, from: 'Ethereum_Sepolia', to: 'Sonic_Testnet' };
+  const cctp = { engine: 'cctp' as const, from: 'Arc_Testnet', to: 'Base_Sepolia' };
+
+  it('puts the mint at the far end, which is the whole point of a bridge', () => {
+    expect(chainForStep('mint', gw)).toBe('Sonic_Testnet');
+    expect(chainForStep('mint', cctp)).toBe('Base_Sepolia');
+  });
+
+  it('keeps the source chain’s own transactions on the source', () => {
+    expect(chainForStep('approve', cctp)).toBe('Arc_Testnet');
+    expect(chainForStep('burn', cctp)).toBe('Arc_Testnet');
+    expect(chainForStep('deposit', gw)).toBe('Ethereum_Sepolia');
+  });
+
+  it('gives no chain to a step that is not a transaction', () => {
+    /*
+     * `sign` is an EIP-712 signature whose domain names no chain, and the
+     * attestation is Circle answering an HTTP call. A chain here would put an
+     * explorer link on a row with nothing to look up.
+     */
+    expect(chainForStep('sign', gw)).toBeUndefined();
+    expect(chainForStep('attestation', gw)).toBeUndefined();
+    expect(chainForStep('fetchAttestation', cctp)).toBeUndefined();
+    expect(chainForStep('counted', gw)).toBeUndefined();
+  });
+
+  it('keeps a deposit on its one chain, whatever the step is called', () => {
+    // A deposit and a subscription happen entirely on one chain and record
+    // from === to, so no step of theirs can be sent to the wrong end.
+    const dep = { engine: 'gateway' as const, from: 'Base_Sepolia', to: 'Base_Sepolia', kind: 'deposit' };
+    for (const step of ['approve', 'deposit', 'counted', 'mint']) {
+      expect(chainForStep(step, dep)).toBe('Base_Sepolia');
+    }
+  });
+
+  it('never sends a step to a chain the route does not name', () => {
+    for (const step of ['approve', 'burn', 'deposit', 'sign', 'attestation', 'mint', 'anything']) {
+      for (const route of [gw, cctp]) {
+        const answer = chainForStep(step, route);
+        expect(answer === undefined || answer === route.from || answer === route.to).toBe(true);
+      }
+    }
   });
 });

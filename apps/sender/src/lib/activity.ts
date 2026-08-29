@@ -17,7 +17,7 @@
  * question; `kind` is what tells a deposit from a transfer from a subscription.
  */
 import { useEffect, useState } from 'react';
-import { classifyFailure, type BridgeEngine } from '@ctrl-arcz/demo-kit';
+import { chainForStep, classifyFailure, type BridgeEngine } from '@ctrl-arcz/demo-kit';
 import type { Address } from 'viem';
 import {
   chainExplorerTxUrl,
@@ -221,9 +221,26 @@ export function startRun(input: StartRun): RunHandle {
     put({ ...b, steps: [...b.steps.filter((s) => s.name !== step.name), step] });
   };
 
-  const link = (txHash?: string): Pick<StoredBridgeStep, 'txHash' | 'explorerUrl'> => {
+  /**
+   * The link for a step, looked up on the chain that step actually ran on.
+   *
+   * This used `input.from` for everything, so a live row offered its mint on the
+   * source chain's explorer while the transfer was still going. The finished row
+   * was written separately with the right chain, which is why the link changed
+   * under the reader when it landed instead of simply being right.
+   */
+  const link = (
+    step: string,
+    txHash?: string,
+  ): Pick<StoredBridgeStep, 'txHash' | 'explorerUrl'> => {
     if (!txHash) return {};
-    const url = chainExplorerTxUrl(input.from, txHash);
+    const chain = chainForStep(step, {
+      engine: input.engine,
+      from: input.from,
+      to: input.to,
+      ...(input.kind ? { kind: input.kind } : {}),
+    });
+    const url = chain ? chainExplorerTxUrl(chain, txHash) : undefined;
     return { txHash, ...(url ? { explorerUrl: url } : {}) };
   };
 
@@ -234,7 +251,7 @@ export function startRun(input: StartRun): RunHandle {
       return id;
     },
     begin: (step) => write({ name: step, state: 'active' }),
-    done: (step, txHash) => write({ name: step, ...link(txHash) }),
+    done: (step, txHash) => write({ name: step, ...link(step, txHash) }),
     skip: (step) => write({ name: step, state: 'noop' }),
     waiting: () => put({ ...current(), state: 'pending' }),
     finish: () => put({ ...current(), state: 'success' }),

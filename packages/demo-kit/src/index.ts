@@ -40,6 +40,7 @@ export { chainsFor, labelOf, needsWalletOn, type ChainPurpose } from './chainCat
 export { useToken } from './useToken.js';
 export {
   DEPOSIT_STEPS,
+  chainForStep,
   stepsForEngine,
   stepsForRun,
   ownedBy,

@@ -204,3 +204,52 @@ export function stepIndexFor(name: string, list: readonly string[]): number {
   if (n.includes('attest')) return list.findIndex((s) => s.toLowerCase().includes('attest'));
   return -1;
 }
+
+/**
+ * Which chain a step's transaction was mined on.
+ *
+ * A transfer is not one chain, and its steps do not all happen in the same place:
+ * an approval and a burn are on the source, a mint is on the destination, and an
+ * attestation is on neither because it is Circle answering an HTTP call. The whole
+ * point of a bridge is that those are different networks.
+ *
+ * Every caller used to pass the transfer's `from` for every step it recorded, so a
+ * mint was linked to the source chain's explorer. Measured on a real transfer:
+ * Ethereum Sepolia to Sonic Testnet, mint
+ * `0xb9118aad...80697`, and the row offered it on sepolia.etherscan.io, which has
+ * never heard of it. Sonic had no explorer in the registry either, so when the
+ * finished row was rewritten with the correct chain the link did not move, it
+ * disappeared, and the step went from wrong to blank.
+ *
+ * Undefined is a real answer and the right one twice over: for a step with no
+ * transaction, and for a chain with no explorer. Neither is a link to nowhere.
+ */
+export function chainForStep<T extends string>(
+  step: string,
+  route: { engine: BridgeEngine; from: T; to: T; kind?: string },
+): T | undefined {
+  /*
+   * A deposit and a subscription happen entirely on one chain, and both record
+   * `from === to`, so the question does not arise. Answering `from` rather than
+   * falling through keeps a future step name from silently picking a side.
+   */
+  if (route.kind) return route.from;
+  switch (step) {
+    // Circle mints at the far end. This is the one the bug was about.
+    case 'mint':
+      return route.to;
+    // The source chain's own transactions: an allowance, a burn, a deposit.
+    case 'approve':
+    case 'burn':
+    case 'deposit':
+      return route.from;
+    /*
+     * Neither chain. `sign` is an EIP-712 signature over an intent whose domain
+     * names no chain at all, and the attestation is Circle's REST API. Giving
+     * either of them a chain would put an explorer link on a row that has no
+     * transaction to look up.
+     */
+    default:
+      return undefined;
+  }
+}
