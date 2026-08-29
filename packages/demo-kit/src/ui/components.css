@@ -4596,6 +4596,15 @@ a.hstep__go:hover {
 .gwfrom__chip + .gwfrom__chip {
   margin-left: -5px;
 }
+/* The overlap is cut out of whatever the stack is sitting on, so inside the token
+   pill the ring has to be the pill's fill rather than the card's. */
+.usdcpill .gwfrom__stack {
+  margin-left: 0;
+}
+.usdcpill .gwfrom__chip {
+  background: var(--surface-3);
+  box-shadow: 0 0 0 2px var(--surface-3);
+}
 .gwfrom__count {
   margin-left: auto;
   font-size: 13px;

@@ -279,19 +279,6 @@ export function GatewaySources({
     <div className="swapcard gwfrom" data-testid="bridge-from-card">
       <div className="swapcard__head">
         <span className="swapcard__label">{t('bridge.from')}</span>
-        {/* The chains in play, overlapped, so the block says how many networks are
-            carrying this before anybody reads a number. Absent on one, where the
-            name beside it already says which, and a lone overlapped logo is a
-            stack of one pretending to be a stack. */}
-        {sources.length > 1 && (
-          <span className="gwfrom__stack" aria-hidden>
-            {sources.map((s, i) => (
-              <span className="gwfrom__chip" key={`${s.chain}-${i}`}>
-                <ChainLogo id={s.chain} size={22} />
-              </span>
-            ))}
-          </span>
-        )}
         <span className="gwfrom__count" data-testid="gwsrc-count">
           {sources.length === 1
             ? chainLabel(sources[0]!.chain)
@@ -316,6 +303,35 @@ export function GatewaySources({
         balanceLabel={t('bridge.src.spendable')}
         onMax={(f) => onAmount(usdc((reach * BigInt(Math.round(f * 10_000))) / 10_000n))}
         percents={[0.25, 0.5]}
+        /*
+         * The pill names the asset and where it is coming from, the way it does on
+         * CCTP. It was plain text here, alone in the app, because the field is
+         * given no single `chain` -- and it is given none for a good reason, since
+         * a Gateway payment can come off four chains at once and picking one of
+         * them to draw would be a lie. That is an argument for not naming ONE
+         * chain, not for naming none: with a single source there is nothing
+         * ambiguous about it, and with several the honest picture is all of them.
+         *
+         * Which also empties the block's head, where these logos used to sit. They
+         * say the same thing in both places, and beside the amount is where the
+         * question "where is this coming from" is actually being asked.
+         */
+        tokenSlot={
+          <span className="usdcpill">
+            {sources.length === 1 ? (
+              <ChainLogo id={sources[0]!.chain} size={20} />
+            ) : (
+              <span className="gwfrom__stack" aria-hidden>
+                {sources.map((s, i) => (
+                  <span className="gwfrom__chip" key={`${s.chain}-${i}`}>
+                    <ChainLogo id={s.chain} size={18} />
+                  </span>
+                ))}
+              </span>
+            )}
+            USDC
+          </span>
+        }
         data-testid="bridge-amount"
       />
 
