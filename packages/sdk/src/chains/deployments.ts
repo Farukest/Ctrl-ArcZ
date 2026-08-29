@@ -4,6 +4,7 @@ import {
   chainExplorerUrl,
   chainLabel,
   chainNativeCurrency,
+  firstPartyRpc,
   publicReadRpcs,
   type CctpChainName,
 } from '../bridge/cctp.js';
@@ -348,16 +349,21 @@ export interface AddChainRequest {
 /**
  * Everything a wallet needs in order to add this network, or undefined.
  *
- * Undefined is the load-bearing half. Asking a wallet to add a network means
- * naming an endpoint the user then trusts with every request they make on that
- * chain afterwards, so the rule is that nothing here may be invented: the
- * endpoints are the ones already proven for reads, the coin comes from a published
- * registry, and a chain missing either of those gets no offer at all. That is why
- * this returns a value rather than throwing or filling in a blank -- the caller has
- * to be able to tell the difference and fall back to asking the user.
+ * Undefined is the load-bearing half. An endpoint written into a wallet stays
+ * there and is used by every other site the user visits on that chain, so the rule
+ * is not merely that nothing may be invented -- it is that nothing third-party may
+ * be sent at all. The endpoint is the chain's own, the coin comes from the registry
+ * wallets themselves check against, and a chain missing either gets no offer. That
+ * is why this returns a value rather than throwing or filling in a blank: the
+ * caller has to be able to tell the difference and fall back to asking the user.
  *
- * Which chains that works out to is therefore data and not a decision: it is
- * whichever ones have both, per chain, and it changes when the tables change.
+ * Note that this deliberately does not reach for `readRpcUrls`. Those lists carry
+ * community proxies, which are the right thing for this app to read through and
+ * the wrong thing to leave in somebody's wallet, and collapsing the two was the
+ * mistake this rule exists to stop.
+ *
+ * Which chains that works out to is therefore data and not a decision: whichever
+ * ones have both, per chain, changing when the tables change.
  *
  * The explorer is optional in the spec and optional here, because a guessed
  * explorer is a link that goes somewhere else.
@@ -368,15 +374,15 @@ export function addChainParams(chainId: number | undefined): AddChainRequest | u
   if (!chain) return undefined;
 
   const nativeCurrency = chainNativeCurrency(chain);
-  const rpcUrls = readRpcUrls(chainId);
-  if (!nativeCurrency || rpcUrls.length === 0) return undefined;
+  const rpc = firstPartyRpc(chain);
+  if (!nativeCurrency || !rpc) return undefined;
 
   const explorer = chainExplorerUrl(chain);
   return {
     chainId: `0x${chainId.toString(16)}`,
     chainName: chainLabel(chain),
     nativeCurrency,
-    rpcUrls,
+    rpcUrls: [rpc],
     ...(explorer ? { blockExplorerUrls: [explorer] } : {}),
   };
 }

@@ -266,6 +266,7 @@ export {
   chainLabel,
   chainExplorerTxUrl,
   chainNativeCurrency,
+  firstPartyRpc,
   cctpChainByChainId,
   CCTP_CHAINS,
   CCTP_TOKEN_MESSENGER,

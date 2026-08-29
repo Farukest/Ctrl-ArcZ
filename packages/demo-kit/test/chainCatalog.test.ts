@@ -6,7 +6,9 @@ import {
   GATEWAY_CHAIN_NAMES,
   canAddChain,
   chainLabel,
+  chainNativeCurrency,
   deployedChainIds,
+  firstPartyRpc,
   type CctpChainName,
 } from '@ctrl-arcz/sdk';
 import {
@@ -196,17 +198,26 @@ describe('which networks a job can add to the wallet', () => {
     expect(all.filter((p) => needsWalletOn(p)).sort()).toEqual([...MOVES_THE_WALLET].sort());
   });
 
-  it('can add every network it offers, except where nobody publishes the coin', () => {
-    const gaps: string[] = [];
+  it('adds a network for the user wherever the chain publishes its own details', () => {
+    /*
+     * Derived, not restated. Which chains fall short is pinned once, in the SDK
+     * test that owns the rule; copying the list here would make two places to
+     * update and one of them would be missed.
+     *
+     * What is worth checking on this side is the join: a job may only offer a
+     * network it can either add or honestly refuse, and "honestly refuse" means
+     * the chain is one of the known-incomplete ones rather than an oversight.
+     */
     for (const purpose of MOVES_THE_WALLET) {
       for (const chain of chainsFor(purpose)) {
-        if (!canAddChain(CCTP_CHAINS[chain].chainId)) gaps.push(`${purpose}:${chain}`);
+        const id = CCTP_CHAINS[chain].chainId;
+        if (canAddChain(id)) continue;
+        expect(
+          firstPartyRpc(chain) === undefined || chainNativeCurrency(chain) === undefined,
+          `${purpose}:${chain} cannot be added and no missing fact explains why`,
+        ).toBe(true);
       }
     }
-    // Morph Hoodi is a CCTP testnet with no published native currency, so a burn
-    // from there is the one switch that still has to be done by hand. Every other
-    // network on every other job is offered.
-    expect(gaps).toEqual(['cctpSource:Morph_Hoodi']);
   });
 
   it('says nothing about the jobs that never move the wallet', () => {

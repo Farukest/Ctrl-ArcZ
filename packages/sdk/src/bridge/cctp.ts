@@ -237,6 +237,64 @@ const READ_RPCS: Partial<Record<CctpChainName, readonly string[]>> = {
 };
 
 /**
+ * The one endpoint per chain that may be written into somebody's wallet.
+ *
+ * Deliberately not `READ_RPCS`, and that distinction is the whole point of this
+ * table existing. The lists above are what this app dials for its own reads, and a
+ * community proxy is fine there: it answers a balance, the answer is checked
+ * against a contract, and nothing about the user travels with it. An endpoint
+ * stored in a wallet is a different thing. It stays there, it is used by every
+ * other site the user visits on that chain, and whoever runs it sees all of it.
+ *
+ * So this holds only endpoints on the chain's own domain -- `sepolia.base.org`,
+ * `rpc.testnet.soniclabs.com` -- and never publicnode, drpc, Alchemy, Tenderly or
+ * thirdweb, however well they answer. One each rather than a list, because a
+ * fallback here is a second party seeing the same traffic.
+ *
+ * Four chains have no such endpoint and are absent, which means the app does not
+ * offer to add them at all and says so instead:
+ *
+ * - Ethereum Sepolia has no chain-owned RPC and never did; `rpc.sepolia.org`
+ *   answers HTML and `rpc2.sepolia.org` times out. Every wallet ships Sepolia, so
+ *   nothing is lost.
+ * - Polygon Amoy's own `rpc-amoy.polygon.technology` does not resolve in DNS at
+ *   all any more, so its only working endpoints belong to other people.
+ * - World Chain Sepolia publishes nothing but Alchemy, Tenderly and thirdweb.
+ * - Morph Hoodi has no published currency either, so it was never offered.
+ *
+ * Every one below was probed on 2026-08-29 and reported the chain id it is listed
+ * under here.
+ */
+const FIRST_PARTY_RPCS: Partial<Record<CctpChainName, string>> = {
+  Arc_Testnet: 'https://rpc.testnet.arc.network',
+  Avalanche_Fuji: 'https://api.avax-test.network/ext/bc/C/rpc',
+  OP_Sepolia: 'https://sepolia.optimism.io',
+  Arbitrum_Sepolia: 'https://sepolia-rollup.arbitrum.io/rpc',
+  Base_Sepolia: 'https://sepolia.base.org',
+  Unichain_Sepolia: 'https://sepolia.unichain.org',
+  Linea_Sepolia: 'https://rpc.sepolia.linea.build',
+  Codex_Testnet: 'https://rpc.codex-stg.xyz',
+  Sonic_Testnet: 'https://rpc.testnet.soniclabs.com',
+  Monad_Testnet: 'https://testnet-rpc.monad.xyz',
+  Sei_Testnet: 'https://evm-rpc-testnet.sei-apis.com',
+  XDC_Apothem: 'https://erpc.apothem.network',
+  Ink_Testnet: 'https://rpc-gel-sepolia.inkonchain.com',
+  Plume_Testnet: 'https://testnet-rpc.plume.org',
+  Injective_Testnet: 'https://k8s.testnet.json-rpc.injective.network',
+  Cronos_Testnet: 'https://evm-t3.cronos.org',
+};
+
+/**
+ * The chain's own endpoint, or undefined where it does not publish one.
+ *
+ * Undefined is the answer that stops an offer being made, so it is a real value
+ * and not a gap to fill from the read list.
+ */
+export function firstPartyRpc(chain: CctpChainName): string | undefined {
+  return FIRST_PARTY_RPCS[chain];
+}
+
+/**
  * What a chain charges gas in, for the one request that has to name it.
  *
  * Only `wallet_addEthereumChain` needs this. Everything else in the app either
@@ -276,7 +334,11 @@ const NATIVE_CURRENCIES: Partial<
   Ink_Testnet: { name: 'Sepolia Ether', symbol: 'ETH', decimals: 18 },
   Plume_Testnet: { name: 'Plume', symbol: 'PLUME', decimals: 18 },
   Injective_Testnet: { name: 'Injective', symbol: 'INJ', decimals: 18 },
-  Cronos_Testnet: { name: 'CRO', symbol: 'tCRO', decimals: 18 },
+  // `TCRO` and not viem's `tCRO`. The EIP-155 registry is the list wallets check a
+  // submitted symbol against, so where the two disagree the registry wins: a
+  // symbol that does not match what the wallet already believes is what turns an
+  // add dialog into a warning the user has to argue with.
+  Cronos_Testnet: { name: 'CRO', symbol: 'TCRO', decimals: 18 },
 };
 
 /**

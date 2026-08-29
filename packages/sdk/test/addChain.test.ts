@@ -6,6 +6,7 @@ import {
   canAddChain,
   chainLabel,
   chainNativeCurrency,
+  firstPartyRpc,
   readRpcUrls,
   type CctpChainName,
 } from '../src/index.js';
@@ -45,18 +46,82 @@ describe('addChainParams', () => {
       // than the picker the user just clicked is a different network as far as
       // they can tell.
       expect(params.chainName, chain).toBe(chainLabel(chain));
-      // Not a second endpoint list. Anything here is something the app has
-      // already read this chain through.
-      expect(params.rpcUrls, chain).toEqual(readRpcUrls(id));
+      // The chain's own endpoint, and only that one. Not the read list, which
+      // carries community proxies that are right for this app to dial and wrong
+      // to leave in a wallet.
+      expect(params.rpcUrls, chain).toEqual([firstPartyRpc(chain)]);
       expect(params.nativeCurrency, chain).toEqual(chainNativeCurrency(chain));
+    }
+  });
+
+  it('never puts a third party in somebody’s wallet', () => {
+    /*
+     * The rule this file exists for, stated as a list of who must not be in it.
+     *
+     * An endpoint the app dials for a balance is used once and the answer is
+     * checked against a contract. An endpoint stored in a wallet is used by every
+     * other site the user visits on that chain, for as long as it stays there, and
+     * whoever runs it sees all of it. The read lists are full of these and are
+     * right to be; this must contain none of them.
+     */
+    const THIRD_PARTIES = [
+      'publicnode.com',
+      'drpc.org',
+      'alchemy.com',
+      'tenderly.co',
+      'thirdweb.com',
+      'infura.io',
+      'quiknode.pro',
+      'ankr.com',
+      'blastapi.io',
+      'blockpi.network',
+      'nodereal.io',
+      'chainstack.com',
+    ];
+    for (const chain of ALL) {
+      const params = addChainParams(CCTP_CHAINS[chain].chainId);
+      if (!params) continue;
+      for (const url of params.rpcUrls) {
+        const host = new URL(url).host;
+        for (const bad of THIRD_PARTIES) {
+          expect(host.endsWith(bad), `${chain} would store ${host} in a wallet`).toBe(false);
+        }
+      }
+    }
+  });
+
+  it('sends one endpoint and not a fallback list', () => {
+    // A fallback here is a second party seeing the same traffic, which is the
+    // thing being avoided rather than a resilience win.
+    for (const chain of ALL) {
+      const params = addChainParams(CCTP_CHAINS[chain].chainId);
+      if (params) expect(params.rpcUrls.length, chain).toBe(1);
     }
   });
 
   it('offers nothing for a chain missing either fact', () => {
     for (const chain of ALL) {
       const id = CCTP_CHAINS[chain].chainId;
-      const complete = chainNativeCurrency(chain) !== undefined && readRpcUrls(id).length > 0;
+      const complete = chainNativeCurrency(chain) !== undefined && firstPartyRpc(chain) !== undefined;
       expect(canAddChain(id), `${chain} should ${complete ? '' : 'not '}be addable`).toBe(complete);
+    }
+  });
+
+  it('can still read the chains it will not offer to add', () => {
+    /*
+     * The two questions came apart on purpose and this is the proof.
+     *
+     * Polygon Amoy's own `rpc-amoy.polygon.technology` stopped resolving in DNS,
+     * World Chain Sepolia publishes nothing but Alchemy, Tenderly and thirdweb,
+     * and Ethereum Sepolia never had a chain-owned endpoint. All three are read
+     * perfectly well through the community endpoints in the read list, and a
+     * balance the app reads for itself is not the same act as an endpoint left in
+     * somebody's wallet for every other site to use.
+     */
+    for (const chain of ['Polygon_Amoy', 'World_Chain_Sepolia', 'Ethereum_Sepolia'] as const) {
+      const id = CCTP_CHAINS[chain].chainId;
+      expect(readRpcUrls(id).length, chain).toBeGreaterThan(0);
+      expect(canAddChain(id), chain).toBe(false);
     }
   });
 
@@ -112,24 +177,31 @@ describe('the currency table', () => {
     // coin name in a wallet's add dialog. The gap is the mechanism, not an
     // oversight: no entry means no offer.
     expect(chainNativeCurrency('Morph_Hoodi')).toBeUndefined();
-    expect(canAddChain(CCTP_CHAINS.Morph_Hoodi.chainId)).toBe(false);
   });
 });
 
 describe('the networks a bridge actually asks the wallet to stand on', () => {
-  it('can be added on every Gateway chain, which is where deposits happen', () => {
-    // A Gateway deposit is a real transaction on the chosen chain, so this is the
-    // set where being unable to switch stops the user dead. Sonic Testnet is in
-    // here, and it is the one that produced the complaint.
-    for (const chain of GATEWAY_CHAIN_NAMES) {
-      expect(canAddChain(CCTP_CHAINS[chain].chainId), chain).toBe(true);
-    }
+  /*
+   * The exact shape of the answer, written down rather than described.
+   *
+   * Sixteen of the twenty can be offered and four cannot, and the four are not a
+   * policy: they are the chains where the published facts run out. Two have no
+   * chain-owned endpoint left, one never had one, and one has no published coin.
+   * A chain leaving or joining this list is a change worth noticing, which is why
+   * it is pinned by name.
+   */
+  const NO_OFFER = ['Ethereum_Sepolia', 'Polygon_Amoy', 'World_Chain_Sepolia', 'Morph_Hoodi'];
+
+  it('is exactly the chains whose own details are still published', () => {
+    expect(ALL.filter((c) => !canAddChain(CCTP_CHAINS[c].chainId))).toEqual(NO_OFFER);
   });
 
-  it('can be added on every CCTP source but the one with no published coin', () => {
-    // A burn spends the wallet's own USDC, so the source chain is wherever their
-    // money is, which is any of the twenty. Nineteen can be offered.
-    const cannot = ALL.filter((c) => !canAddChain(CCTP_CHAINS[c].chainId));
-    expect(cannot).toEqual(['Morph_Hoodi']);
+  it('reaches every Gateway chain that is not already on that list', () => {
+    // A Gateway deposit is a real transaction on the chosen chain, so this is the
+    // set where being unable to switch stops the user dead. Read off the same list
+    // rather than repeating three of its names.
+    for (const chain of GATEWAY_CHAIN_NAMES) {
+      expect(canAddChain(CCTP_CHAINS[chain].chainId), chain).toBe(!NO_OFFER.includes(chain));
+    }
   });
 });

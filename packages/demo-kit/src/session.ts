@@ -515,18 +515,13 @@ function isUnknownChain(err: unknown): boolean {
 /**
  * Ask the wallet to move to a chain, adding the network first when it has to.
  *
- * This used to refuse to add, and the reason was a good one: adding a network means
- * naming an RPC endpoint, and an endpoint invented here would be one the user
- * silently trusts with every request they make on that chain afterwards. The
- * objection was to inventing it, though, not to adding. Nothing is invented now.
- * `addChainParams` hands back a request built from endpoints this app already
- * proved it can read the chain through and a coin name from a published registry,
- * or it hands back nothing at all -- and where it hands back nothing the old
- * sentence is still what happens, because a network we cannot describe honestly is
- * one the user should add themselves.
- *
- * So which chains this works on is not a list anybody wrote. It is wherever both
- * facts exist, per chain, and it moves when the tables do.
+ * This used to refuse to add, and the reason was a good one: an endpoint left in
+ * somebody's wallet is used by every other site they visit on that chain, and
+ * whoever runs it sees all of it. That objection is met rather than dropped.
+ * `addChainParams` sends the chain's own endpoint or nothing, and where it sends
+ * nothing the old sentence is still what happens -- a network we cannot describe
+ * out of the chain's own published details is one the user should add themselves.
+ * The rule and the reasons per chain live there, not here.
  *
  * The switch is retried after the add rather than assumed: most wallets leave you
  * on the new chain, some do not, and a retry costs nothing where they did.
