@@ -3957,6 +3957,31 @@ a.hstep__go:hover {
     justify-content: flex-start;
     padding-left: 0;
   }
+  /*
+   * A line between what is here and what you are adding to it.
+   *
+   * Everything in this box wraps onto its own row at this width, and with one
+   * spacing between all of them it became six lines of equal weight: a heading, a
+   * figure, a picker, a second figure, a field with a button, a note. Nothing said
+   * which line answered which question, and the reading it produced was that they
+   * were all the same list.
+   *
+   * They are two things. The head is the balance already sitting on this chain;
+   * everything from the picker down is the act of adding to it. One hairline is
+   * enough to say so, and it costs no vertical room that the confusion was not
+   * already costing.
+   */
+  .gwfund__pickrow {
+    padding-top: 12px;
+    border-top: 1px solid var(--border-subtle);
+  }
+  /* Tied to the field it fills rather than floating between two rows: pressing it
+     puts this figure in the box below, so it sits closer to that box than to the
+     picker above. */
+  .gwfund__wallet {
+    margin-top: -2px;
+    margin-bottom: -4px;
+  }
 }
 /* The small print under the field: the same height whatever it has to say.
    Four conditions used to render four independent lines here, so picking a
@@ -4904,34 +4929,47 @@ a.hstep__go:hover {
 .gwleg__fee--costly {
   color: var(--warn);
 }
-/* Under about 520px the three things on the row stop fitting on two lines, and
-   the one that gave way was the chain name: "Arc Te..." beside a 106px amount
-   field, which is the wrong thing to truncate on a control whose whole job is
-   choosing a chain. So the name takes the first line to itself and the share
-   moves under it, still right-aligned and still the largest figure in the row. */
+/*
+ * The share stays on the line with the network it belongs to.
+ *
+ * It used to drop to a row of its own here, on the reasoning that a 106px field
+ * beside a chain name did not fit and the name was the thing that gave way. The
+ * field was the thing to fix: sized to the number rather than to a round hundred,
+ * it and the longest name Circle serves come to about 260px, which is what a row
+ * has at 390px. So the pairing survives -- a name on the left, its figure on the
+ * right, the way every other row in this app reads -- instead of a number hanging
+ * alone under a name with nothing to tie it to.
+ */
 @media (max-width: 520px) {
   .gwleg {
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) auto auto;
     grid-template-areas:
-      'pick drop'
-      'amount amount'
-      'meta meta';
+      'pick amount drop'
+      'meta meta meta';
     /*
-     * Zero, with the gap moved onto the button that needs it.
+     * Zero, with the spacing moved onto the two things that need it.
      *
-     * The column gap applies whether or not the second column holds anything, and
-     * the remove button is only drawn when there is more than one network. So a
-     * single-source row lost 8px off the picker that the amount and the meta below
-     * it kept, and the three lines of one row ended at three different places.
+     * A column gap applies whether or not its column holds anything, and the
+     * remove button is only drawn when there is more than one network. So a
+     * single-source row lost 8px off the picker that the meta below it kept, and
+     * one row ended at two different places.
      */
     column-gap: 0;
   }
+  .gwleg__input {
+    /* Sized to a six-decimal figure, not to the round number it was. Every pixel
+       here is one the chain's name does not get, and the longest names Circle
+       serves are the ones that need it. */
+    width: 66px;
+    margin-left: 6px;
+    font-size: 14px;
+  }
+  /* Two pixels a side, for the same reason. */
+  .gwleg {
+    padding: 8px;
+  }
   .gwleg__drop {
     margin-left: 8px;
-  }
-  .gwleg__input {
-    width: 100%;
-    margin-top: 2px;
   }
   /* Two facts on one line, and at this width one of them was being ellipsed to
      "3.687096 availa...". They wrap instead: a balance cut off mid-word is worse
