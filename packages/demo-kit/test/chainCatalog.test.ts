@@ -4,6 +4,7 @@ import {
   CCTP_CHAINS,
   DEPOSIT_CONFIRMATION_SECONDS,
   GATEWAY_CHAIN_NAMES,
+  canAddChain,
   chainLabel,
   deployedChainIds,
   type CctpChainName,
@@ -162,6 +163,59 @@ describe('labelOf', () => {
   it('reads the chains whose old hand-written labels used the wrong id', () => {
     expect(labelOf('OP_Sepolia')).toBe('OP Sepolia');
     expect(labelOf('Polygon_Amoy')).toBe('Polygon Amoy');
+  });
+});
+
+/**
+ * Per job, which networks the wallet can be moved to without the user doing
+ * anything by hand.
+ *
+ * This is the same table read from the other end. `needsWalletOn` says whether
+ * choosing a network for a job moves the wallet at all; where it does, the wallet
+ * may not have that network, and until now the answer was a dead end: "Sonic
+ * Testnet is not in your wallet yet. Add the network, then try again."
+ *
+ * It is not a blanket "always offer to add", because the app is only allowed to
+ * describe a network out of facts it already holds -- proven endpoints and a
+ * published coin. So the answer is per chain and per job, and this pins it that
+ * way rather than leaving it to be discovered one network at a time.
+ *
+ * What would break this test is a chain being added to a job's list without the
+ * endpoints or the currency to go with it, which is exactly when somebody needs to
+ * be told.
+ */
+describe('which networks a job can add to the wallet', () => {
+  const MOVES_THE_WALLET = (['protectedSend', 'receive', 'privatePay', 'subscriptions',
+    'cctpSource', 'gatewayDeposit'] as const).filter((p) => needsWalletOn(p));
+
+  it('covers every job that moves the wallet', () => {
+    // If a purpose starts moving the wallet, it belongs in the list above and in
+    // the check below. Stated so the two cannot drift apart quietly.
+    const all: ChainPurpose[] = ['protectedSend', 'receive', 'privatePay', 'subscriptions',
+      'cctpSource', 'cctpDestination', 'gatewayDeposit', 'gatewaySource', 'gatewayDestination'];
+    expect(all.filter((p) => needsWalletOn(p)).sort()).toEqual([...MOVES_THE_WALLET].sort());
+  });
+
+  it('can add every network it offers, except where nobody publishes the coin', () => {
+    const gaps: string[] = [];
+    for (const purpose of MOVES_THE_WALLET) {
+      for (const chain of chainsFor(purpose)) {
+        if (!canAddChain(CCTP_CHAINS[chain].chainId)) gaps.push(`${purpose}:${chain}`);
+      }
+    }
+    // Morph Hoodi is a CCTP testnet with no published native currency, so a burn
+    // from there is the one switch that still has to be done by hand. Every other
+    // network on every other job is offered.
+    expect(gaps).toEqual(['cctpSource:Morph_Hoodi']);
+  });
+
+  it('says nothing about the jobs that never move the wallet', () => {
+    // A Gateway spend is a signature over an intent whose domain names no chain,
+    // and a destination is Circle's side. Neither needs the network in the wallet
+    // at all, so neither should ever produce an add prompt.
+    for (const purpose of ['gatewaySource', 'gatewayDestination', 'cctpDestination'] as const) {
+      expect(needsWalletOn(purpose)).toBe(false);
+    }
   });
 });
 

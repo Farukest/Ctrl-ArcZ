@@ -14,9 +14,12 @@
 export * from './chains/arcTestnet.js';
 export {
   DEPLOYMENTS,
+  addChainParams,
+  canAddChain,
   deploymentFor,
   deployedChainIds,
   readRpcUrls,
+  type AddChainRequest,
   type ChainDeployment,
 } from './chains/deployments.js';
 export { ctrlArcZAbi, codeClaimVerifierAbi, memoAbi } from './abi/ctrlArcZ.js';
@@ -262,6 +265,7 @@ export {
   findForwardedMint,
   chainLabel,
   chainExplorerTxUrl,
+  chainNativeCurrency,
   cctpChainByChainId,
   CCTP_CHAINS,
   CCTP_TOKEN_MESSENGER,

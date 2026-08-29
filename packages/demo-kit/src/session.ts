@@ -13,11 +13,12 @@ import {
 } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import {
+  addChainParams,
+  canAddChain,
   arcTestnet,
   ARC_TESTNET_CHAIN_ID,
   deploymentFor,
   readRpcUrls,
-  RPC_URL,
   RPC_URLS,
   SIGNING_RPC_URLS,
   type ClientPair,
@@ -402,19 +403,22 @@ export async function ensureArcChain(
     await provider.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: hexId }] });
   } catch (err) {
     const code = (err as { code?: number }).code;
-    if (code === 4902) {
-      await provider.request({
-        method: 'wallet_addEthereumChain',
-        params: [
-          {
-            chainId: hexId,
-            chainName: arcTestnet.name,
-            nativeCurrency: arcTestnet.nativeCurrency,
-            rpcUrls: [RPC_URL],
-            blockExplorerUrls: [arcTestnet.blockExplorers?.default.url],
-          },
-        ],
-      });
+    if (isUnknownChain(err)) {
+      // The same request every other chain gets, off the same registry. This was
+      // written out separately here, with one endpoint where the registry has
+      // several, so Arc's entry in a wallet had less to fall back on than any
+      // network the app added later.
+      await addChainToWallet(provider, ARC_TESTNET_CHAIN_ID);
+      // Most wallets leave you on the network they just added; the ones that do
+      // not used to leave this function claiming success from the wrong chain.
+      try {
+        await provider.request({
+          method: 'wallet_switchEthereumChain',
+          params: [{ chainId: hexId }],
+        });
+      } catch (again) {
+        if ((again as { code?: number }).code !== 4001 || throwOnReject) throw again;
+      }
     } else if (code === 4001) {
       if (throwOnReject) throw err; // user rejected an explicit switch → surface it
     } else {
@@ -490,35 +494,97 @@ export function bridgeClients(chainId: number, account: Address): ClientPair {
 }
 
 /**
- * Ask the wallet to move to a chain it already knows.
+ * "This network is not in your wallet", however the wallet chose to say it.
  *
- * Deliberately does not fall back to `wallet_addEthereumChain`: adding a network
- * means naming an RPC endpoint, and an endpoint invented here would be one the user
- * silently trusts with every request they make on that chain afterwards. Better to
- * say the network is missing and let them add the one they choose.
+ * 4902 is the specified code and MetaMask does send it, but not always at the top
+ * level: a switch made from inside another request comes back as an internal -32603
+ * carrying the real error underneath, and some wallets only say it in words. Reading
+ * one shape meant the offer to add the network never appeared for the users most
+ * likely to need it.
+ */
+function isUnknownChain(err: unknown): boolean {
+  const e = err as {
+    code?: number;
+    message?: string;
+    data?: { originalError?: { code?: number } };
+  };
+  if (e?.code === 4902 || e?.data?.originalError?.code === 4902) return true;
+  return /unrecognized chain id|chain .* not added|add.*chain/i.test(e?.message ?? '');
+}
+
+/**
+ * Ask the wallet to move to a chain, adding the network first when it has to.
+ *
+ * This used to refuse to add, and the reason was a good one: adding a network means
+ * naming an RPC endpoint, and an endpoint invented here would be one the user
+ * silently trusts with every request they make on that chain afterwards. The
+ * objection was to inventing it, though, not to adding. Nothing is invented now.
+ * `addChainParams` hands back a request built from endpoints this app already
+ * proved it can read the chain through and a coin name from a published registry,
+ * or it hands back nothing at all -- and where it hands back nothing the old
+ * sentence is still what happens, because a network we cannot describe honestly is
+ * one the user should add themselves.
+ *
+ * So which chains this works on is not a list anybody wrote. It is wherever both
+ * facts exist, per chain, and it moves when the tables do.
+ *
+ * The switch is retried after the add rather than assumed: most wallets leave you
+ * on the new chain, some do not, and a retry costs nothing where they did.
  */
 export async function switchWalletChain(chainId: number, label: string): Promise<void> {
   const provider = getProvider();
+  const hexId = `0x${chainId.toString(16)}`;
   try {
-    await provider.request({
-      method: 'wallet_switchEthereumChain',
-      params: [{ chainId: `0x${chainId.toString(16)}` }],
-    });
+    await provider.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: hexId }] });
   } catch (err) {
-    if ((err as { code?: number }).code === 4902) {
+    if (!isUnknownChain(err)) throw err;
+
+    if (!canAddChain(chainId)) {
       throw new Error(`${label} is not in your wallet yet. Add the network, then try again.`);
     }
-    throw err;
+
+    // A rejection here propagates: the user was asked and said no, which is an
+    // answer, not a failure to explain.
+    await addChainToWallet(provider, chainId);
+    await provider.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: hexId }] });
   }
+}
+
+/**
+ * Hand the wallet a network to add, out of the registry and nothing else.
+ *
+ * Throws where there is nothing honest to send, which callers check for first --
+ * this is the last line rather than the decision, so that no path can reach
+ * `wallet_addEthereumChain` with a chain the app cannot describe.
+ *
+ * The copies are for the provider's type, which wants mutable arrays. The registry
+ * keeps its own readonly, which is the right way round: a caller must not be able
+ * to edit the endpoint list every other caller will read.
+ */
+async function addChainToWallet(provider: EIP1193Provider, chainId: number): Promise<void> {
+  const params = addChainParams(chainId);
+  if (!params) throw new Error(`No published network details for chain ${chainId}.`);
+  const explorers = params.blockExplorerUrls;
+  await provider.request({
+    method: 'wallet_addEthereumChain',
+    params: [
+      {
+        chainId: params.chainId,
+        chainName: params.chainName,
+        nativeCurrency: { ...params.nativeCurrency },
+        rpcUrls: [...params.rpcUrls],
+        ...(explorers ? { blockExplorerUrls: [...explorers] } : {}),
+      },
+    ],
+  });
 }
 
 /**
  * Move the wallet to a chain, whichever chain it is.
  *
- * Arc goes through `ensureArcChain`, which may add the network, because we operate
- * its endpoints. Every other chain must already be in the wallet: adding one means
- * naming an RPC the user then trusts with everything they do there, and that is not
- * a choice to make on their behalf.
+ * Arc keeps its own path because it is the only chain whose endpoints we operate;
+ * every other chain now goes through `switchWalletChain`, which adds the network
+ * where it can describe it honestly and says so where it cannot.
  *
  * That split existed twice -- once in `useSession`, once as a bare
  * `switchWalletChain` call in each screen that offered a switch, which is why

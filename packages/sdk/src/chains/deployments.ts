@@ -1,6 +1,9 @@
 import {
   CCTP_CHAINS,
+  cctpChainByChainId,
   chainExplorerUrl,
+  chainLabel,
+  chainNativeCurrency,
   publicReadRpcs,
   type CctpChainName,
 } from '../bridge/cctp.js';
@@ -330,4 +333,55 @@ export function readRpcUrls(chainId: number | undefined): readonly string[] {
     (c) => CCTP_CHAINS[c].chainId === chainId,
   );
   return chain ? publicReadRpcs(chain) : [];
+}
+
+/** Exactly the shape `wallet_addEthereumChain` takes, EIP-3085. */
+export interface AddChainRequest {
+  /** Hex, because the method is specified in hex and wallets check the string. */
+  chainId: string;
+  chainName: string;
+  nativeCurrency: { readonly name: string; readonly symbol: string; readonly decimals: number };
+  rpcUrls: readonly string[];
+  blockExplorerUrls?: readonly string[];
+}
+
+/**
+ * Everything a wallet needs in order to add this network, or undefined.
+ *
+ * Undefined is the load-bearing half. Asking a wallet to add a network means
+ * naming an endpoint the user then trusts with every request they make on that
+ * chain afterwards, so the rule is that nothing here may be invented: the
+ * endpoints are the ones already proven for reads, the coin comes from a published
+ * registry, and a chain missing either of those gets no offer at all. That is why
+ * this returns a value rather than throwing or filling in a blank -- the caller has
+ * to be able to tell the difference and fall back to asking the user.
+ *
+ * Which chains that works out to is therefore data and not a decision: it is
+ * whichever ones have both, per chain, and it changes when the tables change.
+ *
+ * The explorer is optional in the spec and optional here, because a guessed
+ * explorer is a link that goes somewhere else.
+ */
+export function addChainParams(chainId: number | undefined): AddChainRequest | undefined {
+  if (chainId === undefined) return undefined;
+  const chain = cctpChainByChainId(chainId);
+  if (!chain) return undefined;
+
+  const nativeCurrency = chainNativeCurrency(chain);
+  const rpcUrls = readRpcUrls(chainId);
+  if (!nativeCurrency || rpcUrls.length === 0) return undefined;
+
+  const explorer = chainExplorerUrl(chain);
+  return {
+    chainId: `0x${chainId.toString(16)}`,
+    chainName: chainLabel(chain),
+    nativeCurrency,
+    rpcUrls,
+    ...(explorer ? { blockExplorerUrls: [explorer] } : {}),
+  };
+}
+
+/** Whether this app can offer to add the network, rather than ask the user to. */
+export function canAddChain(chainId: number | undefined): boolean {
+  return addChainParams(chainId) !== undefined;
 }

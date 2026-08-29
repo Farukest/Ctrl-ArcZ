@@ -208,7 +208,88 @@ const READ_RPCS: Partial<Record<CctpChainName, readonly string[]>> = {
     'https://worldchain-sepolia.gateway.tenderly.co',
   ],
   Sei_Testnet: ['https://evm-rpc-testnet.sei-apis.com'],
+
+  /*
+   * The nine that were left, added 2026-08-29 to the same standard as the six
+   * above: every one reports its expected chain id, has code at that chain's USDC
+   * address, and answers a real `balanceOf`. They were the difference between "the
+   * app can reach eleven of Circle's twenty testnets" and all twenty, which matters
+   * most for a CCTP burn -- that spends the wallet's own USDC on the source chain,
+   * so the source is wherever their money is and not one of eleven we happened to
+   * have endpoints for.
+   *
+   * Two where two answered. Monad's `monad-testnet.drpc.org` reported the right
+   * chain and the right code but refused the `balanceOf` with "user-specified gas
+   * exceeds provider limit", so it is deliberately absent rather than listed as a
+   * fallback that fails on the one call this is for. Polygon's own
+   * `rpc-amoy.polygon.technology` is absent for the same kind of reason, recorded
+   * above.
+   */
+  Linea_Sepolia: ['https://rpc.sepolia.linea.build', 'https://linea-sepolia-rpc.publicnode.com'],
+  Codex_Testnet: ['https://rpc.codex-stg.xyz'],
+  Monad_Testnet: ['https://testnet-rpc.monad.xyz'],
+  XDC_Apothem: ['https://erpc.apothem.network', 'https://rpc.apothem.network'],
+  Ink_Testnet: ['https://rpc-gel-sepolia.inkonchain.com'],
+  Plume_Testnet: ['https://testnet-rpc.plume.org'],
+  Injective_Testnet: ['https://k8s.testnet.json-rpc.injective.network'],
+  Cronos_Testnet: ['https://evm-t3.cronos.org', 'https://cronos-testnet.drpc.org'],
+  Morph_Hoodi: ['https://rpc-hoodi.morphl2.io'],
 };
+
+/**
+ * What a chain charges gas in, for the one request that has to name it.
+ *
+ * Only `wallet_addEthereumChain` needs this. Everything else in the app either
+ * pays in USDC or lets the wallet decide, which is why there was no such table
+ * until a wallet had to be told what network it was being asked to add.
+ *
+ * Read out of viem's registry by chain id rather than typed from memory, then
+ * inlined for the same reason the explorers above are inlined: reaching viem's
+ * chains means `import * as chains`, which drags the whole registry into a browser
+ * bundle for twenty short strings. Sonic Testnet has no viem entry and its figures
+ * come from the EIP-155 registry at chainid.network, which publishes 14601 as
+ * "Sonic Testnet" paying in S.
+ *
+ * Morph Hoodi is missing on purpose. Neither source publishes a currency for 2910,
+ * and inventing a symbol here would put a made-up coin name in a wallet's add
+ * dialog, which is worse than telling somebody the network has to be added by hand.
+ * That absence is the mechanism: a chain with no entry cannot be offered.
+ */
+const NATIVE_CURRENCIES: Partial<
+  Record<CctpChainName, { readonly name: string; readonly symbol: string; readonly decimals: number }>
+> = {
+  Arc_Testnet: { name: 'USDC', symbol: 'USDC', decimals: 18 },
+  Ethereum_Sepolia: { name: 'Sepolia Ether', symbol: 'ETH', decimals: 18 },
+  Avalanche_Fuji: { name: 'Avalanche Fuji', symbol: 'AVAX', decimals: 18 },
+  OP_Sepolia: { name: 'Sepolia Ether', symbol: 'ETH', decimals: 18 },
+  Arbitrum_Sepolia: { name: 'Arbitrum Sepolia Ether', symbol: 'ETH', decimals: 18 },
+  Base_Sepolia: { name: 'Sepolia Ether', symbol: 'ETH', decimals: 18 },
+  Polygon_Amoy: { name: 'POL', symbol: 'POL', decimals: 18 },
+  Unichain_Sepolia: { name: 'Ether', symbol: 'ETH', decimals: 18 },
+  Linea_Sepolia: { name: 'Linea Ether', symbol: 'ETH', decimals: 18 },
+  Codex_Testnet: { name: 'Ether', symbol: 'ETH', decimals: 18 },
+  Sonic_Testnet: { name: 'Sonic', symbol: 'S', decimals: 18 },
+  World_Chain_Sepolia: { name: 'Ether', symbol: 'ETH', decimals: 18 },
+  Monad_Testnet: { name: 'Testnet MON Token', symbol: 'MON', decimals: 18 },
+  Sei_Testnet: { name: 'Sei', symbol: 'SEI', decimals: 18 },
+  XDC_Apothem: { name: 'TXDC', symbol: 'TXDC', decimals: 18 },
+  Ink_Testnet: { name: 'Sepolia Ether', symbol: 'ETH', decimals: 18 },
+  Plume_Testnet: { name: 'Plume', symbol: 'PLUME', decimals: 18 },
+  Injective_Testnet: { name: 'Injective', symbol: 'INJ', decimals: 18 },
+  Cronos_Testnet: { name: 'CRO', symbol: 'tCRO', decimals: 18 },
+};
+
+/**
+ * What this chain pays gas in, or undefined where nobody publishes it.
+ *
+ * Undefined is a real answer and callers must treat it as one: it is the
+ * difference between offering to add a network and having to ask the user to.
+ */
+export function chainNativeCurrency(
+  chain: CctpChainName,
+): { readonly name: string; readonly symbol: string; readonly decimals: number } | undefined {
+  return NATIVE_CURRENCIES[chain];
+}
 
 /**
  * Endpoints that can answer public reads for a chain we have not deployed on.
