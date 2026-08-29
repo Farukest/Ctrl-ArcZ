@@ -89,7 +89,10 @@ describe('chainsFor', () => {
     for (const purpose of ['gatewayDeposit', 'gatewaySource', 'gatewayDestination'] as const) {
       expect([...chainsFor(purpose)].sort()).toEqual([...GATEWAY_CHAIN_NAMES].sort());
     }
-    expect(GATEWAY_CHAIN_NAMES.length).toBe(11);
+    // The count is deliberately not written down. It was eleven until Circle added
+    // HyperEVM, and a test asserting eleven fails for the wrong reason: the list is
+    // read from Circle's table now, so its length is their news and not our rule.
+    expect(GATEWAY_CHAIN_NAMES.length).toBeGreaterThan(0);
   });
 
   it('puts Arc first wherever Arc is on offer', () => {

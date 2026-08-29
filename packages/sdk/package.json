@@ -57,6 +57,7 @@
     "viem": "^2.38.0"
   },
   "devDependencies": {
+    "@circle-fin/bridge-kit": "^1.14.0",
     "@types/node": "^26.1.1",
     "cross-env": "^10.1.0",
     "dotenv": "^17.4.2",

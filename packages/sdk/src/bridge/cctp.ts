@@ -7,6 +7,7 @@ import {
   type PublicClient,
   type WalletClient,
 } from 'viem';
+import { GENERATED_CHAINS, type GeneratedChain } from '../chains/circleChains.generated.js';
 
 /**
  * Bridge USDC across chains with the sender's own funds.
@@ -61,6 +62,9 @@ const FAST_FINALITY = 1000;
  */
 const ANY_CALLER = `0x${'00'.repeat(32)}` as Hex;
 
+/** Arc's chain id, spelled out here because `arcTestnet.ts` imports this file. */
+const ARC_CHAIN_ID = 5042002;
+
 /** Chains this can bridge between, with the three facts the burn needs. */
 export interface CctpChain {
   /** CCTP domain id. Not a chain id; the two are unrelated numbers. */
@@ -80,79 +84,57 @@ export interface CctpChain {
 }
 
 /**
- * Every testnet Circle lists with both a CCTP domain and a USDC address.
+ * Every testnet Circle serves, read out of Circle's own table rather than typed.
  *
- * Domains come from `cctp/references/contract-addresses`, addresses from
- * `stablecoins/usdc-contract-addresses`. Neither was taken on faith: each row was
- * checked against its own chain, asserting `symbol() == USDC`, `decimals() == 6`,
- * the reported chain id, and that the TokenMessenger address actually has code
- * there. A wrong token address does not fail loudly -- it burns real money into a
- * contract that is not USDC.
+ * The domain, the chain id and the USDC address used to be written here by hand and
+ * checked chain by chain -- `symbol() == USDC`, `decimals() == 6`, the reported chain
+ * id, code at the TokenMessenger. That was honest work and it was correct: when this
+ * moved to Circle's published table, every one of the twenty rows matched exactly.
+ * What it could not do was notice Circle adding a network, and five had been added.
  *
- * Two of Circle's listed testnets are absent, and the reason is stated rather than
- * quietly dropped: EDGE (domain 28) and Pharos (domain 31) have no public RPC that
- * answered, so their USDC addresses could not be verified. They can be added the
- * moment one does. Injective (29) is here because its EVM RPC did answer.
+ * So the facts come from `circleChains.generated.ts`, which is written out of
+ * `@circle-fin/bridge-kit` -- the same table Circle's App Kit answers
+ * `getSupportedChains` from. `chainTable.test.ts` fails if the checked-in copy and
+ * the installed kit disagree.
  *
  * Listing a chain is not a promise Circle will forward on that route -- `quoteBridge`
  * asks per transfer and refuses out loud when the answer is no.
  */
-export const CCTP_CHAINS = {
-  Arc_Testnet: {
-    domain: 26,
-    chainId: 5042002,
-    usdc: '0x3600000000000000000000000000000000000000',
-    gasToken: 'usdc',
-  },
-  Ethereum_Sepolia: {
-    domain: 0,
-    chainId: 11155111,
-    usdc: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238',
-  },
-  Avalanche_Fuji: { domain: 1, chainId: 43113, usdc: '0x5425890298aed601595a70AB815c96711a31Bc65' },
-  OP_Sepolia: { domain: 2, chainId: 11155420, usdc: '0x5fd84259d66Cd46123540766Be93DFE6D43130D7' },
-  Arbitrum_Sepolia: {
-    domain: 3,
-    chainId: 421614,
-    usdc: '0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d',
-  },
-  Base_Sepolia: { domain: 6, chainId: 84532, usdc: '0x036CbD53842c5426634e7929541eC2318f3dCF7e' },
-  Polygon_Amoy: { domain: 7, chainId: 80002, usdc: '0x41E94Eb019C0762f9Bfcf9Fb1E58725BfB0e7582' },
-  Unichain_Sepolia: {
-    domain: 10,
-    chainId: 1301,
-    usdc: '0x31d0220469e10c4E71834a79b1f276d740d3768F',
-  },
-  Linea_Sepolia: { domain: 11, chainId: 59141, usdc: '0xFEce4462D57bD51A6A552365A011b95f0E16d9B7' },
-  Codex_Testnet: {
-    domain: 12,
-    chainId: 812242,
-    usdc: '0x6d7f141b6819C2c9CC2f818e6ad549E7Ca090F8f',
-  },
-  Sonic_Testnet: { domain: 13, chainId: 14601, usdc: '0x0BA304580ee7c9a980CF72e55f5Ed2E9fd30Bc51' },
-  World_Chain_Sepolia: {
-    domain: 14,
-    chainId: 4801,
-    usdc: '0x66145f38cBAC35Ca6F1Dfb4914dF98F1614aeA88',
-  },
-  Monad_Testnet: { domain: 15, chainId: 10143, usdc: '0x534b2f3A21130d7a60830c2Df862319e593943A3' },
-  Sei_Testnet: { domain: 16, chainId: 1328, usdc: '0x4fCF1784B31630811181f670Aea7A7bEF803eaED' },
-  XDC_Apothem: { domain: 18, chainId: 51, usdc: '0xb5AB69F7bBada22B28e79C8FFAECe55eF1c771D4' },
-  Ink_Testnet: { domain: 21, chainId: 763373, usdc: '0xFabab97dCE620294D2B0b0e46C68964e326300Ac' },
-  Plume_Testnet: { domain: 22, chainId: 98867, usdc: '0xcB5f30e335672893c7eb944B374c196392C19D18' },
-  Injective_Testnet: {
-    domain: 29,
-    chainId: 1439,
-    usdc: '0x0C382e685bbeeFE5d3d9C29e29E341fEE8E84C5d',
-  },
-  Morph_Hoodi: { domain: 30, chainId: 2910, usdc: '0x7433b41C6c5e1d58D4Da99483609520255ab661B' },
-  Cronos_Testnet: { domain: 32, chainId: 338, usdc: '0xEb33dc5fac03833e132593659e1dE7256aB59794' },
-} as const satisfies Record<string, CctpChain>;
+export const CCTP_CHAINS = Object.fromEntries(
+  GENERATED_CHAINS.map((c) => [
+    c.name,
+    {
+      domain: c.domain,
+      chainId: c.chainId,
+      usdc: c.usdc as Address,
+      /*
+       * Ours, not Circle's: Arc is the only chain that bills gas in the token being
+       * moved. Keyed by chain id rather than by name so an alias cannot lose it.
+       */
+      ...(c.chainId === ARC_CHAIN_ID ? { gasToken: 'usdc' as const } : {}),
+    },
+  ]),
+) as Record<CctpChainName, CctpChain>;
+
+/**
+ * Every chain name this app knows, as a union.
+ *
+ * Taken from the generated array rather than from `CCTP_CHAINS`, which is now built
+ * at load time and would widen to `string`. Three of these are this project's own
+ * names for a chain Circle calls something else; `circleName` records the pairing
+ * and the alias is kept because these names are written into stored activity rows.
+ */
+export type CctpChainName = (typeof GENERATED_CHAINS)[number]['name'];
 
 /** `Base_Sepolia` reads badly in a dropdown. */
 export function chainLabel(name: CctpChainName): string {
   return name.replace(/_/g, ' ');
 }
+
+/** The generated row for a chain, which the lookups below all read. */
+const ROW: ReadonlyMap<CctpChainName, GeneratedChain> = new Map(
+  GENERATED_CHAINS.map((c) => [c.name, c]),
+);
 
 /** Built once from the table above, so the two can never list different ids. */
 const CHAIN_ID_TO_NAME: ReadonlyMap<number, CctpChainName> = new Map(
@@ -239,118 +221,40 @@ const READ_RPCS: Partial<Record<CctpChainName, readonly string[]>> = {
 /**
  * The one endpoint per chain that may be written into somebody's wallet.
  *
- * Deliberately not `READ_RPCS`, and that distinction is the whole point of this
- * table existing. The lists above are what this app dials for its own reads, and a
- * community proxy is fine there: it answers a balance, the answer is checked
- * against a contract, and nothing about the user travels with it. An endpoint
- * stored in a wallet is a different thing. It stays there, it is used by every
- * other site the user visits on that chain, and whoever runs it sees all of it.
+ * Deliberately not a read endpoint, and that distinction is why this exists at all.
+ * The read lists are what this app dials for itself, and a community proxy is fine
+ * there: it answers a balance, the answer is checked against a contract, and nothing
+ * about the user travels with it. An endpoint stored in a wallet is a different
+ * thing. It stays there, every other site the user visits on that chain goes through
+ * it, and whoever runs it sees all of it.
  *
- * So this holds only endpoints on the chain's own domain -- `sepolia.base.org`,
- * `rpc.testnet.soniclabs.com` -- and never publicnode, drpc, Alchemy, Tenderly or
- * thirdweb, however well they answer. One each rather than a list, because a
- * fallback here is a second party seeing the same traffic.
+ * So this is Circle's published list for the chain, filtered to the endpoint on the
+ * chain's own domain, and never publicnode, drpc, Alchemy, Tenderly or thirdweb
+ * however well they answer. One each rather than a list, because a fallback here is
+ * a second party seeing the same traffic. The filtering happens in the generator, so
+ * the answer moves when Circle's list does.
  *
- * Four chains have no such endpoint and are absent, which means the app does not
- * offer to add them at all and says so instead:
- *
- * - Ethereum Sepolia has no chain-owned RPC and never did; `rpc.sepolia.org`
- *   answers HTML and `rpc2.sepolia.org` times out. Every wallet ships Sepolia, so
- *   nothing is lost.
- * - Polygon Amoy's own `rpc-amoy.polygon.technology` does not resolve in DNS at
- *   all any more, so its only working endpoints belong to other people.
- * - World Chain Sepolia publishes nothing but Alchemy, Tenderly and thirdweb.
- * - Morph Hoodi has no published currency either, so it was never offered.
- *
- * Every one below was probed on 2026-08-29 and reported the chain id it is listed
- * under here.
- */
-const FIRST_PARTY_RPCS: Partial<Record<CctpChainName, string>> = {
-  Arc_Testnet: 'https://rpc.testnet.arc.network',
-  Avalanche_Fuji: 'https://api.avax-test.network/ext/bc/C/rpc',
-  OP_Sepolia: 'https://sepolia.optimism.io',
-  Arbitrum_Sepolia: 'https://sepolia-rollup.arbitrum.io/rpc',
-  Base_Sepolia: 'https://sepolia.base.org',
-  Unichain_Sepolia: 'https://sepolia.unichain.org',
-  Linea_Sepolia: 'https://rpc.sepolia.linea.build',
-  Codex_Testnet: 'https://rpc.codex-stg.xyz',
-  Sonic_Testnet: 'https://rpc.testnet.soniclabs.com',
-  Monad_Testnet: 'https://testnet-rpc.monad.xyz',
-  Sei_Testnet: 'https://evm-rpc-testnet.sei-apis.com',
-  XDC_Apothem: 'https://erpc.apothem.network',
-  Ink_Testnet: 'https://rpc-gel-sepolia.inkonchain.com',
-  Plume_Testnet: 'https://testnet-rpc.plume.org',
-  Injective_Testnet: 'https://k8s.testnet.json-rpc.injective.network',
-  Cronos_Testnet: 'https://evm-t3.cronos.org',
-};
-
-/**
- * The chain's own endpoint, or undefined where it does not publish one.
- *
- * Undefined is the answer that stops an offer being made, so it is a real value
- * and not a gap to fill from the read list.
+ * Four chains publish nothing of their own and are therefore never offered:
+ * Ethereum Sepolia, which never had a chain-owned RPC and ships in every wallet
+ * anyway; Polygon Amoy, whose `rpc-amoy.polygon.technology` stopped resolving in
+ * DNS; and World Chain Sepolia and Edge, where Circle itself lists only resellers.
  */
 export function firstPartyRpc(chain: CctpChainName): string | undefined {
-  return FIRST_PARTY_RPCS[chain];
+  return ROW.get(chain)?.firstPartyRpc;
 }
 
 /**
  * What a chain charges gas in, for the one request that has to name it.
  *
- * Only `wallet_addEthereumChain` needs this. Everything else in the app either
- * pays in USDC or lets the wallet decide, which is why there was no such table
- * until a wallet had to be told what network it was being asked to add.
- *
- * Read out of viem's registry by chain id rather than typed from memory, then
- * inlined for the same reason the explorers above are inlined: reaching viem's
- * chains means `import * as chains`, which drags the whole registry into a browser
- * bundle for twenty short strings. Sonic Testnet has no viem entry and its figures
- * come from the EIP-155 registry at chainid.network, which publishes 14601 as
- * "Sonic Testnet" paying in S.
- *
- * Morph Hoodi is missing on purpose. Neither source publishes a currency for 2910,
- * and inventing a symbol here would put a made-up coin name in a wallet's add
- * dialog, which is worse than telling somebody the network has to be added by hand.
- * That absence is the mechanism: a chain with no entry cannot be offered.
- */
-const NATIVE_CURRENCIES: Partial<
-  Record<CctpChainName, { readonly name: string; readonly symbol: string; readonly decimals: number }>
-> = {
-  Arc_Testnet: { name: 'USDC', symbol: 'USDC', decimals: 18 },
-  Ethereum_Sepolia: { name: 'Sepolia Ether', symbol: 'ETH', decimals: 18 },
-  Avalanche_Fuji: { name: 'Avalanche Fuji', symbol: 'AVAX', decimals: 18 },
-  OP_Sepolia: { name: 'Sepolia Ether', symbol: 'ETH', decimals: 18 },
-  Arbitrum_Sepolia: { name: 'Arbitrum Sepolia Ether', symbol: 'ETH', decimals: 18 },
-  Base_Sepolia: { name: 'Sepolia Ether', symbol: 'ETH', decimals: 18 },
-  Polygon_Amoy: { name: 'POL', symbol: 'POL', decimals: 18 },
-  Unichain_Sepolia: { name: 'Ether', symbol: 'ETH', decimals: 18 },
-  Linea_Sepolia: { name: 'Linea Ether', symbol: 'ETH', decimals: 18 },
-  Codex_Testnet: { name: 'Ether', symbol: 'ETH', decimals: 18 },
-  Sonic_Testnet: { name: 'Sonic', symbol: 'S', decimals: 18 },
-  World_Chain_Sepolia: { name: 'Ether', symbol: 'ETH', decimals: 18 },
-  Monad_Testnet: { name: 'Testnet MON Token', symbol: 'MON', decimals: 18 },
-  Sei_Testnet: { name: 'Sei', symbol: 'SEI', decimals: 18 },
-  XDC_Apothem: { name: 'TXDC', symbol: 'TXDC', decimals: 18 },
-  Ink_Testnet: { name: 'Sepolia Ether', symbol: 'ETH', decimals: 18 },
-  Plume_Testnet: { name: 'Plume', symbol: 'PLUME', decimals: 18 },
-  Injective_Testnet: { name: 'Injective', symbol: 'INJ', decimals: 18 },
-  // `TCRO` and not viem's `tCRO`. The EIP-155 registry is the list wallets check a
-  // submitted symbol against, so where the two disagree the registry wins: a
-  // symbol that does not match what the wallet already believes is what turns an
-  // add dialog into a warning the user has to argue with.
-  Cronos_Testnet: { name: 'CRO', symbol: 'TCRO', decimals: 18 },
-};
-
-/**
- * What this chain pays gas in, or undefined where nobody publishes it.
- *
- * Undefined is a real answer and callers must treat it as one: it is the
- * difference between offering to add a network and having to ask the user to.
+ * Only `wallet_addEthereumChain` needs this; everything else in the app either pays
+ * in USDC or lets the wallet decide. It was typed out of viem's registry once and
+ * disagreed with the EIP-155 registry on Cronos, which is the sort of difference a
+ * wallet turns into a warning. Circle publishes it per chain, so it is read there.
  */
 export function chainNativeCurrency(
   chain: CctpChainName,
 ): { readonly name: string; readonly symbol: string; readonly decimals: number } | undefined {
-  return NATIVE_CURRENCIES[chain];
+  return ROW.get(chain)?.nativeCurrency;
 }
 
 /**
@@ -361,40 +265,30 @@ export function chainNativeCurrency(
  * deploy on carry their own list in `DEPLOYMENTS` and do not appear here.
  */
 export function publicReadRpcs(chain: CctpChainName): readonly string[] {
-  return READ_RPCS[chain] ?? [];
+  /*
+   * Ours first, then Circle's, deduped.
+   *
+   * Both halves earn their place. Circle publishes an endpoint for every chain it
+   * serves, so a newly added network is readable the moment the table is
+   * regenerated rather than when somebody remembers to probe one. The list above
+   * is what this app measured on top of that: a second endpoint where a second one
+   * answered, which is what stops one throttled provider blanking a balance, and a
+   * couple that Circle does not list at all.
+   *
+   * Ours lead because they were checked against this chain's own USDC contract,
+   * not merely published.
+   */
+  return [...new Set([...(READ_RPCS[chain] ?? []), ...(ROW.get(chain)?.rpcEndpoints ?? [])])];
 }
 
-/**
- * Block explorers, read out of viem's own chain registry rather than typed from
- * memory. They are inlined instead of imported because reaching them needs
- * `import * as chains from 'viem/chains'`, which defeats tree-shaking and drags the
- * whole registry into a browser bundle for twenty strings.
- *
- * Sonic Testnet and Morph Hoodi have no viem definition, so they have no entry and
- * get no link. A guessed explorer URL is a link that quietly goes nowhere, or worse,
- * somewhere else.
+/*
+ * Explorers come from the generated table now. They used to be typed out of viem's
+ * registry, which was right for the chains it knew and silent about Sonic and Morph;
+ * Circle publishes one for every chain it serves, as a link template with the hash
+ * in it. The template matters: most chains put a transaction under `/tx/`, Injective
+ * uses `/transaction/`, and X Layer nests it under a per-chain path, so a link built
+ * by gluing `/tx/` onto a front page was wrong on two of them.
  */
-const EXPLORERS: Partial<Record<CctpChainName, string>> = {
-  Arc_Testnet: 'https://testnet.arcscan.app',
-  Ethereum_Sepolia: 'https://sepolia.etherscan.io',
-  Avalanche_Fuji: 'https://testnet.snowtrace.io',
-  OP_Sepolia: 'https://optimism-sepolia.blockscout.com',
-  Arbitrum_Sepolia: 'https://sepolia.arbiscan.io',
-  Base_Sepolia: 'https://sepolia.basescan.org',
-  Polygon_Amoy: 'https://amoy.polygonscan.com',
-  Unichain_Sepolia: 'https://sepolia.uniscan.xyz',
-  Linea_Sepolia: 'https://sepolia.lineascan.build',
-  Codex_Testnet: 'https://explorer.codex-stg.xyz',
-  Sonic_Testnet: 'https://testnet.sonicscan.org',
-  World_Chain_Sepolia: 'https://sepolia.worldscan.org',
-  Monad_Testnet: 'https://testnet.monadexplorer.com',
-  Sei_Testnet: 'https://testnet.seiscan.io',
-  XDC_Apothem: 'https://testnet.xdcscan.com',
-  Ink_Testnet: 'https://explorer-sepolia.inkonchain.com',
-  Plume_Testnet: 'https://testnet-explorer.plume.org',
-  Injective_Testnet: 'https://testnet.blockscout.injective.network',
-  Cronos_Testnet: 'https://explorer.cronos.org/testnet',
-};
 
 /**
  * Where to look this transaction up, or undefined when no explorer is known.
@@ -403,17 +297,16 @@ const EXPLORERS: Partial<Record<CctpChainName, string>> = {
  * caller should render no link rather than a broken one.
  */
 export function chainExplorerTxUrl(chain: CctpChainName, txHash: string): string | undefined {
-  const base = EXPLORERS[chain];
-  return base ? `${base}/tx/${txHash}` : undefined;
+  const template = ROW.get(chain)?.explorerTx;
+  return template ? template.replace('{hash}', txHash) : undefined;
 }
 
 /** The explorer's own front page for a chain, or undefined where none is known.
  *  Exposed so the deployment registry can point at one without restating it. */
 export function chainExplorerUrl(chain: CctpChainName): string | undefined {
-  return EXPLORERS[chain];
+  return ROW.get(chain)?.explorerUrl;
 }
 
-export type CctpChainName = keyof typeof CCTP_CHAINS;
 
 const tokenMessengerAbi = [
   {

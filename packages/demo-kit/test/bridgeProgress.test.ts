@@ -447,10 +447,25 @@ describe('stepExplorerUrl', () => {
   });
 
   it('offers nothing rather than a link that will not resolve', () => {
-    // Morph Hoodi has no explorer anyone could confirm, so the row keeps the hash
-    // and offers to copy it instead of pointing somewhere that 404s.
+    /*
+     * The row keeps the hash and offers to copy it rather than pointing somewhere
+     * that 404s. Morph Hoodi used to be the example, because no registry anyone
+     * had checked carried an explorer for 2910; reading Circle's own table gave it
+     * one, so the example is now a chain that genuinely is not in the table.
+     *
+     * That is the honest version of this test anyway. "A chain we have no explorer
+     * for" is the case being guarded, and pinning it to a named chain meant the
+     * test failed the day that chain got one.
+     */
+    expect(
+      stepExplorerUrl({ name: 'mint', txHash: hash }, {
+        from: 'Arc_Testnet',
+        to: 'Not_A_Chain' as never,
+      }),
+    ).toBeUndefined();
+    // And the chain that used to stand in for it now resolves, as it should.
     expect(
       stepExplorerUrl({ name: 'mint', txHash: hash }, { from: 'Arc_Testnet', to: 'Morph_Hoodi' }),
-    ).toBeUndefined();
+    ).toContain('morphl2.io');
   });
 });

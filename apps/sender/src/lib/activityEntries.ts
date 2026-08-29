@@ -13,6 +13,7 @@
  */
 import { formatUnits } from 'viem';
 import {
+  chainExplorerTxUrl,
   chainLabel,
   deploymentFor,
   explorerTxUrl,
@@ -32,6 +33,12 @@ import {
   type BridgeEngine,
 } from '@ctrl-arcz/demo-kit';
 import { failureNote, isStalled } from './activity.js';
+
+/** A `href` field, or nothing at all where the chain publishes no explorer. */
+function explorerHref(chain: CctpChainName, txHash: string): { href?: string } {
+  const href = chainExplorerTxUrl(chain, txHash);
+  return href ? { href } : {};
+}
 import type { StoredBridge, StoredTransfer } from '../store.js';
 
 type T = (key: string, vars?: Record<string, string | number>) => string;
@@ -223,9 +230,17 @@ export function historyEntries(
           display: short(e.txHash),
           copy: true,
           mono: true,
-          // The explorer of the chain it happened on, not of the one this app
-          // started life on.
-          ...(network?.explorerUrl ? { href: `${network.explorerUrl}/tx/${e.txHash}` } : {}),
+          /*
+           * The explorer of the chain it happened on, not of the one this app
+           * started life on, and built by the SDK rather than here.
+           *
+           * This used to glue `/tx/` onto a front page, which is right on most
+           * chains and wrong on the ones that do not use that path: Injective files
+           * a transaction under `/transaction/` and X Layer under a per-chain path.
+           * Circle publishes a link template per chain and `chainExplorerTxUrl`
+           * fills it in, so there is one place that knows the shape.
+           */
+          ...(network ? explorerHref(network.chain as CctpChainName, e.txHash) : {}),
         },
       ],
     };

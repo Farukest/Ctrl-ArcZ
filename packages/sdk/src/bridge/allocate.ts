@@ -22,9 +22,14 @@ import type { GatewayChain } from './gateway.js';
  * What one burn intent costs on each source chain, in USDC subunits.
  *
  * Measured 2026-08-26 against Circle's testnet estimate endpoint, pricing a 1
- * USDC leg into Arc from each chain in turn. The spread is the whole reason this
- * module exists: Ethereum is a thousand times Unichain, so "just add another
- * source" is cheap advice on ten chains and ruinous on the eleventh.
+ * USDC leg into Arc from each chain in turn. Circle has since published the same
+ * table in its Gateway fee reference and every measured figure matches it, which is
+ * the sort of agreement worth recording: the measurement was right and the
+ * published page is now where a new chain's figure comes from.
+ *
+ * The spread is the whole reason this module exists: Ethereum is a thousand times
+ * Unichain, so "just add another source" is cheap advice on eleven chains and
+ * ruinous on the twelfth.
  *
  * This is a hint used to CHOOSE a split. The fee that gets signed always comes
  * back from `/v1/estimate`, never from here.
@@ -40,6 +45,9 @@ export const GATEWAY_BASE_FEE: Readonly<Record<GatewayChain, bigint>> = {
   Sonic_Testnet: 10_000n,
   World_Chain_Sepolia: 10_000n,
   Avalanche_Fuji: 20_000n,
+  // Published rather than measured, being the one chain here with no balance to
+  // test against. Circle's fee reference gives HyperEVM $0.05.
+  HyperEVM_Testnet: 50_000n,
   Ethereum_Sepolia: 1_000_000n,
 };
 

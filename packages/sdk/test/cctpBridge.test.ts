@@ -253,8 +253,18 @@ describe('chain data matches Circle documentation', () => {
     expect(usdcGas).toEqual(['Arc_Testnet']);
   });
 
-  it('ships every chain that was verified, and none that was not', () => {
-    expect(Object.keys(CCTP_CHAINS).sort()).toEqual(VERIFIED.map(([n]) => n).sort());
+  it('still ships every chain that was verified', () => {
+    /*
+     * Containment rather than equality, since the table stopped being typed here.
+     * It is generated from Circle's own, so it grows when Circle adds a network --
+     * five had been added by the time anybody looked, and noticing that was the
+     * point of the change. What this still guards is the direction that matters: a
+     * chain checked against its own USDC contract must not quietly disappear or
+     * come back with different numbers. `chainTable.test.ts` covers the other
+     * direction, that the checked-in table matches the installed kit.
+     */
+    const shipped = Object.keys(CCTP_CHAINS);
+    for (const [name] of VERIFIED) expect(shipped, name).toContain(name);
   });
 
   it('renders every USDC address in EIP-55 checksum form', () => {

@@ -7,7 +7,8 @@ import {
   type PublicClient,
   type WalletClient,
 } from 'viem';
-import { CCTP_CHAINS, chainLabel, type CctpChainName } from './cctp.js';
+import { CCTP_CHAINS, chainLabel } from './cctp.js';
+import { GENERATED_CHAINS } from '../chains/circleChains.generated.js';
 // Circle's cap on one transfer request. It lives with the allocator because that
 // is what has to respect it while choosing a split; the import is one-way, since
 // `allocate.ts` takes only a type from here.
@@ -59,21 +60,21 @@ export const GATEWAY_API_TESTNET = 'https://gateway-api-testnet.circle.com' as c
  * table that was read off each chain. Restating them here would be a second place to
  * get them wrong.
  */
-export const GATEWAY_CHAIN_NAMES = [
-  'Arc_Testnet',
-  'Ethereum_Sepolia',
-  'Avalanche_Fuji',
-  'OP_Sepolia',
-  'Arbitrum_Sepolia',
-  'Base_Sepolia',
-  'Polygon_Amoy',
-  'Unichain_Sepolia',
-  'Sonic_Testnet',
-  'World_Chain_Sepolia',
-  'Sei_Testnet',
-] as const satisfies readonly CctpChainName[];
+export const GATEWAY_CHAIN_NAMES = GENERATED_CHAINS.filter((c) => c.gateway).map(
+  (c) => c.name,
+) as readonly GatewayChain[];
 
-export type GatewayChain = (typeof GATEWAY_CHAIN_NAMES)[number];
+/**
+ * The names, as a union, straight from the generated table's `gateway` flag.
+ *
+ * This was a hand-written list of eleven. Circle serves twelve: HyperEVM Testnet
+ * was added and nobody here noticed, which is the whole argument for reading the
+ * flag rather than restating the set.
+ */
+export type GatewayChain = Extract<
+  (typeof GENERATED_CHAINS)[number],
+  { gateway: true }
+>['name'];
 
 export function isGatewayChain(name: string): name is GatewayChain {
   return (GATEWAY_CHAIN_NAMES as readonly string[]).includes(name);
@@ -90,6 +91,8 @@ export function isGatewayChain(name: string): name is GatewayChain {
 export const DEPOSIT_CONFIRMATION_SECONDS: Record<GatewayChain, number> = {
   Arc_Testnet: 1,
   Avalanche_Fuji: 8,
+  // Circle's table gives HyperEVM one block, about five seconds.
+  HyperEVM_Testnet: 5,
   Polygon_Amoy: 8,
   Sonic_Testnet: 8,
   Sei_Testnet: 5,

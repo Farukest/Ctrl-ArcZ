@@ -171,12 +171,17 @@ describe('the currency table', () => {
     }
   });
 
-  it('has no entry for the one chain nobody publishes', () => {
-    // Morph Hoodi. Neither viem's registry nor chainid.network carries 2910, so
-    // there is no honest symbol to send, and inventing one would put a made-up
-    // coin name in a wallet's add dialog. The gap is the mechanism, not an
-    // oversight: no entry means no offer.
-    expect(chainNativeCurrency('Morph_Hoodi')).toBeUndefined();
+  it('names a coin for every chain Circle serves', () => {
+    /*
+     * There used to be a hole here. Morph Hoodi had no entry, because neither
+     * viem's registry nor chainid.network carries 2910 and inventing a symbol
+     * would put a made-up coin name in a wallet's add dialog.
+     *
+     * Circle publishes one, so the hole closed by reading the table rather than by
+     * anybody deciding what Morph's coin ought to be. Which is the argument for
+     * the whole generated table in one line.
+     */
+    for (const chain of ALL) expect(chainNativeCurrency(chain), chain).toBeDefined();
   });
 });
 
@@ -184,13 +189,16 @@ describe('the networks a bridge actually asks the wallet to stand on', () => {
   /*
    * The exact shape of the answer, written down rather than described.
    *
-   * Sixteen of the twenty can be offered and four cannot, and the four are not a
-   * policy: they are the chains where the published facts run out. Two have no
-   * chain-owned endpoint left, one never had one, and one has no published coin.
-   * A chain leaving or joining this list is a change worth noticing, which is why
-   * it is pinned by name.
+   * Four cannot be offered and the rest can, and the four are not a policy: they
+   * are the chains that publish no endpoint of their own. Ethereum Sepolia never
+   * had one, Polygon Amoy's stopped resolving, and for World Chain Sepolia and
+   * Edge even Circle lists nothing but resellers.
+   *
+   * Pinned by name because a chain leaving or joining is worth noticing. It has
+   * moved once already: Morph Hoodi was here for want of a published coin, and
+   * reading Circle's table gave it one.
    */
-  const NO_OFFER = ['Ethereum_Sepolia', 'Polygon_Amoy', 'World_Chain_Sepolia', 'Morph_Hoodi'];
+  const NO_OFFER = ['Ethereum_Sepolia', 'Polygon_Amoy', 'World_Chain_Sepolia', 'Edge_Testnet'];
 
   it('is exactly the chains whose own details are still published', () => {
     expect(ALL.filter((c) => !canAddChain(CCTP_CHAINS[c].chainId))).toEqual(NO_OFFER);
