@@ -19,6 +19,7 @@ import {
   type CctpChainName,
   type HistoryEntry,
   type ProtectedTransfer,
+  type TransferStatus,
 } from '@ctrl-arcz/sdk';
 import {
   deriveStepStatuses,
@@ -65,6 +66,26 @@ export interface SentRow {
  * cancelled or left to expire, and a row that trusted the store would keep
  * claiming "pending" for a transfer somebody collected on another device.
  */
+/**
+ * What each transfer status is called, as a table rather than a template.
+ *
+ * The label used to be built as `active.status.${status.toLowerCase()}`, which the
+ * compiler cannot check, so a status with no entry reached the screen as its own
+ * key: `active.status.cancelled` was printed to the reader, in the Sent list, in
+ * place of a word. Six statuses exist and five had labels.
+ *
+ * Keyed by the union, so adding a status without naming it is a build error rather
+ * than something a person finds later.
+ */
+export const SENT_STATUS_KEY: Record<TransferStatus, string> = {
+  NONE: 'active.status.none',
+  PENDING: 'active.status.pending',
+  LOCKED: 'active.status.locked',
+  CLAIMED: 'active.status.claimed',
+  CANCELLED: 'active.status.cancelled',
+  RECLAIMED: 'active.status.reclaimed',
+};
+
 function sentTone(status: string): ActivityTone {
   if (status === 'CLAIMED') return 'ok';
   // The contract's word for a transfer the sender took back, which is what
@@ -100,7 +121,10 @@ export function sentEntries(rows: readonly SentRow[], t: T): ActivityEntry[] {
         subtitle: short(stored.to),
         subtitleCopy: stored.to,
         amount: `${stored.amount} USDC`,
-        status: { tone: sentTone(status), label: t(`active.status.${status.toLowerCase()}`) },
+        status: {
+          tone: sentTone(status),
+          label: t(SENT_STATUS_KEY[status as TransferStatus] ?? 'active.status.none'),
+        },
       },
       facts: [
         {

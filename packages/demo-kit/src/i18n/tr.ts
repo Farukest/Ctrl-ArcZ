@@ -438,6 +438,7 @@ export const tr: Record<TranslationKey, string> = {
   'active.status.pending': 'Bekliyor',
   'active.status.locked': 'Kilitli',
   'active.status.claimed': 'Alındı',
+  'active.status.cancelled': 'İptal edildi',
   'active.status.reclaimed': 'İade edildi',
   'bridge.historyTitle': 'Köprü geçmişi',
   'bridge.historyEmpty': 'Bu tarayıcıdan henüz köprüleme yapılmadı.',

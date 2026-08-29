@@ -494,6 +494,7 @@ export const en = {
   'active.status.pending': 'Waiting',
   'active.status.locked': 'Locked',
   'active.status.claimed': 'Claimed',
+  'active.status.cancelled': 'Cancelled',
   'active.status.reclaimed': 'Refunded',
   'bridge.historyTitle': 'Bridge history',
   'bridge.historyEmpty': 'No bridges from this browser yet.',
