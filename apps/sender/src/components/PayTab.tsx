@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { hrefWith, pushWith, readRoute } from '../lib/route.js';
 import { Card, InfoBody, SegmentedTabs, useT } from '@ctrl-arcz/demo-kit/ui';
 import { type Session } from '@ctrl-arcz/demo-kit';
 import { SendTab } from './SendTab.js';
@@ -30,7 +31,13 @@ export function PayTab({
   onSwitchChain: (chainId: number) => Promise<void>;
 }) {
   const t = useT();
-  const [pay, setPay] = useState<PayMode>('standard');
+  const [pay, setPay] = useState<PayMode>(
+    () => (readRoute(window.location.search).pay as PayMode) ?? 'standard',
+  );
+  const selectPay = (next: PayMode) => {
+    pushWith({ pay: next });
+    setPay(next);
+  };
 
   return (
     <div className="paytab">
@@ -66,7 +73,8 @@ export function PayTab({
             },
           ]}
           value={pay}
-          onChange={setPay}
+          onChange={selectPay}
+          hrefFor={(id) => hrefWith({ pay: id })}
         />
         </div>
         {pay === 'standard' ? (

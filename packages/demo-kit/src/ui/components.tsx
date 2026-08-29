@@ -17,6 +17,7 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 import { useT, useI18n } from '../i18n/context.js';
+import { isPlainClick } from '../isPlainClick.js';
 import { classifyFailure, failureText } from '../failure.js';
 import type { TranslationKey } from '../i18n/en.js';
 import { useTheme } from './theme.js';
@@ -907,6 +908,7 @@ export function SegmentedTabs<T extends string>({
   tabs,
   value,
   onChange,
+  hrefFor,
 }: {
   /** A tab may carry its own `info`: the explanation shows on an `i` that appears
    *  inside the tab only while it is the active one, so the control never grows a
@@ -914,19 +916,50 @@ export function SegmentedTabs<T extends string>({
   tabs: { id: T; label: ReactNode; info?: ReactNode; infoAria?: string }[];
   value: T;
   onChange: (id: T) => void;
+  /**
+   * The address of each tab, which is what makes it a link.
+   *
+   * A tab that is only an onClick cannot be middle-clicked into a new tab, copied
+   * as an address, or returned to with the back arrow: as far as the browser is
+   * concerned nothing ever happened. Given this, every tab becomes a real link and
+   * the plain left click is still handled in the page, with no reload.
+   *
+   * Optional because a control that genuinely has no address should not invent
+   * one. Without it the tabs render exactly as they always did.
+   */
+  hrefFor?: ((id: T) => string) | undefined;
 }) {
+  /** The plain click is ours; anything else is the reader asking the browser. */
+  const go = (id: T) => (e: React.MouseEvent) => {
+    if (!isPlainClick(e)) return;
+    e.preventDefault();
+    onChange(id);
+  };
   return (
     <div className="segtabs" role="tablist">
       {tabs.map((t) => {
         const active = value === t.id;
-        // No info: a plain tab button, exactly as before.
+        // No info: a plain tab, as a link where there is an address for it.
         if (!t.info) {
-          return (
+          const cls = ['segtab', active && 'is-active'].filter(Boolean).join(' ');
+          return hrefFor ? (
+            <a
+              key={t.id}
+              role="tab"
+              aria-selected={active}
+              className={cls}
+              href={hrefFor(t.id)}
+              onClick={go(t.id)}
+              data-testid={`tab-${t.id}`}
+            >
+              {t.label}
+            </a>
+          ) : (
             <button
               key={t.id}
               role="tab"
               aria-selected={active}
-              className={['segtab', active && 'is-active'].filter(Boolean).join(' ')}
+              className={cls}
               onClick={() => onChange(t.id)}
               data-testid={`tab-${t.id}`}
             >
@@ -953,6 +986,26 @@ export function SegmentedTabs<T extends string>({
             }}
             data-testid={`tab-${t.id}`}
           >
+            {/*
+              The browser's half of the tab, laid over it.
+              
+              This one cannot simply become an anchor: it has a real info button
+              nested inside it, and a button inside a link is neither valid nor
+              operable. So the tab stays the control it already was, keyboard and
+              all, and a stretched link sits under it purely so the browser has
+              something to middle-click and a URL to show in the status bar. It is
+              hidden from assistive technology because the tab beside it already
+              carries the name and the role.
+            */}
+            {hrefFor && (
+              <a
+                className="segtab__hit"
+                href={hrefFor(t.id)}
+                onClick={go(t.id)}
+                aria-hidden
+                tabIndex={-1}
+              />
+            )}
             <span className="segtab__label">{t.label}</span>
             {active && (
               <span

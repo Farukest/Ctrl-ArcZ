@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { useSession, isPlainClick, type ChainPurpose } from '@ctrl-arcz/demo-kit';
-import { hrefFor, pushRoute, readRoute, type ActivityView } from './lib/route.js';
+import { hrefFor, hrefWith, pushRoute, pushWith, readRoute, type ActivityView } from './lib/route.js';
 import {
   ConnectBar,
   IconHistory,
@@ -53,7 +53,13 @@ export function App() {
   // A harness for UI that needs balances the live account cannot be made to hold.
   const lab = params.get('lab');
 
-  const [mode, setMode] = useState<Mode>(linkTid ? 'receive' : 'send');
+  const [mode, setMode] = useState<Mode>(
+    () => (readRoute(window.location.search).mode as Mode) ?? (linkTid ? 'receive' : 'send'),
+  );
+  const selectMode = (next: Mode) => {
+    pushWith({ mode: next });
+    setMode(next);
+  };
   /*
    * The tab is in the address, so it can be linked to, opened in a new tab and
    * gone back to. Read once for the first render and kept in step with the
@@ -91,6 +97,7 @@ export function App() {
   useEffect(() => {
     const onPop = () => {
       const r = readRoute(window.location.search);
+      setMode((r.mode as Mode) ?? 'send');
       startTabSwitch(() => {
         setTab(r.tab ?? 'pay');
         setActivityView(r.view);
@@ -206,7 +213,12 @@ export function App() {
         {state.session && (
           <>
             <div style={{ marginTop: 'var(--sp-4)' }}>
-              <ModeSwitch mode={mode} onChange={setMode} pendingCount={pendingCount} />
+              <ModeSwitch
+                mode={mode}
+                onChange={selectMode}
+                pendingCount={pendingCount}
+                hrefFor={(m) => hrefWith({ mode: m })}
+              />
             </div>
 
             {/* Keyed so switching replays the enter transition (see .mode-view). */}
@@ -218,6 +230,7 @@ export function App() {
                       tabs={primaryTabs}
                       value={tab === 'activity' ? ('' as Exclude<Tab, 'activity'>) : tab}
                       onChange={selectTab}
+                      hrefFor={(id) => hrefFor(id)}
                     />
                     {/* A link, not a button, so it can be middle-clicked into a
                         new tab and copied like any other address. The plain click

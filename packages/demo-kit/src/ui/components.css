@@ -1920,6 +1920,15 @@
   flex: 1 1 auto;
   min-width: 0;
   white-space: nowrap;
+  /* A tab is a control that happens to have an address. It is a link so the
+     browser can middle-click it, not so it can look like prose: the underline the
+     global `a` rule adds would put a rule under half the navigation. */
+  text-decoration: none;
+  /* Centred the way the button it replaces was, since an anchor is not a button
+     and does not centre its own text. */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   background: transparent;
   border: 0;
   color: var(--text-mid);
@@ -1939,6 +1948,7 @@
 @media (hover: hover) {
   .segtab:hover {
     color: var(--text-hi);
+    text-decoration: none;
   }
 }
 /* A tab that carries its own info: the label and the `i` sit inside the button,
@@ -1952,6 +1962,23 @@
   display: grid;
   grid-template-columns: 28px 1fr 28px;
   align-items: center;
+  /* Holds the stretched link that gives this tab an address. */
+  position: relative;
+}
+/* The browser's half of an info tab: a link covering it, under the label and the
+   info button rather than over them, so a click still reaches the real control
+   and a middle click still reaches the browser. */
+.segtab__hit {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  text-decoration: none;
+}
+.segtab--info .segtab__label,
+.segtab--info .segtab__info {
+  position: relative;
+  z-index: 1;
 }
 .segtab--info .segtab__label {
   grid-column: 2;
@@ -2026,6 +2053,8 @@
 }
 
 .modeswitch__btn {
+  /* A link so the browser can middle-click it, not so it reads as prose. */
+  text-decoration: none;
   position: relative;
   z-index: 1;
   display: inline-flex;

@@ -31,7 +31,7 @@ import {
   switchWalletTo,
   useWalletChain,
 } from '@ctrl-arcz/demo-kit';
-import { hrefFor, type ActivityView } from '../lib/route.js';
+import { hrefFor, hrefWith, pushWith, readRoute, type ActivityView } from '../lib/route.js';
 import {
   chainForStep,
   chainsFor,
@@ -168,7 +168,9 @@ export function BridgeTab({
   const t = useT();
   const toast = useToast();
   const guard = useSubmitGuard();
-  const [engine, setEngine] = useState<BridgeEngine>('cctp');
+  const [engine, setEngine] = useState<BridgeEngine>(
+    () => (readRoute(window.location.search).engine as BridgeEngine) ?? 'cctp',
+  );
   /**
    * The destination the user picked, or null while it is still the default.
    *
@@ -634,7 +636,10 @@ export function BridgeTab({
    * chain being left, and the destination rule does the same. The snapping code
    * that used to live here is the thing that forgot one of the two.
    */
-  const changeEngine = (e: BridgeEngine) => setEngine(e);
+  const changeEngine = (e: BridgeEngine) => {
+    pushWith({ engine: e });
+    setEngine(e);
+  };
 
   /**
    * What a spend of this size would cost, and what is still uncredited.
@@ -1433,6 +1438,7 @@ export function BridgeTab({
             ]}
             value={engine}
             onChange={changeEngine}
+            hrefFor={(id) => hrefWith({ engine: id })}
           />
         </div>
 

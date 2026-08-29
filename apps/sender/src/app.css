@@ -201,6 +201,9 @@
    is what makes it read as a different kind of destination from the three actions
    in the row, and the word is what stops the icon being a guess. */
 .tab-more {
+  /* A link so the browser can middle-click it, not so it reads as prose: the
+     global `a` rule would put an underline under a navigation control. */
+  text-decoration: none;
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;

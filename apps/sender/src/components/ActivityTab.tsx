@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { hrefWith, pushWith } from '../lib/route.js';
 import { cancel, TransferUnavailableError } from '@ctrl-arcz/sdk';
 import { useActivityFeed, type ActivityEntry, type Session } from '@ctrl-arcz/demo-kit';
 import {
@@ -154,7 +155,11 @@ export function ActivityTab({
             { id: 'subs', label: t('activity.v.subs') },
           ]}
           value={view}
-          onChange={(v) => setView(v as View)}
+          onChange={(v) => {
+            pushWith({ view: v as View });
+            setView(v as View);
+          }}
+          hrefFor={(v) => hrefWith({ view: v as View })}
         />
       </div>
       <Card data-testid="activity-card">

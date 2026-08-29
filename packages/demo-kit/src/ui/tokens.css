@@ -279,6 +279,25 @@ a {
 a:hover {
   text-decoration: underline;
 }
+/*
+ * A link that is a control rather than prose.
+ *
+ * Tabs became links so the browser can middle-click them into a new tab and show
+ * their address, which is what a real `href` buys and an onClick never can. The
+ * underline above is for text, and under half the navigation it reads as a
+ * mistake. Stated once here, with the `:hover` spelled out because `a:hover`
+ * outweighs a bare class and would otherwise win.
+ */
+a[role='tab'],
+a[role='tab']:hover,
+.tab-more,
+.tab-more:hover,
+.segtab__hit,
+.segtab__hit:hover,
+.modeswitch__btn,
+.modeswitch__btn:hover {
+  text-decoration: none;
+}
 ::selection {
   background: var(--accent-soft);
 }
