@@ -53,6 +53,22 @@ export interface GatewayFundBoxProps {
   busy?: boolean;
   /** True when the wallet is on `chain`; a deposit is the one act that needs it. */
   walletOnChain: boolean;
+  /**
+   * True when the wallet has nothing to pay this chain's gas with.
+   *
+   * A deposit is a real transaction on the chosen chain, and holding USDC there
+   * says nothing about holding the coin the network charges in. Somebody who
+   * bridged USDC onto Sonic and never used Sonic has zero S, which is the ordinary
+   * case and not the odd one.
+   *
+   * Undefined where the question does not apply or could not be answered: Arc bills
+   * gas in the USDC being moved, and a read that failed is not a zero. Only a
+   * definite `true` refuses, because refusing on a failed read would lock somebody
+   * out of a deposit they can perfectly well make.
+   */
+  noGas?: boolean | undefined;
+  /** What this chain charges gas in, for the sentence that says there is none. */
+  gasSymbol?: string | undefined;
   /** Deposited, on chain, not yet counted by Circle. */
   pending?: bigint;
   /**
@@ -82,6 +98,8 @@ export function GatewayFundBox({
   onDeposit,
   busy = false,
   walletOnChain,
+  noGas,
+  gasSymbol,
   pending = 0n,
   wait,
   format,
@@ -94,6 +112,9 @@ export function GatewayFundBox({
   })();
   // More than the wallet holds is not a deposit, it is a revert after a signature.
   const tooBig = maxDeposit != null && value > maxDeposit;
+  // Nor is a transaction on a chain the wallet cannot pay for. Only a definite
+  // `true` blocks: an unread balance is not a zero.
+  const cannotPayGas = noGas === true;
 
   return (
     <div className="gwfund" data-testid="gateway-deposit-box">
@@ -169,7 +190,7 @@ export function GatewayFundBox({
           data-testid="gateway-deposit-amount"
         />
         <Button
-          disabled={value <= 0n || tooBig || busy}
+          disabled={value <= 0n || tooBig || cannotPayGas || busy}
           loading={busy}
           onClick={onDeposit}
           data-testid="gateway-deposit"
@@ -208,6 +229,10 @@ export function GatewayFundBox({
         {maxDeposit == null ? (
           <span className="gwfund__note" data-testid="gateway-wallet-unreadable">
             {t('bridge.gwWalletUnreadable')}
+          </span>
+        ) : cannotPayGas ? (
+          <span className="gwfund__err" data-testid="gateway-no-gas">
+            {t('bridge.gwNoGas', { symbol: gasSymbol ?? '' })}
           </span>
         ) : tooBig ? (
           <span className="gwfund__err" data-testid="gateway-deposit-error">

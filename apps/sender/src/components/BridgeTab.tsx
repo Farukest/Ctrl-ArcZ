@@ -12,6 +12,7 @@ import {
   quoteGatewaySpend,
   isGatewayChain,
   CCTP_CHAINS,
+  chainNativeCurrency,
   usdc,
   percentOf,
   maxDeliverable,
@@ -72,7 +73,7 @@ import { RiskGate } from './RiskGate.js';
 import { pendingOn, rememberDeposit } from '../lib/pendingDeposits.js';
 import { refreshActivity, startRun, useActivity } from '../lib/activity.js';
 import { activityLabels, toActivityItem } from '../lib/activityView.js';
-import { useGatewayBalances, useWalletUsdc } from '../lib/balances.js';
+import { useGasBalance, useGatewayBalances, useWalletUsdc } from '../lib/balances.js';
 import { bumpBalances } from '../lib/balanceStore.js';
 
 // The wallet signs both engines, so there is no key here to gate on. A plain flag
@@ -543,6 +544,24 @@ export function BridgeTab({
    */
   const gwWithdraw = engine === 'gateway' && sameChain;
   const walletOnDepositChain = !gwSource || session.chainId === CCTP_CHAINS[gwSource].chainId;
+  /*
+   * Whether a deposit here can pay for itself.
+   *
+   * Only asked where the chain charges in its own coin. Arc bills gas in the USDC
+   * being moved, so the answer there is already in `maxDeposit`, and asking again
+   * would be a second, worse copy of the same rule.
+   *
+   * The offer used to go out regardless, and MetaMask was the first thing to notice:
+   * a red fee and a "Review alert" over an approve, leaving the user to work out
+   * which part of it was wrong. Zero S on Sonic is the ordinary case for anybody who
+   * bridged USDC there and never used the chain.
+   */
+  const gwGasToken =
+    gwSource && (CCTP_CHAINS[gwSource] as { gasToken?: string }).gasToken === 'usdc'
+      ? undefined
+      : gwSource;
+  const gwGas = useGasBalance(gwGasToken, session.address as Address);
+  const gwNoGas = gwGasToken != null && gwGas.resolved && gwGas.value === 0n;
   const canBridge =
     bridgeEnabled &&
     amountValue > 0 &&
@@ -1115,11 +1134,25 @@ export function BridgeTab({
        * answers, the row takes the transferId as its name (see `rekey`), which is
        * what the mint is looked up by afterwards.
        */
+      /*
+       * Where the money actually leaves from, which is not `from`.
+       *
+       * `from` is the deposit box's chain: where the wallet would put USDC in. A
+       * spend draws on the rows in the From block, and since those became a list
+       * the two have been free to differ -- deposit box on Sonic, spending from
+       * Base -- and the row was labelled with the wrong one. It read "Sonic
+       * Testnet to Arc Testnet" over a transfer that never touched Sonic.
+       *
+       * The legs are ordered with the leading one first, so a split names the leg
+       * carrying the forwarding fee. That is a real source rather than a guess;
+       * `sourceCount` is what lets the row say there were others.
+       */
       const record = startRun({
         engine: 'gateway',
-        from,
+        from: sources[0]?.chain ?? from,
         to,
         amount,
+        ...(sources.length > 1 ? { sourceCount: sources.length } : {}),
         ...(isAddress(recipient.trim()) ? { recipient: recipient.trim() } : {}),
       });
       setSpotlight(record.id);
@@ -1457,6 +1490,8 @@ export function BridgeTab({
             amount={depositAmount}
             onAmountChange={setDepositAmount}
             walletOnChain={walletOnDepositChain}
+            noGas={gwNoGas}
+            gasSymbol={gwGasToken ? chainNativeCurrency(gwGasToken)?.symbol : undefined}
             pending={gwPending}
             wait={depositWaitLabel(gwSource)}
             format={usdc}

@@ -107,3 +107,60 @@ describe('rekey', () => {
     expect(rows[0]?.state).toBe('success');
   });
 });
+
+/**
+ * What the row says the money came from.
+ *
+ * A Gateway spend has two chains that could answer that and they are not the same
+ * one. `from` on the bridge screen is the deposit box's chain -- where the wallet
+ * would put USDC in -- while a spend draws on the rows in the From block, and since
+ * those became a list the two have been free to differ. The row was labelled with
+ * the deposit box, so a transfer taken off Base Sepolia and minted on Arc appeared
+ * in Recent as "Sonic Testnet to Arc Testnet", naming a chain it never touched.
+ *
+ * The fix is at the call site: it passes the leading leg. What can be pinned here
+ * is the half this module owns -- that a run stores the source it was given, that a
+ * split says how many there were, and that the label follows the chain rather than
+ * being passed in beside it and allowed to disagree.
+ */
+describe('a run names the chain it was given', () => {
+  it('labels the source from the chain, so the two cannot disagree', () => {
+    const run = startRun({
+      engine: 'gateway',
+      from: 'Base_Sepolia',
+      to: 'Arc_Testnet',
+      amount: '1.1',
+    });
+    const row = loadActivity().find((b) => b.id === run.id);
+    expect(row?.from).toBe('Base_Sepolia');
+    expect(row?.fromLabel).toBe('Base Sepolia');
+    // One source, so nothing to correct.
+    expect(row?.sourceCount).toBeUndefined();
+  });
+
+  it('records how many chains a split drew on', () => {
+    // The leading leg is a real source and the one carrying the forwarding fee, but
+    // on its own it describes a payment taken off three chains as coming from one.
+    const run = startRun({
+      engine: 'gateway',
+      from: 'Base_Sepolia',
+      to: 'Arc_Testnet',
+      amount: '9',
+      sourceCount: 3,
+    });
+    expect(loadActivity().find((b) => b.id === run.id)?.sourceCount).toBe(3);
+  });
+
+  it('says nothing about a count of one', () => {
+    // Absent rather than 1: every row written before a spend could draw on several
+    // has no count at all, and a "+0 more" beside a single chain is noise.
+    const run = startRun({
+      engine: 'cctp',
+      from: 'Base_Sepolia',
+      to: 'Arc_Testnet',
+      amount: '2',
+      sourceCount: 1,
+    });
+    expect(loadActivity().find((b) => b.id === run.id)?.sourceCount).toBeUndefined();
+  });
+});

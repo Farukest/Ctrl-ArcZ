@@ -110,6 +110,14 @@ export function toActivityItem(b: StoredBridge, t: T): ActivityItem {
       <>
         <ChainLogo id={b.from} size={18} />
         {b.fromLabel}
+        {/* A split says so. `from` is the leading leg, which is a real source and
+            the one the fee came off, but naming it alone would describe a payment
+            taken off three chains as coming from one of them. */}
+        {b.sourceCount && b.sourceCount > 1 ? (
+          <span className="hrow__more">
+            {t('activity.andMoreNetworks', { n: String(b.sourceCount - 1) })}
+          </span>
+        ) : null}
         {!sameChain && (
           <>
             <span className="hrow__arrow" aria-hidden>

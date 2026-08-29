@@ -11,7 +11,7 @@
  * screen from this one source.
  */
 import type { Address } from 'viem';
-import { readUsdcOn } from '@ctrl-arcz/demo-kit';
+import { readGasBalanceOn, readUsdcOn } from '@ctrl-arcz/demo-kit';
 import { type CctpChainName, type GatewayChain, gatewayBalance } from '@ctrl-arcz/sdk';
 import { createBalanceStore, useBalance, type Resolved } from './balanceStore.js';
 
@@ -49,6 +49,34 @@ const walletUsdcStore = createBalanceStore<
   contextOf: (a) => String(a.connectedChainId),
   read: (a) => readUsdcOn(a.chain, a.connectedChainId, a.address),
 });
+
+/* Native gas (the coin the chain itself charges in) ------------------------- */
+
+/**
+ * The wallet's balance in the chain's own coin, which is what pays for a deposit.
+ *
+ * Kept apart from the USDC store because it answers a different question and fails
+ * differently: having USDC on Sonic says nothing about having any S, and somebody
+ * who bridged USDC there and never touched Sonic has exactly zero.
+ */
+const gasStore = createBalanceStore<
+  { chain: CctpChainName; address: Address },
+  bigint | null
+>({
+  keyOf: (a) => `${a.chain}:${a.address.toLowerCase()}`,
+  read: (a) => readGasBalanceOn(a.chain, a.address),
+});
+
+/**
+ * What the wallet can pay gas with on `chain`. A resolved `null` means the read
+ * could not be made, which callers must not treat as zero.
+ */
+export function useGasBalance(
+  chain: CctpChainName | undefined,
+  address?: Address,
+): Resolved<bigint | null> {
+  return useBalance(gasStore, chain && address ? { chain, address } : null);
+}
 
 /**
  * The wallet's USDC on `chain`. A resolved `null` means "on another network, so it

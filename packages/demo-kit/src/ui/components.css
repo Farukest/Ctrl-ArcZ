@@ -3115,6 +3115,19 @@ a.hstep__go:hover {
   color: var(--text-lo);
   margin: 0 2px;
 }
+/* "+2 more" beside the source of a split, quieter than the chain it follows: the
+   named chain is where the fee came off and the count is the correction to it,
+   not a second network with equal billing. */
+.hrow__more {
+  margin-left: 4px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  color: var(--text-lo);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
 
 /* The one amount control -------------------------------------------------- */
 /* Sizes come from the scale the rest of this file uses (11-18px), with a single
@@ -3931,6 +3944,20 @@ a.hstep__go:hover {
 .gwfund__wallet:disabled .gwfund__walletv {
   color: var(--text-mid);
 }
+/* The picker and the wallet figure stop fitting side by side here and wrap, and
+   `margin-left: auto` then pushed the second line to the far right: a line starting
+   19px in from the column above it and ending flush with nothing. Wrapped, it is a
+   line of its own and belongs at the left edge like every other line in the box.
+
+   After the rule it overrides, not beside the head's own breakpoint above, because
+   both are one class deep and the later of two equals wins. */
+@media (max-width: 520px) {
+  .gwfund__wallet {
+    margin-left: 0;
+    justify-content: flex-start;
+    padding-left: 0;
+  }
+}
 /* The small print under the field: the same height whatever it has to say.
    Four conditions used to render four independent lines here, so picking a
    different network in the row above changed the height of the box and shifted
@@ -4723,7 +4750,10 @@ a.hstep__go:hover {
   align-items: baseline;
   justify-content: space-between;
   gap: 10px;
-  padding: 0 2px 2px;
+  /* No side inset. It had 2px, so the word "Networks" started two pixels right of
+     every row it is a heading for, which is the kind of difference you feel
+     without being able to name. */
+  padding: 0 0 2px;
 }
 .gwlegs__title {
   font-size: 12px;
@@ -4845,7 +4875,6 @@ a.hstep__go:hover {
   justify-content: space-between;
   gap: 10px;
   margin-top: 2px;
-  padding-left: 2px;
   font-size: 11px;
   line-height: 15px;
   color: var(--text-lo);
@@ -4887,6 +4916,18 @@ a.hstep__go:hover {
       'pick drop'
       'amount amount'
       'meta meta';
+    /*
+     * Zero, with the gap moved onto the button that needs it.
+     *
+     * The column gap applies whether or not the second column holds anything, and
+     * the remove button is only drawn when there is more than one network. So a
+     * single-source row lost 8px off the picker that the amount and the meta below
+     * it kept, and the three lines of one row ended at three different places.
+     */
+    column-gap: 0;
+  }
+  .gwleg__drop {
+    margin-left: 8px;
   }
   .gwleg__input {
     width: 100%;

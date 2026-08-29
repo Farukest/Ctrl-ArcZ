@@ -58,6 +58,41 @@ export async function readUsdcOn(
 }
 
 /**
+ * What the wallet holds in the chain's own coin, which is what pays for gas there.
+ *
+ * A Gateway deposit is a real transaction on the chosen chain, so it needs that
+ * chain's gas, and having USDC there says nothing about having any. Somebody who
+ * bridged USDC onto Sonic and never touched Sonic before holds exactly zero S,
+ * which is the ordinary case rather than the odd one: nothing about receiving USDC
+ * gives you the coin the network charges in.
+ *
+ * Without this the app offered the deposit anyway and the first thing to notice was
+ * MetaMask, which puts the amount, the contract and a red fee on screen and asks
+ * the user to work out which part is wrong. The app knows before any of that.
+ *
+ * Arc is the exception and needs no caller to remember it: it bills gas in the USDC
+ * being moved, so `gasToken` is set there and this is not asked.
+ *
+ * Null means the read could not be made, never zero. Zero is a claim.
+ */
+export async function readGasBalanceOn(
+  chain: CctpChainName,
+  address: Address,
+): Promise<bigint | null> {
+  const entry = CCTP_CHAINS[chain];
+  if (readRpcUrls(entry.chainId).length === 0) return null;
+  try {
+    const client =
+      entry.chainId === ARC_TESTNET_CHAIN_ID
+        ? getPublicClient()
+        : bridgeClients(entry.chainId, address).publicClient;
+    return await client.getBalance({ address });
+  } catch {
+    return null;
+  }
+}
+
+/**
  * What the connected wallet holds on the network it is actually on.
  *
  * The header used to answer this with Arc's balance no matter where the wallet

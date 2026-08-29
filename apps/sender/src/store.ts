@@ -175,6 +175,16 @@ export interface StoredBridge {
   fromLabel: string;
   toLabel: string;
   /**
+   * How many chains a Gateway spend drew on, when it drew on more than one.
+   *
+   * `from` names the leading leg. That is a real source and the right one to build
+   * an explorer link from, but a payment taken off three chains is not a payment
+   * from the first of them, so the row says how many there were rather than
+   * quietly naming one. Absent means one, which is every record written before
+   * a spend could draw on several.
+   */
+  sourceCount?: number;
+  /**
    * Only set when the transfer was sent to someone else. Absent means it went to
    * the sender's own address, which is what a bridge normally is, and a row should
    * not show a "to" that is just you.

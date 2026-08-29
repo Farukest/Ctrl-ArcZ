@@ -12,7 +12,7 @@ export {
   switchWalletTo,
   type Session,
 } from './session.js';
-export { readUsdcOn, readWalletUsdc } from './walletUsdc.js';
+export { readGasBalanceOn, readUsdcOn, readWalletUsdc } from './walletUsdc.js';
 export {
   useWalletChain,
   chainForWallet,

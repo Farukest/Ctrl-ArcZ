@@ -188,6 +188,15 @@ export interface StartRun {
   to: CctpChainName;
   /** Display units. */
   amount: string;
+  /**
+   * How many chains a Gateway spend drew on, when it drew on more than one.
+   *
+   * `from` names the leading leg, which is a real source and the one carrying the
+   * forwarding fee, but on its own it is a half-truth about a split: a payment
+   * taken off three chains is not a payment from the first of them. Absent means
+   * one source, which is every CCTP transfer and most Gateway ones.
+   */
+  sourceCount?: number;
   label?: string;
   recipient?: string;
   /** Only when the run has a natural identity of its own, such as a transferId. */
@@ -219,6 +228,7 @@ export function startRun(input: StartRun): RunHandle {
     to: input.to,
     fromLabel: chainLabel(input.from),
     toLabel: chainLabel(input.to),
+    ...(input.sourceCount && input.sourceCount > 1 ? { sourceCount: input.sourceCount } : {}),
     ...(input.label ? { label: input.label } : {}),
     ...(input.recipient ? { recipient: input.recipient } : {}),
     amount: input.amount,

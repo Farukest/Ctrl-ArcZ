@@ -392,6 +392,7 @@ export const en = {
   // width that keeping this to one line needs.
   'bridge.gwWalletOtherChain': 'Switches your wallet first, then counts in about {wait}.',
   'bridge.gwWalletUnreadable': 'Your wallet did not answer. Retrying.',
+  'bridge.gwNoGas': 'No {symbol} here to pay the gas with.',
   'bridge.gwDepositCta': 'Deposit',
   'bridge.gwDepositTooBig': 'More than your wallet holds here.',
   'bridge.depositButton': 'Deposit {amount} USDC on {chain}',
@@ -456,6 +457,7 @@ export const en = {
   'activity.failed': '{n} needs a look',
   'activity.fresh': 'Just now',
   'activity.feeIs': 'Fee {fee} USDC',
+  'activity.andMoreNetworks': '+{n} more',
   'activity.type': 'Type',
   'activity.jump': 'Go to it',
   'activity.steps': 'Steps',
