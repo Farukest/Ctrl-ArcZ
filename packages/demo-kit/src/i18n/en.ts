@@ -392,8 +392,6 @@ export const en = {
   'bridge.depositButton': 'Deposit {amount} USDC on {chain}',
   'bridge.deposited': 'Deposited {amount} USDC. It becomes spendable in about {wait}.',
   'bridge.withdrawButton': 'Withdraw to my wallet',
-  'bridge.withdrawHint':
-    'Same chain in and out: this takes the USDC out of Gateway and back into your wallet on this chain. It costs about a third of a cross-chain transfer.',
   'bridge.recipient': 'Recipient (optional)',
   'bridge.recipientHint': 'Leave empty to send to yourself, which is what a bridge usually means.',
   'bridge.recipientPlaceholder': 'Your own address',

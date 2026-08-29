@@ -343,8 +343,6 @@ export const tr: Record<TranslationKey, string> = {
   'bridge.depositButton': '{chain} üzerinde {amount} USDC yatır',
   'bridge.deposited': '{amount} USDC yatırıldı. Yaklaşık {wait} içinde harcanabilir olur.',
   'bridge.withdrawButton': 'Cüzdanıma çek',
-  'bridge.withdrawHint':
-    'Aynı zincire çıkış: USDC Gateway’den çıkıp bu zincirdeki cüzdanınıza döner. Ücreti, zincirler arası transferin yaklaşık üçte biridir.',
   'bridge.recipient': 'Alıcı (opsiyonel)',
   'bridge.recipientHint': 'Boş bırakırsanız kendinize gönderilir; köprü genelde bu demektir.',
   'bridge.recipientPlaceholder': 'Kendi adresiniz',

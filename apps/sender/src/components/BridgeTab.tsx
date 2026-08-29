@@ -1671,7 +1671,12 @@ export function BridgeTab({ session }: { session: Session }) {
             {t('bridge.sameChain')}
           </Notice>
         )}
-        {gwWithdraw && <Notice tone="info">{t('bridge.withdrawHint')}</Notice>}
+        {/* Same chain in and out needs no sentence. The primary button already
+            reads "Withdraw to my wallet" instead of "Bridge", which is the loudest
+            control on the screen, and the cost block underneath gives the actual
+            fee rather than a comparison to a transfer nobody is making. What was
+            here restated both: the action in words next to the button that
+            performs it, and the price as a fraction of a different price. */}
         {/* Whose money moves is the thing that changed, so say it plainly rather
             than leaving the user to infer it from a MetaMask prompt. */}
         {engine === 'cctp' && !walletOnSource && (
