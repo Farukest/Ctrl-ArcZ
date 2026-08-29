@@ -323,7 +323,7 @@ export const en = {
     'The rest sits on other chains, and a transfer spends only the balance on its source chain.',
   'bridge.gwBalance': 'A transfer costs a flat {fee} USDC whatever the amount.',
   'bridge.gwBalanceLoading': 'Reading your Gateway balance...',
-  'bridge.gwDepositWait': 'Depositing on {chain} takes about {wait} to count.',
+  'bridge.gwDepositWait': 'Deposits here count in about {wait}.',
   'bridge.youReceive': 'You receive',
   'bridge.balance': 'Balance',
   'bridge.gwBalanceLabel': 'Gateway balance',
@@ -384,11 +384,16 @@ export const en = {
   // this stopped being about reading. What is still true is that a deposit is an
   // on-chain transaction and has to happen there -- and the button handles that
   // itself, so this says what will happen rather than what cannot.
-  'bridge.gwWalletOtherChain': 'Depositing here will switch your wallet to {chain} first.',
-  'bridge.gwWalletUnreadable':
-    'Your wallet did not answer for what it holds on {chain}. Retrying; the deposit field still works.',
+  //
+  // It carries the wait as well, because these two facts used to be two lines and
+  // only one of them was ever conditional, which is what made the box change
+  // height when you changed network. Neither names the chain any more: the box is
+  // titled with it and the picker inside shows it, so a third mention cost the
+  // width that keeping this to one line needs.
+  'bridge.gwWalletOtherChain': 'Switches your wallet first, then counts in about {wait}.',
+  'bridge.gwWalletUnreadable': 'Your wallet did not answer. Retrying.',
   'bridge.gwDepositCta': 'Deposit',
-  'bridge.gwDepositTooBig': 'More than your wallet holds on this chain.',
+  'bridge.gwDepositTooBig': 'More than your wallet holds here.',
   'bridge.depositButton': 'Deposit {amount} USDC on {chain}',
   'bridge.deposited': 'Deposited {amount} USDC. It becomes spendable in about {wait}.',
   'bridge.withdrawButton': 'Withdraw to my wallet',
@@ -399,7 +404,7 @@ export const en = {
   'bridge.gwBalanceShort': '{here} USDC on {chain}. Fee {fee}.',
   'bridge.gwUseFunded': 'Use {chain} instead ({amount} USDC there)',
   'bridge.gwChainMissing': 'Pick two chains Gateway supports.',
-  'bridge.gwPending': '{amount} more deposited, waiting for Circle to count it.',
+  'bridge.gwPending': '{amount} deposited, counts in about {wait}.',
   'history.days3': 'Last 3 days',
   'history.custom': 'Pick dates',
   'history.from': 'From date',

@@ -55,7 +55,15 @@ export interface GatewayFundBoxProps {
   walletOnChain: boolean;
   /** Deposited, on chain, not yet counted by Circle. */
   pending?: bigint;
-  /** How long a deposit takes to count here, already worded. */
+  /**
+   * How long a deposit takes to count here, as a duration and nothing more: `1s`
+   * on Arc, `19m` on Base. `depositWaitLabel` produces it.
+   *
+   * The sentence around it belongs to this component, which is a change: both
+   * callers used to build one and pass it in whole, so the same sentence existed
+   * twice and the box could not fold it into the line about switching networks
+   * without asking them both to change.
+   */
   wait: string;
   /** Formats subunits for display; the caller owns the money vocabulary. */
   format: (subunits: bigint) => string;
@@ -169,39 +177,56 @@ export function GatewayFundBox({
           {t('bridge.gwDepositCta')}
         </Button>
       </div>
-      {tooBig && (
-        <span className="gwfund__err" data-testid="gateway-deposit-error">
-          {t('bridge.gwDepositTooBig')}
-        </span>
-      )}
-      {/* Two different reasons the figure above is missing, and until now only one
-          of them was on screen. The other showed a held placeholder and nothing
-          else: on a light background that is a blank space beside a label, which
-          reads as a bug in the page rather than a wallet that did not answer.
+      {/*
+        One line of small print, and only ever one.
 
-          Order matters and used to be the other way round: the deposit note came
-          first and hid the unreadable one, so a missing figure got an explanation
-          about depositing. No figure is the more urgent fact, so it speaks first.
+        These were four independent lines, each rendered when its own condition
+        held, so the box was one line tall on a chain the wallet is already on and
+        two on a chain it is not -- and changing the picker moved everything below
+        it, which on this screen is the whole rest of the bridge. A control that
+        makes the page jump under the cursor is a control people stop using.
 
-          The retry the second one promises is real, but it is not the timer this
-          comment used to claim: a read that failed leaves its entry stale, and the
-          store asks again the next time the value is subscribed to, which is every
-          render. Worth being exact about, because the promise is on screen. */}
-      {maxDeposit == null ? (
-        <span className="gwfund__note" data-testid="gateway-wallet-unreadable">
-          {t('bridge.gwWalletUnreadable', { chain: labelOf(chain) })}
-        </span>
-      ) : !walletOnChain ? (
-        <span className="gwfund__note">
-          {t('bridge.gwWalletOtherChain', { chain: labelOf(chain) })}
-        </span>
-      ) : null}
-      {pending > 0n && (
-        <span className="gwfund__note" data-testid="gateway-pending">
-          {t('bridge.gwPending', { amount: format(pending) })}
-        </span>
-      )}
-      <span className="gwfund__note">{wait}</span>
+        The fix is not to reserve two lines and leave one of them blank; it is that
+        there was never more than one thing worth saying here. So the four states
+        are ordered by urgency and the winner speaks alone, and the two that would
+        otherwise be said together are said in one sentence: a pending deposit
+        already implies the wait, and a wallet on another chain is a step on the way
+        to the same wait. Every variant fits one line at 380px on all eleven
+        Gateway chains, which is what keeps the height fixed rather than merely
+        reserved.
+
+        Order matters and used to be the other way round: the deposit note came
+        first and hid the unreadable one, so a missing figure got an explanation
+        about depositing. No figure is the more urgent fact, so it speaks first.
+
+        The retry it promises is real, but it is not a timer: a read that failed
+        leaves its entry stale, and the store asks again the next time the value is
+        subscribed to, which is every render. Worth being exact about, because the
+        promise is on screen.
+      */}
+      <div className="gwfund__notes">
+        {maxDeposit == null ? (
+          <span className="gwfund__note" data-testid="gateway-wallet-unreadable">
+            {t('bridge.gwWalletUnreadable')}
+          </span>
+        ) : tooBig ? (
+          <span className="gwfund__err" data-testid="gateway-deposit-error">
+            {t('bridge.gwDepositTooBig')}
+          </span>
+        ) : pending > 0n ? (
+          <span className="gwfund__note" data-testid="gateway-pending">
+            {t('bridge.gwPending', { amount: format(pending), wait })}
+          </span>
+        ) : !walletOnChain ? (
+          <span className="gwfund__note" data-testid="gateway-wallet-elsewhere">
+            {t('bridge.gwWalletOtherChain', { wait })}
+          </span>
+        ) : (
+          <span className="gwfund__note" data-testid="gateway-wait">
+            {t('bridge.gwDepositWait', { wait })}
+          </span>
+        )}
+      </div>
       {children}
     </div>
   );

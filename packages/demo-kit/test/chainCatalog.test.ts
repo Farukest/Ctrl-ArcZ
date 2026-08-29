@@ -2,13 +2,22 @@ import { describe, expect, it } from 'vitest';
 import {
   ARC_TESTNET_CHAIN_ID,
   CCTP_CHAINS,
+  DEPOSIT_CONFIRMATION_SECONDS,
   GATEWAY_CHAIN_NAMES,
   chainLabel,
   deployedChainIds,
   type CctpChainName,
 } from '@ctrl-arcz/sdk';
-import { chainsFor, labelOf, needsWalletOn, type ChainPurpose } from '../src/chainCatalog.js';
+import {
+  chainsFor,
+  depositWaitLabel,
+  labelOf,
+  needsWalletOn,
+  type ChainPurpose,
+} from '../src/chainCatalog.js';
 import { supportsChain } from '../src/chainSupport.js';
+import { en } from '../src/i18n/en.js';
+import { tr } from '../src/i18n/tr.js';
 
 /**
  * Which networks a job can be done on.
@@ -153,5 +162,103 @@ describe('labelOf', () => {
   it('reads the chains whose old hand-written labels used the wrong id', () => {
     expect(labelOf('OP_Sepolia')).toBe('OP Sepolia');
     expect(labelOf('Polygon_Amoy')).toBe('Polygon Amoy');
+  });
+});
+
+describe('depositWaitLabel', () => {
+  it('is seconds under a minute and whole minutes above it', () => {
+    // Arc counts in one second, Base in nineteen minutes. Both are Circle's
+    // published figures and neither is rounded towards the other.
+    expect(depositWaitLabel('Arc_Testnet')).toBe('1s');
+    expect(depositWaitLabel('Sonic_Testnet')).toBe('8s');
+    expect(depositWaitLabel('Base_Sepolia')).toBe('19m');
+  });
+
+  it('says nothing when there is no chain to say it about', () => {
+    // The bridge can render its deposit box for a frame before a source is
+    // settled, and "undefineds" is worse than an empty line.
+    expect(depositWaitLabel(undefined)).toBe('');
+  });
+
+  it('answers for every Gateway chain', () => {
+    for (const chain of GATEWAY_CHAIN_NAMES) {
+      expect(depositWaitLabel(chain)).toMatch(/^\d+[sm]$/);
+    }
+  });
+});
+
+/**
+ * The small print under the deposit field, and why it has a length budget.
+ *
+ * The box used to render up to four independent lines here, so choosing a network
+ * the wallet was not on made it a line taller and shifted the whole bridge below
+ * it. It now shows exactly one of them, and the stylesheet holds two lines of room
+ * for that one below 520px and one line above -- which fixes the height only as
+ * long as no sentence outgrows the room held for it.
+ *
+ * Sixty characters is the measured budget. The region is 224px wide at a 380px
+ * viewport, which is about thirty-seven characters of 12px text, so two lines is
+ * seventy-four and every variant has to fit inside that once `{amount}` has taken
+ * its widest value. Above the breakpoint the region is wide enough that the same
+ * sixty characters fit on the single line held there.
+ *
+ * The heights themselves are checked in a browser, which is the only place a wrap
+ * is real. What this stops is a translation being added months from now that
+ * quietly puts the jump back.
+ */
+describe('the deposit note fits the room held for it', () => {
+  const KEYS = [
+    'bridge.gwDepositWait',
+    'bridge.gwWalletOtherChain',
+    'bridge.gwWalletUnreadable',
+    'bridge.gwDepositTooBig',
+    'bridge.gwPending',
+  ] as const;
+
+  const filled = (s: string) =>
+    s.replace('{wait}', '19m').replace('{amount}', '176.502194').replace('{chain}', '');
+
+  for (const [name, dict] of [
+    ['en', en],
+    ['tr', tr],
+  ] as const) {
+    it(`in ${name}`, () => {
+      for (const key of KEYS) {
+        expect(filled(dict[key]).length, `${name} ${key}`).toBeLessThanOrEqual(60);
+      }
+    });
+  }
+
+  it('never names the chain, which the box is already titled with', () => {
+    // Three mentions of "World Chain Sepolia" in one small box, and the third one
+    // was what pushed the line into wrapping.
+    for (const key of KEYS) {
+      expect(en[key]).not.toContain('{chain}');
+      expect(tr[key]).not.toContain('{chain}');
+    }
+  });
+
+  it('leaves the wait sayable from every state that has one', () => {
+    // Hiding a line is only acceptable because the line that wins carries what the
+    // hidden one would have said. These two are shown instead of the plain wait,
+    // so they have to carry it.
+    expect(en['bridge.gwWalletOtherChain']).toContain('{wait}');
+    expect(en['bridge.gwPending']).toContain('{wait}');
+    expect(tr['bridge.gwWalletOtherChain']).toContain('{wait}');
+    expect(tr['bridge.gwPending']).toContain('{wait}');
+  });
+});
+
+/**
+ * `DEPOSIT_CONFIRMATION_SECONDS` is Circle's and this file only words it. Pinned so
+ * that a chain added to the registry without a wait fails here rather than printing
+ * "NaNs" under a deposit field.
+ */
+describe('every Gateway chain has a published wait', () => {
+  it('and it is a real number of seconds', () => {
+    for (const chain of GATEWAY_CHAIN_NAMES) {
+      expect(Number.isFinite(DEPOSIT_CONFIRMATION_SECONDS[chain])).toBe(true);
+      expect(DEPOSIT_CONFIRMATION_SECONDS[chain]).toBeGreaterThan(0);
+    }
   });
 });

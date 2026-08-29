@@ -36,7 +36,13 @@ export {
   type BridgeOutcome,
 } from './bridgeChains.js';
 export { supportsChain, preferredChainFor, type ChainFeature } from './chainSupport.js';
-export { chainsFor, labelOf, needsWalletOn, type ChainPurpose } from './chainCatalog.js';
+export {
+  chainsFor,
+  depositWaitLabel,
+  labelOf,
+  needsWalletOn,
+  type ChainPurpose,
+} from './chainCatalog.js';
 export { isPlainClick } from './isPlainClick.js';
 export { useToken } from './useToken.js';
 export {

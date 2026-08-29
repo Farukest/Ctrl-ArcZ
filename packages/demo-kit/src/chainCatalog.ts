@@ -1,11 +1,13 @@
 import {
   ARC_TESTNET_CHAIN_ID,
   CCTP_CHAINS,
+  DEPOSIT_CONFIRMATION_SECONDS,
   GATEWAY_CHAIN_NAMES,
   cctpChainByChainId,
   chainLabel,
   deployedChainIds,
   type CctpChainName,
+  type GatewayChain,
 } from '@ctrl-arcz/sdk';
 import { supportsChain, type ChainFeature } from './chainSupport.js';
 
@@ -143,4 +145,21 @@ export function needsWalletOn(purpose: ChainPurpose): boolean {
  */
 export function labelOf(chain: CctpChainName | string): string {
   return chainLabel(chain as CctpChainName);
+}
+
+/**
+ * How long a Gateway deposit on this chain takes to count, as a duration.
+ *
+ * Seconds under a minute and whole minutes above it, which is the whole rule; the
+ * point of it living here is that it was written out twice, identically, in the two
+ * screens that fund a Gateway balance, and both of them also feed it to a toast. A
+ * third copy was one screen away.
+ *
+ * The number itself is Circle's, from `DEPOSIT_CONFIRMATION_SECONDS`, and it is not
+ * averaged: depositing on Arc counts in a second and on Base in nineteen minutes.
+ */
+export function depositWaitLabel(chain: GatewayChain | undefined): string {
+  if (!chain) return '';
+  const secs = DEPOSIT_CONFIRMATION_SECONDS[chain];
+  return secs < 60 ? `${secs}s` : `${Math.round(secs / 60)}m`;
 }

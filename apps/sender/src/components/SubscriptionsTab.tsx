@@ -33,13 +33,13 @@ import {
   quoteGatewaySpend,
   maxDepositable,
   depositToGateway,
-  DEPOSIT_CONFIRMATION_SECONDS,
   CCTP_CHAINS,
   type GatewayChain,
 } from '@ctrl-arcz/sdk';
 import {
   bridgeClients,
   chainsFor,
+  depositWaitLabel,
   getPublicClient,
   supportsChain,
   switchWalletTo,
@@ -468,8 +468,7 @@ export function SubscriptionsTab({
   const gwNeeded = gwCeiling == null ? null : capAmt + gwCeiling;
   const gwShort = gwOnSource != null && gwNeeded != null && capAmt > 0n && gwOnSource < gwNeeded;
   const gwMissing = gwShort && gwOnSource != null && gwNeeded != null ? gwNeeded - gwOnSource : 0n;
-  const gwWaitSecs = DEPOSIT_CONFIRMATION_SECONDS[gwSource];
-  const gwWaitLabel = gwWaitSecs < 60 ? `${gwWaitSecs}s` : `${Math.round(gwWaitSecs / 60)}m`;
+  const gwWaitLabel = depositWaitLabel(gwSource);
 
   /**
    * Move wallet USDC into the Gateway balance, switching the wallet's network first
@@ -946,10 +945,7 @@ export function SubscriptionsTab({
             onAmountChange={setDepositAmount}
             walletOnChain={gw.walletHere}
             pending={gwPending}
-            wait={t('bridge.gwDepositWait', {
-              chain: chainLabel(gwSource),
-              wait: gwWaitLabel,
-            })}
+            wait={gwWaitLabel}
             format={fmtUsdc}
             busy={depositing || switching || gw.switching}
             onDeposit={() => void guard(depositToGw)}

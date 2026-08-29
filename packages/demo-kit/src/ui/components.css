@@ -3791,11 +3791,28 @@ a.hstep__go:hover {
   background: var(--surface-2);
   min-width: 0;
 }
+/* Never one line on one network and two on the next.
+   This wrapped, and what decided it was the two things that change when you use
+   the picker below it: the length of the chain's name and the width of its
+   balance. "On Arc Testnet 3.174386 USDC" needs 238px of the 224px this has at
+   380px and went to two lines; "On Sonic Testnet 0 USDC" fit on one. So changing
+   network moved the whole bridge under it by 22px, which is the same complaint as
+   the note at the bottom of the box wearing different clothes.
+
+   Two rules, one per side of the width where the pair stops fitting. Under it the
+   figure always takes its own line, so no name and no balance can be the thing
+   that decides. Over it they always share one, and the name gives way rather than
+   wrapping if a balance ever gets long enough to need the room -- it is repeated
+   in the picker directly below, so an ellipsis there costs nothing.
+
+   The width itself is measured, not guessed: the longest pair the app can produce
+   is "On World Chain Sepolia" beside a six-figure balance, which is 314px, and
+   this element runs 156px narrower than the viewport. */
 .gwfund__head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 2px 10px;
   min-width: 0;
 }
@@ -3804,6 +3821,9 @@ a.hstep__go:hover {
   font-weight: 600;
   color: var(--text-mid);
   white-space: nowrap;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 /* Reserves its own text height. A placeholder is always shorter than the line it
    stands in for, so without this the head grew 4px the moment the balance landed,
@@ -3817,6 +3837,21 @@ a.hstep__go:hover {
   font-weight: 700;
   color: var(--text-hi);
   white-space: nowrap;
+}
+/* Below the width where the pair fits, a label with the figure under it. The
+   `margin-left: auto` above is what pushes the figure to the far end of a row and
+   has to go, or the stack reads as two things that missed each other rather than
+   as one figure and what it is called. This block sits after that rule rather than
+   beside the one it belongs to, because both are one class deep and the later of
+   two equals wins. */
+@media (max-width: 520px) {
+  .gwfund__head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .gwfund__figure {
+    margin-left: 0;
+  }
 }
 /* Two rows, two behaviours. The picker row may wrap so a six-decimal balance
    keeps its digits; the deposit row may not, or the button leaves its field. */
@@ -3896,13 +3931,46 @@ a.hstep__go:hover {
 .gwfund__wallet:disabled .gwfund__walletv {
   color: var(--text-mid);
 }
-.gwfund__note {
+/* The small print under the field: the same height whatever it has to say.
+   Four conditions used to render four independent lines here, so picking a
+   different network in the row above changed the height of the box and shifted
+   everything below it. The component now shows one of them, which is most of the
+   fix; this is the rest of it.
+
+   Two lines are held below 520px and one above, because that is what the sentences
+   measure. This region is 224px wide at a 380px viewport, which is around
+   thirty-seven characters, and "Switches your wallet first, then counts in about
+   19m." does not fit in thirty-seven characters in English and fits in fewer in
+   Turkish. Cutting them to fit was the other option and it produced copy nobody
+   would defend, so the space is held instead. Above the breakpoint every variant
+   is one line in both languages and holding two would be a blank line.
+
+   Column flex rather than a plain block: the wrapper's own strut is 23px against
+   the note's 16px line, so a block would round every measurement here to a number
+   that is not a multiple of the thing being counted. `min-height` rather than
+   `height`, so a translation that outgrows the reserve is readable rather than
+   clipped -- then the box grows, which is a bug you can see, instead of a sentence
+   that ends halfway. Both children share the line box for the same reason: a 2px
+   taller error is still a jump. */
+.gwfund__notes {
+  display: flex;
+  flex-direction: column;
+  min-height: 16px;
+}
+@media (max-width: 520px) {
+  .gwfund__notes {
+    min-height: 32px;
+  }
+}
+.gwfund__note,
+.gwfund__err {
   font-size: 12px;
   line-height: 16px;
+}
+.gwfund__note {
   color: var(--text-mid);
 }
 .gwfund__err {
-  font-size: 12px;
   color: var(--block);
 }
 

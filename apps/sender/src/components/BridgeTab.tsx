@@ -12,7 +12,6 @@ import {
   quoteGatewaySpend,
   isGatewayChain,
   CCTP_CHAINS,
-  DEPOSIT_CONFIRMATION_SECONDS,
   usdc,
   percentOf,
   maxDeliverable,
@@ -35,6 +34,7 @@ import { hrefFor, hrefWith, pushWith, readRoute, type ActivityView } from '../li
 import {
   chainForStep,
   chainsFor,
+  depositWaitLabel,
   stepExplorerUrl,
   labelOf,
   ownedBy,
@@ -92,13 +92,6 @@ const SDK_STEP_TO_UI: Record<CctpStep, string | undefined> = {
   forward: 'mint',
 };
 
-/** How long a deposit takes to count, as something a person reads rather than a
- *  number of seconds. Shared so the box and the toast never disagree. */
-function waitLabel(chain: GatewayChain | undefined): string {
-  if (!chain) return '';
-  const secs = DEPOSIT_CONFIRMATION_SECONDS[chain];
-  return secs < 60 ? `${secs}s` : `${Math.round(secs / 60)}m`;
-}
 
 /**
  * What a deposit leaves behind for its own gas, on chains that charge it in USDC.
@@ -1038,7 +1031,9 @@ export function BridgeTab({
       setGwPending(pendingOn(on));
       setDepositAmount('');
       toast.push(
-        t('bridge.deposited').replace('{amount}', depositAmount).replace('{wait}', waitLabel(on)),
+        t('bridge.deposited')
+          .replace('{amount}', depositAmount)
+          .replace('{wait}', depositWaitLabel(on)),
         'success',
       );
     } catch (e) {
@@ -1463,7 +1458,7 @@ export function BridgeTab({
             onAmountChange={setDepositAmount}
             walletOnChain={walletOnDepositChain}
             pending={gwPending}
-            wait={t('bridge.gwDepositWait', { chain: fromLabel, wait: waitLabel(gwSource) })}
+            wait={depositWaitLabel(gwSource)}
             format={usdc}
             busy={depositing || switching || source.switching}
             onDeposit={() =>
