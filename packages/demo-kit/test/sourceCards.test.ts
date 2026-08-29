@@ -35,9 +35,6 @@ const sheet: Record<string, bigint> = {
   OP_Sepolia: usdc('4'),
   Ethereum_Sepolia: usdc('500'),
 };
-const roomOn = (c: GatewayChain): bigint =>
-  capacityOf({ chain: c, balance: sheet[c] ?? 0n }, FWD);
-
 describe('typedSubunits', () => {
   it('reads a half-typed field as nothing rather than as an error', () => {
     // "1." is what an input holds between the 1 and the 5. It is not a mistake and
