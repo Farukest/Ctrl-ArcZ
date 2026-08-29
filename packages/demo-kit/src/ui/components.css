@@ -3146,16 +3146,29 @@ a.hstep__go:hover {
 /* The boxed variant is the amount field standing on its own, which makes it a
    form field rather than part of a card, so it wears the same well as every other
    one. On --surface-2 it was the same fill as the card holding it. */
-.amountf--boxed {
-  gap: 10px;
+/*
+ * The well a money control stands in, as a thing with a name.
+ *
+ * Written once and worn by whatever needs it, which is the point: the two ends of
+ * the bridge are the same surface because they are the same class, not because two
+ * rules happen to agree today. The amount control adds it when it is `boxed`, and
+ * the Gateway source block adds it around its whole composite -- an amount, the
+ * networks carrying it, and what is wrong with the split -- because those are one
+ * panel's worth of one idea rather than three stacked cards.
+ */
+.fieldpanel {
   padding: 14px;
   border: 1px solid var(--field-border);
   border-radius: 14px;
   background: var(--field-bg);
   box-shadow: var(--field-inset);
+  min-width: 0;
   transition:
     border-color var(--dur-2) var(--ease),
     box-shadow var(--dur-2) var(--ease);
+}
+.amountf--boxed {
+  gap: 10px;
 }
 /* The input inside has no border of its own, so the box shows the focus. */
 .amountf--boxed:focus-within {
@@ -3298,21 +3311,50 @@ a.hstep__go:hover {
   color: var(--text-hi);
   white-space: nowrap;
 }
+/*
+ * Quieter than the amount, and shaded by how much of the balance each one takes.
+ *
+ * They were one colour, which made 25% and 50% look like equally weighted
+ * decisions sitting at accent strength next to a figure that is the actual subject
+ * of the screen. Now the fraction itself does the shading: the component hands its
+ * value over as `--pct` and everything below is derived from it, so a screen that
+ * offers [0.25, 0.5, 0.75] grades across three tones without a line changing here.
+ * That is the difference between a prop and two buttons someone wrote twice.
+ *
+ * Both ends of the mix are theme tokens, so the light theme grades through its own
+ * accent rather than through a colour picked while looking at the dark one.
+ *
+ * The fallback matters: a browser without `color-mix` gets the muted surface and
+ * the mid text, which is a chip that reads correctly and simply does not grade.
+ */
 .pctchip {
+  --pct: 0.5;
   border: 0;
   border-radius: 999px;
   background: var(--surface-3);
-  color: var(--accent-text);
+  background: color-mix(in srgb, var(--accent-soft) calc(var(--pct) * 90%), var(--surface-3));
+  color: var(--text-mid);
+  color: color-mix(in srgb, var(--accent-text) calc(35% + var(--pct) * 65%), var(--text-mid));
   font-size: 12px;
   font-weight: 600;
   padding: 4px 9px;
   cursor: pointer;
   font-family: inherit;
+  transition:
+    background-color var(--dur-2) var(--ease),
+    color var(--dur-2) var(--ease);
 }
+/* One step up the same scale rather than a colour of its own, so hovering says
+   "this one" without saying "this one is different from the others". */
 .pctchip:hover:not(:disabled) {
   background: var(--accent-soft);
+  background: color-mix(in srgb, var(--accent-soft) calc(40% + var(--pct) * 60%), var(--surface-3));
+  color: var(--accent-text);
 }
+/* Nothing to take a fraction of. Off the scale entirely, because a graded chip
+   that cannot be pressed is a chip that looks pressable. */
 .pctchip:disabled {
+  background: var(--surface-3);
   color: var(--text-lo);
   cursor: default;
 }
@@ -3322,32 +3364,24 @@ a.hstep__go:hover {
   display: flex;
   flex-direction: column;
 }
-/* A direction marker rather than a control, for the Gateway split. Same slot, same
-   size, so the two cards keep the gap and the rhythm they have on CCTP; it just
-   does not offer to swap ends that cannot be swapped. */
-.swapstack__flip--static {
-  pointer-events: none;
-}
-.swapstack__flip--static span {
-  width: 38px;
-  height: 38px;
-  border-radius: 50%;
-  background: var(--bg-base);
-  color: var(--text-lo);
-  font-size: 18px;
-  font-weight: 700;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
+
+/*
+ * A heading and a box, not a box with a heading inside it.
+ *
+ * This used to be the box: it drew the border and the fill, and the amount inside
+ * it went unboxed so as not to be a panel within a panel. The result was that the
+ * bridge's amount looked nothing like the same control on Pay, which stands in its
+ * own panel with the label and the balance on its top line -- one module, two
+ * appearances, decided by which screen happened to be drawing it.
+ *
+ * So the box moved to where the control is. `AmountField boxed` draws it on every
+ * screen now, and this is what is left: a row saying which end of the transfer
+ * this is, above it. Nothing here paints, which is the point.
+ */
 .swapcard {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 14px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 18px;
-  background: var(--surface-2);
+  gap: 8px;
   min-width: 0;
 }
 .swapcard__head {
@@ -3366,15 +3400,28 @@ a.hstep__go:hover {
 .swapcard__head .select {
   min-width: 0;
 }
-.swapcard__head .select-trigger {
-  background: transparent;
-  border-color: transparent;
-  box-shadow: none;
+/*
+ * What a chain looks like on a route heading, whichever end it is.
+ *
+ * The destination wears it on a picker and the Gateway source wears it on plain
+ * text, because that end is decided by the rows inside the block rather than by a
+ * control up here. What must not differ is the look: these are the two ends of one
+ * transfer, read together, and they were typeset differently -- one 15px and bold
+ * beside its label, the other 13px and pushed to the far edge of the row.
+ */
+.swapcard__head .select-trigger,
+.swapcard__head .gwfrom__count {
   padding: 2px 6px;
   min-height: 0;
   font-weight: 700;
   font-size: 15px;
+  color: var(--text-hi);
   max-width: 100%;
+}
+.swapcard__head .select-trigger {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
 }
 .swapcard__head .select-trigger:hover:not(:disabled) {
   background: var(--surface-3);
@@ -3383,36 +3430,64 @@ a.hstep__go:hover {
 }
 /* In the gap between the cards, painted in the page background so it reads as a
    cut-out rather than as a third element stacked between them. */
+/*
+ * Exchange the two ends, in the gap between them.
+ *
+ * Centred and round, sitting the same distance from the block above it as from the
+ * block below: it belongs to neither end, and anything that puts it nearer one of
+ * them makes it look like that one's control. `12px` each side is the gap, and the
+ * disc is what is in it -- no negative margin, no overlap, because the panels no
+ * longer meet on a shared border for it to be cut out of.
+ *
+ * The mark is a stroked icon at the same weight as every other icon in the app. It
+ * was a bold arrow character, which no font renders at the weight a stroked set
+ * uses, so the one control between two quiet headings was the heaviest thing on
+ * the screen.
+ */
 .swapstack__flip {
-  height: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  position: relative;
-  z-index: 1;
+  margin: 12px 0;
 }
 .swapstack__flip button {
-  width: 38px;
-  height: 38px;
+  width: 34px;
+  height: 34px;
   border-radius: 50%;
-  border: 0;
-  background: var(--bg-base);
-  color: var(--text-hi);
-  font-size: 18px;
-  font-weight: 700;
+  border: 1px solid var(--border-subtle);
+  background: var(--surface-2);
+  color: var(--text-mid);
   cursor: pointer;
+  padding: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   transition:
     background var(--dur-2) var(--ease),
+    border-color var(--dur-2) var(--ease),
+    color var(--dur-2) var(--ease),
     transform var(--dur-1) var(--ease);
 }
 .swapstack__flip button:hover {
   background: var(--surface-3);
+  border-color: var(--border-strong);
+  color: var(--text-hi);
 }
 .swapstack__flip button:active {
-  transform: scale(0.92);
+  transform: scale(0.94);
+}
+/* The marker, which is not the button: same slot and same size so the rhythm of
+   the two blocks does not change, without edges, because it cannot be pressed. */
+.swapstack__flip--static {
+  pointer-events: none;
+}
+.swapstack__flip--static span {
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-lo);
 }
 
 /* What it costs, raised off the background: at the weight of the rest of the
@@ -4751,12 +4826,20 @@ a.hstep__go:hover {
   background: var(--surface-3);
   box-shadow: 0 0 0 2px var(--surface-3);
 }
+/* Mark then chain, beside its label, exactly where the destination's picker puts
+   the same pair. The gap is what keeps the logo off the first letter; everything
+   else about how it reads comes from the shared rule above. */
 .gwfrom__count {
-  margin-left: auto;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-hi);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   white-space: nowrap;
+}
+/* Inside the panel, the amount and the networks under it are one stack. */
+.gwfrom__body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 /* The networks carrying the amount above. Inset and hairlined so it reads as the

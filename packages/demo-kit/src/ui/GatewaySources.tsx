@@ -75,8 +75,7 @@ export function GatewaySources({
 }: GatewaySourcesProps) {
   const t = useT();
 
-  const balanceOf = (c: GatewayChain): bigint =>
-    balances.find((b) => b.chain === c)?.balance ?? 0n;
+  const balanceOf = (c: GatewayChain): bigint => balances.find((b) => b.chain === c)?.balance ?? 0n;
 
   const want = typedSubunits(amount);
   const listed = useMemo(() => new Set(sources.map((s) => s.chain)), [sources]);
@@ -107,10 +106,7 @@ export function GatewaySources({
   const held = useMemo(() => balances.reduce((sum, b) => sum + b.balance, 0n), [balances]);
 
   /** Chains not already on a row. */
-  const spare = useMemo(
-    () => balances.filter((b) => !listed.has(b.chain)),
-    [balances, listed],
-  );
+  const spare = useMemo(() => balances.filter((b) => !listed.has(b.chain)), [balances, listed]);
 
   /**
    * What the networks already listed could still give, above what was typed into
@@ -224,10 +220,7 @@ export function GatewaySources({
           {loaded ? t('bridge.src.hasAmount', { amount: usdc(held) }) : ''}
         </span>
         <span
-          className={[
-            'chainrow__fee',
-            feeOf(chain) >= COSTLY_BASE_FEE && 'chainrow__fee--costly',
-          ]
+          className={['chainrow__fee', feeOf(chain) >= COSTLY_BASE_FEE && 'chainrow__fee--costly']
             .filter(Boolean)
             .join(' ')}
         >
@@ -279,14 +272,36 @@ export function GatewaySources({
     <div className="swapcard gwfrom" data-testid="bridge-from-card">
       <div className="swapcard__head">
         <span className="swapcard__label">{t('bridge.from')}</span>
+        {/* Named the same way the other end of the transfer names itself: the
+            mark, then the chain. It was the label alone here, so the one side of
+            the bridge that cannot show a picker was also the one side with no
+            logo, and "From / Arc Testnet" sat opposite "To [mark] Arc Testnet".
+
+            Only with a single source, because with several there is no one chain
+            to put a mark on -- the count is the honest answer, and the marks for
+            all of them are already stacked in the token pill below. */}
         <span className="gwfrom__count" data-testid="gwsrc-count">
-          {sources.length === 1
-            ? chainLabel(sources[0]!.chain)
-            : t('bridge.src.count', { n: String(sources.length) })}
+          {sources.length === 1 ? (
+            <>
+              <ChainLogo id={sources[0]!.chain} size={18} />
+              {chainLabel(sources[0]!.chain)}
+            </>
+          ) : (
+            t('bridge.src.count', { n: String(sources.length) })
+          )}
         </span>
       </div>
 
       {/*
+        The well, the same one the amount control wears on every other screen.
+        It goes around the whole composite rather than around the amount alone,
+        because what follows the amount is not a second card: it is the same
+        payment broken into the networks carrying it, the offer of another, and
+        what is wrong with the split. Three panels stacked would say those were
+        three things.
+      */}
+      <div className="fieldpanel gwfrom__body">
+        {/*
         One amount, because there is one payment.
 
         The figure beside it is what the networks below can actually deliver, not
@@ -296,225 +311,231 @@ export function GatewaySources({
         "Gateway balance" it sat two lines above the actual Gateway balance, a
         larger number, with nothing to say why they differed.
       */}
-      <AmountField
-        value={amount}
-        onChange={onAmount}
-        balance={loaded ? reach : null}
-        balanceLabel={t('bridge.src.spendable')}
-        onMax={(f) => onAmount(usdc((reach * BigInt(Math.round(f * 10_000))) / 10_000n))}
-        percents={[0.25, 0.5]}
-        /*
-         * The pill names the asset and where it is coming from, the way it does on
-         * CCTP. It was plain text here, alone in the app, because the field is
-         * given no single `chain` -- and it is given none for a good reason, since
-         * a Gateway payment can come off four chains at once and picking one of
-         * them to draw would be a lie. That is an argument for not naming ONE
-         * chain, not for naming none: with a single source there is nothing
-         * ambiguous about it, and with several the honest picture is all of them.
-         *
-         * Which also empties the block's head, where these logos used to sit. They
-         * say the same thing in both places, and beside the amount is where the
-         * question "where is this coming from" is actually being asked.
-         */
-        tokenSlot={
-          <span className="usdcpill">
-            {sources.length === 1 ? (
-              <ChainLogo id={sources[0]!.chain} size={20} />
-            ) : (
-              <span className="gwfrom__stack" aria-hidden>
-                {sources.map((s, i) => (
-                  <span className="gwfrom__chip" key={`${s.chain}-${i}`}>
-                    <ChainLogo id={s.chain} size={18} />
-                  </span>
-                ))}
-              </span>
-            )}
-            USDC
-          </span>
-        }
-        data-testid="bridge-amount"
-      />
-
-      <div className="gwlegs">
-        <div className="gwlegs__head">
-          <span className="gwlegs__title">{t('bridge.src.title')}</span>
-          <span className="gwlegs__held" data-testid="gwsrc-held">
-            {loaded ? t('bridge.src.heldOn', { amount: usdc(held) }) : ''}
-          </span>
-        </div>
-
-        {sources.map((s, i) => {
-          const room = capacityOf({ chain: s.chain, balance: balanceOf(s.chain) }, forwarding);
-          const pinned = typedSubunits(s.amount) > 0n;
-          const carries = legOf(s);
+        <AmountField
+          value={amount}
+          onChange={onAmount}
+          balance={loaded ? reach : null}
+          balanceLabel={t('bridge.src.spendable')}
+          onMax={(f) => onAmount(usdc((reach * BigInt(Math.round(f * 10_000))) / 10_000n))}
+          percents={[0.25, 0.5]}
           /*
-           * A row is allowed to hold more than its chain can pay: people type the
-           * figure they have in mind, and rewriting it under them is worse than
-           * letting it stand. What is not allowed is saying nothing about it.
+           * The pill names the asset and where it is coming from, the way it does on
+           * CCTP. It was plain text here, alone in the app, because the field is
+           * given no single `chain` -- and it is given none for a good reason, since
+           * a Gateway payment can come off four chains at once and picking one of
+           * them to draw would be a lie. That is an argument for not naming ONE
+           * chain, not for naming none: with a single source there is nothing
+           * ambiguous about it, and with several the honest picture is all of them.
            *
-           * Only while something is actually missing, though. `capacityOf` prices a
-           * chain as though it were the leading leg, which is the strict reading and
-           * the right one alone; in a split only one leg carries the forwarding fee,
-           * so the others have more room than this says. Left unguarded it put "Arc
-           * can send 3.623786" on a row holding 3.627024 in a split the allocator had
-           * already accepted, which is the screen arguing with its own send button.
+           * Which also empties the block's head, where these logos used to sit. They
+           * say the same thing in both places, and beside the amount is where the
+           * question "where is this coming from" is actually being asked.
            */
-          const overCap = loaded && short > 0n && pinned && typedSubunits(s.amount) > room;
-          return (
-            <div
-              className={['gwleg', pinned && 'gwleg--pinned', overCap && 'gwleg--over']
-                .filter(Boolean)
-                .join(' ')}
-              key={`${s.chain}-${i}`}
-              data-testid={`gwsrc-${s.chain}`}
-            >
-              <div className="gwleg__pick">
-                <ChainSelect<GatewayChain>
-                  purpose="gatewaySource"
-                  value={s.chain}
-                  onChange={(v) => setChain(i, v)}
-                  // The chains the other rows already name. Usable, just not twice.
-                  exclude={sources.filter((_, j) => j !== i).map((o) => o.chain)}
-                  meta={rowMeta}
-                  disabledFor={(c) => c !== s.chain && dust(c)}
-                  ariaLabel={t('bridge.from')}
-                />
-              </div>
+          tokenSlot={
+            <span className="usdcpill">
+              {sources.length === 1 ? (
+                <ChainLogo id={sources[0]!.chain} size={20} />
+              ) : (
+                <span className="gwfrom__stack" aria-hidden>
+                  {sources.map((s, i) => (
+                    <span className="gwfrom__chip" key={`${s.chain}-${i}`}>
+                      <ChainLogo id={s.chain} size={18} />
+                    </span>
+                  ))}
+                </span>
+              )}
+              USDC
+            </span>
+          }
+          data-testid="bridge-amount"
+        />
 
-              {/*
+        <div className="gwlegs">
+          <div className="gwlegs__head">
+            <span className="gwlegs__title">{t('bridge.src.title')}</span>
+            <span className="gwlegs__held" data-testid="gwsrc-held">
+              {loaded ? t('bridge.src.heldOn', { amount: usdc(held) }) : ''}
+            </span>
+          </div>
+
+          {sources.map((s, i) => {
+            const room = capacityOf({ chain: s.chain, balance: balanceOf(s.chain) }, forwarding);
+            const pinned = typedSubunits(s.amount) > 0n;
+            const carries = legOf(s);
+            /*
+             * A row is allowed to hold more than its chain can pay: people type the
+             * figure they have in mind, and rewriting it under them is worse than
+             * letting it stand. What is not allowed is saying nothing about it.
+             *
+             * Only while something is actually missing, though. `capacityOf` prices a
+             * chain as though it were the leading leg, which is the strict reading and
+             * the right one alone; in a split only one leg carries the forwarding fee,
+             * so the others have more room than this says. Left unguarded it put "Arc
+             * can send 3.623786" on a row holding 3.627024 in a split the allocator had
+             * already accepted, which is the screen arguing with its own send button.
+             */
+            const overCap = loaded && short > 0n && pinned && typedSubunits(s.amount) > room;
+            return (
+              <div
+                className={['gwleg', pinned && 'gwleg--pinned', overCap && 'gwleg--over']
+                  .filter(Boolean)
+                  .join(' ')}
+                key={`${s.chain}-${i}`}
+                data-testid={`gwsrc-${s.chain}`}
+              >
+                <div className="gwleg__pick">
+                  <ChainSelect<GatewayChain>
+                    purpose="gatewaySource"
+                    value={s.chain}
+                    onChange={(v) => setChain(i, v)}
+                    // The chains the other rows already name. Usable, just not twice.
+                    exclude={sources.filter((_, j) => j !== i).map((o) => o.chain)}
+                    meta={rowMeta}
+                    disabledFor={(c) => c !== s.chain && dust(c)}
+                    ariaLabel={t('bridge.from')}
+                  />
+                </div>
+
+                {/*
                 The allocator's figure is the placeholder, so an automatic row shows
                 what it is carrying without pretending the user put it there, and
                 typing over it is the same gesture as editing any other field. There
                 is no mode to switch, and clearing the field hands the row back.
               */}
-              <input
-                className="gwleg__input"
-                value={s.amount}
-                onChange={(e) => setLeg(i, sanitize(e.target.value))}
-                placeholder={loaded ? usdc(carries) : '0'}
-                inputMode="decimal"
-                aria-label={t('bridge.src.legAria', { chain: chainLabel(s.chain) })}
-                data-testid={`gwsrc-amount-${s.chain}`}
-              />
+                <input
+                  className="gwleg__input"
+                  value={s.amount}
+                  onChange={(e) => setLeg(i, sanitize(e.target.value))}
+                  placeholder={loaded ? usdc(carries) : '0'}
+                  inputMode="decimal"
+                  aria-label={t('bridge.src.legAria', { chain: chainLabel(s.chain) })}
+                  data-testid={`gwsrc-amount-${s.chain}`}
+                />
 
-              {/* Only ever offered when there is more than one, so the block cannot
+                {/* Only ever offered when there is more than one, so the block cannot
                   be emptied into a payment that comes from nowhere. */}
-              {sources.length > 1 && (
-                <button
-                  type="button"
-                  className="gwleg__drop"
-                  onClick={() => drop(i)}
-                  aria-label={t('bridge.src.remove', { chain: chainLabel(s.chain) })}
-                  data-testid={`gwsrc-drop-${s.chain}`}
-                >
-                  &times;
-                </button>
-              )}
-
-              <div className="gwleg__meta">
-                {/* A pinned row holding this payment back, with the money to fix it
-                    sitting on its own chain. Pressing it raises the pin by exactly
-                    what is missing, or to the ceiling, whichever comes first. */}
-                {loaded && short > 0n && !overCap && slackOn(s) > 0n ? (
+                {sources.length > 1 && (
                   <button
                     type="button"
-                    className="gwleg__cap"
-                    onClick={() => {
-                      const grown = typedSubunits(s.amount) + short;
-                      setLeg(i, formatSubunits(grown < room ? grown : room));
-                    }}
-                    data-testid={`gwsrc-raise-${s.chain}`}
+                    className="gwleg__drop"
+                    onClick={() => drop(i)}
+                    aria-label={t('bridge.src.remove', { chain: chainLabel(s.chain) })}
+                    data-testid={`gwsrc-drop-${s.chain}`}
                   >
-                    {t('bridge.src.raise', {
-                      chain: chainLabel(s.chain),
-                      amount: usdc(slackOn(s) < short ? slackOn(s) : short),
-                    })}
+                    &times;
                   </button>
-                ) : overCap ? (
-                  room > 0n ? (
+                )}
+
+                <div className="gwleg__meta">
+                  {/* A pinned row holding this payment back, with the money to fix it
+                    sitting on its own chain. Pressing it raises the pin by exactly
+                    what is missing, or to the ceiling, whichever comes first. */}
+                  {loaded && short > 0n && !overCap && slackOn(s) > 0n ? (
                     <button
                       type="button"
                       className="gwleg__cap"
-                      onClick={() => setLeg(i, formatSubunits(room))}
-                      data-testid={`gwsrc-cap-${s.chain}`}
+                      onClick={() => {
+                        const grown = typedSubunits(s.amount) + short;
+                        setLeg(i, formatSubunits(grown < room ? grown : room));
+                      }}
+                      data-testid={`gwsrc-raise-${s.chain}`}
                     >
-                      {t('bridge.src.overCapacity', {
+                      {t('bridge.src.raise', {
                         chain: chainLabel(s.chain),
-                        amount: usdc(room),
+                        amount: usdc(slackOn(s) < short ? slackOn(s) : short),
                       })}
                     </button>
+                  ) : overCap ? (
+                    room > 0n ? (
+                      <button
+                        type="button"
+                        className="gwleg__cap"
+                        onClick={() => setLeg(i, formatSubunits(room))}
+                        data-testid={`gwsrc-cap-${s.chain}`}
+                      >
+                        {t('bridge.src.overCapacity', {
+                          chain: chainLabel(s.chain),
+                          amount: usdc(room),
+                        })}
+                      </button>
+                    ) : (
+                      // "can send 0 of this" is arithmetic pretending to be a sentence,
+                      // and the button under it sets the field to zero, which helps
+                      // nobody. A chain with nothing to spare offers nothing.
+                      <span
+                        className="gwleg__cap gwleg__cap--none"
+                        data-testid={`gwsrc-none-${s.chain}`}
+                      >
+                        {t('bridge.src.nothingHere', { chain: chainLabel(s.chain) })}
+                      </span>
+                    )
                   ) : (
-                    // "can send 0 of this" is arithmetic pretending to be a sentence,
-                    // and the button under it sets the field to zero, which helps
-                    // nobody. A chain with nothing to spare offers nothing.
-                    <span className="gwleg__cap gwleg__cap--none" data-testid={`gwsrc-none-${s.chain}`}>
-                      {t('bridge.src.nothingHere', { chain: chainLabel(s.chain) })}
+                    <span className="gwleg__have" data-testid={`gwsrc-have-${s.chain}`}>
+                      {loaded
+                        ? t('bridge.src.ready', { amount: usdc(balanceOf(s.chain)) })
+                        : t('bridge.gwBalanceLoading')}
                     </span>
-                  )
-                ) : (
-                  <span className="gwleg__have" data-testid={`gwsrc-have-${s.chain}`}>
-                    {loaded
-                      ? t('bridge.src.ready', { amount: usdc(balanceOf(s.chain)) })
-                      : t('bridge.gwBalanceLoading')}
-                  </span>
-                )}
-                {/* The per-network fee, on the network it is charged for. The same
+                  )}
+                  {/* The per-network fee, on the network it is charged for. The same
                     figures total up in the cost block below; here they are next to
                     the choice that causes them, which is where a chain that costs a
                     hundred times its neighbour has to be visible. */}
-                <span
-                  className={['gwleg__fee', feeOf(s.chain) >= COSTLY_BASE_FEE && 'gwleg__fee--costly']
-                    .filter(Boolean)
-                    .join(' ')}
-                  data-testid={`gwsrc-fee-${s.chain}`}
-                >
-                  {pinned ? t('bridge.src.pinned') : t('bridge.src.auto')}
-                  <span className="gwleg__dot" aria-hidden />
-                  {t('bridge.src.legFee', { fee: usdc(feeOf(s.chain)) })}
-                </span>
+                  <span
+                    className={[
+                      'gwleg__fee',
+                      feeOf(s.chain) >= COSTLY_BASE_FEE && 'gwleg__fee--costly',
+                    ]
+                      .filter(Boolean)
+                      .join(' ')}
+                    data-testid={`gwsrc-fee-${s.chain}`}
+                  >
+                    {pinned ? t('bridge.src.pinned') : t('bridge.src.auto')}
+                    <span className="gwleg__dot" aria-hidden />
+                    {t('bridge.src.legFee', { fee: usdc(feeOf(s.chain)) })}
+                  </span>
+                </div>
               </div>
-            </div>
-          );
-        })}
+            );
+          })}
 
-        {/*
+          {/*
           The offer, in the gap where the next row would go. Deliberately not a
           warning: nothing here is a mistake, it is a payment that has outgrown its
           networks and a button that gives it another. Red text under an amount
           field reads as blame, and there is nobody to blame.
         */}
-        {spare.length > 0 && (
-          <ChainSelect<GatewayChain>
-            purpose="gatewaySource"
-            variant="ghost"
-            value=""
-            placeholder={t('bridge.src.add')}
-            wanted={short > 0n}
-            exclude={sources.map((s) => s.chain)}
-            // Where the money actually is. A network holding nothing is not a
-            // place to draw from and not a question anyone is asking; one holding
-            // too little to cover its own fee is both, so it stays, greyed.
-            only={ranked.map((r) => r.chain)}
-            compare={compareCandidates}
-            meta={candidateMeta}
-            // Dust is shown and refused rather than hidden: a chain holding four
-            // hundredths is a real place the user's money is, and "we cannot use
-            // this" answers the question that leaving it out would raise.
-            disabledFor={(c) => (rankOf.get(c)?.room ?? 0n) <= 0n}
-            searchText={(c) => usdc(balanceOf(c))}
-            onChange={(chain) => onSources([...sources, { chain, amount: '' }])}
-            ariaLabel={t('bridge.src.add')}
-            data-testid="gwsrc-more"
-          />
-        )}
-      </div>
+          {spare.length > 0 && (
+            <ChainSelect<GatewayChain>
+              purpose="gatewaySource"
+              variant="ghost"
+              value=""
+              placeholder={t('bridge.src.add')}
+              wanted={short > 0n}
+              exclude={sources.map((s) => s.chain)}
+              // Where the money actually is. A network holding nothing is not a
+              // place to draw from and not a question anyone is asking; one holding
+              // too little to cover its own fee is both, so it stays, greyed.
+              only={ranked.map((r) => r.chain)}
+              compare={compareCandidates}
+              meta={candidateMeta}
+              // Dust is shown and refused rather than hidden: a chain holding four
+              // hundredths is a real place the user's money is, and "we cannot use
+              // this" answers the question that leaving it out would raise.
+              disabledFor={(c) => (rankOf.get(c)?.room ?? 0n) <= 0n}
+              searchText={(c) => usdc(balanceOf(c))}
+              onChange={(chain) => onSources([...sources, { chain, amount: '' }])}
+              ariaLabel={t('bridge.src.add')}
+              data-testid="gwsrc-more"
+            />
+          )}
+        </div>
 
-      {/*
+        {/*
         What is wrong with the split, if anything, said once and at the bottom of
         the block that owns it. Per-row notes say which chain; these say what the
         payment as a whole is missing, and only one of them can be true at a time.
       */}
-      {/*
+        {/*
         One voice for a shortfall, and which voice depends on what would fix it.
 
         A gap another network can close is not a warning: it is a pill in the list
@@ -527,39 +548,40 @@ export function GatewaySources({
         (one nets out what Base could add, the other does not) and together
         unreadable, because nothing on screen said which number was which.
       */}
-      {loaded && residual > 0n && (
-        <Notice
-          tone="warn"
-          testId="gwsrc-shortfall"
-          action={
-            onDeposit
-              ? {
-                  label: t('bridge.src.topUp', { amount: usdc(residual) }),
-                  onClick: topUp,
-                  testId: 'gwsrc-topup',
-                }
-              : null
-          }
-        >
-          {t('bridge.src.short', { amount: usdc(residual) })}
-        </Notice>
-      )}
-      {/* Only once the split otherwise works. A set of rows can be both impossible
+        {loaded && residual > 0n && (
+          <Notice
+            tone="warn"
+            testId="gwsrc-shortfall"
+            action={
+              onDeposit
+                ? {
+                    label: t('bridge.src.topUp', { amount: usdc(residual) }),
+                    onClick: topUp,
+                    testId: 'gwsrc-topup',
+                  }
+                : null
+            }
+          >
+            {t('bridge.src.short', { amount: usdc(residual) })}
+          </Notice>
+        )}
+        {/* Only once the split otherwise works. A set of rows can be both impossible
           and over-subscribed at the same time -- pin 50 on a chain holding 6 while
           sending 12 -- and printing "44.055 short" above "38 more than you are
           sending" asks the reader to reconcile two facts that only make sense
           together to whoever wrote the allocator. The shortfall is the one that
           stops the transfer, so it speaks alone. */}
-      {over > 0n && short === 0n && (
-        <Notice tone="warn" testId="gwsrc-overfill">
-          {t('bridge.src.overfill', { amount: usdc(over) })}
-        </Notice>
-      )}
-      {alloc?.costly && (
-        <Notice tone="info" testId="gwsrc-costly">
-          {t('bridge.src.costlyNote')}
-        </Notice>
-      )}
+        {over > 0n && short === 0n && (
+          <Notice tone="warn" testId="gwsrc-overfill">
+            {t('bridge.src.overfill', { amount: usdc(over) })}
+          </Notice>
+        )}
+        {alloc?.costly && (
+          <Notice tone="info" testId="gwsrc-costly">
+            {t('bridge.src.costlyNote')}
+          </Notice>
+        )}
+      </div>
     </div>
   );
 }

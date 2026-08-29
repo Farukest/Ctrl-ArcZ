@@ -114,6 +114,31 @@ export const IconArrowDownLeft = (p: SVGProps<SVGSVGElement>) => (
   </svg>
 );
 
+/**
+ * Exchange the two ends of a route.
+ *
+ * Two shafts with a head each, pointing opposite ways, at the same 1.75 stroke as
+ * everything else here. It replaces a text glyph: at the weight a bold arrow
+ * character renders, the control read as heavier than the headings it sits beside,
+ * and no font hinting makes a glyph match a stroked icon set.
+ */
+/** Which way the money goes, where there is nothing to exchange. */
+export const IconArrowDown = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}>
+    <path d="M12 4v16" />
+    <path d="m6 14 6 6 6-6" />
+  </svg>
+);
+
+export const IconSwapVertical = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}>
+    <path d="M8 4v16" />
+    <path d="m4.5 16.5 3.5 3.5 3.5-3.5" />
+    <path d="M16 20V4" />
+    <path d="m12.5 7.5 3.5-3.5 3.5 3.5" />
+  </svg>
+);
+
 export const IconGlobe = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)}>
     <circle cx="12" cy="12" r="9" />

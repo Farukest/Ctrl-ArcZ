@@ -375,6 +375,12 @@ export function SendTab({
           // reach, it never is.
           balanceMissing={balanceMissing}
           onMax={(f) => spendable != null && setAmount(percentOf(spendable, f))}
+          // The same quick fractions the bridge offers. `onMax` was already written
+          // to take one, so this screen had the whole mechanism and simply never
+          // asked for the buttons, which is what the prop is for. Subscriptions
+          // deliberately does not: a per-pull figure is a decision about a
+          // schedule, not a bite out of a balance.
+          percents={[0.25, 0.5]}
           {...(mode === 'plain' ? { hint: t('send.plainHint') } : {})}
           boxed
           data-testid="amount"

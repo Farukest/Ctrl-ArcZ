@@ -46,6 +46,8 @@ import {
 } from '@ctrl-arcz/demo-kit';
 import {
   AmountField,
+  IconArrowDown,
+  IconSwapVertical,
   Button,
   Card,
   ChainLogo,
@@ -1569,21 +1571,21 @@ export function BridgeTab({
                 balanceLabel={t('bridge.balance')}
                 onMax={fillPercent}
                 percents={[0.25, 0.5]}
+                boxed
                 data-testid="bridge-amount"
               />
             </div>
           )}
 
-          {/* In the gap between the cards, painted in the page background so it
-              reads as a cut-out rather than a third element.
+          {/* Between the two ends, above the heading of the second one.
 
-              Always present, because it is what holds the two cards apart and
-              says which way the money goes; dropping it on Gateway left them
-              meeting on a shared edge, reading as one panel with a seam.
+              A disc on the seam, painted in the page background so it reads as a
+              cut-out of the panel above rather than as a third element stacked
+              between them.
 
-              What it does depends on whether there are two ends to swap. One
+              What it is depends on whether there are two ends to exchange. One
               source and it trades places with the destination. Several, and there
-              is no single end the destination could change places with, so the
+              is no single source the destination could change places with, so the
               same shape stays as a direction marker and stops being a button
               rather than becoming a button that does nothing. */}
           {engine !== 'gateway' || gwSources.length === 1 ? (
@@ -1591,16 +1593,17 @@ export function BridgeTab({
               <button
                 type="button"
                 onClick={swapRoute}
-                title={t('bridge.swap')}
                 aria-label={t('bridge.swap')}
                 data-testid="bridge-swap-route"
               >
-                &darr;
+                <IconSwapVertical width={16} height={16} aria-hidden />
               </button>
             </div>
           ) : (
             <div className="swapstack__flip swapstack__flip--static" aria-hidden>
-              <span>&darr;</span>
+              <span>
+                <IconArrowDown width={16} height={16} />
+              </span>
             </div>
           )}
 
@@ -1643,6 +1646,7 @@ export function BridgeTab({
               balanceMissing="unavailable"
               balanceLabel={t('bridge.balance')}
               label={t('bridge.youReceive')}
+              boxed
               data-testid="bridge-receive"
             />
           </div>

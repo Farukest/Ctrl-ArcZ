@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { ChainLogo } from './ChainLogo.js';
 import { Skeleton } from './components.js';
 import { useT } from '../i18n/context.js';
@@ -121,7 +121,9 @@ export function AmountField({
 
   return (
     <div
-      className={['amountf', boxed && 'amountf--boxed', invalid && 'amountf--invalid']
+      // `fieldpanel` is the well, shared with anything else that stands a money
+      // control in one; `amountf--boxed` is only what this control does inside it.
+      className={['amountf', boxed && 'fieldpanel amountf--boxed', invalid && 'amountf--invalid']
         .filter(Boolean)
         .join(' ')}
       data-testid={testId}
@@ -184,6 +186,18 @@ export function AmountField({
                 key={f}
                 type="button"
                 className="pctchip"
+                /*
+                 * The fraction, handed to the stylesheet as data.
+                 *
+                 * The chips were one colour, so 25% and 50% looked equally like a
+                 * decision, and neither looked like a smaller or larger bite of
+                 * the balance. Grading them in the component would mean a class
+                 * per value and a new one the day somebody wants 75%; grading them
+                 * in CSS from the number means any list of fractions tones itself,
+                 * which is what makes `percents` a real prop rather than a choice
+                 * between two hardcoded buttons.
+                 */
+                style={{ '--pct': f } as CSSProperties}
                 onClick={() => onMax?.(f)}
                 disabled={!canFill}
                 data-testid={testId ? `${testId}-pct-${Math.round(f * 100)}` : undefined}
