@@ -11,7 +11,6 @@ import {
   RiskBlockedError,
   sendProtected,
   spendableAfterGas,
-  usdc,
 } from '@ctrl-arcz/sdk';
 import { failureText, supportsChain, walletChainName, type Session } from '@ctrl-arcz/demo-kit';
 import {
@@ -27,6 +26,8 @@ import {
   Select,
   Skeleton,
   Stepper,
+  displayAmount,
+  displayCost,
   parseAmount,
   useSubmitGuard,
   useT,
@@ -406,10 +407,19 @@ export function SendTab({
       <CostBlock
         testId="send-cost"
         lines={[
-          { label: t('cost.amount'), value: `${usdc(amountValue)} USDC`, testId: 'send-cost-amount' },
+          {
+            // Not a cost, despite the block it sits in: it is the figure that was
+            // typed, and it has to read the same as the balance it came out of.
+            // Rounded up it said 0.00028 under a balance line saying 0.00027, which
+            // is the screen disagreeing with itself about one number.
+            label: t('cost.amount'),
+            value: `${displayAmount(amountValue)} USDC`,
+            testId: 'send-cost-amount',
+          },
           {
             label: t('cost.networkMax'),
-            value: reserve == null ? <Skeleton width={72} height={23} /> : `${usdc(reserve)} USDC`,
+            value:
+              reserve == null ? <Skeleton width={72} height={23} /> : `${displayCost(reserve)} USDC`,
           },
         ]}
         total={{
@@ -418,7 +428,7 @@ export function SendTab({
             reserve == null ? (
               <Skeleton width={86} height={26} />
             ) : (
-              `${usdc(amountValue + reserve)} USDC`
+              `${displayCost(amountValue + reserve)} USDC`
             ),
           testId: 'send-youpay',
         }}

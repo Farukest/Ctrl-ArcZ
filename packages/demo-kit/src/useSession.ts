@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { formatUnits, type Address } from 'viem';
+import { type Address } from 'viem';
 import { ARC_TESTNET_CHAIN_ID, type CctpChainName } from '@ctrl-arcz/sdk';
 import { useT } from './i18n/context.js';
 import { hasWallet, injectedSession, switchWalletTo, watchWallet, type Session } from './session.js';
@@ -7,13 +7,16 @@ import { readWalletUsdc } from './walletUsdc.js';
 
 export interface SessionState {
   session: Session | null;
-  balance: string;
   /**
-   * The same figure in USDC subunits, for arithmetic.
+   * The wallet's USDC, in subunits, or null while nothing has been read.
    *
-   * `balance` is formatted for reading and every caller that needed to compare or
-   * subtract was parsing that string back, which is a lossy round trip through a
-   * display format. Both come from the one read, so they cannot disagree.
+   * Subunits and nothing else. There used to be a `balance` string beside this,
+   * pre-formatted for reading, and it earned its keep in neither direction:
+   * callers doing arithmetic parsed it back, and the two callers that displayed it
+   * both reformatted it anyway, each with its own idea of how many decimals a
+   * balance deserves. Formatting is the display layer's job and it has one rule
+   * for it now (`displayAmount`), so the hook hands over the figure and stops
+   * having an opinion.
    */
   balanceRaw: bigint | null;
   /**
@@ -88,7 +91,6 @@ const remember = {
  */
 export function useSession(): SessionState {
   const [session, setSession] = useState<Session | null>(null);
-  const [balance, setBalance] = useState('0');
   const [balanceRaw, setBalanceRaw] = useState<bigint | null>(null);
   const [balanceChain, setBalanceChain] = useState<CctpChainName | undefined>(undefined);
   const [balanceMissing, setBalanceMissing] = useState<'loading' | 'unavailable'>('loading');
@@ -119,7 +121,6 @@ export function useSession(): SessionState {
     );
     setBalanceChain(chain);
     setBalanceRaw(raw);
-    setBalance(raw === null ? '0' : formatUnits(raw, 6));
     // A read that came back empty is a read that happened. Leaving this on
     // `loading` is what kept the placeholder moving on a chain whose USDC could
     // not be reached.
@@ -161,7 +162,7 @@ export function useSession(): SessionState {
   const disconnect = useCallback(() => {
     remember.set(false);
     setSession(null);
-    setBalance('0');
+    setBalanceRaw(null);
   }, []);
 
   const switchTo = useCallback(
@@ -210,7 +211,6 @@ export function useSession(): SessionState {
   // under another account's address, or one network's under another network's name.
   // Null means unknown, which every consumer renders as a placeholder, not as zero.
   useEffect(() => {
-    setBalance('0');
     setBalanceRaw(null);
     setBalanceChain(undefined);
     setBalanceMissing('loading');
@@ -230,7 +230,6 @@ export function useSession(): SessionState {
 
   return {
     session,
-    balance,
     balanceRaw,
     balanceChain,
     balanceMissing,

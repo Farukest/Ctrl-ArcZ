@@ -11,7 +11,7 @@
  * would type to find one of its rows: a transfer id for a send, a token symbol
  * for a history line, a chain name for a bridge, a merchant for a subscription.
  */
-import { formatUnits } from 'viem';
+import { displayAmount } from '@ctrl-arcz/demo-kit/ui';
 import {
   chainExplorerTxUrl,
   chainLabel,
@@ -174,7 +174,11 @@ export function historyEntries(
   const network = chainId === undefined ? undefined : deploymentFor(chainId);
   const networkName = network ? chainLabel(network.chain as CctpChainName) : undefined;
   return entries.map((e) => {
-    const amount = formatUnits(e.amount, e.decimals);
+    // Shortened by the app's one rule rather than printed at the token's storage
+    // precision: `e.decimals` is 6 for USDC and 8 for cirBTC, so a mixed history
+    // was a column of numbers no two of which lined up. Rounded down, because a
+    // row of what already happened should not read as more than it moved.
+    const amount = displayAmount(e.amount, e.decimals);
     const incoming = e.direction === 'in';
     const party =
       e.kind === 'transfer'

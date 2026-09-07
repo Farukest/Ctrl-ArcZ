@@ -287,7 +287,7 @@ export function App() {
                   session={state.session}
                   pending={pending}
                   reload={reload}
-                  balance={state.balance}
+                  balance={state.balanceRaw}
                   onClaimed={state.refreshBalance}
                   onSwitchChain={state.switchTo}
                 />

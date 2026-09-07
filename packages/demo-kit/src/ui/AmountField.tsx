@@ -2,7 +2,7 @@ import type { CSSProperties, ReactNode } from 'react';
 import { ChainLogo } from './ChainLogo.js';
 import { Skeleton } from './components.js';
 import { useT } from '../i18n/context.js';
-import { fiat, formatAmount, sanitizeAmount } from './amount.js';
+import { displayAmount, fiat, formatAmount, sanitizeAmount } from './amount.js';
 
 /**
  * The one way this app asks for an amount.
@@ -140,12 +140,21 @@ export function AmountField({
           >
             <span className="amountf__balk">{balanceLabel ?? t('amount.balance')}</span>
             {/* `output` rather than a span: it is the element for a value the page
-                computed, and it can never be typed into or submitted. */}
-            <output className="amountf__balv">
+                computed, and it can never be typed into or submitted.
+
+                Shortened for reading and rounded down, while `onMax` above hands
+                the owner a fraction and gets the exact figure back. Those are not
+                the same number and they were never meant to be: a balance rounded
+                up is a figure that fails the next check. The exact one is on the
+                title, for anybody who needs the sixth decimal. */}
+            <output
+              className="amountf__balv"
+              title={balance == null ? undefined : formatAmount(balance, decimals)}
+            >
               {balance == null ? (
                 <Skeleton width={74} height={13} still={balanceMissing === 'unavailable'} />
               ) : (
-                `${formatAmount(balance, decimals)} ${symbol}`
+                `${displayAmount(balance, decimals)} ${symbol}`
               )}
             </output>
           </button>

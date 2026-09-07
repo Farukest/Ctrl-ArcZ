@@ -7,8 +7,8 @@
  * lines inside a component until it turned out to be wrong in a way that looking
  * at the screen never revealed.
  */
-import { formatUnits } from 'viem';
 import type { ProtectedTransfer, TransferStatus } from '@ctrl-arcz/sdk';
+import { displayAmount, formatAmount } from './amount.js';
 import type { RowTone } from './HistoryRow.js';
 
 /** Same four tones every history uses, so the lists read alike. */
@@ -48,7 +48,10 @@ export function receivedHaystack(row: {
 }): string {
   return [
     row.transferId.toString(),
-    formatUnits(row.transfer.amount, 6),
+    // Both forms of the figure: the shortened one the row actually shows, and the
+    // exact one somebody would paste in from a block explorer.
+    displayAmount(row.transfer.amount),
+    formatAmount(row.transfer.amount),
     'usdc',
     row.transfer.sender,
     row.transfer.status,

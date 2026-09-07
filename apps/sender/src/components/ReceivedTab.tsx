@@ -1,5 +1,4 @@
 import { useMemo, useState } from 'react';
-import { formatUnits } from 'viem';
 import type { Session } from '@ctrl-arcz/demo-kit';
 import { isReturnable, reclaimExpired, statusBucket, type StatusBucket } from '@ctrl-arcz/sdk';
 import {
@@ -9,6 +8,7 @@ import {
   HistoryRow,
   Address as AddressChip,
   ListSkeleton,
+  displayAmount,
   receivedHaystack,
   relativeTime,
   statusTone,
@@ -132,7 +132,7 @@ export function ReceivedTab({ session }: { session: Session }) {
                   <AddressChip address={transfer.sender} />
                 </>
               }
-              amount={`${formatUnits(transfer.amount, 6)} USDC`}
+              amount={`${displayAmount(transfer.amount)} USDC`}
               status={{ tone: statusTone(transfer.status), label: transfer.status }}
               time={relativeTime(at)}
             />

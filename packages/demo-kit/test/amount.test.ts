@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { fiat, formatAmount, humanDuration, parseAmount, sanitizeAmount } from '../src/ui/amount.js';
+import {
+  displayAmount,
+  displayCost,
+  fiat,
+  formatAmount,
+  humanDuration,
+  parseAmount,
+  sanitizeAmount,
+} from '../src/ui/amount.js';
 
 /**
  * What may be typed into an amount, and what that text means.
@@ -102,6 +110,70 @@ describe('formatAmount', () => {
     expect(formatAmount(1_050_000n)).toBe('1.05');
     expect(formatAmount(1_000_000n)).toBe('1');
     expect(formatAmount(0n)).toBe('0');
+  });
+});
+
+describe('displayAmount', () => {
+  it('shortens the six-decimal figures the bridge used to print in full', () => {
+    // The screenshot that started this: every figure on the card six digits wide.
+    expect(displayAmount(761_693n)).toBe('0.76');
+    expect(displayAmount(191_981_099n)).toBe('191.98');
+    expect(displayAmount(2_563_353n)).toBe('2.56');
+  });
+
+  it('rounds a balance down and a cost up, so neither flatters the split', () => {
+    expect(displayAmount(2_646_169n)).toBe('2.64');
+    expect(displayCost(2_646_169n)).toBe('2.65');
+  });
+
+  it('opens up rather than rounding a small figure away to nothing', () => {
+    // A 0.0035 base fee shown as "0.00" reads as a broken row, not a cheap chain.
+    expect(displayCost(3_500n)).toBe('0.0035');
+    expect(displayAmount(3_500n)).toBe('0.0035');
+    expect(displayCost(10_000n)).toBe('0.01');
+    expect(displayAmount(1n)).toBe('0.000001');
+  });
+
+  it('carries two decimals so a column of money lines up', () => {
+    // "176.5" between "0.76" and "2.56" reads as a figure that lost a digit.
+    expect(displayAmount(176_502_194n)).toBe('176.50');
+    expect(displayAmount(1_500_000n)).toBe('1.50');
+    expect(displayAmount(1_000_004n)).toBe('1.00');
+    expect(displayAmount(1_004_000n)).toBe('1.00');
+    expect(displayCost(1_000_001n)).toBe('1.01');
+    // But a figure that widened to stay legible keeps every decimal it earned,
+    // and is not carried out to the token's full precision either.
+    expect(displayCost(10_000n)).toBe('0.01');
+    expect(displayAmount(3_000n)).toBe('0.003');
+  });
+
+  it('never lets rounding invent money that is not there', () => {
+    expect(displayAmount(0n)).toBe('0.00');
+    expect(displayCost(0n)).toBe('0.00');
+    // Down is toward zero on both sides of it, so a negative reads the same way.
+    expect(displayAmount(-2_646_169n)).toBe('-2.64');
+    expect(displayCost(-2_646_169n)).toBe('-2.65');
+  });
+
+  it('reads a token by its own decimals, not by the ones USDC has', () => {
+    // cirBTC is eight, which is where `formatUnits` printed an eight-digit row.
+    expect(displayAmount(123_456_789n, 8)).toBe('1.23');
+    expect(displayAmount(1_234n, 8)).toBe('0.000012');
+    expect(displayAmount(5n, 0)).toBe('5');
+  });
+
+  it('never widens past what the token can hold', () => {
+    for (const v of [1n, 7n, 999n, 1_000_001n]) {
+      expect(displayAmount(v).split('.')[1]?.length ?? 0).toBeLessThanOrEqual(6);
+      expect(displayCost(v).split('.')[1]?.length ?? 0).toBeLessThanOrEqual(6);
+    }
+  });
+
+  it('is never larger than the exact figure for a balance, nor smaller for a cost', () => {
+    for (const v of [0n, 1n, 3_500n, 761_693n, 2_646_169n, 191_981_099n, 999_999n]) {
+      expect(parseAmount(displayAmount(v))! <= v).toBe(true);
+      expect(parseAmount(displayCost(v))! >= v).toBe(true);
+    }
   });
 });
 

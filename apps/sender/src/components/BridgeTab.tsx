@@ -55,6 +55,10 @@ import {
   CostBlock,
   Field,
   GatewayFundBox,
+  // Shortened for reading. `usdc` stays for the figures that are values rather
+  // than sentences: what fills a field, and what gets written into a saved bridge.
+  displayAmount,
+  displayCost,
   InfoBody,
   Input,
   SegmentedTabs,
@@ -1496,7 +1500,6 @@ export function BridgeTab({
             gasSymbol={gwGasToken ? chainNativeCurrency(gwGasToken)?.symbol : undefined}
             pending={gwPending}
             wait={depositWaitLabel(gwSource)}
-            format={usdc}
             busy={depositing || switching || source.switching}
             onDeposit={() =>
               void (async () => {
@@ -1635,7 +1638,16 @@ export function BridgeTab({
                * for, each over-reaching one says what its chain can really do, and
                * this says what lands at the other end.
                */
-              value={engine === 'gateway' ? usdc(gwDeliverable) : amount}
+              /* Empty rather than "0.00" when there is nothing to receive, so the
+                 two halves of the bridge look the same before anything is typed:
+                 the source field is empty and falls back to the field's own "0". */
+              value={
+                engine === 'gateway'
+                  ? gwDeliverable > 0n
+                    ? displayAmount(gwDeliverable)
+                    : ''
+                  : amount
+              }
               onChange={() => {}}
               readOnly
               chain={to}
@@ -1703,7 +1715,7 @@ export function BridgeTab({
             lines={[
               {
                 label: t('cost.circleFee'),
-                value: `${usdc(gwAlloc?.fee ?? 0n)} USDC`,
+                value: `${displayCost(gwAlloc?.fee ?? 0n)} USDC`,
                 testId: 'bridge-fee',
                 /*
                  * The same total, in the pieces it is made of: one base fee per
@@ -1725,7 +1737,7 @@ export function BridgeTab({
                   ) : (
                     <span>{t('cost.forwarding', { chain: toLabel })}</span>
                   ),
-                  value: `${usdc(part.fee)} USDC`,
+                  value: `${displayCost(part.fee)} USDC`,
                   testId: part.chain ? `bridge-fee-${part.chain}` : 'bridge-fee-forwarding',
                 })),
               },
@@ -1738,7 +1750,7 @@ export function BridgeTab({
               amountValue > 0 && gwAlloc && gwAlloc.legs.length > 0
                 ? {
                     label: t('cost.youPay'),
-                    value: `${usdc(gwAmount + gwAlloc.fee)} USDC`,
+                    value: `${displayCost(gwAmount + gwAlloc.fee)} USDC`,
                     testId: 'bridge-youpay',
                   }
                 : null

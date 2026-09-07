@@ -25,7 +25,6 @@ import {
   explorerAddressUrl,
   newStealthOwner,
   computeStealthPrivateKey,
-  usdc as fmtUsdc,
   chainLabel,
   assertBoxFundable,
   fundBoxFromGateway,
@@ -74,6 +73,9 @@ import {
   useToast,
   short,
   parseAmount,
+  displayAmount,
+  displayCost,
+  formatAmount,
   ActivityBlock,
   type Step,
 } from '@ctrl-arcz/demo-kit/ui';
@@ -546,7 +548,10 @@ export function SubscriptionsTab({
       rememberDeposit(on, amount, before);
       setGwPending(pendingOn(on));
       setDepositAmount('');
-      toast.push(t('bridge.deposited', { amount: fmtUsdc(amount), wait: gwWaitLabel }), 'success');
+      toast.push(
+        t('bridge.deposited', { amount: displayAmount(amount), wait: gwWaitLabel }),
+        'success',
+      );
     } catch (e) {
       // Both are told which prompt it was: a deposit asks for an approval and
       // then for the deposit itself.
@@ -946,7 +951,6 @@ export function SubscriptionsTab({
             walletOnChain={gw.walletHere}
             pending={gwPending}
             wait={gwWaitLabel}
-            format={fmtUsdc}
             busy={depositing || switching || gw.switching}
             onDeposit={() => void guard(depositToGw)}
           />
@@ -964,7 +968,7 @@ export function SubscriptionsTab({
           {gwShort && (
             <p className="gwfund__err" data-testid="sub-gw-short">
               {t('sub.gwShort', {
-                amount: fmtUsdc(gwMissing),
+                amount: displayCost(gwMissing),
                 chain: chainLabel(gwSource),
               })}
             </p>
@@ -1176,7 +1180,7 @@ export function SubscriptionsTab({
                       gwCeiling == null ? (
                         <Skeleton width={78} height={14} still={gwState === 'unavailable'} />
                       ) : (
-                        `${fmtUsdc(gwCeiling)} USDC`
+                        `${displayCost(gwCeiling)} USDC`
                       ),
                     testId: 'sub-fee',
                   },
@@ -1189,7 +1193,7 @@ export function SubscriptionsTab({
                     gwNeeded == null ? (
                       <Skeleton width={92} height={16} still={gwState === 'unavailable'} />
                     ) : (
-                      `${fmtUsdc(gwNeeded)} USDC`
+                      `${displayCost(gwNeeded)} USDC`
                     ),
                   testId: 'sub-youpay',
                 }}
@@ -1359,7 +1363,7 @@ export function SubscriptionsTab({
                     // Lowercased: the label is written for a dropdown, and "0.01
                     // Every minute" mid-line reads as two sentences colliding.
                     // Locale-aware because Turkish lowercases I to a dotless one.
-                    amount={`${formatUnits(s.perPull, 6)} ${t(
+                    amount={`${displayCost(s.perPull)} ${t(
                       `sub.freq.${frequencyKeyOf(s.interval)}` as never,
                     ).toLocaleLowerCase()}`}
                   />
@@ -1375,8 +1379,14 @@ export function SubscriptionsTab({
                       <AddressChip address={s.target} />
                     </HistoryRow.Fact>
                     <HistoryRow.Fact label={t('sub.remaining')}>
-                      <span className="mono">
-                        {formatUnits(s.remaining, 6)}/{formatUnits(s.cap, 6)} USDC
+                      {/* Both rounded down: what is left is a ceiling on what can
+                          still be pulled, and a cap read up is a cap that is not
+                          there. The exact pair is on the title. */}
+                      <span
+                        className="mono"
+                        title={`${formatAmount(s.remaining)}/${formatAmount(s.cap)}`}
+                      >
+                        {displayAmount(s.remaining)}/{displayAmount(s.cap)} USDC
                       </span>
                       <span className="sub-bar">
                         <span style={{ width: `${pct}%` }} />
@@ -1529,25 +1539,29 @@ function SubDetail({
             <AddressChip address={sub.target} />
           </dd>
         </div>
+        {/* Shortened like everywhere else, each figure bent the way its own meaning
+            allows: what gets charged rounds up, what is left rounds down. The exact
+            figure is on the title of each, because this panel is also where somebody
+            checks a number against the explorer. */}
         <div>
           <dt>{t('sub.d.perPull')}</dt>
-          <dd>{formatUnits(sub.perPull, 6)} USDC</dd>
+          <dd title={formatAmount(sub.perPull)}>{displayCost(sub.perPull)} USDC</dd>
         </div>
         <div>
           <dt>{t('sub.d.cap')}</dt>
-          <dd>{formatUnits(sub.cap, 6)} USDC</dd>
+          <dd title={formatAmount(sub.cap)}>{displayAmount(sub.cap)} USDC</dd>
         </div>
         <div>
           <dt>{t('sub.d.spent')}</dt>
-          <dd>{formatUnits(sub.spent, 6)} USDC</dd>
+          <dd title={formatAmount(sub.spent)}>{displayCost(sub.spent)} USDC</dd>
         </div>
         <div>
           <dt>{t('sub.d.remaining')}</dt>
-          <dd>{formatUnits(sub.remaining, 6)} USDC</dd>
+          <dd title={formatAmount(sub.remaining)}>{displayAmount(sub.remaining)} USDC</dd>
         </div>
         <div>
           <dt>{t('sub.d.balance')}</dt>
-          <dd>{formatUnits(sub.balance, 6)} USDC</dd>
+          <dd title={formatAmount(sub.balance)}>{displayAmount(sub.balance)} USDC</dd>
         </div>
         <div>
           <dt>{t('sub.d.lastPull')}</dt>

@@ -9,7 +9,6 @@ import {
   explorerTxUrl,
   percentOf,
   spendableAfterGas,
-  usdc,
   PAY_GAS_LIMIT,
 } from '@ctrl-arcz/sdk';
 import { supportsChain, useToken, type Session } from '@ctrl-arcz/demo-kit';
@@ -25,6 +24,8 @@ import {
   Skeleton,
   Stepper,
   TokenPicker,
+  displayAmount,
+  displayCost,
   parseAmount,
   IconLock,
   IconExternal,
@@ -319,13 +320,20 @@ export function PrivatePayTab({
               testId="ppay-cost"
               lines={[
                 {
+                  // The typed figure, not a cost: it reads next to the balance it
+                  // came out of and has to agree with it. Only the fee and the
+                  // total round the other way.
                   label: t('cost.amount'),
-                  value: `${usdc(amountAmt, token.decimals)} ${token.symbol}`,
+                  value: `${displayAmount(amountAmt, token.decimals)} ${token.symbol}`,
                 },
                 {
                   label: t('cost.networkMax'),
                   value:
-                    reserve == null ? <Skeleton width={72} height={23} /> : `${usdc(reserve)} USDC`,
+                    reserve == null ? (
+                      <Skeleton width={72} height={23} />
+                    ) : (
+                      `${displayCost(reserve)} USDC`
+                    ),
                 },
               ]}
               /*
@@ -340,9 +348,9 @@ export function PrivatePayTab({
                   reserve == null ? (
                     <Skeleton width={86} height={26} />
                   ) : payingInGas ? (
-                    `${usdc(amountAmt + reserve, token.decimals)} ${token.symbol}`
+                    `${displayCost(amountAmt + reserve, token.decimals)} ${token.symbol}`
                   ) : (
-                    `${usdc(amountAmt, token.decimals)} ${token.symbol} + ${usdc(reserve)} USDC`
+                    `${displayAmount(amountAmt, token.decimals)} ${token.symbol} + ${displayCost(reserve)} USDC`
                   ),
                 testId: 'ppay-youpay',
               }}

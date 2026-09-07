@@ -38,6 +38,14 @@ import {
   typedSubunits,
   type GatewaySource,
 } from './sourceCards.js';
+/*
+ * Two vocabularies, on purpose. `displayAmount`/`displayCost` shorten a figure for
+ * reading, rounding a balance down and a cost up so neither can flatter the split;
+ * `usdc` stays exact and is what fills a field or feeds a signature. They used to be
+ * one function, which is why a screen full of six-decimal figures could still hand
+ * the allocator a number it refused.
+ */
+import { displayAmount, displayCost, formatAmount } from './amount.js';
 import { AmountField } from './AmountField.js';
 import { ChainLogo } from './ChainLogo.js';
 import { ChainSelect } from './ChainSelect.js';
@@ -178,14 +186,14 @@ export function GatewaySources({
       return (
         <>
           <span className="chainrow__have">
-            {t('bridge.src.hasAmount', { amount: usdc(r.balance) })}
+            {t('bridge.src.hasAmount', { amount: displayAmount(r.balance) })}
           </span>
           <span className={`chainrow__tone chainrow__tone--${r.tone}`}>
             {r.room <= 0n
               ? t('bridge.src.tooSmall')
               : r.completes
-                ? t('bridge.src.totalFee', { fee: usdc(r.fee) })
-                : t('bridge.src.stillShort', { amount: usdc(r.stillShort) })}
+                ? t('bridge.src.totalFee', { fee: displayCost(r.fee) })
+                : t('bridge.src.stillShort', { amount: displayCost(r.stillShort) })}
           </span>
         </>
       );
@@ -216,15 +224,15 @@ export function GatewaySources({
             needs no gas anywhere. Saying "USDC" is therefore a fact and not a
             guess -- and the one worth stating, since a per-chain fee is exactly
             where a reader would expect to see ETH. */}
-        <span className="chainrow__have">
-          {loaded ? t('bridge.src.hasAmount', { amount: usdc(held) }) : ''}
+        <span className="chainrow__have" title={loaded ? formatAmount(held) : undefined}>
+          {loaded ? t('bridge.src.hasAmount', { amount: displayAmount(held) }) : ''}
         </span>
         <span
           className={['chainrow__fee', feeOf(chain) >= COSTLY_BASE_FEE && 'chainrow__fee--costly']
             .filter(Boolean)
             .join(' ')}
         >
-          {t('bridge.src.legFee', { fee: usdc(feeOf(chain)) })}
+          {t('bridge.src.legFee', { fee: displayCost(feeOf(chain)) })}
         </span>
       </>
     );
@@ -353,8 +361,12 @@ export function GatewaySources({
         <div className="gwlegs">
           <div className="gwlegs__head">
             <span className="gwlegs__title">{t('bridge.src.title')}</span>
-            <span className="gwlegs__held" data-testid="gwsrc-held">
-              {loaded ? t('bridge.src.heldOn', { amount: usdc(held) }) : ''}
+            <span
+              className="gwlegs__held"
+              data-testid="gwsrc-held"
+              title={loaded ? formatAmount(held) : undefined}
+            >
+              {loaded ? t('bridge.src.heldOn', { amount: displayAmount(held) }) : ''}
             </span>
           </div>
 
@@ -406,7 +418,7 @@ export function GatewaySources({
                   className="gwleg__input"
                   value={s.amount}
                   onChange={(e) => setLeg(i, sanitize(e.target.value))}
-                  placeholder={loaded ? usdc(carries) : '0'}
+                  placeholder={loaded ? displayAmount(carries) : '0'}
                   inputMode="decimal"
                   aria-label={t('bridge.src.legAria', { chain: chainLabel(s.chain) })}
                   data-testid={`gwsrc-amount-${s.chain}`}
@@ -442,7 +454,7 @@ export function GatewaySources({
                     >
                       {t('bridge.src.raise', {
                         chain: chainLabel(s.chain),
-                        amount: usdc(slackOn(s) < short ? slackOn(s) : short),
+                        amount: displayAmount(slackOn(s) < short ? slackOn(s) : short),
                       })}
                     </button>
                   ) : overCap ? (
@@ -455,7 +467,7 @@ export function GatewaySources({
                       >
                         {t('bridge.src.overCapacity', {
                           chain: chainLabel(s.chain),
-                          amount: usdc(room),
+                          amount: displayAmount(room),
                         })}
                       </button>
                     ) : (
@@ -470,9 +482,13 @@ export function GatewaySources({
                       </span>
                     )
                   ) : (
-                    <span className="gwleg__have" data-testid={`gwsrc-have-${s.chain}`}>
+                    <span
+                      className="gwleg__have"
+                      data-testid={`gwsrc-have-${s.chain}`}
+                      title={loaded ? formatAmount(balanceOf(s.chain)) : undefined}
+                    >
                       {loaded
-                        ? t('bridge.src.ready', { amount: usdc(balanceOf(s.chain)) })
+                        ? t('bridge.src.ready', { amount: displayAmount(balanceOf(s.chain)) })
                         : t('bridge.gwBalanceLoading')}
                     </span>
                   )}
@@ -491,7 +507,7 @@ export function GatewaySources({
                   >
                     {pinned ? t('bridge.src.pinned') : t('bridge.src.auto')}
                     <span className="gwleg__dot" aria-hidden />
-                    {t('bridge.src.legFee', { fee: usdc(feeOf(s.chain)) })}
+                    {t('bridge.src.legFee', { fee: displayCost(feeOf(s.chain)) })}
                   </span>
                 </div>
               </div>
@@ -522,7 +538,10 @@ export function GatewaySources({
               // hundredths is a real place the user's money is, and "we cannot use
               // this" answers the question that leaving it out would raise.
               disabledFor={(c) => (rankOf.get(c)?.room ?? 0n) <= 0n}
-              searchText={(c) => usdc(balanceOf(c))}
+              /* Both the shortened figure and the exact one: people search for what
+                 they can see on the row, and for the number they read off a block
+                 explorer. Matching only one of the two refuses half of them. */
+              searchText={(c) => `${displayAmount(balanceOf(c))} ${formatAmount(balanceOf(c))}`}
               onChange={(chain) => onSources([...sources, { chain, amount: '' }])}
               ariaLabel={t('bridge.src.add')}
               data-testid="gwsrc-more"
@@ -555,14 +574,14 @@ export function GatewaySources({
             action={
               onDeposit
                 ? {
-                    label: t('bridge.src.topUp', { amount: usdc(residual) }),
+                    label: t('bridge.src.topUp', { amount: displayCost(residual) }),
                     onClick: topUp,
                     testId: 'gwsrc-topup',
                   }
                 : null
             }
           >
-            {t('bridge.src.short', { amount: usdc(residual) })}
+            {t('bridge.src.short', { amount: displayCost(residual) })}
           </Notice>
         )}
         {/* Only once the split otherwise works. A set of rows can be both impossible
@@ -573,7 +592,7 @@ export function GatewaySources({
           stops the transfer, so it speaks alone. */}
         {over > 0n && short === 0n && (
           <Notice tone="warn" testId="gwsrc-overfill">
-            {t('bridge.src.overfill', { amount: usdc(over) })}
+            {t('bridge.src.overfill', { amount: displayAmount(over) })}
           </Notice>
         )}
         {alloc?.costly && (

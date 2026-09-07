@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import QRCode from 'qrcode';
-import { formatUnits, type Hex } from 'viem';
+import { type Hex } from 'viem';
 import { getPublicClient, supportsChain, type Session } from '@ctrl-arcz/demo-kit';
 import {
   Button,
@@ -12,6 +12,7 @@ import {
   useT,
   useToast,
   short,
+  displayAmount,
   IconExternal,
 } from '@ctrl-arcz/demo-kit/ui';
 import {
@@ -83,7 +84,15 @@ export function ReceiveTab({
   session: Session;
   pending: PendingClaim[] | null;
   reload: () => Promise<void>;
-  balance: string;
+  /**
+   * The wallet's USDC in subunits, for the line that says what it is now.
+   *
+   * Subunits rather than the session's pre-formatted string: that string was being
+   * put through `Number(...).toLocaleString({maximumFractionDigits: 4})` here, one
+   * more private opinion about how much of a balance to show, and four decimals
+   * rather than the two the rest of the app settled on. `null` while unread.
+   */
+  balance: bigint | null;
   onClaimed: () => Promise<void> | void;
   onSwitchChain: (chainId: number) => Promise<void>;
 }) {
@@ -239,9 +248,7 @@ export function ReceiveTab({
           <p className="muted">
             {claimed.toSelf
               ? t('claim.successBody', {
-                  balance: Number(balance).toLocaleString(undefined, {
-                    maximumFractionDigits: 4,
-                  }),
+                  balance: displayAmount(balance ?? 0n),
                 })
               : t('claim.settledBody')}
           </p>
@@ -330,7 +337,7 @@ export function ReceiveTab({
                 ? t('claim.matchedExpired', { id: matched.transferId.toString() })
                 : t('claim.matched', {
                     id: matched.transferId.toString(),
-                    amount: formatUnits(matched.amount, 6),
+                    amount: displayAmount(matched.amount),
                     from: short(matched.sender),
                   })}
             </span>

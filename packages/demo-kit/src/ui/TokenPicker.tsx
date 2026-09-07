@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
-import { formatUnits } from 'viem';
 import { spendableTokensFor, tokensFor, type TokenInfo } from '@ctrl-arcz/sdk';
+import { displayAmount, formatAmount } from './amount.js';
 import { useT } from '../i18n/context.js';
 import { Select } from './components.js';
 import { TokenLogo } from './TokenLogo.js';
@@ -70,7 +70,17 @@ export function TokenPicker({
                 <span className="tokenrow__sym">{token.symbol}</span>
                 <span className="tokenrow__name">{token.name}</span>
               </span>
-              <span className="tokenrow__right">
+              <span
+                className="tokenrow__right"
+                /* No exact figure behind a row that is not showing one: a restricted
+                   token says why it cannot be picked, and hanging "0" off it as a
+                   tooltip is a claim about a balance the row never made. */
+                title={
+                  token.restricted || held === undefined
+                    ? undefined
+                    : formatAmount(held, token.decimals)
+                }
+              >
                 {token.restricted
                   ? restrictedText(token.restricted.reason)
                   : // The number only. The row has already said which token this
@@ -79,9 +89,15 @@ export function TokenPicker({
                     //
                     // Blank rather than zeroed while unread: a zero is a claim
                     // about someone's money and an unread balance is not one.
+                    //
+                    // Shortened, and rounded down, by the same rule the amount
+                    // field uses. `formatUnits` printed the token's storage
+                    // precision, so a cirBTC row was eight digits wide against
+                    // USDC's six and neither could be compared to the other at a
+                    // glance. The exact figure is on the title.
                     held === undefined
                     ? ''
-                    : formatUnits(held, token.decimals)}
+                    : displayAmount(held, token.decimals)}
               </span>
             </span>
           ),

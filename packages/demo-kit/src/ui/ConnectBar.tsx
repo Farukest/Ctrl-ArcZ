@@ -1,6 +1,7 @@
 import type { SessionState } from '../useSession.js';
 import { useT } from '../i18n/context.js';
 import { AddressChip, Button, Skeleton } from './components.js';
+import { displayAmount, formatAmount } from './amount.js';
 import { IconWallet } from './icons.js';
 
 /**
@@ -18,7 +19,6 @@ export function ConnectBar({ state }: { state: SessionState }) {
   const t = useT();
   const {
     session,
-    balance,
     balanceRaw,
     balanceMissing,
     connecting,
@@ -26,11 +26,12 @@ export function ConnectBar({ state }: { state: SessionState }) {
     error,
     walletDetected,
   } = state;
-  // `balance` is a formatted string that starts at "0", so between connecting and
-  // the first balanceOf landing the bar stated, in the largest number on the page,
-  // that a funded wallet was empty. `balanceRaw` is null until something is
-  // actually known, and a skeleton is the honest answer to a question not yet
-  // answered.
+  // The session's formatted `balance` string is not what this reads. It starts at
+  // "0", so between connecting and the first balanceOf landing the bar stated, in
+  // the largest number on the page, that a funded wallet was empty. `balanceRaw` is
+  // null until something is actually known, a skeleton is the honest answer to a
+  // question not yet answered, and subunits are what the shortening rule wants
+  // anyway.
   const balanceKnown = balanceRaw !== null;
 
   return (
@@ -50,8 +51,18 @@ export function ConnectBar({ state }: { state: SessionState }) {
               <AddressChip address={session.address} />
               <div className="connectbar__balance">
                 {balanceKnown ? (
-                  <span className="connectbar__amount" data-testid="balance">
-                    {Number(balance).toLocaleString(undefined, { maximumFractionDigits: 4 })}
+                  /* Shortened by the same rule as every other figure in the app,
+                     from the subunits rather than from the formatted string. This
+                     was `Number(balance).toLocaleString(maximumFractionDigits: 4)`:
+                     a fifth opinion about how much of a balance to show, four
+                     decimals rather than the two everywhere else, and it went
+                     through a float to get there. */
+                  <span
+                    className="connectbar__amount"
+                    data-testid="balance"
+                    title={formatAmount(balanceRaw)}
+                  >
+                    {displayAmount(balanceRaw)}
                   </span>
                 ) : (
                   // Still, not shimmering, once the read has been attempted and

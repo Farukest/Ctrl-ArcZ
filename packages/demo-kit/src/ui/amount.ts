@@ -68,6 +68,129 @@ export function formatAmount(subunits: bigint, decimals = USDC_DECIMALS): string
 }
 
 /**
+ * Which way a figure is allowed to bend when it is shortened for reading.
+ *
+ * Not a detail. A balance rounded up is a promise the chain will not keep: "2.65
+ * spendable" over 2.646169 sends whoever types the number they were shown into a
+ * shortfall. A fee rounded down is the same lie from the other end. So money that
+ * limits what you can do rounds `down`, money you have to pay rounds `up`, and
+ * `near` is for the figures that are neither, like an amount already agreed.
+ */
+export type Rounding = 'down' | 'up' | 'near';
+
+/** Decimals an ordinary figure gets. Two, because these are dollars. */
+const DISPLAY_FRACTION = 2;
+
+/**
+ * How much of a small number has to survive before the shortening gives up.
+ *
+ * Two decimals turn a 0.0035 fee into "0.00", which is not a small number, it is
+ * a broken row: the reader concludes the app does not know what it charges. So a
+ * figure that would round away opens up one decimal at a time until two digits of
+ * it are actually visible, and never past what the token can hold.
+ */
+const MIN_SIGNIFICANT = 2;
+
+/**
+ * Subunits as a person should read them, which is not how a chain stores them.
+ *
+ * Six decimals is what USDC is denominated in, not what a balance is worth
+ * reading in, and eight is what cirBTC is denominated in. Printing the storage
+ * precision put "191.981099 USDC" beside "0.761693 USDC" on the bridge, so every
+ * figure on the screen was six digits wide and none of them was easier to compare
+ * than its neighbour.
+ *
+ * This is the only function that shortens an amount. `formatAmount` stays exact
+ * and stays the one that fills fields, because what is shown and what gets signed
+ * are different questions and answering both with one string is how a Max button
+ * ends up offering a number the next check refuses.
+ */
+export function displayAmount(
+  subunits: bigint,
+  decimals = USDC_DECIMALS,
+  round: Rounding = 'down',
+): string {
+  const neg = subunits < 0n;
+  const v = neg ? -subunits : subunits;
+  const sign = neg ? '-' : '';
+  // A figure with a whole part carries its own magnitude, so two decimals is
+  // always enough there and the widening below is only ever about fractions.
+  const hasWhole = v >= 10n ** BigInt(decimals);
+
+  const floor = Math.min(DISPLAY_FRACTION, decimals);
+  let d = floor;
+  for (;;) {
+    /*
+     * Decided on the trimmed form and printed on the padded one, which are two
+     * different questions. Trimmed is how you tell whether widening would reveal
+     * anything: at six decimals a 0.01 fee still trims to "0.01", so the loop
+     * stops rather than marching out to "0.010000". Padded is how it reads.
+     */
+    const s = render(shorten(v, decimals, d, round), d);
+    if (hasWhole || d >= decimals || significantDigits(s) >= MIN_SIGNIFICANT) {
+      return `${sign}${pad(s, floor)}`;
+    }
+    d += 1;
+  }
+}
+
+/** A cost, shortened the way a cost has to be: never smaller than it is. */
+export function displayCost(subunits: bigint, decimals = USDC_DECIMALS): string {
+  return displayAmount(subunits, decimals, 'up');
+}
+
+/**
+ * A non-negative subunit count restated in units of `10 ** -d`.
+ *
+ * The sign is handled outside, so `down` is always toward zero and `up` always
+ * away from it: a figure's magnitude is never overstated by one and never
+ * understated by the other, whichever side of zero it sits on.
+ */
+function shorten(v: bigint, decimals: number, d: number, round: Rounding): bigint {
+  if (d >= decimals) return v * 10n ** BigInt(d - decimals);
+  const drop = 10n ** BigInt(decimals - d);
+  const kept = v / drop;
+  const lost = v % drop;
+  if (lost === 0n) return kept;
+  if (round === 'up') return kept + 1n;
+  if (round === 'near') return lost * 2n >= drop ? kept + 1n : kept;
+  return kept;
+}
+
+/** Units of `10 ** -d` as text, trailing zeros dropped: "0.010" is not a figure. */
+function render(scaled: bigint, d: number): string {
+  if (d === 0) return scaled.toString();
+  const unit = 10n ** BigInt(d);
+  const frac = (scaled % unit).toString().padStart(d, '0').replace(/0+$/, '');
+  return `${scaled / unit}${frac ? `.${frac}` : ''}`;
+}
+
+/**
+ * The same figure carried out to `min` decimals, so a column of money lines up.
+ *
+ * Only on the way to the screen. Trimming is right for a field, where "1.50" is a
+ * number somebody has to backspace through and "176.5" is what they would have
+ * typed; it is wrong for a balance, where a stray "176.5" between "0.76" and
+ * "2.56" reads as a figure that lost a digit. `formatAmount` keeps trimming for
+ * exactly that reason.
+ *
+ * Never truncates: a figure that has already widened past `min` to stay legible
+ * (a 0.0035 fee) keeps every decimal it earned.
+ */
+function pad(s: string, min: number): string {
+  if (min <= 0) return s;
+  const dot = s.indexOf('.');
+  if (dot === -1) return `${s}.${'0'.repeat(min)}`;
+  const have = s.length - dot - 1;
+  return have >= min ? s : s + '0'.repeat(min - have);
+}
+
+/** Digits that say something: leading zeros and the point do not. */
+function significantDigits(s: string): number {
+  return s.replace('.', '').replace(/^0+/, '').length;
+}
+
+/**
  * The dollar line under the field.
  *
  * USDC is a dollar, so this is the same number with two decimals rather than a

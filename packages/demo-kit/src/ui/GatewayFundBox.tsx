@@ -4,7 +4,7 @@ import { Input } from './components.js';
 import { ChainSelect } from './ChainSelect.js';
 import { labelOf } from '../chainCatalog.js';
 import { useT } from '../i18n/context.js';
-import { sanitizeAmount } from './amount.js';
+import { displayAmount, formatAmount, sanitizeAmount } from './amount.js';
 
 /**
  * Putting the wallet's own USDC into its Gateway balance.
@@ -81,8 +81,14 @@ export interface GatewayFundBoxProps {
    * without asking them both to change.
    */
   wait: string;
-  /** Formats subunits for display; the caller owns the money vocabulary. */
-  format: (subunits: bigint) => string;
+  /*
+   * `format` used to be a prop, on the grounds that the caller owned the money
+   * vocabulary. It owned it twice, with two different answers, and the box is
+   * Gateway-only anyway: every figure in here is USDC, the deposit maths below
+   * already assumes six decimals and the label already says so. Now it reads the
+   * one vocabulary directly, which is also what lets it round a balance for
+   * reading and still fill the field with the exact figure.
+   */
   children?: ReactNode;
 }
 
@@ -102,7 +108,6 @@ export function GatewayFundBox({
   gasSymbol,
   pending = 0n,
   wait,
-  format,
   children,
 }: GatewayFundBoxProps) {
   const t = useT();
@@ -127,11 +132,15 @@ export function GatewayFundBox({
         <span className="gwfund__title">
           {t('bridge.gwOnChain', { chain: labelOf(chain) })}
         </span>
-        <output className="gwfund__figure" data-testid="gateway-balance">
+        <output
+          className="gwfund__figure"
+          data-testid="gateway-balance"
+          title={balance == null ? undefined : formatAmount(balance)}
+        >
           {balance == null ? (
             <Skeleton width={92} height={17} still={balanceMissing === 'unavailable'} />
           ) : (
-            `${format(balance)} USDC`
+            `${displayAmount(balance)} USDC`
           )}
         </output>
       </div>
@@ -150,7 +159,7 @@ export function GatewayFundBox({
                   // Nothing rather than a zero: a row saying "0" for every chain
                   // you have not used is noise, and the ones that matter stop
                   // standing out.
-                  return held > 0n ? <span>{format(held)}</span> : null;
+                  return held > 0n ? <span>{displayAmount(held)}</span> : null;
                 }
               : undefined
           }
@@ -162,19 +171,22 @@ export function GatewayFundBox({
         <button
           type="button"
           className="gwfund__wallet"
-          onClick={() => maxDeposit != null && onAmountChange(format(maxDeposit))}
+          onClick={() => maxDeposit != null && onAmountChange(formatAmount(maxDeposit))}
           disabled={maxDeposit == null || maxDeposit <= 0n}
           data-testid="gateway-wallet-balance"
         >
           <span className="gwfund__walletk">{t('bridge.gwWalletLabel')}</span>
-          <output className="gwfund__walletv">
+          <output
+            className="gwfund__walletv"
+            title={maxDeposit == null ? undefined : formatAmount(maxDeposit)}
+          >
             {/* Null here means the wallet is connected to another chain, so this
                 balance cannot be read from where we are standing. That is a
                 settled fact, not a pending one. */}
             {maxDeposit == null ? (
               <Skeleton width={78} height={13} still />
             ) : (
-              `${format(maxDeposit)} USDC`
+              `${displayAmount(maxDeposit)} USDC`
             )}
           </output>
         </button>
@@ -240,7 +252,7 @@ export function GatewayFundBox({
           </span>
         ) : pending > 0n ? (
           <span className="gwfund__note" data-testid="gateway-pending">
-            {t('bridge.gwPending', { amount: format(pending), wait })}
+            {t('bridge.gwPending', { amount: displayAmount(pending), wait })}
           </span>
         ) : !walletOnChain ? (
           <span className="gwfund__note" data-testid="gateway-wallet-elsewhere">
