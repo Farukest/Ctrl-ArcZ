@@ -301,20 +301,22 @@ a[role='tab']:hover,
 ::selection {
   background: var(--accent-soft);
 }
-/* The keyboard focus ring, for everything that does not draw its own.
+/* No focus ring. This is the one place it is decided, for the whole app.
 
-   It was `box-shadow: 0 0 0 3px` plus `border-radius: var(--r-sm)`, and both
-   halves were wrong. A box-shadow ring is painted in the element's own box, so on
-   a text input it landed under the field's border and on top of nothing else,
-   stacking with the field's own focus style into four pixels of amber; and
-   rewriting `border-radius` meant a pill button turned into a rounded rectangle
-   for as long as it was focused, which is the ring reshaping the thing it is
-   supposed to be pointing at.
+   The amber was on nine different rules: a global outline here, an inset edge on
+   `.input`, `.searchfield`, `.select-trigger` and `.sub-select`, the whole
+   `.amountf--boxed` panel via `:focus-within`, an underline on `.gwleg__input`,
+   and a soft ring on the checkbox and the switch. Pressing the token picker lit
+   two of them at once, because the trigger is inside the amount panel: the pill
+   went amber and so did the box around it, for one click on one control.
 
-   `outline` is the property for this. It follows the element's real radius, it is
-   drawn outside the box so it never touches text, and it takes no space, so
-   nothing shifts. The offset keeps it clear of borders. */
+   Removed rather than reconciled. A pointer user gets nothing they asked for out
+   of a control announcing it has focus, and the open menu, the caret in the field
+   and the pressed state already say where you are. Keyboard focus is invisible
+   now, which is the cost, and it is one rule to put back:
+   `:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }`.
+   Everything else still suppresses the UA default, so nothing draws a white ring
+   on a dark card in its place. */
 :focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
+  outline: none;
 }
