@@ -107,23 +107,38 @@ export function clientIp(req: IncomingMessage): string {
   return last || req.socket.remoteAddress || 'unknown';
 }
 
-function rateLimited(req: IncomingMessage, now: number): boolean {
+function rateLimited(
+  req: IncomingMessage,
+  now: number,
+  bucket: Map<string, number[]> = hits,
+  max: number = RATE_MAX,
+): boolean {
   const ip = clientIp(req);
-  const recent = (hits.get(ip) ?? []).filter((t) => now - t < RATE_WINDOW_MS);
+  const recent = (bucket.get(ip) ?? []).filter((t) => now - t < RATE_WINDOW_MS);
   recent.push(now);
   // Bound total keys: once the map is full, a genuinely new IP is rate-limited
   // rather than allowed to grow the map (the rightmost-hop fix already caps
   // cardinality to real client IPs, so this only bites under extreme load).
-  if (!hits.has(ip) && hits.size >= MAX_TRACKED_IPS) return true;
-  hits.set(ip, recent);
-  return recent.length > RATE_MAX;
+  if (!bucket.has(ip) && bucket.size >= MAX_TRACKED_IPS) return true;
+  bucket.set(ip, recent);
+  return recent.length > max;
 }
+
+/**
+ * `/api/chain-data` has its own window. One firewall check is several reads
+ * (counterparties, activity, bait) and the history list polls, so sharing the
+ * general 40 a minute would starve the routes that move money.
+ */
+const dataHits = new Map<string, number[]>();
+const DATA_RATE_MAX = 240;
 
 // Periodically drop stale buckets so the map tracks only currently-active IPs.
 setInterval(() => {
   const now = Date.now();
-  for (const [ip, times] of hits) {
-    if (times.every((t) => now - t >= RATE_WINDOW_MS)) hits.delete(ip);
+  for (const bucket of [hits, dataHits]) {
+    for (const [ip, times] of bucket) {
+      if (times.every((t) => now - t >= RATE_WINDOW_MS)) bucket.delete(ip);
+    }
   }
 }, RATE_WINDOW_MS).unref?.();
 
@@ -210,9 +225,11 @@ export function serve(routes: Routes): void {
       if (applyCors(req, res)) return;
       const url = new URL(req.url ?? '/', 'http://localhost');
       // Health is unmetered; everything else is rate limited per source IP.
-      if (url.pathname !== '/api/health' && rateLimited(req, Date.now())) {
-        return json(res, 429, { error: 'rate limited' });
-      }
+      const limited =
+        url.pathname === '/api/chain-data'
+          ? rateLimited(req, Date.now(), dataHits, DATA_RATE_MAX)
+          : url.pathname !== '/api/health' && rateLimited(req, Date.now());
+      if (limited) return json(res, 429, { error: 'rate limited' });
       const key = `${req.method} ${url.pathname}`;
       const handler = routes[key];
       if (handler) {

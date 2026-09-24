@@ -3,7 +3,6 @@ import { erc20Abi, type Address, type Hex } from 'viem';
 import type { Session } from '@ctrl-arcz/demo-kit';
 import { readClientFor } from './chainRead.js';
 import {
-  SPEND_POLICY_FACTORY_ADDRESS,
   deploymentFor,
   spendPolicyFactoryAbi,
   ownerHash as toOwnerHash,
@@ -390,7 +389,14 @@ export function useSubscriptions(session: Session | null): {
        * comes back undirected and the match happens in this loop, so nothing about
        * who is asking goes out.
        */
-      const viaExplorer = await explorerAccountsCreated(SPEND_POLICY_FACTORY_ADDRESS, latest);
+      const deployment = deploymentFor(session.chainId);
+      if (!deployment) return;
+      const factory = deployment.spendPolicyFactory;
+      // Only where this chain has a readable explorer. Elsewhere (Arc mainnet) the
+      // default would be testnet Arc's explorer, answering about another network.
+      const viaExplorer = deployment.explorerApi
+        ? await explorerAccountsCreated(factory, latest, { apiUrl: deployment.explorerApi })
+        : { accounts: [], complete: false };
       if (viaExplorer.complete) {
         for (const a of viaExplorer.accounts) {
           if (a.ownerHash.toLowerCase() === mine) remember(a.account, a.salt);
@@ -398,9 +404,14 @@ export function useSubscriptions(session: Session | null): {
         return;
       }
 
-      const fromBlock = latest !== null && latest > DISCOVER_LOOKBACK ? latest - DISCOVER_LOOKBACK : 0n;
+      // Never before the factory existed. On a young deployment (Arc mainnet) the
+      // lookback reached millions of blocks past it, and the hundreds of empty
+      // `eth_getLogs` it cost were rate-limited into failing the box reads too.
+      const floor = deployment.stealthAnnouncerDeployBlock;
+      const back = latest !== null && latest > DISCOVER_LOOKBACK ? latest - DISCOVER_LOOKBACK : 0n;
+      const fromBlock = back > floor ? back : floor;
       const logs = await getLogsChunked<{ account?: Address; salt?: Hex }>(client, {
-        address: SPEND_POLICY_FACTORY_ADDRESS,
+        address: factory,
         abi: spendPolicyFactoryAbi,
         eventName: 'AccountCreated',
         args: { ownerHash: toOwnerHash(session.address as Address) },

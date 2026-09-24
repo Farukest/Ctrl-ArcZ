@@ -131,6 +131,31 @@ describe('deployment registry', () => {
     },
   );
 
+  it('matches the broadcast record for Arc mainnet', () => {
+    const record = JSON.parse(
+      readFileSync(
+        fileURLToPath(new URL('../../contracts/deployments/arc.json', import.meta.url)),
+        'utf8',
+      ),
+    ) as Record<string, string | number>;
+    const d = deploymentFor(5042);
+    expect(d?.chainId).toBe(record.chainId);
+    expect(d?.usdc).toBe(record.USDC);
+    expect(d?.ctrlArcZ).toBe(record.CtrlArcZ);
+    expect(d?.codeClaimVerifier).toBe(record.CodeClaimVerifier);
+    expect(d?.spendPolicyFactory).toBe(record.SpendPolicyFactory);
+    expect(d?.spendPolicyAccountImpl).toBe(record.AccountImplementation);
+    expect(d?.stealthAnnouncer).toBe(record.StealthAnnouncer);
+    expect(d?.ctrlArcZDeployBlock).toBe(BigInt(record.deployBlock as number));
+    // Arc bills gas in USDC and funds Private Pay through CallFrom, on both networks.
+    expect(d?.gasToken).toBe('usdc');
+    expect(d?.multicall3From).toBeDefined();
+    expect(d?.privatePayRouter).toBeUndefined();
+    // No readable explorer API on mainnet: history comes from Alchemy.
+    expect(d?.explorerApi).toBeUndefined();
+    expect(d?.alchemyNetwork).toBe('arc-mainnet');
+  });
+
   it('lists exactly the chains it holds', () => {
     expect([...deployedChainIds()].sort()).toEqual(entries.map((d) => d.chainId).sort());
     expect(deploymentFor(undefined)).toBeUndefined();

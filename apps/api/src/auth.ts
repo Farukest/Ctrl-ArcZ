@@ -135,8 +135,34 @@ export function checkQuota(address: Address, units: number): void {
   globalUsage = { day, used: globalUsage.used + units };
 }
 
+/*
+ * Mainnet has its own budget, far below testnet's. There the relayer pays real
+ * USDC for every deploy, announcement, gas top-up and relayed claim, and
+ * addresses cost nothing to make, so the global ceiling is what bounds the loss.
+ * Counted in actions, not USDC.
+ */
+const MAINNET_DAILY_LIMIT = 10;
+const MAINNET_GLOBAL_DAILY_LIMIT = 60;
+const mainnetUsage = new Map<string, { day: number; used: number }>();
+let mainnetGlobal = { day: -1, used: 0 };
+
+export function checkMainnetQuota(address: Address, units = 1): void {
+  const day = Math.floor(Date.now() / 86_400_000);
+  if (mainnetGlobal.day !== day) mainnetGlobal = { day, used: 0 };
+  if (mainnetGlobal.used + units > MAINNET_GLOBAL_DAILY_LIMIT) {
+    throw new HttpError(429, 'daily mainnet quota exceeded');
+  }
+  const k = address.toLowerCase();
+  const cur = mainnetUsage.get(k);
+  const used = cur && cur.day === day ? cur.used : 0;
+  if (used + units > MAINNET_DAILY_LIMIT) throw new HttpError(429, 'daily mainnet quota exceeded');
+  mainnetUsage.set(k, { day, used: used + units });
+  mainnetGlobal = { day, used: mainnetGlobal.used + units };
+}
+
 // Drop entries from a previous day so the per-address map does not grow unbounded.
 setInterval(() => {
   const day = Math.floor(Date.now() / 86_400_000);
   for (const [k, v] of usage) if (v.day !== day) usage.delete(k);
+  for (const [k, v] of mainnetUsage) if (v.day !== day) mainnetUsage.delete(k);
 }, 3_600_000).unref?.();

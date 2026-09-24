@@ -3,7 +3,6 @@ import { isAddress, type Address } from 'viem';
 import {
   approveUsdc,
   defineConfig,
-  explorerTxUrl,
   generateClaimCode,
   percentOf,
   recommendTransferMode,
@@ -12,7 +11,7 @@ import {
   sendProtected,
   spendableAfterGas,
 } from '@ctrl-arcz/sdk';
-import { failureText, supportsChain, walletChainName, type Session } from '@ctrl-arcz/demo-kit';
+import { failureText, supportsChain, walletChainName, type Session, txLink } from '@ctrl-arcz/demo-kit';
 import {
   AmountField,
   Button,
@@ -288,7 +287,7 @@ export function SendTab({
         </ul>
 
         <div className="row-between" style={{ marginTop: 16 }}>
-          <a className="row" href={explorerTxUrl(sent.txHash)} target="_blank" rel="noreferrer">
+          <a className="row" href={txLink(sent.txHash, session.chainId)} target="_blank" rel="noreferrer">
             {t('common.viewOnArcScan')} <IconExternal width={14} height={14} />
           </a>
           <Button variant="ghost" onClick={() => setSent(null)}>

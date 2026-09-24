@@ -111,6 +111,11 @@ function cosignApi(env: Record<string, string>): Plugin {
         };
         if (!isSameOrigin(req as never)) return send(403, { error: 'forbidden' });
         const privateKey = env.COSIGNER_PK;
+        // The co-signer reads Arc mainnet history from Alchemy, server-side. Not a
+        // VITE_ variable, so it stays in this process and out of the bundle.
+        if (env.ALCHEMY_API_KEY && !process.env.ALCHEMY_API_KEY) {
+          process.env.ALCHEMY_API_KEY = env.ALCHEMY_API_KEY;
+        }
         if (!privateKey) return send(400, { error: 'no co-signer key configured' });
         try {
           const mod = (await server.ssrLoadModule('@ctrl-arcz/demo-kit/cosign')) as {

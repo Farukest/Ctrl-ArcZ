@@ -11,7 +11,7 @@
  * screen from this one source.
  */
 import type { Address } from 'viem';
-import { readGasBalanceOn, readUsdcOn } from '@ctrl-arcz/demo-kit';
+import { readGasBalanceOn, readUsdcOn, APP_TESTNET } from '@ctrl-arcz/demo-kit';
 import { type CctpChainName, type GatewayChain, gatewayBalance } from '@ctrl-arcz/sdk';
 import { createBalanceStore, useBalance, type Resolved } from './balanceStore.js';
 
@@ -21,7 +21,8 @@ export type GatewayByChain = Partial<Record<GatewayChain, bigint>>;
 
 const gatewayStore = createBalanceStore<{ depositor: Address }, GatewayByChain>({
   keyOf: (a) => a.depositor.toLowerCase(),
-  read: async (a) => (await gatewayBalance({ depositor: a.depositor })).byChain,
+  read: async (a) =>
+    (await gatewayBalance({ depositor: a.depositor, testnet: APP_TESTNET })).byChain,
 });
 
 /** The shared Gateway balances for a depositor: `{ value: byChain, resolved }`. */

@@ -25,6 +25,12 @@ import {
   STEALTH_ANNOUNCER_ADDRESS,
   STEALTH_ANNOUNCER_DEPLOY_BLOCK,
 } from './arcTestnet.js';
+import {
+  ARC_MAINNET_ADDRESSES,
+  ARC_MAINNET_CHAIN_ID,
+  ARC_MAINNET_EXPLORER_URL,
+  ARC_MAINNET_RPC_URLS,
+} from './arcMainnet.js';
 
 /**
  * Where Ctrl+ArcZ is deployed, per chain.
@@ -142,6 +148,33 @@ export interface ChainDeployment {
    * and Snowtrace answers a different API shape behind a key.
    */
   explorerApi?: string;
+
+  /**
+   * Alchemy's network slug (`arc-mainnet`), for a chain whose history is read from
+   * Alchemy's Transfers API because no Blockscout can be.
+   *
+   * Only the slug lives here. The key does not: a server builds the URL from its
+   * own environment, and a browser goes through that server. See
+   * `AlchemyDataProvider`.
+   */
+  alchemyNetwork?: string;
+}
+
+/** Where a chain's transaction history comes from, or undefined where nothing does. */
+export type HistorySource =
+  | { kind: 'blockscout'; apiUrl: string }
+  | { kind: 'alchemy'; network: string };
+
+export function historySourceFor(chainId: number | undefined): HistorySource | undefined {
+  const d = deploymentFor(chainId);
+  if (d?.explorerApi) return { kind: 'blockscout', apiUrl: d.explorerApi };
+  if (d?.alchemyNetwork) return { kind: 'alchemy', network: d.alchemyNetwork };
+  return undefined;
+}
+
+/** Alchemy's URL for a network. Server-side only: it carries the key. */
+export function alchemyRpcUrl(network: string, apiKey: string): string {
+  return `https://${network}.g.alchemy.com/v2/${apiKey}`;
 }
 
 /**
@@ -291,6 +324,37 @@ export const DEPLOYMENTS: Readonly<Record<number, ChainDeployment>> = {
       'https://avalanche-fuji-c-chain-rpc.publicnode.com',
     ],
   }),
+
+  /**
+   * Arc mainnet, deployed 2026-09-24 with `DeployChain.s.sol` in one broadcast and
+   * read back the same hour (`CtrlArcZ.USDC()`, `factory.implementation()`,
+   * `router.PERMIT2()`). Everything testnet Arc has, with two differences:
+   *
+   *   - No `explorerApi`. The explorer's API is permissioned and answers 403, so
+   *     history comes from Alchemy (`alchemyNetwork`), through the server.
+   *   - No `privatePayRouter`, though one was deployed with the rest: Arc funds
+   *     Private Pay through its CallFrom precompile, as testnet Arc does, and the
+   *     router is left unregistered so the two networks take the same path.
+   */
+  [ARC_MAINNET_CHAIN_ID]: {
+    chain: 'Arc',
+    chainId: ARC_MAINNET_CHAIN_ID,
+    usdc: ARC_MAINNET_ADDRESSES.USDC,
+    ctrlArcZ: '0x99880dC312d8e73c331487ae26B5b021857833aE',
+    codeClaimVerifier: '0xe9b49263d3a99836042500a12C2FAA6BA62855e4',
+    spendPolicyFactory: '0x4bC13B65583B5CadD32a2E4246F0A6E2862A4F9a',
+    spendPolicyAccountImpl: '0xcb5bfCb3925c01B8D56EBBD427518469659de75f',
+    stealthAnnouncer: '0x7c22A0b370ec39f201c0A9bdCa6f8C09734DaDcC',
+    ctrlArcZDeployBlock: 22547628n,
+    stealthAnnouncerDeployBlock: 22547628n,
+    // Circle's endpoint refuses more than this per address-filtered query.
+    maxLogRange: 10000n,
+    gasToken: 'usdc',
+    rpcUrls: ARC_MAINNET_RPC_URLS,
+    multicall3From: ARC_MAINNET_ADDRESSES.MULTICALL3_FROM,
+    explorerUrl: ARC_MAINNET_EXPLORER_URL,
+    alchemyNetwork: 'arc-mainnet',
+  },
 };
 
 /**

@@ -6,6 +6,7 @@ import {
   announceArgsFor,
   type ChainDeployment,
   type EphemeralPolicy,
+  isTestnetChain,
 } from '@ctrl-arcz/sdk';
 import { signerFor } from './session.js';
 
@@ -91,6 +92,12 @@ export async function boxExists(
  * anything, with the relayer's money gone.
  */
 export const STEALTH_GAS_TOPUP = parseUnits('0.05', 6);
+/**
+ * The same on Arc mainnet, sized to real money: a sweep there costs about 0.003
+ * USDC at the 20 Gwei floor, so 0.01 covers it three times over and a caller who
+ * drains top-ups drains a fifth of what testnet would hand out.
+ */
+export const STEALTH_GAS_TOPUP_MAINNET = parseUnits('0.01', 6);
 /** Native gas, on chains that bill in their own coin. Generous on a testnet: the
  *  sweep is one transfer, and being short is an address that cannot be emptied. */
 export const STEALTH_NATIVE_TOPUP = parseEther('0.001');
@@ -114,19 +121,20 @@ export async function relayStealthGas(
   const { publicClient, walletClient } = signerFor(chainId, privateKey);
 
   if (deployment.gasToken === 'usdc') {
+    const topup = isTestnetChain(chainId) === false ? STEALTH_GAS_TOPUP_MAINNET : STEALTH_GAS_TOPUP;
     const balance = (await publicClient.readContract({
       address: deployment.usdc,
       abi: erc20Abi,
       functionName: 'balanceOf',
       args: [to],
     })) as bigint;
-    if (balance >= STEALTH_GAS_TOPUP) return { txHash: null, funded: false };
+    if (balance >= topup) return { txHash: null, funded: false };
 
     const txHash = await walletClient.writeContract({
       address: deployment.usdc,
       abi: erc20Abi,
       functionName: 'transfer',
-      args: [to, STEALTH_GAS_TOPUP],
+      args: [to, topup],
       account: walletClient.account!,
       chain: walletClient.chain ?? null,
     });

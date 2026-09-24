@@ -1,11 +1,10 @@
 import type { Hex } from 'viem';
 import {
-  ARC_TESTNET_CHAIN_ID,
   deploymentFor,
   explorerAnnouncements,
   type RawAnnouncement,
 } from '@ctrl-arcz/sdk';
-import { bridgeClients, getPublicClient } from '@ctrl-arcz/demo-kit';
+import { bridgeClients, getPublicClient, APP_ARC_CHAIN_ID } from '@ctrl-arcz/demo-kit';
 
 /**
  * A read client for one chain, without a session to hand.
@@ -15,7 +14,7 @@ import { bridgeClients, getPublicClient } from '@ctrl-arcz/demo-kit';
  * own RPCs; elsewhere the wallet's provider answers for the chain it is on.
  */
 function readClientForChain(chainId: number) {
-  return chainId === ARC_TESTNET_CHAIN_ID
+  return chainId === APP_ARC_CHAIN_ID
     ? getPublicClient()
     : bridgeClients(chainId, '0x0000000000000000000000000000000000000000').publicClient;
 }

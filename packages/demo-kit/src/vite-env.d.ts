@@ -6,6 +6,8 @@ interface ImportMeta {
     pattern: string,
     options?: { eager?: boolean; query?: string; import?: string },
   ) => Record<string, unknown>;
+  /** Vite's build-time env. Absent under plain Node, hence optional. */
+  readonly env?: { readonly VITE_NETWORK?: string; readonly [key: string]: unknown };
 }
 
 declare module '*.svg?raw' {

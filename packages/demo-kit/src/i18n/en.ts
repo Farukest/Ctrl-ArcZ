@@ -94,6 +94,7 @@ export const en = {
   'footer.soon': 'Coming soon',
   // Said once, at the bottom, in the one place a person looks for the catch.
   'footer.note': 'Testnet build. Nothing here moves real money.',
+  'footer.noteMainnet': 'Mainnet. Payments here move real USDC.',
   'footer.copyright': '© {year} Ctrl+ArcZ',
 
   'mode.send': 'Send',
@@ -215,6 +216,7 @@ export const en = {
   'sub.pullNow': 'Pull now',
   'sub.tooSoon': 'Not yet',
   'sub.cancel': 'Cancel',
+  'sub.withdraw': 'Withdraw',
   'sub.d.account': 'Box address',
   'sub.d.merchant': 'Merchant',
   'sub.d.perPull': 'Per pull',

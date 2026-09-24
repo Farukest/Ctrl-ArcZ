@@ -10,12 +10,9 @@ import {
 } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import {
-  ARC_TESTNET_CHAIN_ID,
   cctpChainByChainId,
   deploymentFor,
   isGatewayChain,
-  SIGNING_RPC_URLS,
-  arcTestnet,
   readAccount,
   submitPull,
   sweepToVault,
@@ -44,6 +41,9 @@ import {
   switchWalletTo,
   useWalletChain,
   type Session,
+  APP_ARC,
+  APP_ARC_CHAIN_ID,
+  APP_ARC_NAME,
 } from '@ctrl-arcz/demo-kit';
 import { getStealthKeys } from '../lib/stealthKeys.js';
 import { hrefFor, type ActivityView } from '../lib/route.js';
@@ -264,7 +264,7 @@ export function SubscriptionsTab({
     options: chainsFor('gatewayDeposit') as readonly GatewayChain[],
     chainIdOf: (name) => CCTP_CHAINS[name].chainId,
     walletChainId: session.chainId,
-    fallback: 'Arc_Testnet',
+    fallback: APP_ARC_NAME,
     switchWallet: (chainId, name) =>
       switchWalletTo(chainId, chainLabel(name)).catch((e: unknown) => {
         toast.fail(e);
@@ -316,7 +316,7 @@ export function SubscriptionsTab({
    * absent.
    */
   const boxClient = () =>
-    session.chainId === ARC_TESTNET_CHAIN_ID
+    session.chainId === APP_ARC_CHAIN_ID
       ? getPublicClient()
       : bridgeClients(session.chainId, session.address as Address).publicClient;
 
@@ -663,7 +663,12 @@ export function SubscriptionsTab({
       });
       setSpotlight(run.id);
       step('machine');
-      const pre = await cosigner.precheck({ owner, target: to, amount: perPullAmt });
+      const pre = await cosigner.precheck({
+        owner,
+        target: to,
+        amount: perPullAmt,
+        chainId: session.chainId,
+      });
       if (!pre.approved) {
         setVeto(pre.reason);
         setPhase('vetoed');
@@ -862,8 +867,8 @@ export function SubscriptionsTab({
          */
         const stealthWallet = createWalletClient({
           account: stealthAccount,
-          chain: arcTestnet,
-          transport: fallback(SIGNING_RPC_URLS.map((u) => http(u))),
+          chain: APP_ARC.chain,
+          transport: fallback(APP_ARC.signingRpcs.map((u) => http(u))),
         });
         await sweepToVault(
           { publicClient, walletClient: stealthWallet },
@@ -1110,7 +1115,7 @@ export function SubscriptionsTab({
             <AmountField
               value={perPull}
               onChange={setPerPull}
-              chain="Arc_Testnet"
+              chain={APP_ARC_NAME}
               label={t('sub.perPull')}
               boxed
               data-testid="sub-perpull"
@@ -1318,6 +1323,7 @@ export function SubscriptionsTab({
             rowKey={(s) => s.account}
             searchPlaceholder={t('sub.searchPh')}
             emptyText={t('sub.empty')}
+            unfilteredCount={subs?.length ?? 0}
             noMatchText={t('sub.noMatch')}
             pageSize={PAGE_SIZE}
             renderRow={(s) => {
@@ -1433,6 +1439,22 @@ export function SubscriptionsTab({
                           {t('sub.cancel')}
                         </Button>
                       </>
+                    )}
+                    {/* An expired box can still hold money nobody will pull. The
+                        vault may always sweep it home, and without this button
+                        there was no way to: the only sweep was behind Cancel,
+                        which is offered while a box is active. */}
+                    {s.status === 'expired' && s.balance > 0n && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={locked}
+                        loading={mine && busy?.action === 'cancel'}
+                        onClick={() => void guard(() => cancel(s))}
+                        data-testid="sub-withdraw"
+                      >
+                        {t('sub.withdraw')}
+                      </Button>
                     )}
                   </HistoryRow.Actions>
                   {open && (

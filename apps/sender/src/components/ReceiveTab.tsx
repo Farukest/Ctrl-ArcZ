@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import QRCode from 'qrcode';
 import { type Hex } from 'viem';
-import { getPublicClient, supportsChain, type Session } from '@ctrl-arcz/demo-kit';
+import { getPublicClient, supportsChain, type Session, txLink } from '@ctrl-arcz/demo-kit';
 import {
   Button,
   Card,
@@ -17,7 +17,6 @@ import {
 } from '@ctrl-arcz/demo-kit/ui';
 import {
   claim,
-  explorerTxUrl,
   hashClaim,
   normaliseSecret,
   saltFromSecret,
@@ -58,6 +57,7 @@ async function gaslessClaimViaServer(
     transferId: transferId.toString(),
     code,
     salt,
+    chainId: session.chainId,
   });
   if (data.ok && data.txHash) return data.txHash as Hex;
   // A refused claim comes back as a typed reason, not an HTTP error, so it is
@@ -252,7 +252,7 @@ export function ReceiveTab({
                 })
               : t('claim.settledBody')}
           </p>
-          <a className="row" href={explorerTxUrl(claimed.tx)} target="_blank" rel="noreferrer">
+          <a className="row" href={txLink(claimed.tx, session.chainId)} target="_blank" rel="noreferrer">
             {t('common.viewOnArcScan')} <IconExternal width={14} height={14} />
           </a>
           <div style={{ marginTop: 12 }}>

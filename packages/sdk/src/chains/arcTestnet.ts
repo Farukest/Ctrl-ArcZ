@@ -9,6 +9,7 @@
  */
 import { arcTestnet as viemArcTestnet } from 'viem/chains';
 import { CCTP_CHAINS, type CctpChainName } from '../bridge/cctp.js';
+import { ARC_MAINNET_ADDRESSES, ARC_MAINNET_CHAIN_ID } from './arcMainnet.js';
 
 /** viem ships Arc Testnet as a built-in chain (requires viem >= 2.38). */
 export const arcTestnet = viemArcTestnet;
@@ -223,6 +224,47 @@ export const TOKENS_BY_CHAIN: Readonly<Record<number, readonly TokenInfo[]>> = {
    * is not a token there.
    */
   ...usdcOnly(['Base_Sepolia', 'Ethereum_Sepolia', 'Arbitrum_Sepolia', 'Avalanche_Fuji']),
+
+  /*
+   * Arc mainnet. The same four tokens, at mainnet's addresses: only USDC shares its
+   * address with testnet. Each was read back on 2026-09-24 (`symbol()`, `decimals()`)
+   * before being written here. USYC stays restricted for the same reason as above.
+   */
+  [ARC_MAINNET_CHAIN_ID]: [
+    {
+      symbol: 'USDC',
+      name: 'USD Coin',
+      address: ARC_MAINNET_ADDRESSES.USDC,
+      decimals: 6,
+      searchNames: ['dollar', 'usd'],
+      tint: '#2775ca',
+    },
+    {
+      symbol: 'EURC',
+      name: 'Euro Coin',
+      address: ARC_MAINNET_ADDRESSES.EURC,
+      decimals: 6,
+      searchNames: ['euro', 'eur'],
+      tint: '#1a4fa0',
+    },
+    {
+      symbol: 'cirBTC',
+      name: 'Circle Wrapped BTC',
+      address: ARC_MAINNET_ADDRESSES.CIRBTC,
+      decimals: 8,
+      searchNames: ['bitcoin', 'btc', 'wrapped'],
+      tint: '#f2a33c',
+    },
+    {
+      symbol: 'USYC',
+      name: 'US Yield Coin',
+      address: ARC_MAINNET_ADDRESSES.USYC,
+      decimals: 6,
+      searchNames: ['yield', 'treasury', 'money market'],
+      tint: '#3f8f6b',
+      restricted: { reason: 'allowlist' },
+    },
+  ],
 };
 
 /** USDC as this app describes it, on chains where that is all we have verified. */

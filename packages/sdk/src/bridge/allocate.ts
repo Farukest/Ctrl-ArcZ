@@ -49,6 +49,25 @@ export const GATEWAY_BASE_FEE: Readonly<Record<GatewayChain, bigint>> = {
   // test against. Circle's fee reference gives HyperEVM $0.05.
   HyperEVM_Testnet: 50_000n,
   Ethereum_Sepolia: 1_000_000n,
+
+  /*
+   * Mainnet, from Circle's Gateway fee reference (circle/gateway/references/fees.md,
+   * read 2026-09-24). The same figures as the testnets, chain for chain. Mainnet
+   * also charges 0.5 bps of the amount on a crosschain transfer; that part is
+   * proportional and comes back from `/v1/estimate` like the rest of the signed fee.
+   */
+  Unichain: 1_000n,
+  Sei: 1_000n,
+  Optimism: 1_500n,
+  Polygon: 1_500n,
+  Arc: 3_500n,
+  Arbitrum: 10_000n,
+  Base: 10_000n,
+  Sonic: 10_000n,
+  World_Chain: 10_000n,
+  Avalanche: 20_000n,
+  HyperEVM: 50_000n,
+  Ethereum: 1_000_000n,
 };
 
 /**

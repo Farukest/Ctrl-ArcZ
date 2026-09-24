@@ -3,12 +3,12 @@ import type { Address } from 'viem';
 import { getPublicClient, type Session } from '@ctrl-arcz/demo-kit';
 import {
   ctrlArcZAbi,
-  CTRL_ARCZ_ADDRESS,
   getLogsChunked,
   getTransfer,
   isClaimable,
   type ProtectedTransfer,
 } from '@ctrl-arcz/sdk';
+import { appCtrlArcZ, appScanStart } from './chainRead.js';
 
 export interface PendingClaim {
   transferId: bigint;
@@ -66,10 +66,10 @@ export function usePendingClaims(session: Session | null): {
       const latest = await client.getBlockNumber();
       const from =
         cursor.current ??
-        (latest > FIRST_SCAN_LOOKBACK ? latest - FIRST_SCAN_LOOKBACK : 0n);
+        appScanStart(latest, FIRST_SCAN_LOOKBACK);
       if (from <= latest) {
         const logs = await getLogsChunked<{ to?: Address; transferId?: bigint }>(client, {
-          address: CTRL_ARCZ_ADDRESS,
+          address: appCtrlArcZ(),
           abi: ctrlArcZAbi,
           eventName: 'TransferCreated',
           args: { to: session.address as Address },

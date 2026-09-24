@@ -103,6 +103,14 @@ export interface HistoryListProps<T> {
    */
   filters?: ReactNode;
   /**
+   * How many items there are before `filters` narrowed them. When those chips
+   * leave nothing, the list is not empty, the selection is: it keeps its chrome
+   * and says "no match" so the chips stay on screen to be changed back. Without
+   * this, a subscriptions list whose only boxes had expired showed "No
+   * subscriptions yet" under the default Active chip, and hid the chips with it.
+   */
+  unfilteredCount?: number;
+  /**
    * Ties this list to its loading placeholder, so the placeholder can be exactly
    * as tall as this list settled at last time. See reservedHeight.ts.
    */
@@ -124,6 +132,7 @@ export function HistoryList<T>({
   resetKey,
   dateDirection = 'past',
   filters,
+  unfilteredCount,
   reserveId,
   ...rest
 }: HistoryListProps<T>) {
@@ -195,7 +204,7 @@ export function HistoryList<T>({
   // Recorded too, and this is the case that mattered most: a wallet with nothing
   // received reserved five rows and then collapsed by 763px. An empty list is a
   // height like any other, and next time it is the height that gets reserved.
-  if (items.length === 0)
+  if (items.length === 0 && !(unfilteredCount && unfilteredCount > 0))
     return (
       <p className="muted" ref={record as React.RefObject<HTMLParagraphElement>}>
         {emptyText}

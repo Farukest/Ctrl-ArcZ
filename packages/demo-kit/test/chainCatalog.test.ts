@@ -79,15 +79,19 @@ describe('chainsFor', () => {
      * deployment registry would refuse fifteen of the twenty for a reason that
      * does not apply to them.
      */
-    expect(chainsFor('cctpSource')).toHaveLength(Object.keys(CCTP_CHAINS).length);
-    expect(chainsFor('cctpDestination')).toHaveLength(Object.keys(CCTP_CHAINS).length);
+    // Every chain on this build's network (testnet here, see vitest.config.ts).
+    const onNetwork = Object.values(CCTP_CHAINS).filter((c) => c.testnet).length;
+    expect(chainsFor('cctpSource')).toHaveLength(onNetwork);
+    expect(chainsFor('cctpDestination')).toHaveLength(onNetwork);
     expect(chainsFor('cctpSource').length).toBeGreaterThan(deployedChainIds().length);
   });
 
   it('offers exactly the chains Circle runs Gateway on', () => {
     // Not a copy of that list: the same list. The table this replaced had five.
     for (const purpose of ['gatewayDeposit', 'gatewaySource', 'gatewayDestination'] as const) {
-      expect([...chainsFor(purpose)].sort()).toEqual([...GATEWAY_CHAIN_NAMES].sort());
+      expect([...chainsFor(purpose)].sort()).toEqual(
+        [...GATEWAY_CHAIN_NAMES].filter((n) => CCTP_CHAINS[n].testnet).sort(),
+      );
     }
     // The count is deliberately not written down. It was eleven until Circle added
     // HyperEVM, and a test asserting eleven fails for the wrong reason: the list is

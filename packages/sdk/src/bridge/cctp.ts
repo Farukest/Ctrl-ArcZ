@@ -36,11 +36,28 @@ import { GENERATED_CHAINS, type GeneratedChain } from '../chains/circleChains.ge
  *   - https://docs.arc.io/circle/cctp/quickstarts/transfer-usdc-ethereum-to-arc
  */
 
-/** CCTP v2 TokenMessenger. One address on every testnet; Circle deploys with CREATE2. */
+/**
+ * CCTP v2 TokenMessenger on the testnets.
+ *
+ * Kept for callers that imported it. The bridge itself reads each chain's own
+ * `tokenMessenger`, because the address is not the same on mainnet (and not even
+ * the same on every mainnet: Edge's differs).
+ */
 export const CCTP_TOKEN_MESSENGER = '0x8FE6B999Dc680CcFDD5Bf7EB0974218be2542DAA' as const;
 
 /** Circle's testnet attestation service. */
 export const IRIS_TESTNET = 'https://iris-api-sandbox.circle.com' as const;
+
+/** Circle's mainnet attestation service. */
+export const IRIS_MAINNET = 'https://iris-api.circle.com' as const;
+
+/**
+ * The attestation service for a network. The two are separate services that know
+ * nothing of each other's burns, so asking the wrong one answers "not found" forever.
+ */
+export function irisApiFor(testnet: boolean): string {
+  return testnet ? IRIS_TESTNET : IRIS_MAINNET;
+}
 
 /**
  * Tells Circle to submit the destination mint itself. It is the ASCII bytes of
@@ -62,8 +79,9 @@ const FAST_FINALITY = 1000;
  */
 const ANY_CALLER = `0x${'00'.repeat(32)}` as Hex;
 
-/** Arc's chain id, spelled out here because `arcTestnet.ts` imports this file. */
-const ARC_CHAIN_ID = 5042002;
+/** Arc's chain ids, testnet and mainnet, spelled out here because `arcTestnet.ts`
+ *  imports this file. */
+const ARC_CHAIN_IDS: readonly number[] = [5042002, 5042];
 
 /** Chains this can bridge between, with the three facts the burn needs. */
 export interface CctpChain {
@@ -73,6 +91,10 @@ export interface CctpChain {
   chainId: number;
   /** USDC on that chain. */
   usdc: Address;
+  /** Which network the chain is on. A route never crosses from one to the other. */
+  testnet: boolean;
+  /** CCTP v2 TokenMessenger on that chain, which the burn is sent to. */
+  tokenMessenger: Address;
   /**
    * Set where gas is paid in the same USDC being bridged, which is Arc and nowhere
    * else here. It changes the affordability question rather than decorating it: on
@@ -107,11 +129,13 @@ export const CCTP_CHAINS = Object.fromEntries(
       domain: c.domain,
       chainId: c.chainId,
       usdc: c.usdc as Address,
+      testnet: c.testnet,
+      tokenMessenger: c.tokenMessenger as Address,
       /*
        * Ours, not Circle's: Arc is the only chain that bills gas in the token being
        * moved. Keyed by chain id rather than by name so an alias cannot lose it.
        */
-      ...(c.chainId === ARC_CHAIN_ID ? { gasToken: 'usdc' as const } : {}),
+      ...(ARC_CHAIN_IDS.includes(c.chainId) ? { gasToken: 'usdc' as const } : {}),
     },
   ]),
 ) as Record<CctpChainName, CctpChain>;
@@ -129,6 +153,27 @@ export type CctpChainName = (typeof GENERATED_CHAINS)[number]['name'];
 /** `Base_Sepolia` reads badly in a dropdown. */
 export function chainLabel(name: CctpChainName): string {
   return name.replace(/_/g, ' ');
+}
+
+/**
+ * Refuse a route that crosses from a testnet to a mainnet, or back.
+ *
+ * Circle runs the two as separate systems: a testnet burn is never attested by the
+ * mainnet service. Signing one would destroy the source funds for good, so this is
+ * checked before anything is quoted or signed.
+ */
+export function assertSameNetwork(from: CctpChainName, to: CctpChainName): void {
+  if (CCTP_CHAINS[from].testnet !== CCTP_CHAINS[to].testnet) {
+    throw new Error(
+      `${chainLabel(from)} and ${chainLabel(to)} are on different networks (testnet and mainnet). USDC cannot move between them.`,
+    );
+  }
+}
+
+/** Whether a chain Circle serves is a testnet. Undefined for a chain it does not. */
+export function isTestnetChain(chainId: number): boolean | undefined {
+  const name = cctpChainByChainId(chainId);
+  return name === undefined ? undefined : CCTP_CHAINS[name].testnet;
 }
 
 /** The generated row for a chain, which the lookups below all read. */
@@ -350,11 +395,12 @@ export async function quoteBridge(params: {
   amount: bigint;
   fetchImpl?: typeof fetch;
 }): Promise<BridgeQuote> {
-  const src = CCTP_CHAINS[params.from];
-  const dst = CCTP_CHAINS[params.to];
+  const src: CctpChain = CCTP_CHAINS[params.from];
+  const dst: CctpChain = CCTP_CHAINS[params.to];
+  assertSameNetwork(params.from, params.to);
   const doFetch = params.fetchImpl ?? fetch;
   const res = await doFetch(
-    `${IRIS_TESTNET}/v2/burn/USDC/fees/${src.domain}/${dst.domain}?forward=true`,
+    `${irisApiFor(src.testnet)}/v2/burn/USDC/fees/${src.domain}/${dst.domain}?forward=true`,
     { method: 'GET', headers: { 'Content-Type': 'application/json' } },
   );
   if (!res.ok) throw new Error(`Could not price this transfer (${res.status}).`);
@@ -436,6 +482,7 @@ export async function bridgeFromWallet(
   // `gasToken` would only be visible on the one chain that declares it.
   const src: CctpChain = CCTP_CHAINS[params.from];
   const dst: CctpChain = CCTP_CHAINS[params.to];
+  assertSameNetwork(params.from, params.to);
   const recipient = params.recipient ?? account.address;
 
   // A wallet on the wrong network would read a balance from the wrong USDC contract
@@ -471,7 +518,7 @@ export async function bridgeFromWallet(
     address: src.usdc,
     abi: erc20Abi,
     functionName: 'allowance',
-    args: [account.address, CCTP_TOKEN_MESSENGER],
+    args: [account.address, src.tokenMessenger],
   })) as bigint;
 
   const needsApproval = allowance < quote.total;
@@ -490,6 +537,7 @@ export async function bridgeFromWallet(
   const gasCost = await estimateBridgeGas(clients.publicClient, {
     account: account.address,
     usdc: src.usdc,
+    spender: src.tokenMessenger,
     needsApproval,
     total: quote.total,
   });
@@ -528,7 +576,7 @@ export async function bridgeFromWallet(
         address: src.usdc,
         abi: erc20Abi,
         functionName: 'approve',
-        args: [CCTP_TOKEN_MESSENGER, quote.total],
+        args: [src.tokenMessenger, quote.total],
         account,
         chain: clients.walletClient.chain ?? null,
       }),
@@ -541,7 +589,7 @@ export async function bridgeFromWallet(
 
   const burnTxHash = await queued(account.address, src.chainId, () =>
     clients.walletClient.sendTransaction({
-      to: CCTP_TOKEN_MESSENGER,
+      to: src.tokenMessenger,
       data: encodeFunctionData({
         abi: tokenMessengerAbi,
         functionName: 'depositForBurnWithHook',
@@ -566,6 +614,7 @@ export async function bridgeFromWallet(
   params.onStep?.('attest', burnTxHash);
   const forwardTxHash = await waitForForwardedMint({
     sourceDomain: src.domain,
+    testnet: src.testnet,
     burnTxHash,
     ...(params.timeoutMs != null ? { timeoutMs: params.timeoutMs } : {}),
     ...(params.fetchImpl ? { fetchImpl: params.fetchImpl } : {}),
@@ -650,7 +699,13 @@ const APPROVE_GAS_CEILING = 80_000n;
  */
 async function estimateBridgeGas(
   publicClient: PublicClient,
-  params: { account: Address; usdc: Address; needsApproval: boolean; total: bigint },
+  params: {
+    account: Address;
+    usdc: Address;
+    spender: Address;
+    needsApproval: boolean;
+    total: bigint;
+  },
 ): Promise<bigint> {
   let approveGas = 0n;
   if (params.needsApproval) {
@@ -659,7 +714,7 @@ async function estimateBridgeGas(
         address: params.usdc,
         abi: erc20Abi,
         functionName: 'approve',
-        args: [CCTP_TOKEN_MESSENGER, params.total],
+        args: [params.spender, params.total],
         account: params.account,
       });
     } catch {
@@ -694,12 +749,17 @@ async function estimateBridgeGas(
 export async function findForwardedMint(params: {
   sourceDomain: number;
   burnTxHash: Hex;
+  /**
+   * Which network the burn was on. Defaults to testnet for callers written before
+   * mainnet; a mainnet burn asked of the testnet service is never found.
+   */
+  testnet?: boolean;
   fetchImpl?: typeof fetch;
 }): Promise<Hex | undefined> {
   const doFetch = params.fetchImpl ?? fetch;
   try {
     const res = await doFetch(
-      `${IRIS_TESTNET}/v2/messages/${params.sourceDomain}?transactionHash=${params.burnTxHash}`,
+      `${irisApiFor(params.testnet ?? true)}/v2/messages/${params.sourceDomain}?transactionHash=${params.burnTxHash}`,
     );
     if (!res.ok) return undefined;
     const body = (await res.json()) as { messages?: { forwardTxHash?: string }[] };
@@ -721,6 +781,7 @@ export async function findForwardedMint(params: {
 export async function waitForForwardedMint(params: {
   sourceDomain: number;
   burnTxHash: Hex;
+  testnet?: boolean;
   timeoutMs?: number;
   fetchImpl?: typeof fetch;
 }): Promise<Hex | undefined> {

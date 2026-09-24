@@ -2,16 +2,15 @@ import { useMemo, useState } from 'react';
 import { parseUnits, isAddress, type Address, type Hex } from 'viem';
 import {
   ADDRESSES,
-  SPEND_POLICY_FACTORY_ADDRESS,
+  deploymentFor,
   settlePrivatePaymentBatched,
   RemoteCoSigner,
   MODE_PUSH,
-  explorerTxUrl,
   percentOf,
   spendableAfterGas,
   PAY_GAS_LIMIT,
 } from '@ctrl-arcz/sdk';
-import { supportsChain, useToken, type Session } from '@ctrl-arcz/demo-kit';
+import { supportsChain, useToken, type Session, txLink } from '@ctrl-arcz/demo-kit';
 import {
   AmountField,
   Button,
@@ -202,9 +201,13 @@ export function PrivatePayTab({
       // wallet signature, and nothing exists on chain until the transaction below, so
       // a veto here stops the payment just as early. One signature, one transaction.
       setPhase('machine');
+      // The factory on the chain the wallet is paying from, never the SDK's built-in
+      // one (testnet Arc's, which has no code anywhere else).
+      const factory = deploymentFor(session.chainId)?.spendPolicyFactory;
+      if (!factory) throw new Error(`no deployment on chain ${session.chainId}`);
       const outcome = await settlePrivatePaymentBatched(
         clients,
-        SPEND_POLICY_FACTORY_ADDRESS,
+        factory,
         salt,
         {
           token: token.address,
@@ -422,7 +425,7 @@ export function PrivatePayTab({
           <div className="row-between" style={{ marginTop: 16 }}>
             <a
               className="row"
-              href={explorerTxUrl(success.txHash)}
+              href={txLink(success.txHash, session.chainId)}
               target="_blank"
               rel="noreferrer"
             >

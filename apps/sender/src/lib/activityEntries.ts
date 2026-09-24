@@ -16,7 +16,6 @@ import {
   chainExplorerTxUrl,
   chainLabel,
   deploymentFor,
-  explorerTxUrl,
   type CctpChainName,
   type HistoryEntry,
   type ProtectedTransfer,
@@ -31,6 +30,7 @@ import {
   type ActivityStep,
   type ActivityTone,
   type BridgeEngine,
+  txLink,
 } from '@ctrl-arcz/demo-kit';
 import { failureNote, isStalled } from './activity.js';
 
@@ -149,7 +149,7 @@ export function sentEntries(rows: readonly SentRow[], t: T): ActivityEntry[] {
                 display: short(stored.txHash),
                 copy: true,
                 mono: true,
-                href: explorerTxUrl(stored.txHash),
+                href: txLink(stored.txHash),
               },
             ]
           : []),

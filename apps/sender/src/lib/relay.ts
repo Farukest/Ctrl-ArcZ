@@ -1,7 +1,6 @@
 import type { Address, Hex } from 'viem';
 import { deploymentFor, predictEphemeral, type EphemeralPolicy } from '@ctrl-arcz/sdk';
-import { bridgeClients, getPublicClient, type Session } from '@ctrl-arcz/demo-kit';
-import { ARC_TESTNET_CHAIN_ID } from '@ctrl-arcz/sdk';
+import { bridgeClients, getPublicClient, type Session, APP_ARC_CHAIN_ID } from '@ctrl-arcz/demo-kit';
 import { signedPost } from './signedPost.js';
 
 /**
@@ -33,7 +32,7 @@ import { signedPost } from './signedPost.js';
  * a prediction from the wrong factory and reject every honest deploy.
  */
 function clientOn(session: Session) {
-  return session.chainId === ARC_TESTNET_CHAIN_ID
+  return session.chainId === APP_ARC_CHAIN_ID
     ? getPublicClient()
     : bridgeClients(session.chainId, session.address).publicClient;
 }

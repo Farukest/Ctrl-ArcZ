@@ -9,6 +9,7 @@ import {
   IconSlides,
 } from './icons.js';
 import { useT } from '../i18n/context.js';
+import { APP_TESTNET } from '../network.js';
 
 /**
  * Where the project lives outside this page: the docs, the deck, the source, the
@@ -137,7 +138,7 @@ export function SiteFooter({ version }: { version?: string }) {
           maintained.
         */}
         <div className="sitefooter__bottom">
-          <span className="sitefooter__note">{t('footer.note')}</span>
+          <span className="sitefooter__note">{t(APP_TESTNET ? 'footer.note' : 'footer.noteMainnet')}</span>
           <span className="sitefooter__legal">
             {t('footer.copyright', { year: String(new Date().getFullYear()) })}
             {version ? <span className="sitefooter__build">{version}</span> : null}

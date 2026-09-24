@@ -45,7 +45,7 @@ const q = (s) => `'${s}'`;
 const out = [];
 
 out.push(`/**`);
-out.push(` * Circle's testnets, generated. Do not edit.`);
+out.push(` * Circle's CCTP chains, testnets and mainnets, generated. Do not edit.`);
 out.push(` *`);
 out.push(` * Written by \`scripts/generate-chains.mjs\` out of \`@circle-fin/bridge-kit\`, which`);
 out.push(` * is the same table Circle's own App Kit answers \`getSupportedChains\` from. Run the`);
@@ -55,18 +55,27 @@ out.push(` *`);
 out.push(` * Generated from @circle-fin/bridge-kit@${kitVersion}.`);
 out.push(` */`);
 out.push(``);
-out.push(`/** One of Circle's testnets, as much of it as this app has any use for. */`);
+out.push(`/** One of Circle's chains, as much of it as this app has any use for. */`);
 out.push(`export interface GeneratedChain {`);
 out.push(`  /** This project's name for it, which is Circle's except for three aliases. */`);
 out.push(`  readonly name: string;`);
 out.push(`  /** Circle's own name, where it differs. Undefined when the two agree. */`);
 out.push(`  readonly circleName?: string;`);
+out.push(`  /** Which network it belongs to. Testnet and mainnet rows never mix in one flow. */`);
+out.push(`  readonly testnet: boolean;`);
 out.push(`  /** CCTP domain id. Not a chain id; the two are unrelated numbers. */`);
 out.push(`  readonly domain: number;`);
 out.push(`  readonly chainId: number;`);
 out.push('  readonly usdc: `0x${string}`;');
+out.push(`  /** CCTP v2 TokenMessenger, which the burn is sent to. */`);
+out.push('  readonly tokenMessenger: `0x${string}`;');
+out.push(`  /** CCTP v2 MessageTransmitter, which the mint is received by. */`);
+out.push('  readonly messageTransmitter: `0x${string}`;');
 out.push(`  /** True where Circle runs Gateway, which is a smaller set than CCTP. */`);
 out.push(`  readonly gateway: boolean;`);
+out.push(`  /** Gateway's wallet and minter, present exactly when \`gateway\` is. */`);
+out.push('  readonly gatewayWallet?: `0x${string}`;');
+out.push('  readonly gatewayMinter?: `0x${string}`;');
 out.push(`  readonly nativeCurrency: {`);
 out.push(`    readonly name: string;`);
 out.push(`    readonly symbol: string;`);
@@ -91,10 +100,15 @@ for (const c of chains) {
   out.push(`  {`);
   out.push(`    name: ${q(c.name)},`);
   if (c.circleName) out.push(`    circleName: ${q(c.circleName)},`);
+  out.push(`    testnet: ${c.testnet},`);
   out.push(`    domain: ${c.domain},`);
   out.push(`    chainId: ${c.chainId},`);
   out.push(`    usdc: ${q(c.usdc)},`);
+  out.push(`    tokenMessenger: ${q(c.tokenMessenger)},`);
+  out.push(`    messageTransmitter: ${q(c.messageTransmitter)},`);
   out.push(`    gateway: ${c.gateway},`);
+  if (c.gatewayWallet) out.push(`    gatewayWallet: ${q(c.gatewayWallet)},`);
+  if (c.gatewayMinter) out.push(`    gatewayMinter: ${q(c.gatewayMinter)},`);
   out.push(
     `    nativeCurrency: { name: ${q(c.nativeCurrency.name)}, symbol: ${q(
       c.nativeCurrency.symbol,

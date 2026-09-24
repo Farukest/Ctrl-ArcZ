@@ -30,6 +30,8 @@ import {
   destinationChain,
   switchWalletTo,
   useWalletChain,
+  APP_ARC_NAME,
+  APP_TESTNET,
 } from '@ctrl-arcz/demo-kit';
 import { hrefFor, hrefWith, pushWith, readRoute, type ActivityView } from '../lib/route.js';
 import {
@@ -215,7 +217,7 @@ export function BridgeTab({
     options: engineChains,
     chainIdOf: (name) => CCTP_CHAINS[name].chainId,
     walletChainId: session.chainId,
-    fallback: 'Arc_Testnet',
+    fallback: APP_ARC_NAME,
     switchWallet: (chainId, name) =>
       switchWalletTo(chainId, labelFor(name)).catch((e: unknown) => {
         toast.fail(e);
@@ -244,8 +246,8 @@ export function BridgeTab({
    */
   const to =
     engine === 'gateway'
-      ? ((toChoice && engineChains.includes(toChoice) ? toChoice : 'Arc_Testnet') as CctpChainName)
-      : destinationChain(engineChains, from, toChoice, 'Arc_Testnet');
+      ? ((toChoice && engineChains.includes(toChoice) ? toChoice : APP_ARC_NAME) as CctpChainName)
+      : destinationChain(engineChains, from, toChoice, APP_ARC_NAME);
   /**
    * Per chain, because that is what a transfer actually spends. Showing only the
    * total would tell someone with money on Arc that they can send from Base.
@@ -293,7 +295,7 @@ export function BridgeTab({
    * who only ever sends from one place never learns that any of this exists.
    */
   const [gwSources, setGwSources] = useState<GatewaySource[]>(() => [
-    { chain: (isGatewayChain(from) ? from : 'Arc_Testnet') as GatewayChain, amount: '' },
+    { chain: (isGatewayChain(from) ? from : APP_ARC_NAME) as GatewayChain, amount: '' },
   ]);
   const [depositing, setDepositing] = useState(false);
   /**
@@ -864,7 +866,10 @@ export function BridgeTab({
            */
           if (b.state === 'returning') {
             if (b.returnBaseline == null) continue;
-            const bal = await gatewayBalance({ depositor: session.address }).catch(() => null);
+            const bal = await gatewayBalance({
+              depositor: session.address,
+              testnet: APP_TESTNET,
+            }).catch(() => null);
             const back = bal?.byChain[b.from as GatewayChain];
             if (!live || back == null) continue;
             /**
@@ -885,7 +890,7 @@ export function BridgeTab({
           }
 
           // Gateway's receipt is the transferId, and Circle answers on it forever.
-          const status = await findGatewayMint({ transferId: b.id });
+          const status = await findGatewayMint({ transferId: b.id, testnet: APP_TESTNET });
           if (!live || status.state === 'pending') continue;
 
           if (status.state === 'done') {
@@ -926,6 +931,7 @@ export function BridgeTab({
         if (!burnTxHash || !source) continue;
         const forward = await findForwardedMint({
           sourceDomain: source.domain,
+          testnet: source.testnet,
           burnTxHash: burnTxHash as `0x${string}`,
         });
         if (!live || !forward) continue;

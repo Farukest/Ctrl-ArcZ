@@ -27,6 +27,14 @@ export interface CheckOptions {
    * indexer list is supplied). Undefined scans from the deploy block.
    */
   verifiedRecipientsLookbackBlocks?: number;
+  /**
+   * The block `contractAddress` was deployed in. Give it whenever the contract is
+   * not the SDK's built-in one: the fallback scan otherwise starts at testnet
+   * Arc's deploy block, which on any other chain is simply the wrong number. With
+   * it, a lookback window that reaches back past the deployment is a complete scan,
+   * not a partial one -- which is the whole history of a young deployment.
+   */
+  contractDeployBlock?: bigint;
 }
 
 /**
@@ -135,11 +143,15 @@ async function readVerifiedRecipients(
     // Chunked, and from the deploy block by default — Arc caps eth_getLogs at 10k
     // blocks and rejects a from-0 query. A lookback bound trims the scan when there
     // is no indexer, and a bounded scan is by definition incomplete.
-    let fromBlock: bigint | undefined;
+    let fromBlock: bigint | undefined = options.contractDeployBlock;
+    let reachedDeploy = true;
     if (options.verifiedRecipientsLookbackBlocks != null) {
       const latest = await options.client.getBlockNumber();
       const back = BigInt(options.verifiedRecipientsLookbackBlocks);
-      fromBlock = latest > back ? latest - back : 0n;
+      const windowStart = latest > back ? latest - back : 0n;
+      const floor = options.contractDeployBlock ?? 0n;
+      fromBlock = windowStart > floor ? windowStart : floor;
+      reachedDeploy = windowStart <= floor;
     }
     const logs = await getLogsChunked<{ recipient?: Address }>(options.client, {
       address,
@@ -150,7 +162,7 @@ async function readVerifiedRecipients(
     });
     // Complete only if the scan reached the deploy block: either no lookback bound
     // was set, or the window was wide enough to start at 0.
-    const complete = fromBlock == null || fromBlock === 0n;
+    const complete = reachedDeploy;
     return {
       recipients: logs.map((log) => log.args.recipient).filter((r): r is Address => Boolean(r)),
       complete,

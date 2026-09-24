@@ -13,7 +13,6 @@ import { privateKeyToAccount } from 'viem/accounts';
 import {
   ADDRESSES,
   ARC_TESTNET_CHAIN_ID,
-  BlockscoutDataProvider,
   CachingDataProvider,
   MODE_PUSH,
   MODE_PULL,
@@ -22,6 +21,8 @@ import {
   buildDossier,
   check,
   deploymentFor,
+  historySourceFor,
+  isTestnetChain,
   spendableTokensFor,
   type EphemeralPolicy,
   type TokenInfo,
@@ -34,6 +35,7 @@ import {
   verifiedRecipients,
 } from '@ctrl-arcz/demo-kit/cosign';
 import { gaslessClaimToResult } from '@ctrl-arcz/demo-kit/gasless';
+import { serverAlchemyUrl, serverDataProvider } from '@ctrl-arcz/demo-kit/history-server';
 import {
   relayCreateBox,
   relayAnnounceBox,
@@ -42,7 +44,29 @@ import {
 } from '@ctrl-arcz/demo-kit/relay';
 import { env } from './env.js';
 import { json, readJson, readRaw, HttpError } from './http.js';
-import { requireSignedRequest, checkQuota, takeInvestigatorBudget } from './auth.js';
+import {
+  requireSignedRequest,
+  checkQuota,
+  checkMainnetQuota,
+  takeInvestigatorBudget,
+} from './auth.js';
+
+/**
+ * The relayer key for a chain, or a refusal.
+ *
+ * Testnet and mainnet never share a relayer. A mainnet action also draws on its own
+ * daily budget, on top of the testnet one every route already charges, because
+ * there the relayer is spending real money on the caller's behalf.
+ */
+function relayerKeyFor(chainId: number, caller: Address): Hex {
+  if (isTestnetChain(chainId) === false) {
+    if (!env.relayerPkMainnet) throw new HttpError(400, 'no mainnet relayer key configured');
+    checkMainnetQuota(caller);
+    return env.relayerPkMainnet;
+  }
+  if (!env.relayerPk) throw new HttpError(400, 'no relayer key configured');
+  return env.relayerPk;
+}
 
 /** JSON-parse a raw body already read for signature verification. */
 function parseBody(raw: string): unknown {
@@ -96,9 +120,13 @@ const riskProviders = new Map<number, CachingDataProvider>();
 function riskProviderFor(chainId: number): CachingDataProvider {
   const cached = riskProviders.get(chainId);
   if (cached) return cached;
-  const provider = new CachingDataProvider(new BlockscoutDataProvider({ chainId }), {
-    ttlMs: 60_000,
-  });
+  let source;
+  try {
+    source = serverDataProvider(chainId, env.alchemyApiKey);
+  } catch (e) {
+    throw new HttpError(400, e instanceof Error ? e.message : 'no history source');
+  }
+  const provider = new CachingDataProvider(source, { ttlMs: 60_000 });
   riskProviders.set(chainId, provider);
   return provider;
 }
@@ -239,12 +267,19 @@ export async function gaslessPost(req: IncomingMessage, res: ServerResponse): Pr
   const raw = await readRaw(req);
   const caller = await requireSignedRequest(req, raw, '/api/gasless-claim');
   checkQuota(caller, 1);
-  if (!env.relayerPk) throw new HttpError(400, 'gasless not configured');
-  const { transferId, code, salt } = parseBody(raw) as {
+  const {
+    transferId,
+    code,
+    salt,
+    chainId: rawChainId,
+  } = parseBody(raw) as {
     transferId?: unknown;
     code?: unknown;
     salt?: unknown;
+    chainId?: unknown;
   };
+  const chainId = chainOf(rawChainId);
+  const ownerKey = relayerKeyFor(chainId, caller);
   if (typeof transferId !== 'string' || !/^\d{1,78}$/.test(transferId))
     throw new HttpError(400, 'invalid transferId');
   // The claim code is 16 Crockford base32 characters. It arrives already normalised
@@ -257,13 +292,14 @@ export async function gaslessPost(req: IncomingMessage, res: ServerResponse): Pr
   const cfg = {
     clientKey: env.circleClientKey,
     clientUrl: env.circleClientUrl,
-    ownerKey: env.relayerPk,
+    ownerKey,
   };
   const result = await gaslessClaimToResult(
     cfg as never,
     BigInt(transferId),
     code,
     salt as `0x${string}`,
+    chainId,
   );
   json(res, 200, result);
 }
@@ -420,10 +456,10 @@ export async function relayCreatePost(req: IncomingMessage, res: ServerResponse)
   const raw = await readRaw(req);
   const caller = await requireSignedRequest(req, raw, '/api/relay/create');
   checkQuota(caller, 1);
-  if (!env.relayerPk) throw new HttpError(400, 'no relayer key configured');
   const body = parseBody(raw);
   const { salt, policy, chainId } = parsePolicy(body);
-  const result = await relayCreateBox(env.relayerPk, chainId, salt, policy);
+  const relayerPk = relayerKeyFor(chainId, caller);
+  const result = await relayCreateBox(relayerPk, chainId, salt, policy);
 
   // Announce in the same call, when asked to.
   //
@@ -451,7 +487,7 @@ export async function relayCreatePost(req: IncomingMessage, res: ServerResponse)
     // be able to make that bill arbitrarily large.
     const label = typeof announce.label === 'string' ? announce.label.trim().slice(0, 40) : '';
     announceTx = await relayAnnounceBox(
-      env.relayerPk,
+      relayerPk,
       chainId,
       {
         stealthAddress: addr(announce.stealthAddress, 'stealthAddress'),
@@ -468,7 +504,6 @@ export async function relayAnnouncePost(req: IncomingMessage, res: ServerRespons
   const raw = await readRaw(req);
   const caller = await requireSignedRequest(req, raw, '/api/relay/announce');
   checkQuota(caller, 1);
-  if (!env.relayerPk) throw new HttpError(400, 'no relayer key configured');
 
   const {
     stealthAddress,
@@ -482,6 +517,7 @@ export async function relayAnnouncePost(req: IncomingMessage, res: ServerRespons
     chainId?: unknown;
   };
   const chainId = chainOf(rawChainId);
+  const relayerPk = relayerKeyFor(chainId, caller);
   // 33-byte compressed secp256k1 point, as ERC-5564 specifies for scheme 1.
   if (typeof ephemeralPubKey !== 'string' || !/^0x[0-9a-fA-F]{66}$/.test(ephemeralPubKey)) {
     throw new HttpError(400, 'invalid ephemeralPubKey');
@@ -494,11 +530,11 @@ export async function relayAnnouncePost(req: IncomingMessage, res: ServerRespons
 
   // An announcement for an address with no code would be a relayer-funded lie, and
   // the scanner on the other side would hand the payer a box that cannot be swept.
-  if (!(await boxExists(env.relayerPk, chainId, boxAddr))) {
+  if (!(await boxExists(relayerPk, chainId, boxAddr))) {
     throw new HttpError(400, 'box does not exist');
   }
 
-  const result = await relayAnnounceBox(env.relayerPk, chainId, stealth, boxAddr);
+  const result = await relayAnnounceBox(relayerPk, chainId, stealth, boxAddr);
   json(res, 200, result);
 }
 
@@ -541,7 +577,7 @@ export async function investigatePost(req: IncomingMessage, res: ServerResponse)
   // answered with an empty report that would read as "this address has never done
   // anything" -- which is the exact signal the firewall treats as suspicious, and
   // would be a verdict about our own missing data rather than about the recipient.
-  if (!deployment.explorerApi) {
+  if (!historySourceFor(deployment.chainId)) {
     throw new HttpError(400, `no transaction history source for chain ${chainId}`);
   }
   // The sender is claimed rather than proven, and that is fine here: everything
@@ -555,6 +591,7 @@ export async function investigatePost(req: IncomingMessage, res: ServerResponse)
     client: riskClientFor(chainId),
     provider: riskProviderFor(chainId),
     contractAddress: deployment.ctrlArcZ,
+    contractDeployBlock: deployment.ctrlArcZDeployBlock,
     verifiedRecipientsLookbackBlocks: VERIFIED_LOOKBACK_BLOCKS,
   });
 
@@ -594,8 +631,47 @@ export async function relayGasPost(req: IncomingMessage, res: ServerResponse): P
   const raw = await readRaw(req);
   const caller = await requireSignedRequest(req, raw, '/api/relay/gas');
   checkQuota(caller, 1);
-  if (!env.relayerPk) throw new HttpError(400, 'no relayer key configured');
   const { to, chainId: rawChainId } = parseBody(raw) as { to?: unknown; chainId?: unknown };
-  const result = await relayStealthGas(env.relayerPk, chainOf(rawChainId), addr(to, 'to'));
+  const chainId = chainOf(rawChainId);
+  const result = await relayStealthGas(relayerKeyFor(chainId, caller), chainId, addr(to, 'to'));
   json(res, 200, result);
+}
+
+// --- chain data: history reads for chains with no public indexer ---
+
+/**
+ * The only methods the proxy forwards. Everything the firewall and the history
+ * list need, and nothing that writes, costs compute units beyond a read, or
+ * reveals anything about the key's account.
+ */
+const CHAIN_DATA_METHODS = new Set(['alchemy_getAssetTransfers', 'eth_getTransactionCount']);
+
+/**
+ * `POST /api/chain-data?chainId=5042`: a JSON-RPC pass-through to Alchemy for a
+ * chain whose history is read there, with this server's key added on the way.
+ *
+ * It exists so the browser can run the firewall itself, exactly as it does against
+ * Blockscout on testnet, without the key ever being in the page. Unauthenticated
+ * like `/api/investigate` and for the same reason: it reads public chain data and
+ * moves nothing. It has its own per-IP window in `http.ts`, because one debounced
+ * address check is several reads and would otherwise eat the budget every other
+ * route shares.
+ */
+export async function chainDataPost(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  const url = new URL(req.url ?? '/', 'http://localhost');
+  const chainId = chainOf(Number(url.searchParams.get('chainId')));
+  const upstream = serverAlchemyUrl(chainId, env.alchemyApiKey);
+  if (!upstream) throw new HttpError(400, `no history proxy for chain ${chainId}`);
+  const body = parseBody(await readRaw(req)) as { method?: unknown; params?: unknown; id?: unknown };
+  if (typeof body.method !== 'string' || !CHAIN_DATA_METHODS.has(body.method)) {
+    throw new HttpError(400, 'method not allowed');
+  }
+  if (!Array.isArray(body.params) || body.params.length > 2) throw new HttpError(400, 'invalid params');
+  const r = await fetch(upstream, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: body.method, params: body.params }),
+  });
+  if (!r.ok) throw new HttpError(r.status === 429 ? 429 : 502, `upstream ${r.status}`);
+  json(res, 200, await r.json());
 }

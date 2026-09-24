@@ -80,10 +80,14 @@ describe('every chain in it can actually be used', () => {
   it('keeps chain ids and domains unique', () => {
     // Two chains sharing either would make a route ambiguous, and the failure would
     // be a transfer arriving somewhere else rather than an error.
+    // Domains repeat across the two networks by design, so they are unique per
+    // network; chain ids are unique outright.
     const ids = rows.map((c) => c.chainId);
-    const domains = rows.map((c) => c.domain);
     expect(new Set(ids).size).toBe(ids.length);
-    expect(new Set(domains).size).toBe(domains.length);
+    for (const testnet of [true, false]) {
+      const domains = rows.filter((c) => c.testnet === testnet).map((c) => c.domain);
+      expect(new Set(domains).size).toBe(domains.length);
+    }
   });
 
   it('never calls a reseller the chain’s own endpoint', () => {

@@ -93,6 +93,12 @@ export interface PrecheckRequest {
   owner: Address;
   target: Address;
   amount: bigint;
+  /**
+   * The chain the payment will be on. A remote co-signer judges the target on this
+   * chain's history; one that is not told assumes Arc testnet, which is where a
+   * mainnet recipient looks brand new and gets vetoed.
+   */
+  chainId?: number;
 }
 
 /** The shape of a veto (shared by precheck and authorize). */
@@ -330,6 +336,7 @@ export class RemoteCoSigner implements CoSigner {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         phase: 'precheck',
+        ...(req.chainId != null ? { chainId: req.chainId } : {}),
         owner: req.owner,
         target: req.target,
         amount: req.amount.toString(),

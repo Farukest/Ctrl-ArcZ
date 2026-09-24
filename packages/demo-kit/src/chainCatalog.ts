@@ -1,5 +1,4 @@
 import {
-  ARC_TESTNET_CHAIN_ID,
   CCTP_CHAINS,
   DEPOSIT_CONFIRMATION_SECONDS,
   GATEWAY_CHAIN_NAMES,
@@ -10,6 +9,7 @@ import {
   type GatewayChain,
 } from '@ctrl-arcz/sdk';
 import { supportsChain, type ChainFeature } from './chainSupport.js';
+import { APP_ARC_CHAIN_ID, APP_TESTNET } from './network.js';
 
 /**
  * Which networks a given job can be done on, and whether choosing one moves the
@@ -51,7 +51,11 @@ export type ChainPurpose =
   /** Where a Gateway spend mints. Circle's side. */
   | 'gatewayDestination';
 
-const CCTP_NAMES = Object.keys(CCTP_CHAINS) as CctpChainName[];
+/** Circle's chains on this app's network only. The other network is never offered. */
+const CCTP_NAMES = (Object.keys(CCTP_CHAINS) as CctpChainName[]).filter(
+  (n) => CCTP_CHAINS[n].testnet === APP_TESTNET,
+);
+const GATEWAY_NAMES = GATEWAY_CHAIN_NAMES.filter((n) => CCTP_CHAINS[n].testnet === APP_TESTNET);
 
 /**
  * Arc first, then the rest in registry order.
@@ -62,7 +66,7 @@ const CCTP_NAMES = Object.keys(CCTP_CHAINS) as CctpChainName[];
  * reshuffle between renders.
  */
 function arcFirst(names: readonly CctpChainName[]): readonly CctpChainName[] {
-  const arc = names.filter((n) => CCTP_CHAINS[n].chainId === ARC_TESTNET_CHAIN_ID);
+  const arc = names.filter((n) => CCTP_CHAINS[n].chainId === APP_ARC_CHAIN_ID);
   return arc.length > 0 ? [...arc, ...names.filter((n) => !arc.includes(n))] : names;
 }
 
@@ -95,7 +99,7 @@ export function chainsFor(purpose: ChainPurpose): readonly CctpChainName[] {
     case 'gatewayDeposit':
     case 'gatewaySource':
     case 'gatewayDestination':
-      return arcFirst(GATEWAY_CHAIN_NAMES);
+      return arcFirst(GATEWAY_NAMES);
     /*
      * The rest are ours, so they need a deployment and whatever else the feature
      * needs on top of it. `supportsChain` already owns that question and is pinned

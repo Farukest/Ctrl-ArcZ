@@ -76,6 +76,7 @@ export const tr: Record<TranslationKey, string> = {
   'footer.iosSub': "iPhone'da",
   'footer.soon': 'Çok yakında',
   'footer.note': 'Testnet sürümü. Burada gerçek para hareket etmiyor.',
+  'footer.noteMainnet': 'Mainnet. Buradaki ödemeler gerçek USDC taşır.',
   'footer.copyright': '© {year} Ctrl+ArcZ',
 
   'mode.send': 'Gönder',
@@ -179,6 +180,7 @@ export const tr: Record<TranslationKey, string> = {
   'sub.pullNow': 'Şimdi çek',
   'sub.tooSoon': 'Henüz değil',
   'sub.cancel': 'İptal',
+  'sub.withdraw': 'Geri çek',
   'sub.d.account': 'Kutu adresi',
   'sub.d.merchant': 'Satıcı',
   'sub.d.perPull': 'Çekim başına',

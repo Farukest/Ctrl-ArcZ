@@ -22,5 +22,9 @@ export default defineConfig({
     environment: 'node',
     include: ['test/**/*.test.ts'],
     exclude: runIntegration ? [] : integrationGlob,
+    // The catalog and support tests were written against the testnet chain set and
+    // still describe it exactly. The mainnet build is covered in network.test.ts,
+    // which switches this per test.
+    env: { VITE_NETWORK: 'testnet' },
   },
 });

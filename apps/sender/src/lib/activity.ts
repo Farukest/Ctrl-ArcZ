@@ -17,7 +17,7 @@
  * question; `kind` is what tells a deposit from a transfer from a subscription.
  */
 import { useEffect, useState } from 'react';
-import { chainForStep, classifyFailure, type BridgeEngine } from '@ctrl-arcz/demo-kit';
+import { chainForStep, classifyFailure, type BridgeEngine, APP_TESTNET } from '@ctrl-arcz/demo-kit';
 import type { Address } from 'viem';
 import {
   chainExplorerTxUrl,
@@ -352,7 +352,7 @@ export function useSettleDeposits(address: Address | undefined): void {
       if (waiting.length === 0) return;
       let byChain: Partial<Record<GatewayChain, bigint>>;
       try {
-        ({ byChain } = await gatewayBalance({ depositor: address }));
+        ({ byChain } = await gatewayBalance({ depositor: address, testnet: APP_TESTNET }));
       } catch {
         // A poll that fails leaves the row waiting, which is the honest answer.
         return;

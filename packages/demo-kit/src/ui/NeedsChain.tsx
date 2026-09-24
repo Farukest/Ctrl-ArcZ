@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { cctpChainByChainId, chainLabel } from '@ctrl-arcz/sdk';
 import { preferredChainFor, type ChainFeature } from '../chainSupport.js';
+import { APP_TESTNET } from '../network.js';
 import { useT } from '../i18n/context.js';
 import { Button } from './components.js';
 import { IconAlert } from './icons.js';
@@ -37,7 +38,7 @@ export function NeedsChain({
   const t = useT();
   const [busy, setBusy] = useState(false);
   const chainId = preferredChainFor(feature);
-  const target = labelOf(chainId, 'Arc Testnet');
+  const target = labelOf(chainId, APP_TESTNET ? 'Arc Testnet' : 'Arc');
 
   return (
     <div className="needschain" data-testid="needs-chain" data-feature={feature}>

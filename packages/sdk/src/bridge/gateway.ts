@@ -40,13 +40,54 @@ import { MAX_INTENTS } from './allocate.js';
  *   - docs-arc/circle/gateway/references/supported-blockchains.md
  */
 
-/** GatewayWallet: holds deposits. One address on every chain. Verified to have code. */
+/**
+ * GatewayWallet on every testnet. Kept for callers that imported it: the module
+ * itself reads each chain's own contract, because mainnet's is a different address
+ * (`0x77777777Dcc4...`, against testnet's `0x0077777d...`).
+ */
 export const GATEWAY_WALLET = '0x0077777d7EBA4688BDeF3E311b846F25870A19B9' as const;
 
-/** GatewayMinter: mints on the destination. Also one address everywhere. */
+/** GatewayMinter on every testnet. Same caveat as `GATEWAY_WALLET`. */
 export const GATEWAY_MINTER = '0x0022222ABE238Cc2C7Bb1f21003F0a260052475B' as const;
 
 export const GATEWAY_API_TESTNET = 'https://gateway-api-testnet.circle.com' as const;
+export const GATEWAY_API_MAINNET = 'https://gateway-api.circle.com' as const;
+
+/**
+ * The Gateway API for a network. The two share CCTP domain numbers, so a mainnet
+ * depositor asked of the testnet API is not an error, it is a confident zero.
+ */
+export function gatewayApiFor(testnet: boolean): string {
+  return testnet ? GATEWAY_API_TESTNET : GATEWAY_API_MAINNET;
+}
+
+/** A Gateway chain's wallet and minter, read from Circle's table. */
+export function gatewayContracts(chain: GatewayChain): { wallet: Address; minter: Address } {
+  const row = GENERATED_CHAINS.find((c) => c.name === chain) as
+    | { gatewayWallet?: string; gatewayMinter?: string }
+    | undefined;
+  if (!row?.gatewayWallet || !row.gatewayMinter) {
+    throw new Error(`${chain} has no Gateway contracts in Circle's table.`);
+  }
+  return { wallet: row.gatewayWallet as Address, minter: row.gatewayMinter as Address };
+}
+
+/**
+ * Every chain in one transfer on one network, which is returned. Circle runs testnet
+ * and mainnet as separate systems; a mixed set is refused before anything is signed.
+ */
+function assertOneNetwork(chains: readonly GatewayChain[]): boolean {
+  const first = chains[0]!;
+  const testnet = CCTP_CHAINS[first].testnet;
+  for (const c of chains) {
+    if (CCTP_CHAINS[c].testnet !== testnet) {
+      throw new Error(
+        `${chainLabel(c)} is on a different network from ${chainLabel(first)}. A Gateway transfer stays on one network.`,
+      );
+    }
+  }
+  return testnet;
+}
 
 /**
  * Chains Gateway serves that also have a USDC address this SDK has verified.
@@ -102,6 +143,20 @@ export const DEPOSIT_CONFIRMATION_SECONDS: Record<GatewayChain, number> = {
   Arbitrum_Sepolia: 19 * 60,
   Unichain_Sepolia: 19 * 60,
   World_Chain_Sepolia: 19 * 60,
+
+  // Mainnet: the same block confirmations, per the same Circle page.
+  Arc: 1,
+  Avalanche: 8,
+  HyperEVM: 5,
+  Polygon: 8,
+  Sonic: 8,
+  Sei: 5,
+  Ethereum: 19 * 60,
+  Base: 19 * 60,
+  Optimism: 19 * 60,
+  Arbitrum: 19 * 60,
+  Unichain: 19 * 60,
+  World_Chain: 19 * 60,
 };
 
 const gatewayWalletAbi = [
@@ -263,12 +318,22 @@ export interface GatewayBalance {
 export async function gatewayBalance(params: {
   depositor: Address;
   chains?: readonly GatewayChain[];
+  /**
+   * Which network to read. Taken from `chains` when those are given; otherwise
+   * testnet, which is what this read meant before mainnet existed.
+   */
+  testnet?: boolean;
   apiBase?: string;
   fetchImpl?: typeof fetch;
 }): Promise<GatewayBalance> {
-  const chains = params.chains ?? GATEWAY_CHAIN_NAMES;
+  const testnet =
+    params.chains && params.chains.length > 0
+      ? assertOneNetwork(params.chains)
+      : (params.testnet ?? true);
+  const chains =
+    params.chains ?? GATEWAY_CHAIN_NAMES.filter((c) => CCTP_CHAINS[c].testnet === testnet);
   const doFetch = params.fetchImpl ?? fetch;
-  const res = await doFetch(`${params.apiBase ?? GATEWAY_API_TESTNET}/v1/balances`, {
+  const res = await doFetch(`${params.apiBase ?? gatewayApiFor(testnet)}/v1/balances`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -349,7 +414,7 @@ export async function depositToGateway(
     address: chain.usdc,
     abi: erc20Abi,
     functionName: 'allowance',
-    args: [account.address, GATEWAY_WALLET],
+    args: [account.address, gatewayContracts(params.chain).wallet],
   })) as bigint;
 
   let approveTxHash: Hex | undefined;
@@ -358,7 +423,7 @@ export async function depositToGateway(
       address: chain.usdc,
       abi: erc20Abi,
       functionName: 'approve',
-      args: [GATEWAY_WALLET, params.amount],
+      args: [gatewayContracts(params.chain).wallet, params.amount],
       account,
       chain: clients.walletClient.chain ?? null,
     });
@@ -369,7 +434,7 @@ export async function depositToGateway(
   }
 
   const depositTxHash = await clients.walletClient.writeContract({
-    address: GATEWAY_WALLET,
+    address: gatewayContracts(params.chain).wallet,
     abi: gatewayWalletAbi,
     functionName: 'deposit',
     args: [chain.usdc, params.amount],
@@ -396,8 +461,8 @@ function buildSpec(params: {
     version: 1,
     sourceDomain: src.domain,
     destinationDomain: dst.domain,
-    sourceContract: pad(GATEWAY_WALLET, { size: 32 }),
-    destinationContract: pad(GATEWAY_MINTER, { size: 32 }),
+    sourceContract: pad(gatewayContracts(params.from).wallet, { size: 32 }),
+    destinationContract: pad(gatewayContracts(params.to).minter, { size: 32 }),
     sourceToken: pad(src.usdc, { size: 32 }),
     destinationToken: pad(dst.usdc, { size: 32 }),
     sourceDepositor: pad(params.depositor, { size: 32 }),
@@ -622,6 +687,7 @@ export async function quoteGatewaySpend(params: {
   const doFetch = params.fetchImpl ?? fetch;
   const sources = toSources(params);
   assertSources(sources);
+  const testnet = assertOneNetwork([params.to, ...sources.map((s) => s.chain)]);
   const recipient = params.recipient ?? params.depositor;
 
   const specs = sources.map((s) =>
@@ -638,7 +704,7 @@ export async function quoteGatewaySpend(params: {
   );
 
   const res = await doFetch(
-    `${params.apiBase ?? GATEWAY_API_TESTNET}/v1/estimate?enableForwarder=true`,
+    `${params.apiBase ?? gatewayApiFor(testnet)}/v1/estimate?enableForwarder=true`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -764,7 +830,8 @@ export async function spendFromGateway(
   const amount = sources.reduce((sum, s) => sum + s.value, 0n);
   if (amount <= 0n) throw new Error('Amount must be positive.');
 
-  const apiBase = params.apiBase ?? GATEWAY_API_TESTNET;
+  const testnet = assertOneNetwork([params.to, ...sources.map((s) => s.chain)]);
+  const apiBase = params.apiBase ?? gatewayApiFor(testnet);
   const doFetch = params.fetchImpl ?? fetch;
   const recipient = params.recipient ?? account.address;
 
@@ -795,6 +862,10 @@ export async function spendFromGateway(
    */
   const balance = await gatewayBalance({
     depositor: account.address,
+    // The network's own chains, so a domain is read back under the right name:
+    // Arc is domain 26 on both networks, and without this a mainnet balance was
+    // filed under Arc_Testnet and the spend refused for want of it.
+    testnet,
     apiBase,
     ...(params.fetchImpl ? { fetchImpl: params.fetchImpl } : {}),
   });
@@ -939,6 +1010,7 @@ export interface GatewayTransferStatus {
 export async function waitForGatewayMint(params: {
   transferId: string;
   timeoutMs?: number;
+  testnet?: boolean;
   apiBase?: string;
   fetchImpl?: typeof fetch;
 }): Promise<Hex | undefined> {
@@ -962,13 +1034,15 @@ export async function waitForGatewayMint(params: {
  */
 export async function findGatewayMint(params: {
   transferId: string;
+  /** Which network the transfer is on, when `apiBase` is not given. Default testnet. */
+  testnet?: boolean;
   apiBase?: string;
   fetchImpl?: typeof fetch;
 }): Promise<GatewayTransferStatus> {
   const doFetch = params.fetchImpl ?? fetch;
   try {
     const res = await doFetch(
-      `${params.apiBase ?? GATEWAY_API_TESTNET}/v1/transfer/${params.transferId}`,
+      `${params.apiBase ?? gatewayApiFor(params.testnet ?? true)}/v1/transfer/${params.transferId}`,
     );
     if (!res.ok) return { state: 'pending' };
     const body = (await res.json()) as {

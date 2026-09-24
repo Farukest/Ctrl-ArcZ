@@ -1,4 +1,27 @@
-import { BlockscoutDataProvider, CachingDataProvider, deploymentFor } from '@ctrl-arcz/sdk';
+import {
+  AlchemyDataProvider,
+  BlockscoutDataProvider,
+  CachingDataProvider,
+  historySourceFor,
+  type IDataProvider,
+} from '@ctrl-arcz/sdk';
+
+/**
+ * The browser's endpoint for a chain whose history is read from Alchemy. The key
+ * lives on the server; this path forwards two read methods and nothing else.
+ */
+export function chainDataUrl(chainId: number): string {
+  return `/api/chain-data?chainId=${chainId}`;
+}
+
+/** The raw history source for a chain. Throws where there is none. */
+function sourceFor(chainId: number): IDataProvider {
+  const source = historySourceFor(chainId);
+  if (!source) throw new Error(`no transaction history source for chain ${chainId}`);
+  return source.kind === 'blockscout'
+    ? new BlockscoutDataProvider({ apiUrl: source.apiUrl })
+    : new AlchemyDataProvider({ rpcUrl: chainDataUrl(chainId) });
+}
 
 /**
  * One risk data provider for the whole session, with the sender's counterparty
@@ -26,7 +49,7 @@ const providers = new Map<number, CachingDataProvider>();
 export function riskProvider(chainId: number): CachingDataProvider {
   const cached = providers.get(chainId);
   if (cached) return cached;
-  const provider = new CachingDataProvider(new BlockscoutDataProvider({ chainId }), {
+  const provider = new CachingDataProvider(sourceFor(chainId), {
     ttlMs: 60_000,
   });
   providers.set(chainId, provider);
@@ -36,7 +59,7 @@ export function riskProvider(chainId: number): CachingDataProvider {
 /** Whether a recipient can be judged here at all. `riskProvider` throws on a
  *  chain with no explorer, so callers ask this first rather than catching. */
 export function canJudgeRecipients(chainId: number): boolean {
-  return deploymentFor(chainId)?.explorerApi !== undefined;
+  return historySourceFor(chainId) !== undefined;
 }
 
 /** Drop the caches when the connected wallet changes — a different sender has a

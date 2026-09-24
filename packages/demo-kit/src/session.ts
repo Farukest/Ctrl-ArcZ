@@ -15,14 +15,11 @@ import { privateKeyToAccount } from 'viem/accounts';
 import {
   addChainParams,
   canAddChain,
-  arcTestnet,
-  ARC_TESTNET_CHAIN_ID,
   deploymentFor,
   readRpcUrls,
-  RPC_URLS,
-  SIGNING_RPC_URLS,
   type ClientPair,
 } from '@ctrl-arcz/sdk';
+import { APP_ARC, APP_ARC_CHAIN_ID, arcNetwork, type ArcNetwork } from './network.js';
 
 /**
  * The public Arc RPC returns JSON-RPC error -32011 "request limit reached" under
@@ -53,18 +50,18 @@ function rlHttp(url: string): Transport {
 
 /** Spread requests across all public Arc RPCs; if one rate-limits, fall back to the
  *  next. This is what keeps heavy flows (deploy + fund + poll at once) alive. */
-function arcTransport(): Transport {
+function arcTransport(arc: ArcNetwork = APP_ARC): Transport {
   return fallback(
-    RPC_URLS.map((u) => rlHttp(u)),
+    arc.readRpcs.map((u) => rlHttp(u)),
     { retryCount: 1 },
   );
 }
 
 /** The transport for anything that signs. See `SIGNING_RPC_URLS` for why the order
  *  differs from the read path. */
-function arcSigningTransport(): Transport {
+function arcSigningTransport(arc: ArcNetwork = APP_ARC): Transport {
   return fallback(
-    SIGNING_RPC_URLS.map((u) => rlHttp(u)),
+    arc.signingRpcs.map((u) => rlHttp(u)),
     { retryCount: 1 },
   );
 }
@@ -180,20 +177,32 @@ export interface Session {
   address: Address;
   clients: ClientPair;
   chainId: number;
-  /** True when the connected wallet is on Arc Testnet. */
+  /** True when the connected wallet is on this app's Arc (see `network.ts`). */
   onArc: boolean;
 }
 
-const publicClient: PublicClient = createPublicClient({
-  chain: arcTestnet,
-  transport: arcTransport(),
-  pollingInterval: 6000, // ease receipt polling against the rate-limited public RPC
-  // Coalesce concurrent readContract calls into a single Multicall3 RPC request.
-  // readAccount fires 6 reads at once; batching turns them into ONE call, which
-  // matters a lot against a rate-limited public RPC.
-  batch: { multicall: { wait: 20 } },
-});
+/** One read client per Arc network, so a server can serve both side by side. */
+const arcPublicClients = new Map<number, PublicClient>();
 
+function arcPublicClient(arc: ArcNetwork): PublicClient {
+  const cached = arcPublicClients.get(arc.chainId);
+  if (cached) return cached;
+  const client = createPublicClient({
+    chain: arc.chain,
+    transport: arcTransport(arc),
+    pollingInterval: 6000, // ease receipt polling against the rate-limited public RPC
+    // Coalesce concurrent readContract calls into a single Multicall3 RPC request.
+    // readAccount fires 6 reads at once; batching turns them into ONE call, which
+    // matters a lot against a rate-limited public RPC.
+    batch: { multicall: { wait: 20 } },
+  }) as PublicClient;
+  arcPublicClients.set(arc.chainId, client);
+  return client;
+}
+
+const publicClient: PublicClient = arcPublicClient(APP_ARC);
+
+/** The read client for this app's Arc. */
 export function getPublicClient(): PublicClient {
   return publicClient;
 }
@@ -202,15 +211,23 @@ export function getPublicClient(): PublicClient {
  * A ClientPair backed by a raw private key. NOT for user wallets — used only for
  * a relayer/service signer (e.g. gasless-claim relay), where the key belongs to
  * the integrator's backend, not the end user.
+ *
+ * On this app's Arc unless `chainId` names the other one. A server serves both,
+ * and a signature tagged with the wrong chain id is refused by the chain.
  */
-export function localSigner(privateKey: `0x${string}`): ClientPair {
+export function localSigner(
+  privateKey: `0x${string}`,
+  chainId: number = APP_ARC_CHAIN_ID,
+): ClientPair {
+  const arc = arcNetwork(chainId);
+  if (!arc) throw new Error(`chain ${chainId} is not Arc`);
   const account = privateKeyToAccount(privateKey);
   const walletClient: WalletClient = createWalletClient({
     account,
-    chain: arcTestnet,
-    transport: arcSigningTransport(),
+    chain: arc.chain,
+    transport: arcSigningTransport(arc),
   });
-  return { publicClient, walletClient };
+  return { publicClient: arcPublicClient(arc), walletClient };
 }
 
 /**
@@ -299,7 +316,10 @@ function withSaneGas(client: WalletClient, reader: PublicClient): WalletClient {
  * NOT for user wallets. The key belongs to the operator's backend.
  */
 export function signerFor(chainId: number, privateKey: `0x${string}`): ClientPair {
-  if (chainId === ARC_TESTNET_CHAIN_ID) return localSigner(privateKey);
+  if (arcNetwork(chainId)) {
+    if (!deploymentFor(chainId)) throw new Error(`no deployment on chain ${chainId}`);
+    return localSigner(privateKey, chainId);
+  }
 
   const deployment = deploymentFor(chainId);
   if (!deployment) throw new Error(`no deployment on chain ${chainId}`);
@@ -369,15 +389,22 @@ export async function injectedSession({ silent = false } = {}): Promise<Session 
 
   const walletClient: WalletClient = createWalletClient({
     account: address,
-    chain: arcTestnet,
+    chain: APP_ARC.chain,
     transport: injectedTransport(provider),
   });
 
+  /*
+   * These clients are this app's Arc, so the contract is that Arc's too. Leaving it
+   * out let the SDK fall back to its built-in address, which is testnet Arc's: on
+   * mainnet that is an address with no code, and every call through it "returned
+   * no data".
+   */
+  const ctrlArcZ = deploymentFor(APP_ARC_CHAIN_ID)?.ctrlArcZ;
   return {
     address,
-    clients: { publicClient, walletClient },
+    clients: { publicClient, walletClient, ...(ctrlArcZ ? { contractAddress: ctrlArcZ } : {}) },
     chainId,
-    onArc: chainId === ARC_TESTNET_CHAIN_ID,
+    onArc: chainId === APP_ARC_CHAIN_ID,
   };
 }
 
@@ -387,7 +414,7 @@ async function currentChainId(provider: EIP1193Provider): Promise<number> {
 }
 
 /**
- * Asks the wallet to switch to Arc Testnet, adding the network if it is unknown.
+ * Asks the wallet to switch to this app's Arc, adding the network if it is unknown.
  *
  * @param throwOnReject When false (the connect path), a user rejection (4001) is
  *   swallowed so the session still connects on the wrong chain and the guard
@@ -398,7 +425,7 @@ export async function ensureArcChain(
   provider: EIP1193Provider,
   { throwOnReject = false }: { throwOnReject?: boolean } = {},
 ): Promise<void> {
-  const hexId = `0x${arcTestnet.id.toString(16)}`;
+  const hexId = `0x${APP_ARC_CHAIN_ID.toString(16)}`;
   try {
     await provider.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: hexId }] });
   } catch (err) {
@@ -408,7 +435,7 @@ export async function ensureArcChain(
       // written out separately here, with one endpoint where the registry has
       // several, so Arc's entry in a wallet had less to fall back on than any
       // network the app added later.
-      await addChainToWallet(provider, ARC_TESTNET_CHAIN_ID);
+      await addChainToWallet(provider, APP_ARC_CHAIN_ID);
       // Most wallets leave you on the network they just added; the ones that do
       // not used to leave this function claiming success from the wrong chain.
       try {
@@ -427,7 +454,7 @@ export async function ensureArcChain(
   }
 }
 
-/** Asks the connected wallet to switch to Arc Testnet. Rejection propagates. */
+/** Asks the connected wallet to switch to this app's Arc. Rejection propagates. */
 export async function switchToArc(): Promise<void> {
   await ensureArcChain(getProvider(), { throwOnReject: true });
 }
@@ -473,13 +500,13 @@ export function bridgeClients(chainId: number, account: Address): ClientPair {
   const chain = {
     id: chainId,
     name: `chain-${chainId}`,
-    nativeCurrency: arcTestnet.nativeCurrency,
+    nativeCurrency: APP_ARC.chain.nativeCurrency,
     rpcUrls: { default: { http: [] as string[] } },
   };
+  const arc = arcNetwork(chainId);
   return {
-    publicClient:
-      chainId === ARC_TESTNET_CHAIN_ID
-        ? publicClient
+    publicClient: arc
+        ? arcPublicClient(arc)
         : (createPublicClient({
             // A pure read client needs no wallet at all, so it does not get one.
             transport: reads ?? custom(provider),
@@ -587,7 +614,7 @@ async function addChainToWallet(provider: EIP1193Provider, chainId: number): Pro
  * button in the header could. One function, so every switch behaves the same.
  */
 export async function switchWalletTo(chainId: number, label?: string): Promise<void> {
-  if (chainId === ARC_TESTNET_CHAIN_ID) await switchToArc();
+  if (chainId === APP_ARC_CHAIN_ID) await switchToArc();
   else await switchWalletChain(chainId, label ?? `chain ${chainId}`);
 }
 

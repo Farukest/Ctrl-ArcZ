@@ -1,16 +1,42 @@
-import { createWalletClient, fallback, http, type EIP1193Provider, type Hex } from 'viem';
+import {
+  createWalletClient,
+  fallback,
+  http,
+  type Chain,
+  type EIP1193Provider,
+  type Hex,
+  type Transport,
+} from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { arcTestnet, RPC_URLS, SIGNING_RPC_URLS } from '@ctrl-arcz/sdk';
+import { readRpcUrls } from '@ctrl-arcz/sdk';
+import { APP_ARC_CHAIN_ID, arcNetwork } from './network.js';
 
-// Spread across all public Arc RPCs so a single endpoint rate-limiting one heavy
-// flow does not stall the test wallet's reads/writes.
-const arcTransport = () => fallback(RPC_URLS.map((u) => http(u, { retryCount: 2, timeout: 20_000 })));
-/** Signing needs the endpoints that answer `eth_fillTransaction`; see SIGNING_RPC_URLS. */
-const arcSigningTransport = () =>
-  fallback(SIGNING_RPC_URLS.map((u) => http(u, { retryCount: 2, timeout: 20_000 })));
+/**
+ * Endpoints for whichever chain the fake wallet is standing on, split into reads
+ * and signing as the app does. Arc (either network) uses its own lists, where the
+ * signing order matters; any other chain uses the registry's read endpoints.
+ */
+function transportsFor(chainId: number): { read: Transport; sign: Transport; chain: Chain } | null {
+  const arc = arcNetwork(chainId);
+  const urls = arc ? null : readRpcUrls(chainId);
+  const read = arc ? arc.readRpcs : urls ?? [];
+  const sign = arc ? arc.signingRpcs : urls ?? [];
+  if (!read.length) return null;
+  const mk = (list: readonly string[]) =>
+    fallback(list.map((u) => http(u, { retryCount: 2, timeout: 20_000 })));
+  const chain =
+    arc?.chain ??
+    ({
+      id: chainId,
+      name: `chain-${chainId}`,
+      nativeCurrency: { name: 'Gas', symbol: 'GAS', decimals: 18 },
+      rpcUrls: { default: { http: [...read] } },
+    } as Chain);
+  return { read: mk(read), sign: mk(sign), chain };
+}
 
 export interface TestProviderOptions {
-  /** Chain id the provider reports initially. Defaults to Arc Testnet. Set to a
+  /** Chain id the provider reports initially. Defaults to this app's Arc. Set to a
    *  different id (e.g. 1) to exercise the wrong-network guard. */
   chainId?: number;
   /** When true, `wallet_switchEthereumChain` is rejected (user keeps the wrong
@@ -33,15 +59,32 @@ export function makeTestProvider(
   options: TestProviderOptions = {},
 ): EIP1193Provider {
   const account = privateKeyToAccount(privateKey);
-  const wallet = createWalletClient({
-    account,
-    chain: arcTestnet,
-    transport: arcSigningTransport(),
-  });
-  const rpc = arcTransport()({ chain: arcTestnet });
-
-  const arcHex = `0x${arcTestnet.id.toString(16)}`;
+  const arcHex = `0x${APP_ARC_CHAIN_ID.toString(16)}`;
   let chainIdHex = options.chainId ? `0x${options.chainId.toString(16)}` : arcHex;
+
+  /*
+   * One set of clients per chain, built when the wallet first stands there. This
+   * used to be Arc testnet's, whatever chain it reported, so a "switch to Base"
+   * answered Base's chain id and then signed and read on Arc.
+   */
+  const perChain = new Map<number, ReturnType<typeof clientsOn>>();
+  function clientsOn(chainId: number) {
+    const t = transportsFor(chainId) ?? transportsFor(APP_ARC_CHAIN_ID)!;
+    return {
+      chain: t.chain,
+      wallet: createWalletClient({ account, chain: t.chain, transport: t.sign }),
+      rpc: t.read({ chain: t.chain }),
+    };
+  }
+  const here = () => {
+    const id = Number.parseInt(chainIdHex, 16);
+    let c = perChain.get(id);
+    if (!c) {
+      c = clientsOn(id);
+      perChain.set(id, c);
+    }
+    return c;
+  };
 
   const listeners: Record<string, Array<(...args: unknown[]) => void>> = {};
   const emit = (event: string, ...args: unknown[]) =>
@@ -78,19 +121,20 @@ export function makeTestProvider(
           return null;
         case 'eth_sendTransaction': {
           const tx = (params?.[0] ?? {}) as { to?: Hex; data?: Hex; value?: Hex; gas?: Hex };
+          const { wallet, chain } = here();
           return wallet.sendTransaction({
             to: tx.to ?? null,
             data: tx.data,
             value: tx.value ? BigInt(tx.value) : undefined,
             gas: tx.gas ? BigInt(tx.gas) : undefined,
             account,
-            chain: arcTestnet,
+            chain,
           });
         }
         case 'eth_signTypedData_v4': {
           const raw = params?.[1];
           const typed = typeof raw === 'string' ? JSON.parse(raw) : raw;
-          return wallet.signTypedData({
+          return here().wallet.signTypedData({
             account,
             domain: typed.domain,
             types: typed.types,
@@ -99,9 +143,9 @@ export function makeTestProvider(
           });
         }
         case 'personal_sign':
-          return wallet.signMessage({ account, message: { raw: params?.[0] as Hex } });
+          return here().wallet.signMessage({ account, message: { raw: params?.[0] as Hex } });
         default:
-          return rpc.request({ method, params: params ?? [] } as never);
+          return here().rpc.request({ method, params: params ?? [] } as never);
       }
     },
     on(event: string, handler: (...args: unknown[]) => void) {

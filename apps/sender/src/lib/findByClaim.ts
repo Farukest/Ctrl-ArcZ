@@ -1,5 +1,6 @@
 import type { Address, Hex, PublicClient } from 'viem';
-import { ctrlArcZAbi, CTRL_ARCZ_ADDRESS, getLogsChunked } from '@ctrl-arcz/sdk';
+import { ctrlArcZAbi, getLogsChunked } from '@ctrl-arcz/sdk';
+import { appCtrlArcZ, appScanStart } from './chainRead.js';
 
 /** How far back a claim code can find its transfer. Recall windows are hours, so a
  *  claimable transfer is always recent; this keeps the scan to a few calls. */
@@ -38,7 +39,7 @@ export async function findByClaimHash(
   claimHash: Hex,
 ): Promise<FoundTransfer | null> {
   const latest = await client.getBlockNumber();
-  const fromBlock = latest > LOOKBACK ? latest - LOOKBACK : 0n;
+  const fromBlock = appScanStart(latest, LOOKBACK);
   const logs = await getLogsChunked<{
     transferId?: bigint;
     to?: Address;
@@ -47,7 +48,7 @@ export async function findByClaimHash(
     deadline?: bigint;
     claimHash?: Hex;
   }>(client, {
-    address: CTRL_ARCZ_ADDRESS,
+    address: appCtrlArcZ(),
     abi: ctrlArcZAbi,
     eventName: 'TransferCreated',
     fromBlock,

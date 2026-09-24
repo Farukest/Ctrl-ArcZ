@@ -12,6 +12,7 @@
  */
 
 export * from './chains/arcTestnet.js';
+export * from './chains/arcMainnet.js';
 export {
   DEPLOYMENTS,
   addChainParams,
@@ -19,8 +20,11 @@ export {
   deploymentFor,
   deployedChainIds,
   readRpcUrls,
+  historySourceFor,
+  alchemyRpcUrl,
   type AddChainRequest,
   type ChainDeployment,
+  type HistorySource,
 } from './chains/deployments.js';
 export { ctrlArcZAbi, codeClaimVerifierAbi, memoAbi } from './abi/ctrlArcZ.js';
 export { getLogsChunked, type ChunkedEventsParams } from './events.js';
@@ -53,6 +57,14 @@ export {
   BlockscoutDataProvider,
   type BlockscoutProviderOptions,
 } from './risk/blockscoutProvider.js';
+export {
+  AlchemyDataProvider,
+  getAssetTransfers,
+  type AlchemyProviderOptions,
+  type AlchemyTransport,
+  type AssetTransfer,
+  type AssetTransferQuery,
+} from './risk/alchemyProvider.js';
 export type {
   AddressActivity,
   Counterparty,
@@ -139,6 +151,10 @@ export {
   type GetCleanHistoryOptions,
   type HistoryEntry,
 } from './history/history.js';
+export {
+  getCleanHistoryFromAlchemy,
+  type AlchemyHistoryOptions,
+} from './history/alchemyHistory.js';
 
 // Integrator setup
 export {
@@ -271,6 +287,10 @@ export {
   CCTP_CHAINS,
   CCTP_TOKEN_MESSENGER,
   IRIS_TESTNET,
+  IRIS_MAINNET,
+  irisApiFor,
+  assertSameNetwork,
+  isTestnetChain,
   FORWARDING_HOOK,
   type CctpChain,
   type CctpChainName,
@@ -293,6 +313,9 @@ export {
   GATEWAY_WALLET,
   GATEWAY_MINTER,
   GATEWAY_API_TESTNET,
+  GATEWAY_API_MAINNET,
+  gatewayApiFor,
+  gatewayContracts,
   GATEWAY_CHAIN_NAMES,
   DEPOSIT_CONFIRMATION_SECONDS,
   type GatewayChain,

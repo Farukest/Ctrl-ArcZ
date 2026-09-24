@@ -184,8 +184,8 @@ importers:
         version: 1.8.0
     devDependencies:
       '@circle-fin/bridge-kit':
-        specifier: ^1.14.0
-        version: 1.14.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
+        specifier: ^1.15.1
+        version: 1.15.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
       '@types/node':
         specifier: ^26.1.1
         version: 26.1.1
@@ -309,15 +309,15 @@ packages:
     resolution: {integrity: sha512-4zBIxpPzowiZpusoFkyGVwakdRJUyuH5PxQ/PrqghfdFWWasvnCdPfQXHrenDai+gyLARulZjZowCOj6fjT4pA==}
     engines: {node: '>=6.9.0'}
 
-  '@circle-fin/bridge-kit@1.14.0':
-    resolution: {integrity: sha512-DIPbyvBYFUQ4pDtDznShMWO2ZgJTI62vWCJT9KoHdjdvQQHgcnf/tZiU17QrdCEgghkS0OyTM+TFKAWTmyUIEg==}
+  '@circle-fin/bridge-kit@1.15.1':
+    resolution: {integrity: sha512-CnMoBmZJL4NXYDZ11uHxdQJ+9/h9JQSJPOXmFw0EJRn45m0NqWJFWJgyOH+1Kmt8csDOcBgNLWii4WSn3wS4qA==}
     engines: {node: '>=20.0.0'}
 
   '@circle-fin/modular-wallets-core@1.0.13':
     resolution: {integrity: sha512-ohRRpmjqSToHRUIRAdB7EMMnX3qNTUp9XYCRaaHU71922LWavUAhzn7itHoTOQYd0P8kvm52/OBh/N+lH71a8g==}
 
-  '@circle-fin/provider-cctp-v2@1.12.0':
-    resolution: {integrity: sha512-6cZdErj7thaEy6XvXNXuj3AyGfVQvIpJgEL+v79DivFf77E2V91yfIXMZktqDrmYbR5RIgLT/sz7Jb2O6WB28A==}
+  '@circle-fin/provider-cctp-v2@1.14.0':
+    resolution: {integrity: sha512-AX4fQueRft5TfS6XnYjPkHa6El+Dyf7Q2SyifLC6sfOT1kh2FdMvPKc4cWMdn5cBVQczDXlgXiP+PlOSrpK2qw==}
     engines: {node: '>=20.0.0'}
     peerDependencies:
       '@solana/web3.js': ^1.98.2
@@ -325,8 +325,12 @@ packages:
       '@solana/web3.js':
         optional: true
 
-  '@circle-fin/provider-fee-v1@0.2.0':
-    resolution: {integrity: sha512-Fm4jk6kKrYnuoRF7/7Q/KtucbkfvlJT+73tPtJqe8k0fgdHSccP3IMVtqNq5rGFNrWQDgJLMBi1t6rG3E+qFpA==}
+  '@circle-fin/provider-cctpx@1.0.1':
+    resolution: {integrity: sha512-mGbnNJTAj4H26NAZxZr8RyxQtMS2nNwWsl1hDzXau0OQARKieCQV/GIwhDXeVI+BzfgBbFLnQOtrAmkWV3owVA==}
+    engines: {node: '>=20.0.0'}
+
+  '@circle-fin/provider-fee-v1@0.3.1':
+    resolution: {integrity: sha512-KHWU3pj7RLIw1QQ7EJE4SWaJbmEtuz0Vs9RjANWBkC+sI/PjxnzCTEOraFdNAK3QpxftZoDX21dqT6v/a0c4YA==}
     engines: {node: '>=20.0.0'}
 
   '@coral-xyz/anchor-errors@0.31.1':
@@ -3126,10 +3130,11 @@ snapshots:
       '@babel/helper-string-parser': 7.29.7
       '@babel/helper-validator-identifier': 7.29.7
 
-  '@circle-fin/bridge-kit@1.14.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)':
+  '@circle-fin/bridge-kit@1.15.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)':
     dependencies:
-      '@circle-fin/provider-cctp-v2': 1.12.0(@solana/web3.js@1.98.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6))(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
-      '@circle-fin/provider-fee-v1': 0.2.0
+      '@circle-fin/provider-cctp-v2': 1.14.0(@solana/web3.js@1.98.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6))(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
+      '@circle-fin/provider-cctpx': 1.0.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
+      '@circle-fin/provider-fee-v1': 0.3.1
       '@ethersproject/abi': 5.8.0
       '@ethersproject/address': 5.8.0
       '@ethersproject/bytes': 5.8.0
@@ -3158,7 +3163,7 @@ snapshots:
       - utf-8-validate
       - zod
 
-  '@circle-fin/provider-cctp-v2@1.12.0(@solana/web3.js@1.98.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6))(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)':
+  '@circle-fin/provider-cctp-v2@1.14.0(@solana/web3.js@1.98.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6))(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)':
     dependencies:
       '@coral-xyz/anchor': 0.31.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
       '@ethersproject/abi': 5.8.0
@@ -3179,7 +3184,24 @@ snapshots:
       - typescript
       - utf-8-validate
 
-  '@circle-fin/provider-fee-v1@0.2.0':
+  '@circle-fin/provider-cctpx@1.0.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)':
+    dependencies:
+      '@ethersproject/abi': 5.8.0
+      '@ethersproject/address': 5.8.0
+      '@ethersproject/bytes': 5.8.0
+      '@ethersproject/units': 5.8.0
+      '@solana/web3.js': 1.98.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
+      abitype: 1.2.4(typescript@5.9.3)(zod@3.25.67)
+      bs58: 6.0.0
+      pino: 10.1.0
+      zod: 3.25.67
+    transitivePeerDependencies:
+      - bufferutil
+      - encoding
+      - typescript
+      - utf-8-validate
+
+  '@circle-fin/provider-fee-v1@0.3.1':
     dependencies:
       '@ethersproject/abi': 5.8.0
       '@ethersproject/address': 5.8.0

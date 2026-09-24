@@ -240,7 +240,14 @@ describe('chain data matches Circle documentation', () => {
     (name, domain, chainId, usdc) => {
       // Arc is the one chain that charges gas in the USDC being bridged.
       const gas = name === 'Arc_Testnet' ? { gasToken: 'usdc' } : {};
-      expect(CCTP_CHAINS[name]).toEqual({ domain, chainId, usdc, ...gas });
+      expect(CCTP_CHAINS[name]).toEqual({
+        domain,
+        chainId,
+        usdc,
+        testnet: true,
+        tokenMessenger: CCTP_CHAINS[name].tokenMessenger,
+        ...gas,
+      });
     },
   );
 
@@ -250,7 +257,8 @@ describe('chain data matches Circle documentation', () => {
     const usdcGas = Object.entries(CCTP_CHAINS)
       .filter(([, c]) => 'gasToken' in c)
       .map(([n]) => n);
-    expect(usdcGas).toEqual(['Arc_Testnet']);
+    // Arc, on both networks, and nothing else.
+    expect(usdcGas.sort()).toEqual(['Arc', 'Arc_Testnet']);
   });
 
   it('still ships every chain that was verified', () => {
@@ -275,10 +283,27 @@ describe('chain data matches Circle documentation', () => {
     }
   });
 
-  it('keeps domains and chain ids unique, so no route can be ambiguous', () => {
+  it('keeps domains unique per network and chain ids unique everywhere', () => {
+    // Circle numbers domains the same on both networks (Arc is 26 on each), so a
+    // domain is only unambiguous together with the network. A chain id never repeats.
     const chains = Object.values(CCTP_CHAINS);
-    expect(new Set(chains.map((c) => c.domain)).size).toBe(chains.length);
+    for (const testnet of [true, false]) {
+      const net = chains.filter((c) => c.testnet === testnet);
+      expect(net.length, String(testnet)).toBeGreaterThan(0);
+      expect(new Set(net.map((c) => c.domain)).size).toBe(net.length);
+    }
     expect(new Set(chains.map((c) => c.chainId)).size).toBe(chains.length);
+  });
+
+  it('carries Arc mainnet with the facts read off it on 2026-09-24', () => {
+    expect(CCTP_CHAINS.Arc).toEqual({
+      domain: 26,
+      chainId: 5042,
+      usdc: '0x3600000000000000000000000000000000000000',
+      testnet: false,
+      tokenMessenger: '0x28b5a0e9C621a5BadaA536219b3a228C8168cf5d',
+      gasToken: 'usdc',
+    });
   });
 
   it('uses the one TokenMessenger address Circle deploys to every testnet', () => {

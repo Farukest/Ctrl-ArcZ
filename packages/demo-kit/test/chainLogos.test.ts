@@ -84,7 +84,19 @@ describe('every chain logo is safe to inline', () => {
 describe('the chains with no mark', () => {
   it('are the three nobody publishes one for', () => {
     const have = new Set(FILES.map((f) => f.replace(/\.svg$/, '')));
-    const missing = (Object.keys(CCTP_CHAINS) as CctpChainName[]).filter((c) => !have.has(c));
+    const testnets = (Object.keys(CCTP_CHAINS) as CctpChainName[]).filter((c) => CCTP_CHAINS[c].testnet);
+    const missing = testnets.filter((c) => !have.has(c));
     expect(missing.sort()).toEqual(['Edge_Testnet', 'Morph_Hoodi', 'Pharos_Testnet']);
+  });
+
+  it('gives each mainnet its testnet twin’s mark, by CCTP domain', () => {
+    const have = new Set(FILES.map((f) => f.replace(/\.svg$/, '')));
+    const mainnets = (Object.keys(CCTP_CHAINS) as CctpChainName[]).filter((c) => !CCTP_CHAINS[c].testnet);
+    const twin = (c: CctpChainName) =>
+      (Object.keys(CCTP_CHAINS) as CctpChainName[]).find(
+        (n) => CCTP_CHAINS[n].testnet && CCTP_CHAINS[n].domain === CCTP_CHAINS[c].domain,
+      );
+    const missing = mainnets.filter((c) => !have.has(c) && !have.has(twin(c) ?? ''));
+    expect(missing.sort()).toEqual(['Edge', 'Morph', 'Pharos']);
   });
 });

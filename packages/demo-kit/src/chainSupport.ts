@@ -1,4 +1,5 @@
-import { ARC_TESTNET_CHAIN_ID, deployedChainIds, deploymentFor } from '@ctrl-arcz/sdk';
+import { deployedChainIds, deploymentFor, historySourceFor, isArcChain } from '@ctrl-arcz/sdk';
+import { APP_ARC_CHAIN_ID, onAppNetwork } from './network.js';
 
 /**
  * Which chain a screen can do its work on.
@@ -46,7 +47,7 @@ export type ChainFeature =
  * instance for it. Wiring an Etherscan-shaped API would be a second provider, not
  * a config line, and is not worth it for a demo chain.
  */
-const hasFirewall = (chainId: number) => deploymentFor(chainId)?.explorerApi !== undefined;
+const hasFirewall = (chainId: number) => historySourceFor(chainId) !== undefined;
 
 const ALSO_NEEDS: Record<ChainFeature, ((chainId: number) => boolean) | null> = {
   /** Every send goes through the recipient firewall before it is signed. */
@@ -91,7 +92,7 @@ const ALSO_NEEDS: Record<ChainFeature, ((chainId: number) => boolean) | null> = 
    */
   privatePay: (chainId) =>
     hasFirewall(chainId) &&
-    (chainId === ARC_TESTNET_CHAIN_ID || deploymentFor(chainId)?.privatePayRouter !== undefined),
+    (isArcChain(chainId) || deploymentFor(chainId)?.privatePayRouter !== undefined),
   /**
    * A subscription box is deployed and announced by the relayer, which needs
    * nothing this registry does not already answer: a factory, an announcer, and
@@ -117,6 +118,9 @@ const ALSO_NEEDS: Record<ChainFeature, ((chainId: number) => boolean) | null> = 
  */
 export function supportsChain(chainId: number | undefined, feature: ChainFeature): boolean {
   if (chainId === undefined || !deploymentFor(chainId)) return false;
+  // A deployment on the other network is not one this app offers. A testnet box
+  // on a mainnet screen reads as real money and is not.
+  if (!onAppNetwork(chainId)) return false;
   const extra = ALSO_NEEDS[feature];
   return extra === null || extra(chainId);
 }
@@ -130,7 +134,7 @@ export function supportsChain(chainId: number | undefined, feature: ChainFeature
  * rather than sending the user to a network that would refuse them too.
  */
 export function preferredChainFor(feature: ChainFeature): number {
-  if (supportsChain(ARC_TESTNET_CHAIN_ID, feature)) return ARC_TESTNET_CHAIN_ID;
+  if (supportsChain(APP_ARC_CHAIN_ID, feature)) return APP_ARC_CHAIN_ID;
   const other = deployedChainIds().find((id) => supportsChain(id, feature));
-  return other ?? ARC_TESTNET_CHAIN_ID;
+  return other ?? APP_ARC_CHAIN_ID;
 }

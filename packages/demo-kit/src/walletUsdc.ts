@@ -1,12 +1,12 @@
 import { erc20Abi, type Address } from 'viem';
 import {
-  ARC_TESTNET_CHAIN_ID,
   CCTP_CHAINS,
   cctpChainByChainId,
   readRpcUrls,
   type CctpChainName,
 } from '@ctrl-arcz/sdk';
 import { bridgeClients, getPublicClient } from './session.js';
+import { APP_ARC_CHAIN_ID } from './network.js';
 
 /**
  * USDC a wallet holds on a chain, when it can be read from here at all.
@@ -40,7 +40,7 @@ export async function readUsdcOn(
   address: Address,
 ): Promise<bigint | null> {
   const entry = CCTP_CHAINS[chain];
-  const isArc = entry.chainId === ARC_TESTNET_CHAIN_ID;
+  const isArc = entry.chainId === APP_ARC_CHAIN_ID;
   // Endpoints of its own mean the read does not need the wallet to be there.
   const reachable = readRpcUrls(entry.chainId).length > 0;
   if (!reachable && connectedChainId !== entry.chainId) return null;
@@ -83,7 +83,7 @@ export async function readGasBalanceOn(
   if (readRpcUrls(entry.chainId).length === 0) return null;
   try {
     const client =
-      entry.chainId === ARC_TESTNET_CHAIN_ID
+      entry.chainId === APP_ARC_CHAIN_ID
         ? getPublicClient()
         : bridgeClients(entry.chainId, address).publicClient;
     return await client.getBalance({ address });

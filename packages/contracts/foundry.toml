@@ -21,6 +21,8 @@ runs = 256
 
 [rpc_endpoints]
 arc_testnet = "https://rpc.testnet.arc.network"
+# Arc mainnet (chain 5042). Circle's own endpoint: https://docs.arc.io/arc/references/rpc-endpoints
+arc_mainnet = "https://rpc.mainnet.arc.io"
 # The CCTP testnets we can deploy onto. Public endpoints on purpose: a deploy is a
 # handful of transactions, and naming a keyed provider here would put a URL in the
 # repo that has to be rotated rather than read.

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { isAddress, type Address } from 'viem';
-import { check, shouldBlockSend, type RiskReport } from '@ctrl-arcz/sdk';
+import { check, shouldBlockSend, type RiskReport, deploymentFor } from '@ctrl-arcz/sdk';
 import type { Session } from '@ctrl-arcz/demo-kit';
 import { ctrlArcZFor, readClientFor } from './chainRead.js';
 import { isArmed } from '@ctrl-arcz/demo-kit/ui';
@@ -160,6 +160,9 @@ export function useRecipientRisk(session: Session, to: string): RecipientRisk {
             client: readClientFor(session),
             provider: riskProvider(session.chainId),
             contractAddress: ctrlArcZFor(session),
+            ...(deploymentFor(session.chainId)
+              ? { contractDeployBlock: deploymentFor(session.chainId)!.ctrlArcZDeployBlock }
+              : {}),
             /**
              * Only hand over the index when it is actually complete.
              *

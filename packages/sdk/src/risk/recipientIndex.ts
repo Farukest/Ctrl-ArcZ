@@ -23,6 +23,12 @@ export class VerifiedRecipientIndex {
     private readonly client: PublicClient,
     private readonly contractAddress: Address = CTRL_ARCZ_ADDRESS,
     private readonly pollMs = 15_000,
+    /**
+     * Where the backfill starts: the block `contractAddress` was deployed in.
+     * Required in practice for any contract but the built-in one; the default is
+     * testnet Arc's deploy block, which means nothing on another chain.
+     */
+    private readonly fromBlock?: bigint,
   ) {}
 
   /** The sender's verified recipients as indexed so far. Instant, no RPC. */
@@ -64,6 +70,7 @@ export class VerifiedRecipientIndex {
         address: this.contractAddress,
         abi: ctrlArcZAbi,
         eventName: 'RecipientVerified',
+        ...(this.fromBlock != null ? { fromBlock: this.fromBlock } : {}),
         toBlock: head,
       });
       this.ingest(logs);

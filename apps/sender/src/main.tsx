@@ -16,7 +16,24 @@ import './app.css';
 // network" branch and nothing else -- and the interesting cases are the chains we
 // do know, where every control on the screen is supposed to follow the wallet onto
 // them. "The wallet is on Base Sepolia" was a state no test could reach.
-const demoPk = import.meta.env.VITE_DEMO_PK as `0x${string}` | undefined;
+/*
+ * Where the key comes from. `VITE_DEMO_PK` bakes one into the build, which the
+ * production guard in vite.config.ts refuses. The dev server can also take one
+ * from this browser's own storage, so two browser profiles can be two different
+ * wallets against one dev server -- a sender and a receiver -- without a second
+ * build. Only in development: `import.meta.env.DEV` is a constant, and the whole
+ * branch is removed from a production bundle.
+ */
+function devStoredKey(): `0x${string}` | undefined {
+  if (!import.meta.env.DEV) return undefined;
+  try {
+    const v = window.localStorage.getItem('ctrlarcz.testwallet.pk');
+    return v && /^0x[0-9a-fA-F]{64}$/.test(v) ? (v as `0x${string}`) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+const demoPk = devStoredKey() ?? (import.meta.env.VITE_DEMO_PK as `0x${string}` | undefined);
 if (demoPk) {
   const q = new URLSearchParams(window.location.search);
   const asked = Number(q.get('chain'));

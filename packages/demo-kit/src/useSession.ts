@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { type Address } from 'viem';
-import { ARC_TESTNET_CHAIN_ID, type CctpChainName } from '@ctrl-arcz/sdk';
+import { type CctpChainName } from '@ctrl-arcz/sdk';
+import { APP_ARC_CHAIN_ID } from './network.js';
 import { useT } from './i18n/context.js';
 import { hasWallet, injectedSession, switchWalletTo, watchWallet, type Session } from './session.js';
 import { readWalletUsdc } from './walletUsdc.js';
@@ -46,7 +47,7 @@ export interface SessionState {
   walletDetected: boolean;
   connect: () => Promise<void>;
   disconnect: () => void;
-  /** Back to Arc. Shorthand for `switchTo(ARC_TESTNET_CHAIN_ID)`. */
+  /** Back to Arc. Shorthand for `switchTo(APP_ARC_CHAIN_ID)`. */
   switchChain: () => Promise<void>;
   /**
    * Move the wallet to `chainId`.
@@ -184,7 +185,7 @@ export function useSession(): SessionState {
     [reconnect, t],
   );
 
-  const switchChain = useCallback(() => switchTo(ARC_TESTNET_CHAIN_ID), [switchTo]);
+  const switchChain = useCallback(() => switchTo(APP_ARC_CHAIN_ID), [switchTo]);
 
   // On mount: detect the wallet (deferred so an injected test provider registers
   // first) and silently reconnect if the user was connected before the reload.
@@ -223,7 +224,7 @@ export function useSession(): SessionState {
     // nothing; every other chain is reachable only through the wallet's provider,
     // and MetaMask rate-limits a site by how many requests it makes there -- a
     // budget the transaction being signed needs more than this figure does.
-    const every = session.chainId === ARC_TESTNET_CHAIN_ID ? 10_000 : 20_000;
+    const every = session.chainId === APP_ARC_CHAIN_ID ? 10_000 : 20_000;
     const timer = setInterval(() => void refreshBalance(), every);
     return () => clearInterval(timer);
   }, [session, refreshBalance]);

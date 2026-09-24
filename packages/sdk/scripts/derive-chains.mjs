@@ -69,7 +69,13 @@ const explorerHome = (template) =>
 
 const trim = (url) => url.replace(/\/$/, '');
 
-/** Every EVM testnet Circle serves CCTP on, in domain order. */
+/**
+ * Every EVM chain Circle serves CCTP on: the testnets first, then the mainnets,
+ * each in domain order.
+ *
+ * Testnets first so the rows that existed before mainnet keep their place, and a
+ * network is never inferred from position: every row says which one it is on.
+ */
 export function deriveChains() {
   const defs = Object.values(bridgeKit)
     .filter(
@@ -77,14 +83,14 @@ export function deriveChains() {
         v &&
         typeof v === 'object' &&
         v.type === 'evm' &&
-        v.isTestnet === true &&
+        typeof v.isTestnet === 'boolean' &&
         typeof v.chainId === 'number' &&
         v.cctp &&
         typeof v.usdcAddress === 'string',
     )
     // By CCTP domain, which is the number Circle orders them by and the one that
     // does not move when a chain is renamed.
-    .sort((a, b) => a.cctp.domain - b.cctp.domain);
+    .sort((a, b) => Number(b.isTestnet) - Number(a.isTestnet) || a.cctp.domain - b.cctp.domain);
 
   const out = [];
   const seen = new Set();
@@ -95,13 +101,30 @@ export function deriveChains() {
 
     const explorerUrl = explorerHome(d.explorerUrl);
     const firstPartyRpc = d.rpcEndpoints.find(isFirstParty);
+    // Circle deploys CCTP and Gateway with CREATE2, but not to one address on both
+    // networks, and not even to one address on every mainnet (Edge differs). So the
+    // contracts travel with the row instead of living in a constant.
+    const cctpV2 = d.cctp.contracts?.v2;
+    const gatewayV1 = d.gateway?.contracts?.v1;
+    if (!cctpV2?.tokenMessenger || !cctpV2?.messageTransmitter) {
+      throw new Error(`${d.chain}: no CCTP v2 contracts in the kit`);
+    }
+    if (d.gateway && (!gatewayV1?.wallet || !gatewayV1?.minter)) {
+      throw new Error(`${d.chain}: Gateway listed without its contracts`);
+    }
     out.push({
       name,
       ...(d.chain === name ? {} : { circleName: d.chain }),
+      testnet: d.isTestnet,
       domain: d.cctp.domain,
       chainId: d.chainId,
       usdc: getAddress(d.usdcAddress),
+      tokenMessenger: getAddress(cctpV2.tokenMessenger),
+      messageTransmitter: getAddress(cctpV2.messageTransmitter),
       gateway: Boolean(d.gateway),
+      ...(gatewayV1
+        ? { gatewayWallet: getAddress(gatewayV1.wallet), gatewayMinter: getAddress(gatewayV1.minter) }
+        : {}),
       nativeCurrency: {
         name: d.nativeCurrency.name,
         symbol: d.nativeCurrency.symbol,

@@ -17,11 +17,14 @@ import { useT } from '@ctrl-arcz/demo-kit/ui';
 import {
   deploymentFor,
   getCleanHistory,
+  getCleanHistoryFromAlchemy,
   getTransfer,
+  historySourceFor,
   tokensFor,
   type CleanHistory,
 } from '@ctrl-arcz/sdk';
 import { loadTransfers } from '../store.js';
+import { chainDataUrl } from './riskProvider.js';
 import type { SentRow } from './activityEntries.js';
 
 /** The chain moves on its own; this is how often we ask it what changed. */
@@ -78,11 +81,11 @@ export function useTokenHistory(session: Session): {
   const [history, setHistory] = useState<CleanHistory | null>(null);
   const [error, setError] = useState<string | null>(null);
   const t = useT();
-  const deployment = deploymentFor(session.chainId);
-  const apiUrl = deployment?.explorerApi;
+  const source = historySourceFor(session.chainId);
+  const sourceKey = source ? (source.kind === 'blockscout' ? source.apiUrl : source.network) : '';
 
   const reload = useCallback(async () => {
-    if (!apiUrl) {
+    if (!source) {
       setHistory(null);
       return;
     }
@@ -98,11 +101,29 @@ export function useTokenHistory(session: Session): {
        * address is not a token on Base, so filtering Base's transfers through it
        * would empty the list rather than clean it.
        */
+      const allowedTokens = tokensFor(session.chainId).map((token) => token.address);
+      const deployment = deploymentFor(session.chainId);
       setHistory(
-        await getCleanHistory(session.address as Address, {
-          apiUrl,
-          allowedTokens: tokensFor(session.chainId).map((token) => token.address),
-        }),
+        source.kind === 'blockscout'
+          ? await getCleanHistory(session.address as Address, {
+              apiUrl: source.apiUrl,
+              allowedTokens,
+            })
+          : await getCleanHistoryFromAlchemy(session.address as Address, {
+              rpcUrl: chainDataUrl(session.chainId),
+              allowedTokens,
+              // Arc's own coin is USDC, so a plain send of it is a USDC row.
+              ...(deployment?.gasToken === 'usdc'
+                ? {
+                    native: {
+                      address: deployment.usdc,
+                      symbol: 'USDC',
+                      decimals: 6,
+                      sourceDecimals: 18,
+                    },
+                  }
+                : {}),
+            }),
       );
       setError(null);
     } catch (e) {
@@ -114,7 +135,7 @@ export function useTokenHistory(session: Session): {
         return prev;
       });
     }
-  }, [session.address, session.chainId, apiUrl, t]);
+  }, [session.address, session.chainId, sourceKey, t]);
 
   useEffect(() => {
     void reload();
@@ -129,5 +150,5 @@ export function useTokenHistory(session: Session): {
     };
   }, [reload]);
 
-  return { history, error, unsupported: !apiUrl, reload };
+  return { history, error, unsupported: !source, reload };
 }

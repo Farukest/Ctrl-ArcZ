@@ -10,7 +10,8 @@
     "./gasless": "./src/gaslessServer.ts",
     "./cosign": "./src/cosignServer.ts",
     "./relay": "./src/relayServer.ts",
-    "./investigator": "./src/investigator.ts"
+    "./investigator": "./src/investigator.ts",
+    "./history-server": "./src/historyServer.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

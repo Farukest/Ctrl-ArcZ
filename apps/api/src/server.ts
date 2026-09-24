@@ -10,6 +10,7 @@ import {
   healthGet,
   verifiedRecipientsGet,
   announcementsGet,
+  chainDataPost,
 } from './handlers.js';
 /**
  * The Ctrl+ArcZ backend. One service for every client: the enclave co-signer, the
@@ -48,4 +49,6 @@ serve({
 
   // Advisory only, and it can only ever tighten a verdict — never weaken one.
   'POST /api/investigate': investigatePost,
+
+  'POST /api/chain-data': chainDataPost,
 });

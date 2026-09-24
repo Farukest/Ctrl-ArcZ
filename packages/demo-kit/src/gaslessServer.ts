@@ -1,9 +1,11 @@
 import { createPublicClient, http, type Hex } from 'viem';
 import {
   claim,
+  deploymentFor,
   getTransfer,
   hashClaim,
   arcTestnet,
+  ARC_TESTNET_CHAIN_ID,
   RPC_URL,
   TransferLockedError,
   TransferUnavailableError,
@@ -15,7 +17,7 @@ import {
   circleGaslessEnabled,
   type CircleGaslessInput,
 } from './circleGasless.js';
-import { localSigner } from './session.js';
+import { localSigner, signerFor } from './session.js';
 
 const publicClient = createPublicClient({ chain: arcTestnet, transport: http(RPC_URL) });
 
@@ -68,14 +70,35 @@ export async function gaslessClaimToResult(
   transferId: bigint,
   code: string,
   salt: Hex,
+  /**
+   * Which chain the transfer is on. Arc testnet when absent, so a client written
+   * before mainnet keeps working unchanged.
+   */
+  chainId: number = ARC_TESTNET_CHAIN_ID,
 ): Promise<GaslessClaimResult> {
   ensureWindowShim();
+  const onTestnetArc = chainId === ARC_TESTNET_CHAIN_ID;
+  const deployment = deploymentFor(chainId);
+  if (!deployment) {
+    return { ok: false, error: { kind: 'unknown', message: `no deployment on chain ${chainId}` } };
+  }
+  /*
+   * Anywhere but testnet Arc the claim is the relayer's own transaction. Circle's
+   * Gas Station sponsors testnet automatically; on mainnet it needs a policy that
+   * is created, activated and billed in the Console, and this deployment has none.
+   * The relayer paying is the same fallback testnet Arc uses without a client key.
+   */
+  const pair = onTestnetArc || !cfg.ownerKey ? null : signerFor(chainId, cfg.ownerKey);
+  const reader = pair ? pair.publicClient : publicClient;
   try {
     // Pre-flight: reject a wrong code off-chain so it never consumes an on-chain
     // claim attempt (closes the free lock-griefing). A failed read falls through to
     // the on-chain path, which is itself attempt-limited.
     try {
-      const transfer = await getTransfer({ publicClient }, transferId);
+      const transfer = await getTransfer(
+        { publicClient: reader, contractAddress: deployment.ctrlArcZ },
+        transferId,
+      );
       if (!codeMatchesClaimHash(transfer.claimHash, salt, code)) {
         return { ok: false, error: { kind: 'wrong_code' } };
       }
@@ -84,7 +107,10 @@ export async function gaslessClaimToResult(
     }
 
     let txHash: string;
-    if (circleGaslessEnabled(cfg)) {
+    if (!onTestnetArc) {
+      if (!pair) return { ok: false, error: { kind: 'unknown', message: 'gasless not configured' } };
+      txHash = await claim({ ...pair, contractAddress: deployment.ctrlArcZ }, transferId, code, salt);
+    } else if (circleGaslessEnabled(cfg)) {
       txHash = await circleGaslessClaim(cfg, transferId, code, salt);
     } else if (cfg.ownerKey) {
       // Fallback: the relayer signs and pays gas itself (recipient still pays 0).

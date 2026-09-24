@@ -40,7 +40,7 @@ describe('the cost table is the measured one', () => {
 
   it('marks only Ethereum as the user’s decision', () => {
     const costly = Object.entries(GATEWAY_BASE_FEE).filter(([, f]) => f >= COSTLY_BASE_FEE);
-    expect(costly.map(([c]) => c)).toEqual(['Ethereum_Sepolia']);
+    expect(costly.map(([c]) => c)).toEqual(['Ethereum_Sepolia', 'Ethereum']);
   });
 });
 

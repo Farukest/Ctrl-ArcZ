@@ -3,12 +3,12 @@ import type { Address, PublicClient } from 'viem';
 import { getPublicClient, type Session } from '@ctrl-arcz/demo-kit';
 import {
   ctrlArcZAbi,
-  CTRL_ARCZ_ADDRESS,
   getLogsChunked,
   getTransfer,
   isTerminal,
   type ProtectedTransfer,
 } from '@ctrl-arcz/sdk';
+import { appCtrlArcZ, appScanStart } from './chainRead.js';
 
 /** How far back the received history reaches. Deep enough to cover the life of a
  *  demo wallet, shallow enough to stay a handful of eth_getLogs. */
@@ -101,10 +101,10 @@ export function useIncoming(session: Session | null): {
     const me = session.address.toLowerCase();
     try {
       const latest = await client.getBlockNumber();
-      const fromBlock = cursor.current ?? (latest > LOOKBACK ? latest - LOOKBACK : 0n);
+      const fromBlock = cursor.current ?? appScanStart(latest, LOOKBACK);
       if (fromBlock <= latest) {
         const logs = await getLogsChunked<{ to?: Address; transferId?: bigint }>(client, {
-          address: CTRL_ARCZ_ADDRESS,
+          address: appCtrlArcZ(),
           abi: ctrlArcZAbi,
           eventName: 'TransferCreated',
           args: { to: session.address as Address },

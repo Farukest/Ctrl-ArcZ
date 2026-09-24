@@ -14,6 +14,18 @@ export {
 } from './session.js';
 export { readGasBalanceOn, readUsdcOn, readWalletUsdc } from './walletUsdc.js';
 export {
+  APP_NETWORK,
+  APP_TESTNET,
+  APP_ARC,
+  APP_ARC_CHAIN_ID,
+  APP_ARC_NAME,
+  arcNetwork,
+  onAppNetwork,
+  txLink,
+  type AppNetwork,
+  type ArcNetwork,
+} from './network.js';
+export {
   useWalletChain,
   chainForWallet,
   destinationChain,

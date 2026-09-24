@@ -198,7 +198,17 @@ describe('the networks a bridge actually asks the wallet to stand on', () => {
    * moved once already: Morph Hoodi was here for want of a published coin, and
    * reading Circle's table gave it one.
    */
-  const NO_OFFER = ['Ethereum_Sepolia', 'Polygon_Amoy', 'World_Chain_Sepolia', 'Edge_Testnet'];
+  const NO_OFFER = [
+    'Ethereum_Sepolia',
+    'Polygon_Amoy',
+    'World_Chain_Sepolia',
+    'Edge_Testnet',
+    // Mainnet, for the same reason: Circle lists only resellers for each of them.
+    'Ethereum',
+    'Polygon',
+    'World_Chain',
+    'Edge',
+  ];
 
   it('is exactly the chains whose own details are still published', () => {
     expect(ALL.filter((c) => !canAddChain(CCTP_CHAINS[c].chainId))).toEqual(NO_OFFER);

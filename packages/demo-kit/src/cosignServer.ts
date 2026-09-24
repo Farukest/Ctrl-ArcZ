@@ -23,9 +23,9 @@ import {
   cosignAuthMessage,
   arcTestnet,
   ARC_TESTNET_CHAIN_ID,
-  BlockscoutDataProvider,
   CachingDataProvider,
   deploymentFor,
+  historySourceFor,
   RPC_URLS,
   spendPolicyFactoryAbi,
   ACTION_PAY,
@@ -38,6 +38,7 @@ import {
   type RiskVerdict,
   type SpendAction,
 } from '@ctrl-arcz/sdk';
+import { serverDataProvider } from './historyServer.js';
 
 /**
  * Server-only co-signer ("The Machine"). Runs the enclave's job off the browser:
@@ -241,7 +242,7 @@ const providers = new Map<number, CachingDataProvider>();
 function providerFor(chainId: number): CachingDataProvider {
   const cached = providers.get(chainId);
   if (cached) return cached;
-  const provider = new CachingDataProvider(new BlockscoutDataProvider({ chainId }), {
+  const provider = new CachingDataProvider(serverDataProvider(chainId), {
     ttlMs: 60_000,
   });
   providers.set(chainId, provider);
@@ -285,7 +286,12 @@ function recipientIndexFor(chainId: number): VerifiedRecipientIndex {
   if (cached) return cached;
   const deployment = deploymentFor(chainId);
   if (!deployment) throw new Error(`invalid chainId ${chainId}`);
-  const index = new VerifiedRecipientIndex(clientFor(chainId), deployment.ctrlArcZ);
+  const index = new VerifiedRecipientIndex(
+    clientFor(chainId),
+    deployment.ctrlArcZ,
+    undefined,
+    deployment.ctrlArcZDeployBlock,
+  );
   recipientIndexes.set(chainId, index);
   void index.start();
   return index;
@@ -459,7 +465,7 @@ async function riskCheck(
   // is the honest outcome: the co-signer cannot vouch for a recipient it cannot
   // look up. `chainSupport` keeps such a chain out of the firewall-gated screens
   // so the user is told before they fill in a form, not after.
-  if (!deployment?.explorerApi) return null;
+  if (!deployment || !historySourceFor(chainId)) return null;
   const recipientIndex = recipientIndexFor(chainId);
   try {
     // Once the indexer has backfilled, feed its list so check() does zero on-chain
@@ -471,6 +477,7 @@ async function riskCheck(
     const report = await check(owner, target, {
       client: clientFor(chainId),
       contractAddress: deployment.ctrlArcZ,
+      contractDeployBlock: deployment.ctrlArcZDeployBlock,
       provider: providerFor(chainId),
       ...scanOpts,
     });
