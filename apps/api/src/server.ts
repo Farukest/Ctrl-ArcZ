@@ -1,3 +1,4 @@
+import { setDefaultResultOrder } from 'node:dns';
 import { serve } from './http.js';
 import {
   cosignGet,
@@ -16,6 +17,12 @@ import {
   nanoMessagesPost,
   nanoWithdrawPost,
 } from './handlers.js';
+
+// IPv4 first. The server has both families, and BlockRun (the pay-per-request
+// Claude service, behind Google's front end) answers its IPv6 address with 403
+// while taking IPv4. Node tried IPv6 first, so every paid request failed there
+// and nowhere else.
+setDefaultResultOrder('ipv4first');
 /**
  * The Ctrl+ArcZ backend. One service for every client: the enclave co-signer, the
  * gasless claim (server-held keys), the stealth relay, and the two undirected
