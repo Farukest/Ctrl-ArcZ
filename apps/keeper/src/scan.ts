@@ -40,7 +40,15 @@ export class OpenLedger {
   private readonly open = new Map<string, OpenTransfer>();
   private cursor: bigint | null = null;
 
-  constructor(private readonly contract: Address = CTRL_ARCZ_ADDRESS as Address) {}
+  /**
+   * `floor` is the block the contract was deployed at. The first backfill never
+   * reaches below it: on a young chain the backfill window would otherwise start
+   * before the contract existed, and every request for those blocks is wasted.
+   */
+  constructor(
+    private readonly contract: Address = CTRL_ARCZ_ADDRESS as Address,
+    private readonly floor: bigint = 0n,
+  ) {}
 
   get size(): number {
     return this.open.size;
@@ -63,11 +71,8 @@ export class OpenLedger {
     opts: { backfillBlocks: number; spanBlocks: number },
   ): Promise<void> {
     const first = this.cursor === null;
-    const from = first
-      ? head > BigInt(opts.backfillBlocks)
-        ? head - BigInt(opts.backfillBlocks)
-        : 0n
-      : this.cursor! + 1n;
+    const backfilled = head > BigInt(opts.backfillBlocks) ? head - BigInt(opts.backfillBlocks) : 0n;
+    const from = first ? (backfilled > this.floor ? backfilled : this.floor) : this.cursor! + 1n;
     if (from > head) return;
 
     const span = BigInt(opts.spanBlocks);

@@ -2,22 +2,21 @@ import {
   createPublicClient,
   createWalletClient,
   erc20Abi,
-  fallback,
   formatUnits,
-  http,
   type Address,
   type PublicClient,
   type WalletClient,
 } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { ADDRESSES, CTRL_ARCZ_ADDRESS, RPC_URLS, arcTestnet, reclaimExpired } from '@ctrl-arcz/sdk';
+import { reclaimExpired } from '@ctrl-arcz/sdk';
 import { env } from './env.js';
 import { decide } from './decide.js';
+import { network, transport } from './network.js';
 import { OpenLedger, confirm } from './scan.js';
 import { drawSalary } from './salary.js';
 
-const USDC = ADDRESSES.USDC as Address;
-const CONTRACT = CTRL_ARCZ_ADDRESS as Address;
+const USDC = network.usdc;
+const CONTRACT = network.ctrlArcZ;
 
 /**
  * The keeper loop.
@@ -33,15 +32,14 @@ const CONTRACT = CTRL_ARCZ_ADDRESS as Address;
 
 const account = privateKeyToAccount(env.keeperPk);
 
-const transport = () => fallback(RPC_URLS.map((u) => http(u, { retryCount: 2 })));
-const publicClient: PublicClient = createPublicClient({ chain: arcTestnet, transport: transport() });
+const publicClient: PublicClient = createPublicClient({ chain: network.chain, transport: transport() });
 const walletClient: WalletClient = createWalletClient({
   account,
-  chain: arcTestnet,
+  chain: network.chain,
   transport: transport(),
 });
 
-const ledger = new OpenLedger(CONTRACT);
+const ledger = new OpenLedger(CONTRACT, network.deployBlock);
 
 export const keeperAddress = account.address;
 
@@ -113,7 +111,10 @@ export async function tick(): Promise<TickReport> {
       continue;
     }
     try {
-      const txHash = await reclaimExpired({ publicClient, walletClient }, c.transferId);
+      const txHash = await reclaimExpired(
+        { publicClient, walletClient, contractAddress: CONTRACT },
+        c.transferId,
+      );
       ledger.forget(c.transferId);
       reclaimed.push({ transferId: c.transferId, amount: c.amount, sender: c.sender, txHash });
       console.log(`reclaimed #${c.transferId}: ${usdc(c.amount)} returned to ${c.sender} (${txHash})`);
@@ -165,7 +166,7 @@ async function maybeDrawSalary(bal: bigint): Promise<string | undefined> {
 }
 
 export async function run(): Promise<void> {
-  console.log(`keeper ${account.address} watching ${CONTRACT}`);
+  console.log(`keeper ${account.address} watching ${CONTRACT} on chain ${network.chainId}`);
   console.log(
     `budget: gas/action ${usdc(env.gasPerAction)}, reserve ${usdc(env.reserve)}, ` +
       `max ${env.maxActions}/tick${env.dryRun ? ' (DRY RUN)' : ''}`,

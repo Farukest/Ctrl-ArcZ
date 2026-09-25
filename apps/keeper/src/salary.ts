@@ -1,16 +1,15 @@
 import { erc20Abi, type Address, type Hex, type PublicClient, type WalletClient } from 'viem';
 import {
-  ADDRESSES,
   ACTION_PULL,
   MODE_PULL,
   RemoteCoSigner,
   readAccount,
   submitPull,
-  arcTestnet,
 } from '@ctrl-arcz/sdk';
 import { decideSalary } from './decide.js';
+import { network } from './network.js';
 
-const USDC = ADDRESSES.USDC as Address;
+const USDC = network.usdc;
 
 /**
  * How the keeper pays for itself.
@@ -91,7 +90,7 @@ export async function drawSalary(params: {
     action: ACTION_PULL,
     target: state.target,
     nonce: state.nonce,
-    chainId: arcTestnet.id,
+    chainId: network.chainId,
     remaining: state.remaining,
     expiry: state.expiry,
     perPullMax: state.perPullMax,

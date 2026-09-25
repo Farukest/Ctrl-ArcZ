@@ -3,23 +3,15 @@ import {
   createPublicClient,
   createWalletClient,
   erc20Abi,
-  fallback,
   formatUnits,
-  http,
   isAddress,
   parseUnits,
   type Address,
   type Hex,
 } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import {
-  ADDRESSES,
-  MODE_PULL,
-  RPC_URLS,
-  SPEND_POLICY_FACTORY_ADDRESS,
-  arcTestnet,
-  createEphemeral,
-} from '@ctrl-arcz/sdk';
+import { MODE_PULL, createEphemeral } from '@ctrl-arcz/sdk';
+import { network, transport } from '../src/network.js';
 
 /**
  * Create and fund the keeper's salary box.
@@ -40,7 +32,7 @@ import {
  *     tsx scripts/create-salary-box.ts
  */
 
-const USDC = ADDRESSES.USDC as Address;
+const USDC = network.usdc;
 
 function key(name: string): Hex {
   const v = process.env[name];
@@ -59,9 +51,8 @@ const intervalSecs = Number(process.env.SALARY_INTERVAL_SECS ?? 86_400);
 const durationSecs = Number(process.env.SALARY_DURATION_SECS ?? 90 * 86_400);
 const cosignUrl = process.env.KEEPER_COSIGN_URL ?? 'http://127.0.0.1:8787/api/cosign';
 
-const transport = () => fallback(RPC_URLS.map((u) => http(u, { retryCount: 2 })));
-const publicClient = createPublicClient({ chain: arcTestnet, transport: transport() });
-const walletClient = createWalletClient({ account: operator, chain: arcTestnet, transport: transport() });
+const publicClient = createPublicClient({ chain: network.chain, transport: transport() });
+const walletClient = createWalletClient({ account: operator, chain: network.chain, transport: transport() });
 const clients = { publicClient, walletClient };
 
 const cosignerRes = await fetch(cosignUrl);
@@ -83,7 +74,7 @@ console.log(`keeper (owner + target): ${keeper.address}`);
 console.log(`co-signer: ${cosigner}`);
 console.log(`policy: ${perPull} USDC per pull, every ${intervalSecs}s, ${total} USDC total`);
 
-const { account: box } = await createEphemeral(clients, SPEND_POLICY_FACTORY_ADDRESS, salt, {
+const { account: box } = await createEphemeral(clients, network.spendPolicyFactory, salt, {
   token: USDC,
   owner: keeper.address, // the keeper authenticates its own pulls to the co-signer
   cosigner,
@@ -104,7 +95,7 @@ const fundHash = await walletClient.writeContract({
   functionName: 'transfer',
   args: [box, totalAmt],
   account: operator,
-  chain: arcTestnet,
+  chain: network.chain,
 });
 await publicClient.waitForTransactionReceipt({ hash: fundHash });
 

@@ -51,6 +51,15 @@ describe('OpenLedger', () => {
     expect(ledger.expired(1000, 10).map((t) => t.transferId)).toEqual([1n]);
   });
 
+  it('starts its first backfill no earlier than the deploy block', async () => {
+    // A young chain: the backfill window reaches back before the contract existed.
+    const { client, ranges } = fakeChain([created(1n, 950n, 500)]);
+    const ledger = new OpenLedger(CONTRACT, 900n);
+    await ledger.sync(client, 1000n, OPTS);
+    expect(ranges[0]!.from).toBe(900n);
+    expect(ledger.size).toBe(1);
+  });
+
   it.each(['TransferClaimed', 'TransferCancelled', 'TransferReclaimed'])(
     'drops a transfer once %s settles it',
     async (eventName) => {
