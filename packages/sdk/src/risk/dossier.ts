@@ -25,6 +25,13 @@ export interface Dossier {
   /** The rule engine's verdict. Always the floor; nothing may go below it. */
   ruleLevel: RiskLevel;
   ruleCodes: string[];
+  /**
+   * The address the target imitates, when the lookalike rule fired. Without it the
+   * model saw the code but not what it pointed at, and `nearMisses` deliberately
+   * leaves the exact lookalike out, so it described a blocked copy of a known
+   * recipient as "no sign of poisoning".
+   */
+  lookalikeOf: Address | null;
   ruleComplete: boolean;
 
   target_: {
@@ -140,6 +147,7 @@ export async function buildDossier(
     target,
     ruleLevel: report.level,
     ruleCodes: report.reasons.map((r) => r.code),
+    lookalikeOf: report.reasons.find((r) => r.lookalikeOf)?.lookalikeOf ?? null,
     ruleComplete: report.complete,
     target_: {
       isContract: Boolean(code && code !== '0x'),

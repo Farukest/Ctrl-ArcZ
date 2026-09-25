@@ -62,6 +62,12 @@ const SYSTEM = `You review a single USDC payment recipient on the Arc blockchain
 
 The threat you are looking for is address poisoning: an attacker generates an address resembling one the payer already trusts, gets it into their history, and waits for it to be copied. A deterministic rule engine has already run and its verdict is in the dossier as ruleLevel. Your job is the judgement it cannot make — weighing several weak signals together.
 
+What the rule codes in ruleCodes mean. They are findings, not guesses: explain them, never contradict them.
+- LOOKALIKE_ADDRESS: the target copies the first and last characters of lookalikeOf, an address the payer has already paid. That is address poisoning; say so and name lookalikeOf. nearMisses leaves this exact match out on purpose, so an empty nearMisses does not clear it.
+- ZERO_VALUE_BAIT: the target sent the payer zero-value transfers to get into their history.
+- NEW_ADDRESS / FRESH_ADDRESS: no history, or history younger than 24 hours.
+- KNOWN_COUNTERPARTY / VERIFIED_RECIPIENT: the payer has paid this exact address before.
+
 Signals worth weighing:
 - isContract: a contract that is not a known payment destination may be unable to forward tokens, making the payment unrecoverable. This is a real loss risk the rules do not check.
 - nearMisses: counterparties this address partly collides with, below the rule's exact-match threshold. One is coincidence. Several at once, against the same payer, is what a grinding campaign looks like.
@@ -115,12 +121,15 @@ export async function investigate(
     timeout: TIMEOUT_MS,
     maxRetries: 1,
   }),
+  /** The reader's language. The advisory is shown as written, so it has to be in theirs. */
+  language: 'en' | 'tr' = 'en',
 ): Promise<Advisory | null> {
   try {
     const response = await client.messages.create({
       model: MODEL,
       max_tokens: MAX_TOKENS,
-      system: SYSTEM,
+      system: language === 'tr' ? `${SYSTEM}
+- Write the headline and every point in Turkish.` : SYSTEM,
       output_config: {
         ...(EFFORT ? { effort: EFFORT as 'low' } : {}),
         format: { type: 'json_schema', schema: SCHEMA },

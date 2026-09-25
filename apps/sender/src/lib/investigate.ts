@@ -59,7 +59,13 @@ export async function investigate(session: Session, target: Address): Promise<In
       // The chain decides whose history is read. Without it the server judges the
       // recipient by their Arc activity, which on any other network is a confident
       // answer to a different question.
-      body: JSON.stringify({ sender: session.address, target, chainId: session.chainId }),
+      // The advisory is shown as written, so it is written in the reader's language.
+      body: JSON.stringify({
+        sender: session.address,
+        target,
+        chainId: session.chainId,
+        lang: document.documentElement.lang === 'tr' ? 'tr' : 'en',
+      }),
     });
     if (!res.ok) return { status: 'unavailable', why: 'unreachable' };
     const body = (await res.json()) as {

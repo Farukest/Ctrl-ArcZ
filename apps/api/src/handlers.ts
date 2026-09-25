@@ -576,10 +576,12 @@ export async function investigatePost(req: IncomingMessage, res: ServerResponse)
     target,
     sender: claimedSender,
     chainId: rawChainId,
+    lang,
   } = parseBody(raw) as {
     target?: unknown;
     sender?: unknown;
     chainId?: unknown;
+    lang?: unknown;
   };
   const chainId = chainOf(rawChainId);
   const deployment = deploymentFor(chainId)!;
@@ -629,7 +631,7 @@ export async function investigatePost(req: IncomingMessage, res: ServerResponse)
     provider: riskProviderFor(chainId),
     usdcAddress: deployment.usdc,
   });
-  const advisory = await investigate(env.anthropicApiKey, dossier);
+  const advisory = await investigate(env.anthropicApiKey, dossier, undefined, lang === 'tr' ? 'tr' : 'en');
 
   // `ran` even when the advisory is null: the model was asked and either found
   // nothing to add or declined to answer, and both of those are a check that
