@@ -131,7 +131,7 @@ function rateLimited(
  * general 40 a minute would starve the routes that move money.
  */
 const dataHits = new Map<string, number[]>();
-const DATA_RATE_MAX = 240;
+const DATA_RATE_MAX = 900;
 
 // Periodically drop stale buckets so the map tracks only currently-active IPs.
 setInterval(() => {

@@ -38,7 +38,7 @@ import {
   type RiskVerdict,
   type SpendAction,
 } from '@ctrl-arcz/sdk';
-import { serverDataProvider } from './historyServer.js';
+import { serverDataProvider, serverReadRpcUrls } from './historyServer.js';
 
 /**
  * Server-only co-signer ("The Machine"). Runs the enclave's job off the browser:
@@ -224,7 +224,7 @@ function clientFor(chainId: number): PublicClient {
   if (!deployment) throw new Error(`invalid chainId ${chainId}`);
   const client = createPublicClient({
     transport: fallback(
-      deployment.rpcUrls.map((u: string) => http(u, { retryCount: 2, timeout: 20_000 })),
+      serverReadRpcUrls(chainId).map((u: string) => http(u, { retryCount: 2, timeout: 20_000 })),
     ),
     batch: { multicall: { wait: 20 } },
   }) as PublicClient;

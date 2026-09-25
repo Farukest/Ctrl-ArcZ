@@ -3,6 +3,7 @@ import {
   BlockscoutDataProvider,
   alchemyRpcUrl,
   historySourceFor,
+  readRpcUrls,
   type IDataProvider,
 } from '@ctrl-arcz/sdk';
 
@@ -24,6 +25,23 @@ export function serverDataProvider(
   if (!alchemyApiKey)
     throw new Error(`chain ${chainId} reads history from Alchemy and no key is set`);
   return new AlchemyDataProvider({ rpcUrl: alchemyRpcUrl(source.network, alchemyApiKey) });
+}
+
+/**
+ * The endpoints a server reads a chain through, best first. Server-only.
+ *
+ * Alchemy leads where this server has a key for the chain: the public endpoints
+ * rate-limit a busy server into partial scans, and a partial scan is a firewall
+ * that cannot say "safe" (measured: the recipient index and the lookalike rule both
+ * came back incomplete under load). The public list stays behind it as fallback.
+ */
+export function serverReadRpcUrls(
+  chainId: number,
+  alchemyApiKey: string | undefined = process.env.ALCHEMY_API_KEY,
+): string[] {
+  const alchemy = serverAlchemyUrl(chainId, alchemyApiKey);
+  const rest = [...readRpcUrls(chainId)];
+  return alchemy ? [alchemy, ...rest] : rest;
 }
 
 /** Alchemy's URL for a chain that reads from it, or undefined. Server-only. */

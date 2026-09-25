@@ -45,7 +45,7 @@ import {
   userForToken,
   withdrawAll,
 } from './nano.js';
-import { serverAlchemyUrl, serverDataProvider } from '@ctrl-arcz/demo-kit/history-server';
+import { serverAlchemyUrl, serverDataProvider, serverReadRpcUrls } from '@ctrl-arcz/demo-kit/history-server';
 import {
   relayCreateBox,
   relayAnnounceBox,
@@ -112,7 +112,7 @@ function riskClientFor(chainId: number): PublicClient {
   const deployment = deploymentFor(chainId);
   if (!deployment) throw new HttpError(400, 'invalid chainId');
   const client = createPublicClient({
-    transport: fallback(deployment.rpcUrls.map((u) => http(u, { retryCount: 1 }))),
+    transport: fallback(serverReadRpcUrls(chainId).map((u) => http(u, { retryCount: 1 }))),
   }) as PublicClient;
   riskClients.set(chainId, client);
   return client;
@@ -599,12 +599,19 @@ export async function investigatePost(req: IncomingMessage, res: ServerResponse)
   const sender = addr(claimedSender, 'sender');
   const targetAddress = addr(target, 'target');
 
+  // The same verified set the page judged with. Protected transfers pay the
+  // contract, so the people this sender paid that way exist only in this index;
+  // a lookback scan that stops short of the deploy block left them out, and the
+  // advisory then contradicted the page's own lookalike block.
+  const verified = verifiedRecipients(sender, chainId);
   const report = await check(sender, targetAddress, {
     client: riskClientFor(chainId),
     provider: riskProviderFor(chainId),
     contractAddress: deployment.ctrlArcZ,
     contractDeployBlock: deployment.ctrlArcZDeployBlock,
-    verifiedRecipientsLookbackBlocks: VERIFIED_LOOKBACK_BLOCKS,
+    ...(verified.complete
+      ? { verifiedRecipients: verified.recipients }
+      : { verifiedRecipientsLookbackBlocks: VERIFIED_LOOKBACK_BLOCKS }),
   });
 
   /*
@@ -656,7 +663,25 @@ export async function relayGasPost(req: IncomingMessage, res: ServerResponse): P
  * list need, and nothing that writes, costs compute units beyond a read, or
  * reveals anything about the key's account.
  */
-const CHAIN_DATA_METHODS = new Set(['alchemy_getAssetTransfers', 'eth_getTransactionCount']);
+const CHAIN_DATA_METHODS = new Set([
+  'alchemy_getAssetTransfers',
+  'eth_getTransactionCount',
+  // Plain chain reads, so the page reads mainnet through Alchemy rather than the
+  // rate-limited public endpoints. Read-only: nothing here signs or sends.
+  'eth_chainId',
+  'eth_blockNumber',
+  'eth_call',
+  'eth_getLogs',
+  'eth_getCode',
+  'eth_getBalance',
+  'eth_getBlockByNumber',
+  'eth_getTransactionReceipt',
+  'eth_getTransactionByHash',
+  'eth_gasPrice',
+  'eth_maxPriorityFeePerGas',
+  'eth_feeHistory',
+  'eth_estimateGas',
+]);
 
 /**
  * `POST /api/chain-data?chainId=5042`: a JSON-RPC pass-through to Alchemy for a
@@ -678,11 +703,14 @@ export async function chainDataPost(req: IncomingMessage, res: ServerResponse): 
   if (typeof body.method !== 'string' || !CHAIN_DATA_METHODS.has(body.method)) {
     throw new HttpError(400, 'method not allowed');
   }
-  if (!Array.isArray(body.params) || body.params.length > 2) throw new HttpError(400, 'invalid params');
+  if (!Array.isArray(body.params) || body.params.length > 3) throw new HttpError(400, 'invalid params');
+  // The caller's id comes back unchanged: a JSON-RPC client matches answers to
+  // requests by it.
+  const id = typeof body.id === 'number' || typeof body.id === 'string' ? body.id : 1;
   const r = await fetch(upstream, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: body.method, params: body.params }),
+    body: JSON.stringify({ jsonrpc: '2.0', id, method: body.method, params: body.params }),
   });
   if (!r.ok) throw new HttpError(r.status === 429 ? 429 : 502, `upstream ${r.status}`);
   json(res, 200, await r.json());

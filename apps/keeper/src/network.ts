@@ -39,7 +39,11 @@ export const network = {
   spendPolicyFactory: deployment.spendPolicyFactory as Address,
   /** Nothing of ours exists before this block, so no scan starts earlier. */
   deployBlock: deployment.ctrlArcZDeployBlock,
-  rpcUrls: readRpcUrls(chainId),
+  /** `KEEPER_RPC_URL` first when set (the server's Alchemy endpoint): the public
+   *  endpoints rate-limit the log scans this process runs every tick. */
+  rpcUrls: process.env.KEEPER_RPC_URL
+    ? [process.env.KEEPER_RPC_URL, ...readRpcUrls(chainId)]
+    : readRpcUrls(chainId),
 };
 
 export const transport = () => fallback(network.rpcUrls.map((u) => http(u, { retryCount: 2 })));

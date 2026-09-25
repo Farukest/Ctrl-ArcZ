@@ -65,6 +65,16 @@ export interface ArcNetwork {
   signingRpcs: readonly string[];
 }
 
+/**
+ * Mainnet reads in a browser go through this app's own server first, which
+ * forwards read-only calls to Alchemy with a key the page never sees. The public
+ * endpoints rate-limit a busy page into partial firewall scans; they stay behind
+ * it as fallback. Relative, so it only exists where a page served it: a server
+ * using this module reads the public list directly.
+ */
+const MAINNET_READ_PROXY = `/api/chain-data?chainId=${ARC_MAINNET_CHAIN_ID}`;
+const inBrowser = typeof (globalThis as { document?: unknown }).document !== 'undefined';
+
 const ARC_NETWORKS: Readonly<Record<number, ArcNetwork>> = {
   [ARC_TESTNET_CHAIN_ID]: {
     chainId: ARC_TESTNET_CHAIN_ID,
@@ -75,7 +85,7 @@ const ARC_NETWORKS: Readonly<Record<number, ArcNetwork>> = {
   [ARC_MAINNET_CHAIN_ID]: {
     chainId: ARC_MAINNET_CHAIN_ID,
     chain: arcMainnet as Chain,
-    readRpcs: ARC_MAINNET_RPC_URLS,
+    readRpcs: inBrowser ? [MAINNET_READ_PROXY, ...ARC_MAINNET_RPC_URLS] : ARC_MAINNET_RPC_URLS,
     signingRpcs: ARC_MAINNET_RPC_URLS,
   },
 };
