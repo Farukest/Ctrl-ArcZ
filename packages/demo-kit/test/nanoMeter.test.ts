@@ -8,8 +8,8 @@ describe('gaugeTone', () => {
     expect(gaugeTone(0.1, 100)).toBe('critical');
   });
 
-  it('turns critical when a handful of requests are left, whatever the fraction', () => {
-    expect(gaugeTone(0.8, 3)).toBe('critical');
+  it('never says critical over a gauge that reads full', () => {
+    expect(gaugeTone(1, 4)).toBe('ok');
   });
 
   it('is empty with nothing to spend, and when nothing has been measured yet', () => {

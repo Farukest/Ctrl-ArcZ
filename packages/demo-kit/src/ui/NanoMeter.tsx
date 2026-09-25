@@ -14,7 +14,9 @@ export type GaugeTone = 'ok' | 'warn' | 'critical' | 'empty';
 export function gaugeTone(fraction: number | null, requestsLeft: number | null): GaugeTone {
   if (fraction == null) return 'empty';
   if (fraction <= 0 || requestsLeft === 0) return 'empty';
-  if (fraction < 0.2 || (requestsLeft != null && requestsLeft < 5)) return 'critical';
+  // The word follows the arc. Judged on requests left as well, a small balance
+  // just loaded read "100%" over "Critical", and the screen contradicted itself.
+  if (fraction < 0.2) return 'critical';
   if (fraction < 0.5) return 'warn';
   return 'ok';
 }
