@@ -10,6 +10,15 @@ export { ChainSelect, type ChainSelectProps } from './ChainSelect.js';
 export { MerchantLogo, MERCHANTS, merchantByName, type Merchant } from './MerchantLogo.js';
 export { AmountField, type AmountFieldProps } from './AmountField.js';
 export { Notice, type NoticeProps, type NoticeTone } from './Notice.js';
+export {
+  NanoMeter,
+  UsageFeed,
+  UsageGauge,
+  gaugeTone,
+  type GaugeTone,
+  type MeterStat,
+  type UsageItem,
+} from './NanoMeter.js';
 export { GatewayFundBox, type GatewayFundBoxProps } from './GatewayFundBox.js';
 export { CostBlock, type CostBlockProps, type CostBreakdown, type CostLine } from './CostBlock.js';
 export {

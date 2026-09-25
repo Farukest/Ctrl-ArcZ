@@ -11,6 +11,10 @@ import {
   verifiedRecipientsGet,
   announcementsGet,
   chainDataPost,
+  nanoSessionPost,
+  nanoStateGet,
+  nanoMessagesPost,
+  nanoWithdrawPost,
 } from './handlers.js';
 /**
  * The Ctrl+ArcZ backend. One service for every client: the enclave co-signer, the
@@ -51,4 +55,11 @@ serve({
   'POST /api/investigate': investigatePost,
 
   'POST /api/chain-data': chainDataPost,
+
+  // Pay-per-request Claude: each request is paid from the caller's agent wallet
+  // with a Circle Gateway nanopayment, at the moment it is made.
+  'POST /api/nano/session': nanoSessionPost,
+  'GET /api/nano/state': nanoStateGet,
+  'POST /api/nano/v1/messages': nanoMessagesPost,
+  'POST /api/nano/withdraw': nanoWithdrawPost,
 });

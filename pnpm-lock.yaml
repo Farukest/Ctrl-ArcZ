@@ -32,12 +32,18 @@ importers:
       '@anthropic-ai/sdk':
         specifier: ^0.115.0
         version: 0.115.0(zod@4.4.3)
+      '@circle-fin/x402-batching':
+        specifier: 3.5.0
+        version: 3.5.0(@x402/core@2.27.0)(viem@2.55.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)(zod@4.4.3))
       '@ctrl-arcz/demo-kit':
         specifier: workspace:*
         version: link:../../packages/demo-kit
       '@ctrl-arcz/sdk':
         specifier: workspace:*
         version: link:../../packages/sdk
+      '@x402/core':
+        specifier: ^2.27.0
+        version: 2.27.0
       dotenv:
         specifier: ^16.4.7
         version: 16.6.1
@@ -332,6 +338,17 @@ packages:
   '@circle-fin/provider-fee-v1@0.3.1':
     resolution: {integrity: sha512-KHWU3pj7RLIw1QQ7EJE4SWaJbmEtuz0Vs9RjANWBkC+sI/PjxnzCTEOraFdNAK3QpxftZoDX21dqT6v/a0c4YA==}
     engines: {node: '>=20.0.0'}
+
+  '@circle-fin/x402-batching@3.5.0':
+    resolution: {integrity: sha512-BG4weseV3Q9Qpoo1MmFz588t5PQ210s6KxS1qVs9xEj6V4f771/JMrc7C4q/9pqnokl5wXxSxq6SGcsB5mL9SQ==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      '@x402/core': ^2.3.0
+      '@x402/evm': ^2.3.0
+      viem: ^2.0.0
+    peerDependenciesMeta:
+      '@x402/evm':
+        optional: true
 
   '@coral-xyz/anchor-errors@0.31.1':
     resolution: {integrity: sha512-NhNEku4F3zzUSBtrYz84FzYWm48+9OvmT1Hhnwr6GnPQry2dsEqH/ti/7ASjjpoFTWRnPXrjAIT1qM6Isop+LQ==}
@@ -1450,6 +1467,9 @@ packages:
 
   '@vitest/utils@2.1.9':
     resolution: {integrity: sha512-v0psaMSkNJ3A2NMrUEHFRzJtDPFn+/VWZ5WxImB21T9fjucJRmS7xCS3ppEnARb9y11OAzaD+P2Ps+b+BGX5iQ==}
+
+  '@x402/core@2.27.0':
+    resolution: {integrity: sha512-UbxCKnoTsg5nQX9fYER3g9tt5l80jHm1IZOmDczQRqE0cwskls5r+VAAj0iUQfHVshnpv0qo/rLFI7UntqL96g==}
 
   abitype@0.7.1:
     resolution: {integrity: sha512-VBkRHTDZf9Myaek/dO3yMmOzB/y2s3Zo6nVU7yaw1G+TvCHAjwaJzNGN9yo4K5D8bU/VZXKP1EJpRhFr862PlQ==}
@@ -3210,6 +3230,11 @@ snapshots:
       bs58: 6.0.0
       zod: 3.25.67
 
+  '@circle-fin/x402-batching@3.5.0(@x402/core@2.27.0)(viem@2.55.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)(zod@4.4.3))':
+    dependencies:
+      '@x402/core': 2.27.0
+      viem: 2.55.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)(zod@4.4.3)
+
   '@coral-xyz/anchor-errors@0.31.1': {}
 
   '@coral-xyz/anchor@0.31.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)':
@@ -4151,6 +4176,10 @@ snapshots:
       '@vitest/pretty-format': 2.1.9
       loupe: 3.2.1
       tinyrainbow: 1.2.0
+
+  '@x402/core@2.27.0':
+    dependencies:
+      zod: 3.25.76
 
   abitype@0.7.1(typescript@5.9.3)(zod@3.25.76):
     dependencies:

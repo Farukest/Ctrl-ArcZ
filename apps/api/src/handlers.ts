@@ -35,6 +35,16 @@ import {
   verifiedRecipients,
 } from '@ctrl-arcz/demo-kit/cosign';
 import { gaslessClaimToResult } from '@ctrl-arcz/demo-kit/gasless';
+import {
+  NANO_SERVICE,
+  agentAddressFor,
+  nanoState,
+  parseUser as parseNanoUser,
+  payForMessage,
+  tokenFor as nanoTokenFor,
+  userForToken,
+  withdrawAll,
+} from './nano.js';
 import { serverAlchemyUrl, serverDataProvider } from '@ctrl-arcz/demo-kit/history-server';
 import {
   relayCreateBox,
@@ -674,4 +684,53 @@ export async function chainDataPost(req: IncomingMessage, res: ServerResponse): 
   });
   if (!r.ok) throw new HttpError(r.status === 429 ? 429 : 502, `upstream ${r.status}`);
   json(res, 200, await r.json());
+}
+
+// --- pay-per-request Claude, paid with Circle Nanopayments ---
+
+/**
+ * `POST /api/nano/session`, signed: the agent wallet and API key for the caller.
+ * Signed because the key it returns spends that wallet's Gateway balance.
+ */
+export async function nanoSessionPost(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  const raw = await readRaw(req);
+  const caller = await requireSignedRequest(req, raw, '/api/nano/session');
+  json(res, 200, {
+    agent: agentAddressFor(caller),
+    apiKey: nanoTokenFor(caller),
+    baseUrl: '/api/nano',
+    service: NANO_SERVICE.name,
+    provider: NANO_SERVICE.provider,
+    model: NANO_SERVICE.defaultModel,
+  });
+}
+
+/** `GET /api/nano/state?address=`: balance, spend and the request log. All of it is public on Circle. */
+export async function nanoStateGet(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  const url = new URL(req.url ?? '/', 'http://localhost');
+  json(res, 200, await nanoState(parseNanoUser(url.searchParams.get('address'))));
+}
+
+/**
+ * `POST /api/nano/v1/messages`: the Anthropic Messages API, paid per request.
+ * Point any Anthropic client's base URL at `/api/nano` and use the key from the
+ * session. The reply is Claude's, unchanged; what it cost is in `x-nano-paid`.
+ */
+export async function nanoMessagesPost(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  const auth = req.headers['x-api-key'] ?? req.headers.authorization?.replace(/^Bearer\s+/i, '');
+  const user = userForToken(Array.isArray(auth) ? auth[0] : auth);
+  const body = parseBody(await readRaw(req, 64 * 1024));
+  if (!body || typeof body !== 'object' || !Array.isArray((body as { messages?: unknown }).messages)) {
+    throw new HttpError(400, 'messages is required');
+  }
+  const { data, amount } = await payForMessage(user, body as Record<string, unknown>);
+  res.setHeader('x-nano-paid', (Number(amount) / 1e6).toFixed(6));
+  json(res, 200, data);
+}
+
+/** `POST /api/nano/withdraw`, signed: the whole balance back to the caller's wallet. */
+export async function nanoWithdrawPost(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  const raw = await readRaw(req);
+  const caller = await requireSignedRequest(req, raw, '/api/nano/withdraw');
+  json(res, 200, await withdrawAll(caller));
 }

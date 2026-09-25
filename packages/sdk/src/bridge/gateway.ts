@@ -170,6 +170,17 @@ const gatewayWalletAbi = [
     ],
     outputs: [],
   },
+  {
+    type: 'function',
+    name: 'depositFor',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'token', type: 'address' },
+      { name: 'depositor', type: 'address' },
+      { name: 'value', type: 'uint256' },
+    ],
+    outputs: [],
+  },
 ] as const;
 
 /** The EIP-712 domain is chain-agnostic: no chainId, no verifyingContract. */
@@ -383,6 +394,12 @@ export async function depositToGateway(
     chain: GatewayChain;
     /** USDC subunits. */
     amount: bigint;
+    /**
+     * Whose Gateway balance the deposit credits. Defaults to the paying wallet.
+     * Another address is credited with `depositFor`: the wallet pays, and only the
+     * named depositor can spend what arrives.
+     */
+    depositor?: Address;
     onStep?: (step: GatewayStep, txHash?: Hex) => void;
   },
 ): Promise<{ approveTxHash?: Hex; depositTxHash: Hex }> {
@@ -433,14 +450,25 @@ export async function depositToGateway(
     params.onStep?.('approve');
   }
 
-  const depositTxHash = await clients.walletClient.writeContract({
-    address: gatewayContracts(params.chain).wallet,
-    abi: gatewayWalletAbi,
-    functionName: 'deposit',
-    args: [chain.usdc, params.amount],
-    account,
-    chain: clients.walletClient.chain ?? null,
-  });
+  const forOther =
+    params.depositor != null && params.depositor.toLowerCase() !== account.address.toLowerCase();
+  const depositTxHash = forOther
+    ? await clients.walletClient.writeContract({
+        address: gatewayContracts(params.chain).wallet,
+        abi: gatewayWalletAbi,
+        functionName: 'depositFor',
+        args: [chain.usdc, params.depositor as Address, params.amount],
+        account,
+        chain: clients.walletClient.chain ?? null,
+      })
+    : await clients.walletClient.writeContract({
+        address: gatewayContracts(params.chain).wallet,
+        abi: gatewayWalletAbi,
+        functionName: 'deposit',
+        args: [chain.usdc, params.amount],
+        account,
+        chain: clients.walletClient.chain ?? null,
+      });
   await clients.publicClient.waitForTransactionReceipt({ hash: depositTxHash });
   params.onStep?.('deposit', depositTxHash);
 

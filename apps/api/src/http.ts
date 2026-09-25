@@ -13,13 +13,13 @@ export function json(res: ServerResponse, status: number, body: unknown): void {
 /** Read the raw request body under a hard size cap. A request stream can be read
  *  only once, so a handler that needs both the raw bytes (for a signature) and the
  *  parsed value must read raw once and JSON.parse it itself. */
-export async function readRaw(req: IncomingMessage): Promise<string> {
+export async function readRaw(req: IncomingMessage, maxBytes = MAX_BODY_BYTES): Promise<string> {
   const chunks: Uint8Array[] = [];
   let size = 0;
   for await (const c of req) {
     const chunk = c as Uint8Array;
     size += chunk.length;
-    if (size > MAX_BODY_BYTES) throw new HttpError(413, 'payload too large');
+    if (size > maxBytes) throw new HttpError(413, 'payload too large');
     chunks.push(chunk);
   }
   return Buffer.concat(chunks).toString() || '{}';
@@ -60,7 +60,7 @@ function applyCors(req: IncomingMessage, res: ServerResponse): boolean {
   res.setHeader('access-control-allow-methods', 'GET,POST,OPTIONS');
   res.setHeader(
     'access-control-allow-headers',
-    'content-type,x-ctrl-address,x-ctrl-timestamp,x-ctrl-signature',
+    'content-type,x-ctrl-address,x-ctrl-timestamp,x-ctrl-signature,authorization,x-api-key,anthropic-version',
   );
   res.setHeader('vary', 'Origin');
   if (req.method === 'OPTIONS') {
@@ -125,7 +125,8 @@ function rateLimited(
 }
 
 /**
- * `/api/chain-data` has its own window. One firewall check is several reads
+ * `/api/chain-data` has its own window, and so does the pay-per-request panel's
+ * poll, which reads every few seconds while it is open. One firewall check is several reads
  * (counterparties, activity, bait) and the history list polls, so sharing the
  * general 40 a minute would starve the routes that move money.
  */
@@ -226,7 +227,7 @@ export function serve(routes: Routes): void {
       const url = new URL(req.url ?? '/', 'http://localhost');
       // Health is unmetered; everything else is rate limited per source IP.
       const limited =
-        url.pathname === '/api/chain-data'
+        url.pathname === '/api/chain-data' || url.pathname === '/api/nano/state'
           ? rateLimited(req, Date.now(), dataHits, DATA_RATE_MAX)
           : url.pathname !== '/api/health' && rateLimited(req, Date.now());
       if (limited) return json(res, 429, { error: 'rate limited' });

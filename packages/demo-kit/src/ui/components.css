@@ -5179,3 +5179,186 @@ a.hstep__go:hover {
 .chainrow__tone--short {
   color: var(--text-lo);
 }
+
+/* ------------------------------------------------------------------ */
+/* Pay-per-request meter (NanoMeter.tsx)                                */
+/* ------------------------------------------------------------------ */
+.nanometer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 220px;
+  align-items: center;
+  gap: 20px;
+  padding: 16px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 14px;
+  background: var(--surface-2);
+}
+.nanometer__stats {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+}
+.nanometer__stat {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--hairline);
+}
+.nanometer__stat:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+.nanometer__stat dt {
+  color: var(--text-lo);
+  font-size: var(--fs-sm);
+}
+.nanometer__stat dd {
+  margin: 0;
+  color: var(--text-hi);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--fs-body);
+}
+@media (max-width: 560px) {
+  .nanometer {
+    grid-template-columns: 1fr;
+  }
+  .nanometer .gauge {
+    order: -1;
+    justify-self: center;
+  }
+}
+
+.gauge {
+  position: relative;
+  width: 220px;
+  max-width: 100%;
+  --gauge-color: var(--safe);
+}
+.gauge--warn {
+  --gauge-color: var(--warn);
+}
+.gauge--critical,
+.gauge--empty {
+  --gauge-color: var(--block);
+}
+.gauge__svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+.gauge__track,
+.gauge__value {
+  fill: none;
+  stroke-width: 14;
+  stroke-linecap: round;
+}
+.gauge__track {
+  stroke: var(--surface-3);
+}
+.gauge__value {
+  stroke: var(--gauge-color);
+  transition:
+    stroke-dasharray var(--dur-4) var(--ease-emph),
+    stroke var(--dur-3) var(--ease);
+}
+.gauge__center {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 4px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.gauge__pct {
+  color: var(--text-hi);
+  font-size: 34px;
+  font-weight: 650;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.gauge__status {
+  color: var(--gauge-color);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.usagefeed {
+  width: 100%;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.usagefeed__row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+}
+.usagefeed__row--fresh {
+  animation: usage-in var(--dur-4) var(--ease-emph);
+  border-color: var(--safe-border);
+}
+@keyframes usage-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+    background: var(--safe-soft);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.usagefeed__time {
+  color: var(--text-lo);
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  font-variant-numeric: tabular-nums;
+}
+.usagefeed__main,
+.usagefeed__side {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.usagefeed__side {
+  align-items: flex-end;
+}
+.usagefeed__title {
+  color: var(--text-hi);
+  font-size: var(--fs-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.usagefeed__detail,
+.usagefeed__status {
+  color: var(--text-lo);
+  font-size: var(--fs-xs);
+}
+.usagefeed__amount {
+  color: var(--text-hi);
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums;
+}
+.usagefeed__empty {
+  margin: 0;
+  color: var(--text-lo);
+  font-size: var(--fs-sm);
+}

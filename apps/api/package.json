@@ -12,8 +12,10 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",
+    "@circle-fin/x402-batching": "3.5.0",
     "@ctrl-arcz/demo-kit": "workspace:*",
     "@ctrl-arcz/sdk": "workspace:*",
+    "@x402/core": "^2.27.0",
     "dotenv": "^16.4.7",
     "viem": "^2.38.0"
   },

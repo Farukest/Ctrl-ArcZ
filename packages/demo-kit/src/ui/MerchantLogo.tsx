@@ -19,7 +19,12 @@ const logos = import.meta.glob('./merchant-logos/*.svg', {
   import: 'default',
 }) as Record<string, string>;
 
-export type Merchant = { key: string; name: string };
+/**
+ * `nanopayment` marks a merchant billed per request rather than per period. Picking
+ * one swaps the subscription form for the pay-per-request panel: there is no box,
+ * no interval and no pull, only a Gateway balance that each request draws on.
+ */
+export type Merchant = { key: string; name: string; billing?: 'nanopayment' };
 
 /**
  * The list offered, in the order it is shown.
@@ -30,6 +35,7 @@ export type Merchant = { key: string; name: string };
  * two apps offer the same thing in the same place.
  */
 export const MERCHANTS: readonly Merchant[] = [
+  { key: 'claude', name: 'Claude API', billing: 'nanopayment' },
   { key: 'netflix', name: 'Netflix' },
   { key: 'spotify', name: 'Spotify' },
   { key: 'youtube', name: 'YouTube' },

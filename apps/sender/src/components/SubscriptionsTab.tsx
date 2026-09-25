@@ -44,8 +44,10 @@ import {
   APP_ARC,
   APP_ARC_CHAIN_ID,
   APP_ARC_NAME,
+  APP_TESTNET,
 } from '@ctrl-arcz/demo-kit';
 import { getStealthKeys } from '../lib/stealthKeys.js';
+import { NanoPanel } from './NanoPanel.js';
 import { hrefFor, type ActivityView } from '../lib/route.js';
 import { relayCreateBox, relayStealthGas } from '../lib/relay.js';
 import {
@@ -54,6 +56,7 @@ import {
   Card,
   MerchantLogo,
   MERCHANTS,
+  merchantByName,
   CostBlock,
   GatewayFundBox,
   HistoryList,
@@ -927,6 +930,65 @@ export function SubscriptionsTab({
     return c;
   }, [subs]);
 
+  /**
+   * A merchant that bills per request (Claude API) takes the whole card: its
+   * panel replaces the subscription form, and the Gateway funding block above it
+   * goes too, because that balance funds boxes and this one funds an agent.
+   */
+  const isNano = merchantByName(label)?.billing === 'nanopayment';
+  const merchantPicker = (
+              <Field label={t('sub.label')}>
+                {namingByHand ? (
+                  <div className="row" style={{ gap: 8 }}>
+                    <Input
+                      className="grow"
+                      value={label}
+                      onChange={(e) => setLbl(e.target.value)}
+                      placeholder={t('sub.labelPh')}
+                      data-testid="sub-label"
+                    />
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setNamingByHand(false);
+                        setLbl('');
+                      }}
+                      data-testid="sub-merchant-back"
+                    >
+                      {t('sub.merchantList')}
+                    </Button>
+                  </div>
+                ) : (
+                  <Select
+                    value={label}
+                    options={[
+                      ...MERCHANTS.filter((m) => !m.billing || !APP_TESTNET).map((m) => ({
+                        value: m.name,
+                        label: m.name,
+                        icon: <MerchantLogo name={m.name} size={20} />,
+                      })),
+                      { value: MERCHANT_OTHER, label: t('sub.merchantOther') },
+                    ]}
+                    onChange={(v) => {
+                      if (v === MERCHANT_OTHER) {
+                        setNamingByHand(true);
+                        setLbl('');
+                      } else {
+                        setLbl(v);
+                      }
+                    }}
+                    ariaLabel={t('sub.pickMerchant')}
+                    placeholder={t('sub.pickMerchant')}
+                    searchable
+                    searchPlaceholder={t('common.search')}
+                    noResultsText={t('common.noResults')}
+                    full
+                  />
+                )}
+              </Field>
+  );
+
   return (
     <>
       {/*
@@ -942,7 +1004,7 @@ export function SubscriptionsTab({
         `card--fund` is the accent. A border rather than a heading, because the
         point is that it is a different thing, not that it is a more important one.
       */}
-      {canActOnChain && (
+      {canActOnChain && !isNano && (
         <Card title={t('sub.fundTitle')} className="card--fund" data-testid="sub-fund">
           <GatewayFundBox
             chain={gwSource}
@@ -982,7 +1044,7 @@ export function SubscriptionsTab({
       )}
 
       {/* CREATE */}
-      <Card title={t('sub.createTitle')} data-testid="sub-create">
+      <Card title={isNano ? t('nano.title') : t('sub.createTitle')} data-testid="sub-create">
         {/* The form is the action, so the chain question belongs in front of it and
             not beside the list. It used to be answered only down there, which left a
             complete, fillable subscription form on a network that cannot create one:
@@ -991,6 +1053,11 @@ export function SubscriptionsTab({
             nobody's attention before telling them. */}
         {!canActOnChain ? (
           <NeedsChain feature="subscriptions" onSwitch={onSwitchChain} chainId={session.chainId} />
+        ) : isNano ? (
+          <div className="formstack">
+            {merchantPicker}
+            <NanoPanel session={session} />
+          </div>
         ) : (
           <div className="formstack">
             <div className="sub-grid">
@@ -1007,56 +1074,7 @@ export function SubscriptionsTab({
               `Something else` is not decoration. A closed list would be a wallet
               telling somebody they may only subscribe to companies it has heard of.
             */}
-              <Field label={t('sub.label')}>
-                {namingByHand ? (
-                  <div className="row" style={{ gap: 8 }}>
-                    <Input
-                      className="grow"
-                      value={label}
-                      onChange={(e) => setLbl(e.target.value)}
-                      placeholder={t('sub.labelPh')}
-                      data-testid="sub-label"
-                    />
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        setNamingByHand(false);
-                        setLbl('');
-                      }}
-                      data-testid="sub-merchant-back"
-                    >
-                      {t('sub.merchantList')}
-                    </Button>
-                  </div>
-                ) : (
-                  <Select
-                    value={label}
-                    options={[
-                      ...MERCHANTS.map((m) => ({
-                        value: m.name,
-                        label: m.name,
-                        icon: <MerchantLogo name={m.name} size={20} />,
-                      })),
-                      { value: MERCHANT_OTHER, label: t('sub.merchantOther') },
-                    ]}
-                    onChange={(v) => {
-                      if (v === MERCHANT_OTHER) {
-                        setNamingByHand(true);
-                        setLbl('');
-                      } else {
-                        setLbl(v);
-                      }
-                    }}
-                    ariaLabel={t('sub.pickMerchant')}
-                    placeholder={t('sub.pickMerchant')}
-                    searchable
-                    searchPlaceholder={t('common.search')}
-                    noResultsText={t('common.noResults')}
-                    full
-                  />
-                )}
-              </Field>
+              {merchantPicker}
               {/* The accent belongs here rather than on the name: this is the field
                 the firewall judges and the one a subscription cannot be wrong
                 about. */}
