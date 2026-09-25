@@ -6,6 +6,7 @@ import {
   AmountField,
   Button,
   CopyButton,
+  CopyRow,
   Field,
   Input,
   NanoMeter,
@@ -370,14 +371,8 @@ export function NanoPanel({ session }: { session: Session }) {
 
       <Field label={t('nano.accessTitle')}>
         <div className="formstack">
-          <div className="row" style={{ gap: 8 }}>
-            <Input mono readOnly value={baseUrl} className="grow" aria-label={t('nano.baseUrl')} />
-            <CopyButton value={baseUrl} label={t('nano.baseUrl')} />
-          </div>
-          <div className="row" style={{ gap: 8 }}>
-            <Input mono readOnly value={nano.apiKey} className="grow" aria-label={t('nano.apiKey')} />
-            <CopyButton value={nano.apiKey} label={t('nano.apiKey')} />
-          </div>
+          <CopyRow label={t('nano.baseUrl')} value={baseUrl} testId="nano-url" />
+          <CopyRow label={t('nano.apiKey')} value={nano.apiKey} testId="nano-key" />
           <div className="row" style={{ gap: 8 }}>
             <Input
               className="grow"

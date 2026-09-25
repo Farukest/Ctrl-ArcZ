@@ -11,6 +11,7 @@ export { MerchantLogo, MERCHANTS, merchantByName, type Merchant } from './Mercha
 export { AmountField, type AmountFieldProps } from './AmountField.js';
 export { Notice, type NoticeProps, type NoticeTone } from './Notice.js';
 export {
+  CopyRow,
   NanoMeter,
   UsageFeed,
   UsageGauge,

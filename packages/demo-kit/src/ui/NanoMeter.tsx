@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { CopyButton, Input } from './components.js';
 
 /**
  * A pay-per-request budget, drawn as what is left of it.
@@ -109,5 +110,16 @@ export function UsageFeed({ items, empty }: { items: readonly UsageItem[]; empty
         </li>
       ))}
     </ul>
+  );
+}
+
+/** A value to copy out, named on its left: an endpoint, a key. */
+export function CopyRow({ label, value, testId }: { label: string; value: string; testId?: string }) {
+  return (
+    <div className="copyrow">
+      <span className="copyrow__label">{label}</span>
+      <Input mono readOnly value={value} aria-label={label} data-testid={testId} />
+      <CopyButton value={value} label={label} />
+    </div>
   );
 }

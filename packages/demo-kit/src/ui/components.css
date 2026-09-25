@@ -5362,3 +5362,16 @@ a.hstep__go:hover {
   color: var(--text-lo);
   font-size: var(--fs-sm);
 }
+
+.copyrow {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+.copyrow__label {
+  color: var(--text-lo);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  white-space: nowrap;
+}
