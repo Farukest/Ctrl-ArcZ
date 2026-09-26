@@ -415,10 +415,10 @@ const SC=[
   log:['chain','pull(): aylık ödeme','Kutu (akıllı kontrat) her kuralı kendisi kontrol eder, para sadece Spotify\'a gider. Sunucumuz da ödemeden önce kuralları kontrol edip onay imzası verir. İmza olmadan ödeme geçmez.','function pull(tutar, onayImzasi) {\n  require(tutar <= perPullMax);\n  require(now >= lastPull + interval);\n  require(spent + tutar <= maxAmount);\n  require(now <= expiry);\n  usdc.transfer(target, tutar);\n}',[L.factory]]},
  {spot:'cancel',st:{stage:6},text:'Ayşe "İptal" dedi. Kalan 50 USDC kutudan (akıllı kontrat) çıktı ve aboneliğin tek kullanımlık adresine döndü.',
   log:['chain','İptal: sweepToVault()','Kalan para bu aboneliğin tek kullanımlık adresine döner. Bu çağrıyı sadece o adres yapabilir, anahtarı Ayşe\'nin cüzdanından türetilir. İşlem ücretini bizim sunucu o adrese gönderir.','sweepToVault(kasaAdresi)',[]]},
- {spot:'box',st:{stage:6},text:'Aynı kutu (akıllı kontrat) bir yapay zekâ ajanına da verilebilir. Ajan kutudan ödeme yapar ama kuralların dışına çıkamaz. Keeper bütçesini tam böyle bir kutudan alıyor.',
-  log:['app','Ajana güvenli bütçe','Ajana ana cüzdan değil, kuralları zincirde yazılı bir kutu (akıllı kontrat) verilir. Ajanın anahtarı çalınsa bile en fazla kurallarda yazan kadar harcanır. Keeper senaryosunda bunun çalışan örneği var.','',[L.addr(A.salary,'Keeper\'ın bütçe kutusu (akıllı kontrat)')]]},
- {spot:'summary',st:{},summary:{title:'Özet: abonelik ve ajanlar',sub:'Abonelikte ajanın iki rolü: satıcıyı kontrol etmek ve kurallı bir bütçeyle ödeme yapabilmek.',items:[
-    ['Ajan ne yaptı?','Adres müfettişi ajanı satıcı adresini kontrol etti. Abonelik kutusu (akıllı kontrat) da bir ajana verilebilecek güvenli bir bütçe: ajan ödeme yapabilir ama kuralların dışına çıkamaz.'],
+ {spot:'box',st:{stage:6},text:'Aynı kontrat türüyle bir ajana da bütçe verilebilir. "Kime" kuralına ajanın adresi yazılırsa, ajan kendi masrafı için kurallar içinde para çekebilir. Keeper\'ın bütçesi böyle çalışıyor.',
+  log:['app','Ajana güvenli bütçe','Kontrat sadece "kime" kuralında yazan tek adrese ödeyebilir. Abonelikte orada satıcı yazar ve ödemeyi Ayşe "Şimdi çek" ile tetikler. Keeper\'da orada keeper\'ın kendi adresi yazar: keeper kendi masrafı için para çeker, anahtarı çalınsa bile kurallardan fazlası çıkmaz.','',[L.addr(A.salary,'Keeper\'ın bütçe kutusu (akıllı kontrat)')]]},
+ {spot:'summary',st:{},summary:{title:'Özet: abonelik ve ajanlar',sub:'Abonelikte ajan satıcıyı kontrol ediyor. Kurallı kontrat da ajanlara güvenli bütçe vermenin yolu.',items:[
+    ['Ajan ne yaptı?','Adres müfettişi ajanı satıcı adresini kontrol etti. Aylık ödemeyi bugün Ayşe "Şimdi çek" ile tetikliyor, bunu otomatik yapan bir ajan yok. Aynı kontrat türü keeper gibi bir ajana kurallı bütçe vermek için kullanılıyor.'],
     ['Nasıl kuruldu?','Factory kontrat her abonelik için bir kutu (akıllı kontrat) deploy eder. Kurallar kutu açılırken içine yazılır: kime, seferde en fazla ne kadar, ne sıklıkla, toplam ne kadar, ne zamana kadar. Her ödemede sunucumuzun onay imzası da gerekir.'],
     ['Circle ne sağladı?','Gateway: abonelik bütçesi Ayşe\'nin tek bir USDC bakiyesinde durur ve kutuya (akıllı kontrat) tek seferde basılır. Para Circle\'dan geldiği için kutu zincirde Ayşe\'nin cüzdanıyla eşleştirilemez.'],
     ['Arc ne sağladı?','Gateway\'e yatırılan para yaklaşık 1 saniyede kullanılabilir oldu. İşlem ücreti USDC ile ödenir. Ajanın ayrıca ETH gibi bir gaz tokenı tutması gerekmez: harcadığı para ile ücretini ödediği para aynı bakiye.']
@@ -426,29 +426,29 @@ const SC=[
   log:['app','Özet','Özet: abonelik ve ajanlar','',[]]}
  ]},
 {key:'nano',slide:'Slayt 5–7',tab:'Kullandıkça öde',url:'ctrlarcz.xyz/?tab=subscriptions',screen:'nano',
- lead:'Claude API\'yi soru başına ödemek. Her istekte ajan cüzdanı 0.003 USDC\'lik ödemeyi kendisi imzalar, Circle Gateway onaylar.',
+ lead:'Claude API\'yi soru başına ödemek. Her istekte ajan cüzdanı (sana özel, isteklerin ödemesini otomatik yapan ayrı bir cüzdan) 0.003 USDC\'lik ödemeyi kendisi imzalar, Circle Gateway onaylar.',
  steps:[
  {spot:'merchant',st:{},text:'Abonelikler listesinden Claude API seçilince ekran kullandıkça öde paneline dönüşüyor.',
   log:['app','Kullandıkça ödenen servis','Claude API\'yi Circle Agent Marketplace\'teki BlockRun servisi satıyor: Arc üzerinde soru başına 0.003 USDC.','',[L.market]]},
  {spot:'popup',st:{popup:'sign'},text:'"Aktifleştir"e basınca cüzdan bir mesaj imzalıyor. Para hareketi yok.',
-  log:['server','API anahtarı ve ajan cüzdanı','Sunucu imzayla cüzdanın sana ait olduğunu doğrular. Sana özel bir ajan cüzdanı ve bir API anahtarı üretir.','POST /api/nano/session\n<span class="c">// → { agent, apiKey }</span>',[]]},
- {spot:'popup',st:{popup:'dep',active:1,bal2:0},text:'Ali ajan cüzdanına 0.10 USDC yüklüyor. Para Circle Gateway\'de, ajan cüzdanının adına duruyor.',
-  log:['chain','GatewayWallet.depositFor()','Ali öder, bakiye ajan cüzdanının adına yazılır. Zincire yazılan işlemler sadece bunlar: USDC onayı ve yatırma.','usdc.approve(GatewayWallet, tutar)\nGatewayWallet.depositFor(USDC, ajanCuzdani, tutar)',[L.gwc,L.tx(TX.depositFor,'Mainnet örneği')]]},
+  log:['server','API anahtarı ve ajan cüzdanı (sana özel, isteklerin ödemesini otomatik yapan ayrı bir cüzdan)','Sunucu imzayla cüzdanın sana ait olduğunu doğrular. Sana özel bir ajan cüzdanı (sana özel, isteklerin ödemesini otomatik yapan ayrı bir cüzdan) ve bir API anahtarı üretir.','POST /api/nano/session\n<span class="c">// → { agent, apiKey }</span>',[]]},
+ {spot:'popup',st:{popup:'dep',active:1,bal2:0},text:'Ali ajan cüzdanına (sana özel, isteklerin ödemesini otomatik yapan ayrı bir cüzdan) 0.10 USDC yüklüyor. Para Circle Gateway\'de, ajan cüzdanının adına duruyor.',
+  log:['chain','GatewayWallet.depositFor()','Ali öder, bakiye ajan cüzdanının (sana özel, isteklerin ödemesini otomatik yapan ayrı bir cüzdan) adına yazılır. Zincire yazılan işlemler sadece bunlar: USDC onayı ve yatırma.','usdc.approve(GatewayWallet, tutar)\nGatewayWallet.depositFor(USDC, ajanCuzdani, tutar)',[L.gwc,L.tx(TX.depositFor,'Mainnet örneği')]]},
  {spot:'meter',st:{popup:0,bal2:0.1},text:'Bakiye hazır: 33 soru. Claude kullanan her program artık bu adresi ve anahtarı kullanabilir.',
   log:['circle','Bakiye Gateway\'de','Kalan bakiye Circle Gateway API\'den okunur. Gösterge harcadıkça düşer.','POST https://gateway-api.circle.com/v1/balances',[L.gw]]},
  {spot:'term',st:{term:1},text:'Ali terminalden Claude\'a soru soruyor. Anthropic anahtarı yerine bizim adresimizi ve anahtarımızı kullanıyor.',
-  log:['server','İstek sunucuya geldi','Sunucu anahtardan kullanıcıyı, kullanıcıdan ajan cüzdanını bulur ve isteği BlockRun\'a iletir.','',[]]},
+  log:['server','İstek sunucuya geldi','Sunucu anahtardan kullanıcıyı, kullanıcıdan ajan cüzdanını (sana özel, isteklerin ödemesini otomatik yapan ayrı bir cüzdan) bulur ve isteği BlockRun\'a iletir.','',[]]},
  {spot:'term',st:{term:2},text:'BlockRun cevap yerine "önce öde" diyor: HTTP 402.',
   log:['server','x402: HTTP 402','Servis fiyatı, ağı ve ödeme adresini cevapta bildirir.','{ "amount": "3000",\n  "network": "eip155:5042",\n  "payTo": "0xe903…1aBf" }',[L.x402]]},
- {spot:'term',st:{term:3},text:'Ajan cüzdanı ödemeyi kimseye sormadan imzaladı ve soruyu tekrar gönderdi. Circle onayladı.',
+ {spot:'term',st:{term:3},text:'Ajan cüzdanı (sana özel, isteklerin ödemesini otomatik yapan ayrı bir cüzdan) ödemeyi kimseye sormadan imzaladı ve soruyu tekrar gönderdi. Circle onayladı.',
   log:['circle','Nanopayment','Ödeme bir işlem değil, imzalı bir yetki. Gaz yok. Circle imzayı doğrular, binlerce ödemeyi toplayıp tek seferde zincire yazar.','const client = new GatewayClient({ chain: "arc", privateKey })\nawait client.pay(url, { method: "POST", body })',[L.nano,L.eip3009]]},
  {spot:'row',st:{term:4,bal2:0.097,spent:0.003,feed:[['19:07:20','100 giriş · 29 çıkış','alındı']],fresh:1},text:'Cevap terminale geldi. Aynı anda sitede yeni bir ödeme satırı belirdi ve gösterge düştü.',
   log:['circle','Ödeme kaydı','Her ödeme Circle\'ın kayıtlarında görünür: önce "alındı", zincire yazılınca "zincirde".','GET https://gateway-api.circle.com/v1/x402/transfers?from=ajanCuzdani',[L.nano]]},
  {spot:'panel',st:{},text:'Kendi API\'sini satmak isteyen de aynı yolu kullanır. Rotasına tek satır eklemesi yeterli.',
   log:['server','Satıcı tarafı','Circle\'ın paketi, ödemesiz isteğe 402 döner, ödemeli isteği Circle\'a onaylatır.','app.post("/soru", gateway.require("$0.003"), cevapVer)',[L.nano,L.market]]},
- {spot:'summary',st:{},summary:{title:'Özet: kullandıkça öde ajanı',sub:'Her Claude isteğini kendi başına ödeyen ajan cüzdanı.',items:[
+ {spot:'summary',st:{},summary:{title:'Özet: kullandıkça öde ajanı',sub:'Her Claude isteğini kendi başına ödeyen ajan cüzdanı (sana özel, isteklerin ödemesini otomatik yapan ayrı bir cüzdan).',items:[
     ['Ajan ne yaptı?','Her Claude isteğinde 0.003 USDC\'lik ödemeyi kimseye sormadan imzaladı. Bütçe bitince ödeme yapamaz, yüklenen bakiyeden fazlasını harcayamaz.'],
-    ['Nasıl kuruldu?','"Aktifleştir"e basınca sunucumuz kullanıcıya özel bir ajan cüzdanı ve bir API anahtarı üretti. Bütçe Gateway\'e ajan adına yüklendi. İstekler geldikçe sunucu ödemeyi Circle\'ın x402-batching paketiyle ajan adına yapıyor.'],
+    ['Nasıl kuruldu?','"Aktifleştir"e basınca sunucumuz kullanıcıya özel bir ajan cüzdanı (sana özel, isteklerin ödemesini otomatik yapan ayrı bir cüzdan) ve bir API anahtarı üretti. Bütçe Gateway\'e ajan adına yüklendi. İstekler geldikçe sunucu ödemeyi Circle\'ın x402-batching paketiyle ajan adına yapıyor.'],
     ['Circle ne sağladı?','Gateway Nanopayments: gazsız, çok küçük tutarlarda ödeme ve binlerce ödemenin toplu olarak zincire yazılması. x402 ile ödemenin onayı. Claude servisini satan BlockRun, Circle Agent Marketplace\'te listeli.'],
     ['Arc ne sağladı?','Ödemeler Arc üzerinde USDC ile yapılıyor, Circle toplu ödemeleri Arc\'a yazıyor. Bütçeyi yüklemek dışında ajanın zincire işlem göndermesi gerekmiyor.']
   ]},text:'Özet: bu senaryoda ajan ne yaptı, nasıl kuruldu, Circle ve Arc ne sağladı.',
