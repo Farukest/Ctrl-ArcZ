@@ -277,7 +277,7 @@ sub(){
     <span style="font-size:12px;color:var(--app-mute)">Buraya yatırılan tutar yaklaşık 1s içinde sayılır.</span></div>`;
   const form=`<div class="acard" data-spot="form"><h4>Yeni abonelik</h4>
     <div class="two"><div><div class="lbl">Satıcı</div><div class="inp" style="font-family:var(--sans)">Spotify</div></div><div><div class="lbl">Satıcı adresi</div><div class="inp" style="font-family:var(--sans)">Spotify'ın adresi</div></div></div>
-    <div class="note ok"><div><b>Güvenli görünüyor</b>Bu adrese daha önce gönderim yaptınız.</div></div>
+    <div class="note ok" data-spot="subrisk"><div><b>Güvenli görünüyor</b>· Kurallar: Bu adrese daha önce korumalı bir gönderim yapıldı ve alıcı kodla claim etti.<br>· Agent kontrolü: Daha önce ödeme yaptığınız doğrulanmış bir alıcı.</div></div>
     <div class="lbl">Çekim başına</div><div class="inp">10.00 USDC</div>
     <div class="two"><div><div class="lbl">Ne sıklıkla</div><div class="inp" style="font-family:var(--sans)">Aylık</div></div><div><div class="lbl">Kaç ay</div><div class="inp">6</div></div></div>
     <div class="kv"><span>Toplam</span><span>60.00 USDC</span></div><div class="kv"><span>Circle ücreti</span><span>Gateway bakiyesinden</span></div>
@@ -382,8 +382,10 @@ const SC=[
   log:['chain','GatewayWallet.deposit()','USDC Circle\'ın Gateway kontratına yatırılır ve Ayşe\'nin Gateway bakiyesine yazılır.','usdc.approve(GatewayWallet, tutar)\nGatewayWallet.deposit(USDC, tutar)',[L.gwc]]},
  {spot:'fund',st:{fund:'ok',popup:0},text:'Circle yatırılanı yaklaşık 1 saniyede saydı. Gateway bakiyesi 60 USDC.',
   log:['circle','Bakiye sayıldı','Bakiye Circle Gateway API\'den okunur. Arc hızlı kesinleştiği için yatırılan para hemen kullanılabilir.','POST https://gateway-api.circle.com/v1/balances',[L.gw]]},
- {spot:'form',st:{stage:0},text:'Ayşe Spotify\'a aylık 10 USDC, 6 aylık abonelik formunu doldurdu. Satıcı adresi de kontrol edildi.',
-  log:['app','Kurallar belirlendi','Formdaki her alan kutuya yazılacak bir kural: kime ödenecek, seferde en fazla ne kadar, ne sıklıkla, toplam ne kadar, ne zamana kadar.','',[]]},
+ {spot:'form',st:{stage:0},text:'Ayşe Spotify\'a aylık 10 USDC, 6 aylık abonelik formunu doldurdu. Formdaki her alan kutuya yazılacak bir kural olacak.',
+  log:['app','Kurallar belirlendi','Kime ödenecek, seferde en fazla ne kadar, ne sıklıkla, toplam ne kadar, ne zamana kadar. Bunlar kutunun harcama kuralları olacak.','',[]]},
+ {spot:'subrisk',st:{stage:0},text:'Satıcı adresi girilince kurallar ve adres müfettişi ajanı birlikte kontrol etti. Sahte bir adres olsaydı abonelik açılmazdı.',
+  log:['server','Ajan satıcıyı kontrol ediyor','Gönderimdeki aynı iki katman: tarayıcıda kurallar, sunucuda yapay zekâ ajanı. Ajan kararı sadece sıkılaştırabilir.','POST /api/investigate',[]]},
  {spot:'steps',st:{stage:1},text:'"Abonelik oluştur"a basıldı. İlk adım: sunucumuz satıcı adresini kontrol ediyor.',
   log:['server','Satıcı kontrol ediliyor','Sunucumuz satıcı adresini aynı güvenlik kontrolünden geçirir. Riskli bir adresse abonelik hiç açılmaz.','POST /api/cosign  { phase: "precheck", owner, target, amount }',[]]},
  {spot:'box',st:{stage:2},text:'Kutu oluşturuluyor. Factory kontrat bu abonelik için yeni bir kontrat deploy etti, kurallar içine yazıldı.',
@@ -395,7 +397,9 @@ const SC=[
  {spot:'pull',st:{stage:5},text:'Ödeme günü geldi. "Şimdi çek" ile Spotify\'ın 10 USDC\'si kutudan ödendi.',
   log:['chain','pull(): aylık ödeme','Kutu her kuralı kendisi kontrol eder, para sadece Spotify\'a gider. Sunucumuz da ödemeden önce kuralları kontrol edip onay imzası verir. İmza olmadan ödeme geçmez.','function pull(tutar, onayImzasi) {\n  require(tutar <= perPullMax);\n  require(now >= lastPull + interval);\n  require(spent + tutar <= maxAmount);\n  require(now <= expiry);\n  usdc.transfer(target, tutar);\n}',[L.factory]]},
  {spot:'cancel',st:{stage:6},text:'Ayşe "İptal" dedi. Kalan 50 USDC kutudan çıktı ve aboneliğin tek kullanımlık adresine döndü.',
-  log:['chain','İptal: sweepToVault()','Kalan para bu aboneliğin tek kullanımlık adresine döner. Bu çağrıyı sadece o adres yapabilir, anahtarı Ayşe\'nin cüzdanından türetilir. İşlem ücretini bizim sunucu o adrese gönderir.','sweepToVault(kasaAdresi)',[]]}
+  log:['chain','İptal: sweepToVault()','Kalan para bu aboneliğin tek kullanımlık adresine döner. Bu çağrıyı sadece o adres yapabilir, anahtarı Ayşe\'nin cüzdanından türetilir. İşlem ücretini bizim sunucu o adrese gönderir.','sweepToVault(kasaAdresi)',[]]},
+ {spot:'box',st:{stage:6},text:'Aynı kutu bir yapay zekâ ajanına da verilebilir. Ajan kutudan ödeme yapar ama kuralların dışına çıkamaz. Keeper bütçesini tam böyle bir kutudan alıyor.',
+  log:['app','Ajana güvenli bütçe','Ajana ana cüzdan değil, kuralları zincirde yazılı bir kutu verilir. Ajanın anahtarı çalınsa bile en fazla kurallarda yazan kadar harcanır. Keeper senaryosunda bunun çalışan örneği var.','',[L.addr(A.salary,'Keeper\'ın bütçe kutusu')]]}
  ]},
 {key:'nano',slide:'Slayt 5–7',tab:'Kullandıkça öde',url:'ctrlarcz.xyz/?tab=subscriptions',screen:'nano',
  lead:'Claude API\'yi soru başına ödemek. Her istekte ajan cüzdanı 0.003 USDC\'lik ödemeyi kendisi imzalar, Circle Gateway onaylar.',
