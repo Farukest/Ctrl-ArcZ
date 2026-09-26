@@ -340,7 +340,7 @@ keeper(){
   const lines=(S.lines||[]).map(l=>`<span class="ln">${l}</span>`).join('');
   return `<div class="app" style="max-width:640px"><div class="a-top"><div class="logo" style="font-size:14px">keeper@ctrlarcz · pm2</div><span class="pill">${ARC} Arc mainnet</span></div>
   <div class="console" data-spot="console">${lines}<span class="ln d">▍</span></div>
-  ${S.box?`<div class="boxcard" data-spot="salary"><div class="h"><span>Keeper'ın bütçe kontratı</span><span class="chip">Aktif</span></div>
+  ${S.box?`<div class="boxcard" data-spot="salary"><div class="h"><span>Keeper'ın işlem ücreti bütçesi</span><span class="chip">Aktif</span></div>
   <div class="kv"><span>Adres</span><span>${short(A.salary)}</span></div><div class="kv"><span>Kime ödeyebilir</span><span>sadece keeper</span></div>
   <div class="kv"><span>Kurallar</span><span>seferde ≤0.03 · 30 dk'da bir · toplam 0.10 · 30 gün</span></div>
   <div class="kv"><span>Kalan</span><span>${S.box}</span></div></div>`:''}</div>`;
@@ -453,15 +453,15 @@ const SC=[
   log:['app','Özet','Özet: kullandıkça öde ajanı','',[]]}
  ]},
 {key:'keeper',slide:'Slayt 8',tab:'Keeper',url:'sunucu · pm2 logs ctrlarcz-keeper',screen:'keeper',
- lead:'Sunucumuzda sürekli çalışan bir program. Süresi dolan transferleri bulup parayı gönderene iade eder, masrafını kuralları zincirde yazılı bir bütçeden öder. Konsoldaki satırlar sunucudaki gerçek kayıtlardır.',
+ lead:'Sunucumuzda sürekli çalışan bir program. Süresi dolan transferleri bulup parayı gönderene iade eder, kendi işlem ücretlerini, kuralları zincirde yazılı bir işlem ücreti bütçesinden öder. Konsoldaki satırlar sunucudaki gerçek kayıtlardır.',
  steps:[
  {spot:'summary',st:{lines:[]},summary:{title:'Keeper nedir?',sub:'Kendi cüzdanı olan ve kendi kendine çalışan bir program.',items:[
     ['Ne?','Node.js ile yazılmış bir program: apps/keeper. Bir kontrat değil, bir servis. Sunucumuzda pm2 ile sürekli çalışıyor.'],
     ['Cüzdanı ve anahtarı','Kendi normal bir Arc cüzdanı var. Anahtarı sunucudaki ayarlarda duruyor: KEEPER_PK. İşlemleri bu anahtarla kendisi imzalayıp gönderiyor.'],
     ['Onu ne tetikliyor?','Kendi zamanlayıcısı: 30 saniyede bir çalışıyor. Onu bir kullanıcı, bir API çağrısı ya da Circle tetiklemiyor.'],
-    ['Nereye kurulur?','Node.js çalışan herhangi bir sunucuya. Ayarlar: ağ, anahtar, bütçe kontratının adresi, onay sunucusunun adresi. Çalıştırma komutu: pnpm --filter @ctrl-arcz/keeper start'],
+    ['Nereye kurulur?','Node.js çalışan herhangi bir sunucuya. Ayarlar: ağ, anahtar, işlem ücreti bütçesi kontratının adresi, onay sunucusunun adresi. Çalıştırma komutu: pnpm --filter @ctrl-arcz/keeper start'],
     ['Kullanıcının parasını taşıyor mu?','Hayır. Para kontratta durur. Keeper sadece iade çağrısını yapar, parayı gönderene kontrat kendisi gönderir. Keeper\'ın cüzdanından sadece işlem ücreti çıkar.'],
-    ['Güvenlik','Keeper sadece kurallara uyan işi yapabilir. İade adresini kontrat belirler. Bütçesinden seferde en fazla 0.03, 30 dakikada bir, toplam 0.10 USDC çekebilir: önce onay sunucusu, sonra kontrat kuralları kontrol eder. Anahtarı çalınırsa kayıp en fazla bütçe kadardır ve operatör kalanı tek işlemle geri alır.']
+    ['Güvenlik','Keeper sadece kurallara uyan işi yapabilir. İade adresini kontrat belirler. İşlem ücreti bütçesinden seferde en fazla 0.03, 30 dakikada bir, toplam 0.10 USDC çekebilir: önce onay sunucusu, sonra kontrat kuralları kontrol eder. Anahtarı çalınırsa kayıp en fazla bu işlem ücreti bütçesi kadardır ve operatör kalanı tek işlemle geri alır.']
   ]},text:'Önce keeper\'ın ne olduğu: nerede çalışıyor, cüzdanı nerede, onu ne tetikliyor.',
   log:['app','Keeper nedir?','Sunucuda çalışan, kendi cüzdanı olan bir program.','',[]]},
  {spot:'console',st:{lines:['<span class="d">keeper 0x2520…102A watching 0x9988…33aE on chain 5042</span>','tick @22770170: open=1 reclaimed=0 balance=0.045399 USDC','tick @22770232: open=1 reclaimed=0 balance=0.045399 USDC']},text:'Ali, Ayşe\'ye 60 saniyelik pencereyle 0.02 USDC korumalı gönderim yaptı: transfer #6. Ayşe kodu girmedi. Konsoldaki "open=1": bekleyen, henüz alınmamış bir korumalı gönderim var.',
@@ -470,12 +470,12 @@ const SC=[
   log:['app','Karar kuralları','Sadece süresi dolmuş ve hâlâ açık transferler. İade masraftan küçükse yapmaz. Önce büyük tutarlar.','',[]]},
  {spot:'console',st:{lines:['<span class="d">keeper 0x2520…102A watching 0x9988…33aE on chain 5042</span>','tick @22770232: open=1 reclaimed=0 balance=0.045399 USDC','<span class="g">reclaimed #6: 0.02 USDC returned to 0xf9e7…4fcE (0x9aa9…c52d)</span>','tick @22770291: open=0 reclaimed=1 balance=0.044077 USDC']},text:'Keeper iadeyi yaptı, 0.02 USDC gönderene döndü. Parayı kime göndereceğini keeper değil kontrat belirler.',
   log:['chain','reclaimExpired(6)','Herkes çağırabilir ama para her zaman gönderene gider. Bu yüzden bu işi bir bota güvenle bırakabilirsiniz.','function reclaimExpired(id) {\n  require(now > deadline);\n  usdc.transfer(sender, amount);\n}',[L.tx(TX.reclaim6,'Bu işlem mainnet\'te')]]},
- {spot:'salary',st:{box:'0.07 USDC',lines:['<span class="d">keeper 0x2520…102A watching 0x9988…33aE on chain 5042</span>','tick @22692498: open=0 reclaimed=0 balance=0.02 USDC | drew 0.03 USDC salary (0x4ec1…13c4)']},text:'Bakiyesi alt sınırın altına inince keeper bütçe kontratından kendi maaşını çekti.',
-  log:['chain','Bütçe: abonelik kutusunun (akıllı kontrat) aynısı','Keeper\'ın bütçesi abonelik senaryosundaki kutuyla (akıllı kontrat) aynı tür kontrat. Satıcının yerinde keeper yazıyor. Anahtarı çalınsa bile kurallardan fazlası çekilemez.','pull(0.03, onayImzasi)\n<span class="c">// seferde en fazla 0.03 · 30 dakikada bir · toplam 0.10</span>',[L.addr(A.salary,'Bütçe kontratı'),L.tx(TX.salary,'Bu çekim mainnet\'te')]]},
+ {spot:'salary',st:{box:'0.07 USDC',lines:['<span class="d">keeper 0x2520…102A watching 0x9988…33aE on chain 5042</span>','tick @22692498: open=0 reclaimed=0 balance=0.02 USDC | drew 0.03 USDC salary (0x4ec1…13c4)']},text:'Bakiyesi alt sınırın altına inince keeper işlem ücreti bütçesinden (akıllı kontrat) kendi masrafı için para çekti.',
+  log:['chain','İşlem ücreti bütçesi: abonelikteki kontratın aynısı','Keeper\'ın bütçesi abonelik senaryosundaki kutuyla (akıllı kontrat) aynı tür kontrat. Satıcının yerinde keeper yazıyor. Anahtarı çalınsa bile kurallardan fazlası çekilemez.','pull(0.03, onayImzasi)\n<span class="c">// seferde en fazla 0.03 · 30 dakikada bir · toplam 0.10</span>',[L.addr(A.salary,'İşlem ücreti bütçesi kontratı'),L.tx(TX.salary,'Bu çekim mainnet\'te')]]},
  {spot:'summary',st:{},summary:{title:'Özet: keeper',sub:'Kimse komut vermeden çalışan ve kendi masrafını ödeyen program.',items:[
-    ['Ajan ne yaptı?','Süresi dolan transfer #6\'yı kendisi buldu ve 0.02 USDC\'yi gönderene iade etti. Bakiyesi azalınca bütçe kutusundan (akıllı kontrat) kendi maaşını çekti.'],
-    ['Nasıl kuruldu?','Sunucumuzda pm2 ile sürekli çalışan bir Node.js programı, kendi Arc cüzdanı var ve 30 saniyede bir kendi kendine çalışıyor. Bütçesi abonelikteki kontratla aynı türden: seferde en fazla 0.03 USDC, 30 dakikada bir, toplam 0.10 USDC, 30 gün. Maaş çekerken onay sunucumuzun imzasını alıyor.'],
-    ['Circle ne sağladı?','USDC: keeper\'ın iade ettiği para da, harcadığı bütçe de USDC.'],
+    ['Ajan ne yaptı?','Süresi dolan transfer #6\'yı kendisi buldu ve 0.02 USDC\'yi gönderene iade etti. Bakiyesi azalınca işlem ücreti bütçesinden (akıllı kontrat) kendi masrafı için para çekti.'],
+    ['Nasıl kuruldu?','Sunucumuzda pm2 ile sürekli çalışan bir Node.js programı, kendi Arc cüzdanı var ve 30 saniyede bir kendi kendine çalışıyor. İşlem ücreti bütçesi abonelikteki kontratla aynı türden: seferde en fazla 0.03 USDC, 30 dakikada bir, toplam 0.10 USDC, 30 gün. Maaş çekerken onay sunucumuzun imzasını alıyor.'],
+    ['Circle ne sağladı?','USDC: keeper\'ın iade ettiği para da, işlem ücreti bütçesi de USDC.'],
     ['Arc ne sağladı?','İşlem ücreti USDC ile ödenir. Ajanın ayrıca ETH gibi bir gaz tokenı tutması gerekmez: harcadığı para ile ücretini ödediği para aynı bakiye. Keeper\'ın iadesi gibi her işlem bir saniyenin altında kesinleşiyor.']
   ]},text:'Özet: bu senaryoda ajan ne yaptı, nasıl kuruldu, Circle ve Arc ne sağladı.',
   log:['app','Özet','Özet: keeper','',[]]}
