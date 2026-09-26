@@ -6,35 +6,34 @@
 <title>Ctrl+ArcZ Simülasyonu</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
 <style>
 :root{
-  color-scheme: light;
-  --sky:#dcefff; --sky2:#f7fbff; --ink:#1c2550; --ink2:#48507a; --ink3:#7a81a3;
-  --plum:#5b2a74; --plum-soft:#efe6f6; --line:#d6dff0; --card:#ffffff;
-  --app-bg:#f3f5f9; --app-card:#ffffff; --app-line:#dfe4ee; --app-ink:#14182b; --app-mute:#6b7187;
-  --orange:#e0901a; --orange-soft:#fbeed6; --ok:#1a8a55; --ok-soft:#e3f5ec; --bad:#c43a3a; --bad-soft:#fbe7e7;
-  --tag-app:#b36a00; --tag-chain:#1c2550; --tag-circle:#5b2a74; --tag-server:#1f6f8b;
-  --mono:"JetBrains Mono",ui-monospace,Consolas,monospace; --sans:"Onest",system-ui,"Segoe UI",sans-serif;
+  color-scheme:light;
+  --sky:#dcefff;--sky2:#f7fbff;--ink:#1c2550;--ink2:#48507a;--ink3:#7a81a3;
+  --plum:#5b2a74;--plum-soft:#efe6f6;--line:#d6dff0;
+  --app-bg:#f3f5f9;--app-line:#dfe4ee;--app-ink:#14182b;--app-mute:#6b7187;
+  --orange:#e0901a;--orange-soft:#fbeed6;--ok:#1a8a55;--ok-soft:#e3f5ec;--bad:#c43a3a;--bad-soft:#fbe7e7;
+  --t-app:#b36a00;--t-chain:#1c2550;--t-circle:#5b2a74;--t-server:#1f6f8b;--t-seller:#9a3f12;
+  --mono:"JetBrains Mono",ui-monospace,Consolas,monospace;--sans:"Onest",system-ui,"Segoe UI",sans-serif;
 }
 *{box-sizing:border-box}
-body{margin:0;font-family:var(--sans);color:var(--ink);background:linear-gradient(180deg,var(--sky) 0%,var(--sky2) 55%) fixed;min-height:100%}
-.wrap{max-width:none;margin:0;padding-inline:16px;padding-block:12px 16px;min-height:100vh;display:flex;flex-direction:column}
+body{margin:0;font-family:var(--sans);color:var(--ink);background:linear-gradient(180deg,var(--sky) 0%,var(--sky2) 55%) fixed;min-height:100vh}
+.wrap{padding-inline:16px;padding-block:12px 14px;min-height:100vh;display:flex;flex-direction:column}
 header.top{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
-.brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:18px;letter-spacing:-.01em}
-.brand svg{width:26px;height:26px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:18px}
 .brand small{font-weight:500;color:var(--ink3);font-size:13px}
 .tabs{display:flex;gap:6px;flex-wrap:wrap}
-.tab{border:1px solid var(--line);background:rgba(255,255,255,.7);color:var(--ink2);border-radius:999px;padding:7px 13px;font:500 13px var(--sans);cursor:pointer}
-.tab b{font-family:var(--mono);font-weight:500;color:var(--ink3);margin-right:6px;font-size:11px}
+.tab{border:1px solid var(--line);background:rgba(255,255,255,.75);color:var(--ink2);border-radius:999px;padding:7px 13px;font:500 13px var(--sans);cursor:pointer}
+.tab b{font:500 11px var(--mono);color:var(--ink3);margin-right:6px}
 .tab[aria-selected="true"]{background:var(--ink);color:#fff;border-color:var(--ink)}
 .tab[aria-selected="true"] b{color:#b9c0e6}
 .tab:focus-visible,.btn:focus-visible,.logrow:focus-visible{outline:2px solid var(--plum);outline-offset:2px}
-.head{margin-top:18px;display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+.head{margin-top:12px;display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
 .head h1{margin:0;font-size:28px;letter-spacing:-.02em;text-wrap:balance}
-.head .slide{font:500 12px var(--mono);color:var(--plum);background:var(--plum-soft);padding:3px 8px;border-radius:6px}
-.lead{margin:6px 0 0;color:var(--ink2);max-width:75ch;line-height:1.5}
-.grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(380px,34%);gap:16px;margin-top:12px;align-items:stretch;flex:1}
+.slide{font:500 12px var(--mono);color:var(--plum);background:var(--plum-soft);padding:3px 8px;border-radius:6px}
+.lead{margin:6px 0 0;color:var(--ink2);max-width:110ch;line-height:1.5;font-size:16px}
+.grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(380px,34%);gap:16px;margin-top:12px;align-items:start;flex:1}
 @media (max-width:980px){.grid{grid-template-columns:1fr}}
 /* browser frame */
 .frame{background:#0f1428;border-radius:14px;overflow:hidden;box-shadow:0 18px 50px rgba(28,37,80,.18)}
@@ -42,10 +41,10 @@ header.top{display:flex;align-items:center;justify-content:space-between;gap:16p
 .dots{display:flex;gap:6px}.dots i{width:10px;height:10px;border-radius:50%;display:block;background:#ff5f57}.dots i:nth-child(2){background:#febc2e}.dots i:nth-child(3){background:#28c840}
 .url{flex:1;text-align:center;font:12px var(--mono);color:#aab2d8;background:#0f1428;border-radius:6px;padding:4px 10px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 .net{font:600 11px var(--mono);color:#1c2550;background:#bfe0ff;border-radius:5px;padding:2px 7px}
-.stage{position:relative;background:var(--app-bg);height:calc(100vh - 235px);min-height:480px;padding:22px 22px 50vh;overflow-y:auto;overflow-x:hidden;scrollbar-width:thin}
-/* spotlight */
+.stage{position:relative;background:var(--app-bg);height:calc(100vh - 250px);min-height:480px;padding:22px 22px 50vh;overflow-y:auto;overflow-x:hidden}
+/* spotlight and step box */
 .spot{position:absolute;border-radius:12px;box-shadow:0 0 0 9999px rgba(12,16,38,.55);outline:2px solid #ffd580;outline-offset:3px;pointer-events:none;transition:all .35s cubic-bezier(.2,.8,.2,1);z-index:5}
-.pop{position:absolute;z-index:6;width:min(400px,calc(100% - 24px));background:#fff;border-radius:12px;padding:14px 16px 14px;box-shadow:0 14px 40px rgba(0,0,0,.28);transition:top .35s,left .35s}
+.pop{position:absolute;z-index:6;width:min(400px,calc(100% - 24px));background:#fff;border-radius:12px;padding:14px 16px;box-shadow:0 14px 40px rgba(0,0,0,.28);transition:top .35s,left .35s}
 .pop .meta{display:flex;align-items:center;gap:10px;font:11px var(--mono);color:var(--ink3)}
 .bar{flex:1;height:3px;background:#e8ebf4;border-radius:3px;overflow:hidden}.bar i{display:block;height:100%;background:var(--ink)}
 .pop p{margin:10px 0 12px;line-height:1.5;font-size:16px;color:var(--app-ink)}
@@ -53,69 +52,94 @@ header.top{display:flex;align-items:center;justify-content:space-between;gap:16p
 .btn{border:1px solid var(--line);background:#fff;color:var(--ink);border-radius:9px;padding:8px 13px;font:600 13px var(--sans);cursor:pointer;display:inline-flex;align-items:center;gap:6px}
 .btn.dark{background:var(--ink);color:#fff;border-color:var(--ink)}
 .btn[disabled]{opacity:.4;cursor:default}
-.controls{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:12px;flex-wrap:wrap}
-.hint{font-size:12px;color:var(--ink3)}
+.controls{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:10px;flex-wrap:wrap}
+.hint-keys{font-size:12px;color:var(--ink3)}
 kbd{font:11px var(--mono);border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;padding:1px 5px;background:#fff}
-/* log panel */
-.log{background:rgba(255,255,255,.9);border:1px solid var(--line);border-radius:14px;padding:18px;display:flex;flex-direction:column;gap:12px;max-height:calc(100vh - 130px);overflow:auto}
-.log h2{margin:0;font-size:22px;display:flex;align-items:center;gap:8px}
+/* right panel */
+.log{background:rgba(255,255,255,.92);border:1px solid var(--line);border-radius:14px;padding:18px;display:flex;flex-direction:column;gap:12px;max-height:calc(100vh - 170px);overflow:auto}
+.log h2{margin:0;font-size:22px}
 .log .sub{margin:0;font-size:14px;color:var(--ink3)}
-.logrow{border:1px solid var(--line);border-radius:12px;padding:14px 16px;background:#fff;cursor:pointer;text-align:left;font:inherit;color:inherit;width:100%}
+.logrow{border:1px solid var(--line);border-radius:12px;padding:14px 16px;background:#fff;cursor:pointer;text-align:left}
 .logrow.cur{border-color:var(--ink);box-shadow:0 0 0 1px var(--ink)}
-.logrow.future{display:none}
 .lr-top{display:flex;justify-content:space-between;align-items:center;gap:8px}
-.tag{font:600 12px var(--mono);letter-spacing:.06em;text-transform:uppercase}
-.tag.t-app{color:var(--tag-app)}.tag.t-chain,.tag.t-base{color:var(--tag-chain)}.tag.t-circle{color:var(--tag-circle)}.tag.t-server{color:var(--tag-server)}
+.tag{font:600 12px var(--mono);letter-spacing:.05em;text-transform:uppercase}
+.t-app{color:var(--t-app)}.t-chain,.t-base{color:var(--t-chain)}.t-circle{color:var(--t-circle)}.t-server{color:var(--t-server)}.t-seller{color:var(--t-seller)}
 .lr-step{font:12px var(--mono);color:var(--ink3)}
 .logrow h3{margin:8px 0 6px;font-size:19px;line-height:1.3}
 .logrow p{margin:0;font-size:16px;line-height:1.55;color:var(--ink2)}
 .code{margin-top:10px;background:#11162e;color:#dfe5ff;border-radius:8px;padding:10px 12px;font:13.5px/1.6 var(--mono);white-space:pre;overflow-x:auto}
 .code .c{color:#8f98c4}
-.links{margin-top:8px;display:flex;flex-wrap:wrap;gap:6px}
+.links{margin-top:10px;display:flex;flex-wrap:wrap;gap:6px}
 .links a{font:500 13.5px var(--sans);color:var(--plum);text-decoration:none;background:var(--plum-soft);border-radius:6px;padding:3px 8px}
 .links a:hover{text-decoration:underline}
-/* ---------- agent summary ---------- */
-.sum{max-width:980px;margin:0 auto;display:flex;flex-direction:column;gap:14px;color:var(--app-ink)}
+/* summary page */
+.sum{max-width:1000px;margin:0 auto;display:flex;flex-direction:column;gap:14px;color:var(--app-ink)}
 .sum h2{margin:0;font-size:26px;letter-spacing:-.01em}
-.sum .sub{margin:0;color:var(--app-mute);font-size:15px}
+.sum .sub{margin:0;color:var(--app-mute);font-size:16px}
 .sum ol{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:1fr 1fr;gap:12px}
 @media (max-width:900px){.sum ol{grid-template-columns:1fr}}
 .sum li{background:#fff;border:1px solid var(--app-line);border-radius:14px;padding:16px 18px;display:flex;gap:14px}
 .sum li b.n{flex:none;width:30px;height:30px;border-radius:50%;background:var(--ink);color:#fff;display:grid;place-items:center;font:600 14px var(--mono)}
 .sum li h3{margin:2px 0 6px;font-size:17px}
-.sum li p{margin:0;font-size:15px;line-height:1.55;color:var(--ink2)}
-/* ---------- mock app ---------- */
-.app{max-width:560px;margin:0 auto;display:flex;flex-direction:column;gap:12px;color:var(--app-ink);font-size:14px}
+.sum li p{margin:0;font-size:15.5px;line-height:1.55;color:var(--ink2)}
+/* drawn app */
+.app{max-width:560px;display:flex;flex-direction:column;gap:12px;color:var(--app-ink);font-size:14px}
+.wide{max-width:760px;margin-top:14px;display:flex;flex-direction:column;gap:12px;color:var(--app-ink)}
 .a-top{display:flex;justify-content:space-between;align-items:center}
 .logo{font:600 16px var(--mono)}.logo span{color:var(--orange)}
 .pill{border:1px solid var(--app-line);background:#fff;border-radius:9px;padding:5px 10px;font-size:12px;display:inline-flex;gap:6px;align-items:center}
-.acard{background:var(--app-card);border:1px solid var(--app-line);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:10px}
+.acard{background:#fff;border:1px solid var(--app-line);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:10px}
 .acard h4{margin:0;font-size:15px}
-.seg{display:grid;grid-template-columns:repeat(3,1fr);background:#e6eaf2;border-radius:10px;padding:3px;gap:3px}
-.seg span{text-align:center;padding:7px;border-radius:8px;font-weight:600;font-size:12.5px;color:var(--app-mute)}
-.seg span.on{background:#fff;color:#8a5200}
-.lbl{font-weight:600;font-size:12.5px}
-.inp{border:1px solid var(--app-line);background:#f6f8fb;border-radius:9px;padding:10px 12px;font:12.5px var(--mono);color:var(--app-ink);min-height:40px;display:flex;align-items:center;justify-content:space-between;gap:8px;overflow:hidden}
-.inp.ph{color:#9aa0b4}
-.inp .mid{background:var(--bad-soft);color:var(--bad);border-radius:3px}
+.wallet{flex-direction:row;justify-content:space-between;align-items:center;padding:10px 14px}
+.modes,.seg3,.seg2{display:grid;background:#e6eaf2;border-radius:10px;padding:3px;gap:3px}
+.modes{grid-template-columns:1fr 1fr}.seg3{grid-template-columns:repeat(3,1fr)}.seg2{grid-template-columns:1fr 1fr;max-width:260px}
+.modes span,.seg3 span,.seg2 span{text-align:center;padding:7px;border-radius:8px;font-weight:600;font-size:12.5px;color:var(--app-mute)}
+.modes span.on{background:var(--orange);color:#1b1100}
+.seg3 span.on,.seg2 span.on{background:#fff;color:#8a5200}
+.lbl{font-weight:600;font-size:12.5px;display:flex;align-items:center;gap:6px}
+.inp{border:1px solid var(--app-line);background:#f6f8fb;border-radius:9px;padding:10px 12px;font-size:13px;color:var(--app-ink);min-height:40px;display:flex;align-items:center;justify-content:space-between;gap:8px;overflow:hidden;word-break:break-all}
+.mono{font-family:var(--mono)}
+.ph{color:#9aa0b4}
+.mid{background:var(--bad-soft);color:var(--bad);border-radius:3px}
+.hint{font-size:12.5px;color:var(--app-mute)}
+.sm{font-size:12.5px}.xs{font-size:11px}.mute{color:var(--app-mute)}.b{font-weight:700}
+.btn-s{display:inline-block;border:1px solid var(--app-line);background:#fff;border-radius:8px;padding:6px 10px;font-weight:600;font-size:12.5px}
 .amt{border:1px solid var(--app-line);background:#f6f8fb;border-radius:10px;padding:12px}
 .amt .row{display:flex;justify-content:space-between;align-items:center}
 .amt .big{font-size:24px;font-weight:700}
 .tok{display:inline-flex;align-items:center;gap:6px;background:#eef0f5;border-radius:999px;padding:4px 10px;font-weight:600;font-size:12px}
+.cost{border:1px solid var(--app-line);border-radius:10px;padding:10px 12px}
 .cta{background:var(--orange);color:#1b1100;border-radius:10px;text-align:center;padding:11px;font-weight:700}
 .cta.off{opacity:.45}
 .cta.ghost{background:#fff;border:1px solid var(--app-line);color:var(--app-ink)}
-.note{border-radius:10px;padding:10px 12px;font-size:12.5px;line-height:1.45;display:flex;gap:8px}
-.note.bad{background:var(--bad-soft);color:#7d1f1f}.note.ok{background:var(--ok-soft);color:#0f5a36}.note.info{background:#eef2fb;color:#2b3563}
+.cta.sm{padding:8px}
+.note{border-radius:10px;padding:10px 12px;font-size:12.5px;line-height:1.45}
+.note.ok{background:var(--ok-soft);color:#0f5a36}.note.info{background:#eef2fb;color:#2b3563}
 .note b{display:block;margin-bottom:2px}
-.codebig{font:700 22px var(--mono);letter-spacing:.12em;text-align:center;padding:10px;background:#fff8ea;border:1px dashed var(--orange);border-radius:10px}
-.kv{display:flex;justify-content:space-between;gap:10px;font-size:12.5px;padding:3px 0}
-.kv span:first-child{color:var(--app-mute)}.kv span:last-child{font-family:var(--mono)}
+.kv{display:flex;justify-content:space-between;gap:12px;font-size:12.5px;padding:2px 0}
+.kv span:first-child{color:var(--app-mute)}
+.kv.tot span{color:var(--app-ink);font-weight:700}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.col{display:flex;flex-direction:column;gap:8px}
+.codebig{font:700 21px var(--mono);letter-spacing:.08em;text-align:center;padding:10px;background:#fff8ea;border:1px dashed var(--orange);border-radius:10px}
+/* risk panel, as the app draws it */
+.rp{border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:6px;font-size:12.5px;line-height:1.45}
+.rp--bad{background:var(--bad-soft);border:1px solid #efc5c5}
+.rp--ok{background:var(--ok-soft);border:1px solid #bfe3cf}
+.rp-head{font-weight:700;font-size:14px}.rp--bad .rp-head{color:var(--bad)}.rp--ok .rp-head{color:var(--ok)}
+.rp-row{display:flex;gap:8px;align-items:baseline}
+.rp-row i{width:8px;height:8px;border-radius:50%;flex:none;margin-top:4px}
+.rp--bad .rp-row i{background:var(--bad)}.rp--ok .rp-row i{background:var(--ok)}
+.rp-name{color:var(--app-mute);flex:none}.rp-res{font-weight:600}
+.rp ul{margin:0 0 0 22px;padding:0;color:#5a3a3a}.rp--ok ul{color:#2d5a44}
+.rp-link{font-size:11.5px;text-decoration:underline;color:var(--app-mute)}
+/* stepper and rows */
 .steps{display:flex;flex-direction:column;gap:6px}
 .st{display:flex;gap:9px;align-items:center;font-size:12.5px;color:var(--app-mute)}
 .st i{width:18px;height:18px;border-radius:50%;border:1.5px solid #c7cddb;display:grid;place-items:center;font-style:normal;font-size:10px;flex:none}
 .st.done{color:var(--app-ink)}.st.done i{background:var(--ok);border-color:var(--ok);color:#fff}
 .st.act{color:var(--app-ink);font-weight:600}.st.act i{border-color:var(--orange);border-top-color:transparent;animation:spin 1s linear infinite}
+.grow{flex:1}
 @keyframes spin{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){.st.act i{animation:none}.spot,.pop{transition:none}}
 .rowi{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;border:1px solid var(--app-line);border-radius:10px;padding:9px 11px;background:#fff}
@@ -123,36 +147,64 @@ kbd{font:11px var(--mono);border:1px solid var(--line);border-bottom-width:2px;b
 .rowi .t{font:11px var(--mono);color:var(--app-mute)}
 .rowi .m{font-size:12.5px}.rowi .m small{display:block;color:var(--app-mute);font-size:11px}
 .rowi .r{text-align:right;font:12px var(--mono)}.rowi .r small{display:block;font-family:var(--sans);color:var(--app-mute);font-size:11px}
-.meter{display:grid;grid-template-columns:1fr 170px;gap:12px;align-items:center;border:1px solid var(--app-line);border-radius:12px;padding:12px;background:#f8f9fc}
-@media (max-width:560px){.meter{grid-template-columns:1fr}}
-.gauge{position:relative}.gauge svg{width:100%;display:block}
-.gauge .c{position:absolute;left:0;right:0;bottom:2px;text-align:center}
-.gauge .c b{display:block;font-size:26px}.gauge .c span{font:600 10px var(--sans);letter-spacing:.08em;color:var(--ok)}
-.popup{position:absolute;right:26px;top:70px;width:250px;background:#fff;border-radius:14px;box-shadow:0 18px 50px rgba(0,0,0,.25);padding:14px;display:flex;flex-direction:column;gap:9px;z-index:3;font-size:12.5px;color:var(--app-ink)}
-.popup .ph{display:flex;align-items:center;gap:8px;font-weight:700}
-.popup .ph i{width:22px;height:22px;border-radius:6px;background:linear-gradient(135deg,#f6851b,#e2761b);display:block}
-.term{background:#0d1122;color:#d6dcff;border-radius:12px;padding:12px 14px;font:12px/1.6 var(--mono);white-space:pre-wrap;word-break:break-all;box-shadow:0 10px 30px rgba(0,0,0,.25)}
-.term .p{color:#7fe0a8}.term .d{color:#8f98c4}.term .y{color:#ffd580}.term .r{color:#ff9a9a}
-.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-@media (max-width:640px){.two{grid-template-columns:1fr}}
-.boxcard{border:1.5px solid var(--plum);border-radius:12px;padding:12px;background:#fbf8fd;display:flex;flex-direction:column;gap:6px}
-.boxcard .h{display:flex;justify-content:space-between;font-weight:700}
+.boxcard{border:1.5px solid var(--app-line);border-radius:12px;padding:12px;background:#fff;display:flex;flex-direction:column;gap:6px}
+.boxcard .h{display:flex;justify-content:space-between;align-items:center;font-weight:700}
 .chip{font:600 10.5px var(--sans);border-radius:999px;padding:2px 8px;background:var(--ok-soft);color:var(--ok)}
 .chip.warn{background:var(--orange-soft);color:#8a5200}.chip.gray{background:#eceff5;color:var(--app-mute)}
-.flowline{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:12px}
-.flowline span{background:#fff;border:1px solid var(--app-line);border-radius:8px;padding:5px 8px}
-.flowline em{font-style:normal;color:var(--app-mute)}
-.console{background:#0d1122;border-radius:12px;padding:14px;font:12px/1.7 var(--mono);color:#cfd6ff;min-height:300px}
-.console .ln{display:block}.console .g{color:#7fe0a8}.console .y{color:#ffd580}.console .d{color:#7f88b5}
-.footer-note{margin-top:14px;font-size:12px;color:var(--ink3)}
+.toast{align-self:flex-start;background:#123d2a;color:#e3f5ec;border-radius:9px;padding:7px 12px;font-size:12.5px;font-weight:600}
+/* pay per request */
+.meter{display:grid;grid-template-columns:1fr 180px;gap:12px;align-items:center;border:1px solid var(--app-line);border-radius:12px;padding:12px;background:#f8f9fc}
+.gauge{position:relative}.gauge svg{width:100%;display:block}
+.gauge .c{position:absolute;left:0;right:0;bottom:2px;text-align:center}
+.gauge .c b{display:block;font-size:26px}.gauge .c span{font:600 10px var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--ok)}
+.claude{font-weight:800;color:#D97757}
+.menu{border:1px solid var(--app-line);border-radius:10px;background:#fff;overflow:hidden}
+.opt{padding:9px 12px;font-size:13px;border-top:1px solid var(--app-line);display:flex;gap:8px;align-items:center}
+.opt:first-child{border-top:0}.opt.on{background:#fff6e6}
+/* where the money is */
+.money{display:grid;grid-template-columns:1fr auto 1.2fr auto 1fr;align-items:center;gap:8px;border:1.5px dashed #c9b3dc;border-radius:12px;background:#fff;padding:14px}
+.money-h{grid-column:1/-1;font-weight:700;font-size:14px}
+.mbox{border:1px solid var(--app-line);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:3px;font-size:12.5px;background:#f8f9fc;min-width:0}
+.mbox b{font-size:13.5px}
+.mbox span{color:var(--app-mute)}
+.mbox em{font:700 18px var(--mono);font-style:normal;color:var(--app-ink)}
+.mbox.gw{border-color:#c9b3dc;background:#f7f1fb}
+.marrow{display:flex;flex-direction:column;align-items:center;font-size:11.5px;color:var(--app-mute);text-align:center;gap:2px;max-width:110px}
+.marrow i{font-style:normal;font-size:20px;line-height:1;color:var(--ink2)}
+@media (max-width:760px){.money{grid-template-columns:1fr}.marrow{max-width:none}.marrow i{transform:rotate(90deg)}}
+.term{background:#0d1122;color:#d6dcff;border-radius:12px;padding:12px 14px;font:12.5px/1.6 var(--mono);white-space:pre-wrap;word-break:break-word}
+.term .p{color:#7fe0a8}.term .y{color:#ffd580}.term .d{color:#8f98c4}
+/* x402 sequence */
+.seq{border:1px solid var(--app-line);border-radius:12px;background:#fff;padding:12px 10px 10px}
+.seq-heads{display:grid;grid-template-columns:repeat(4,1fr);text-align:center;font-size:12.5px;font-weight:700}
+.seq-heads small{display:block;font-weight:500;color:var(--app-mute);font-size:11px}
+.seq-body{position:relative;margin-top:8px;min-height:20px;background:
+  linear-gradient(var(--app-line),var(--app-line)) 12.5% 0/1px 100% no-repeat,
+  linear-gradient(var(--app-line),var(--app-line)) 37.5% 0/1px 100% no-repeat,
+  linear-gradient(var(--app-line),var(--app-line)) 62.5% 0/1px 100% no-repeat,
+  linear-gradient(var(--app-line),var(--app-line)) 87.5% 0/1px 100% no-repeat}
+.seq-row{position:relative;height:40px}
+.seq-arrow{position:absolute;top:26px;height:2px;background:#9aa3c4}
+.seq-arrow::after{content:"";position:absolute;top:-4px;border:5px solid transparent}
+.seq-arrow.r::after{right:-2px;border-left:7px solid #9aa3c4;border-right:0}
+.seq-arrow.l::after{left:-2px;border-right:7px solid #9aa3c4;border-left:0}
+.seq-label{position:absolute;top:5px;transform:translateX(-50%);font-size:12px;white-space:nowrap;color:var(--app-ink);background:#fff;padding:0 6px;border-radius:4px}
+.seq-row.hi .seq-arrow{background:var(--orange)}
+.seq-row.hi .seq-arrow.r::after{border-left-color:var(--orange)}.seq-row.hi .seq-arrow.l::after{border-right-color:var(--orange)}
+.seq-row.hi .seq-label{color:#8a5200;font-weight:700}
+.seq-note{margin-top:6px;font-size:12px;color:var(--app-mute);text-align:center}
+/* wallet prompt */
+.popup{position:absolute;right:26px;top:70px;width:270px;background:#fff;border-radius:14px;box-shadow:0 18px 50px rgba(0,0,0,.25);padding:14px;display:flex;flex-direction:column;gap:8px;z-index:3;font-size:12.5px;color:var(--app-ink)}
+.popup .ph2{display:flex;align-items:center;gap:8px;font-weight:700}
+.popup .ph2 i{width:22px;height:22px;border-radius:6px;background:linear-gradient(135deg,#f6851b,#e2761b);display:block}
+.popup .pt{font-weight:600}
 </style>
 </head>
 <body>
-
 <div class="wrap">
   <header class="top">
     <div class="brand">
-      <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" fill="none" viewBox="0 0 24 24" > <path fill="url(#arcB)" d="M3.5 20.999c.146-4.407.893-8.519 2.142-11.717C7.223 5.231 9.513 3 12.088 3s4.865 2.231 6.447 6.283c.822 2.107 1.427 4.61 1.786 7.334q.048.366.087.737.015.024.013.041s.21 1.317.256 3.604h-.024c-.313-.256-4-3.153-10.112-2.314.093-1.035.22-2.04.383-3.005l.027-.146a24.5 24.5 0 0 1 6.104.57q-.007-.056-.017-.115c-.33-2.06-.819-3.945-1.448-5.556-1.029-2.635-2.371-4.271-3.502-4.271-1.132 0-2.474 1.636-3.503 4.271q-.375.958-.679 2.034a30 30 0 0 0-.718 3.213A40 40 0 0 0 6.662 21H3.5z"/> <defs> <linearGradient id="arcB" x1="12.088" x2="12.088" y1="3" y2="21" gradientUnits="userSpaceOnUse"> <stop stop-color="#182680"/> <stop offset="1" stop-color="#842D56"/> </linearGradient> </defs> </svg>
+      <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" fill="none" viewBox="0 0 24 24" aria-hidden="true"><path fill="url(#arcB)" d="M3.5 20.999c.146-4.407.893-8.519 2.142-11.717C7.223 5.231 9.513 3 12.088 3s4.865 2.231 6.447 6.283c.822 2.107 1.427 4.61 1.786 7.334q.048.366.087.737.015.024.013.041s.21 1.317.256 3.604h-.024c-.313-.256-4-3.153-10.112-2.314.093-1.035.22-2.04.383-3.005l.027-.146a24.5 24.5 0 0 1 6.104.57q-.007-.056-.017-.115c-.33-2.06-.819-3.945-1.448-5.556-1.029-2.635-2.371-4.271-3.502-4.271-1.132 0-2.474 1.636-3.503 4.271q-.375.958-.679 2.034a30 30 0 0 0-.718 3.213A40 40 0 0 0 6.662 21H3.5z"/><defs><linearGradient id="arcB" x1="12.088" x2="12.088" y1="3" y2="21" gradientUnits="userSpaceOnUse"><stop stop-color="#182680"/><stop offset="1" stop-color="#842D56"/></linearGradient></defs></svg>
       Ctrl+ArcZ <small>adım adım simülasyon</small>
     </div>
     <nav class="tabs" role="tablist" id="tabs"></nav>
@@ -172,7 +224,7 @@ kbd{font:11px var(--mono);border:1px solid var(--line);border-bottom-width:2px;b
           <button class="btn" id="restart" type="button">↺ Baştan başla</button>
           <button class="btn" id="toEnd" type="button">Sonuca geç ▸</button>
         </div>
-        <span class="hint"><kbd>←</kbd> <kbd>→</kbd> adımlar · <kbd>1</kbd>–<kbd>5</kbd> senaryolar</span>
+        <span class="hint-keys"><kbd>←</kbd> <kbd>→</kbd> adımlar · <kbd>1</kbd> ile <kbd>4</kbd> arası senaryolar</span>
       </div>
     </section>
     <aside class="log" aria-live="polite">
@@ -181,390 +233,668 @@ kbd{font:11px var(--mono);border:1px solid var(--line);border-bottom-width:2px;b
       <div id="log" style="display:flex;flex-direction:column;gap:8px"></div>
     </aside>
   </div>
-  
 </div>
 
 <script>
-const EX='https://explorer.arc.io';
-const A={
-  ctrl:'0x99880dC312d8e73c331487ae26B5b021857833aE',
-  factory:'0x4bC13B65583B5CadD32a2E4246F0A6E2862A4F9a',
-  gw:'0x77777777Dcc4d5A8B6E418Fd04D8997ef11000eE',
-  minter:'0x2222222d7164433c4C09B0b0D809a9b52C04C205',
-  tm:'0x28b5a0e9C621a5BadaA536219b3a228C8168cf5d',
-  salary:'0x611d8Cd6F3A36ea2D404e77D74dA076b877A0713',
-  blockrun:'0xe9030014F5DAe217d0A152f02A043567b16c1aBf'
+/* ------------------------------------------------------------------ */
+/* Real addresses, transactions and links                             */
+/* ------------------------------------------------------------------ */
+const EX = "https://explorer.arc.io";
+const GH = "https://github.com/Farukest/Ctrl-ArcZ/blob/main/";
+const A = {
+  ctrl: "0x99880dC312d8e73c331487ae26B5b021857833aE",
+  factory: "0x4bC13B65583B5CadD32a2E4246F0A6E2862A4F9a",
+  gw: "0x77777777Dcc4d5A8B6E418Fd04D8997ef11000eE",
+  minter: "0x2222222d7164433c4C09B0b0D809a9b52C04C205"
 };
-const TX={
-  create3:'0xe3439da54be1c2b04ac03cb2854de72891979598442bf5d78811788556d6bd65',
-  reclaim3:'0xdc67cfff2207d3a82016845678d0f269bd6bf984118adc9da206dd190e677cc3',
-  salary:'0x4ec18f9a8abc041fa70551be7288a86a9e02a400f6632cf5d6ae0bffb86913c4',
-  depositFor:'0x2076804c719bafcc5d3f76aeeafc9de9020a8eabaf4eca69669e58b318bda576',
-  reclaim6:'0x9aa904f5e8555ed9130d4168b6387d66d205ef03c192d1d98e6e83edc5c4c52d',
-  brApprove:'0xeb84729ef4f15d273ef0ca4cfc5a7c5bc393731a73dc554f2a4b3982508e57c1',
-  brBurn:'0xe5cacfc77b5fce7d9ba6a8518bb978be86045f8e1388f8e294b4a3c9c699f65a',
-  brMint:'0xb1dc7e49071e389ac2ab86910dbf2bc54a7d804a389162b0557f312210a189cf'
+const TX = {
+  create3: "0xe3439da54be1c2b04ac03cb2854de72891979598442bf5d78811788556d6bd65",
+  reclaim6: "0x9aa904f5e8555ed9130d4168b6387d66d205ef03c192d1d98e6e83edc5c4c52d",
+  depositFor: "0x2076804c719bafcc5d3f76aeeafc9de9020a8eabaf4eca69669e58b318bda576",
+  brApprove: "0xeb84729ef4f15d273ef0ca4cfc5a7c5bc393731a73dc554f2a4b3982508e57c1",
+  brBurn: "0xe5cacfc77b5fce7d9ba6a8518bb978be86045f8e1388f8e294b4a3c9c699f65a",
+  brMint: "0xb1dc7e49071e389ac2ab86910dbf2bc54a7d804a389162b0557f312210a189cf"
 };
-const L={
-  sdk:['SDK: @ctrl-arcz/sdk','https://www.npmjs.com/package/@ctrl-arcz/sdk'],
-  ctrl:['CtrlArcZ kontratı',EX+'/address/'+A.ctrl],
-  arc:['Arc dokümanları','https://docs.arc.io'],
-  cctp:['Circle CCTP','https://developers.circle.com/cctp'],
-  gw:['Circle Gateway','https://developers.circle.com/gateway'],
-  nano:['Gateway Nanopayments','https://developers.circle.com/gateway-nanopayments'],
-  x402:['x402','https://developers.circle.com/x402-facilitators'],
-  market:['Agent Marketplace','https://developers.circle.com/agent-stack/agent-marketplace'],
-  factory:['Factory kontratı',EX+'/address/'+A.factory],
-  gwc:['GatewayWallet kontratı',EX+'/address/'+A.gw],
-  eip5564:['ERC-5564 (stealth adres)','https://eips.ethereum.org/EIPS/eip-5564'],
-  eip3009:['EIP-3009','https://eips.ethereum.org/EIPS/eip-3009'],
-  eip1167:['EIP-1167 (clone)','https://eips.ethereum.org/EIPS/eip-1167'],
-  tx:(h,label)=>[label||'İşlemi explorer\'da gör',EX+'/tx/'+h],
-  addr:(a,label)=>[label,EX+'/address/'+a],
-  site:['ctrlarcz.xyz','https://ctrlarcz.xyz']
+const tx = (h, label) => [label, EX + "/tx/" + h];
+const L = {
+  sdk: ["SDK: @ctrl-arcz/sdk", "https://www.npmjs.com/package/@ctrl-arcz/sdk"],
+  ctrl: ["CtrlArcZ kontratı", EX + "/address/" + A.ctrl],
+  ctrlSrc: ["CtrlArcZ.sol", GH + "packages/contracts/src/CtrlArcZ.sol"],
+  cctp: ["Circle CCTP", "https://developers.circle.com/cctp"],
+  gw: ["Circle Gateway", "https://developers.circle.com/gateway"],
+  gwc: ["GatewayWallet kontratı", EX + "/address/" + A.gw],
+  minter: ["GatewayMinter kontratı", EX + "/address/" + A.minter],
+  nano: ["Gateway Nanopayments", "https://developers.circle.com/gateway-nanopayments"],
+  x402: ["x402", "https://developers.circle.com/x402-facilitators"],
+  market: ["Agent Marketplace", "https://developers.circle.com/agent-stack/agent-marketplace"],
+  stack: ["Circle Agent Stack", "https://developers.circle.com/agent-stack"],
+  factory: ["Factory kontratı", EX + "/address/" + A.factory],
+  facSrc: ["SpendPolicyFactory.sol", GH + "packages/contracts/src/SpendPolicyFactory.sol"],
+  accSrc: ["SpendPolicyAccount.sol", GH + "packages/contracts/src/SpendPolicyAccount.sol"],
+  basescan: ["Basım işlemi, Base", "https://basescan.org/tx/" + TX.brMint]
 };
-const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const short=a=>a.slice(0,6)+'…'+a.slice(-4);
-const ARC='<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none" viewBox="0 0 24 24" > <path fill="url(#arcA)" d="M3.5 20.999c.146-4.407.893-8.519 2.142-11.717C7.223 5.231 9.513 3 12.088 3s4.865 2.231 6.447 6.283c.822 2.107 1.427 4.61 1.786 7.334q.048.366.087.737.015.024.013.041s.21 1.317.256 3.604h-.024c-.313-.256-4-3.153-10.112-2.314.093-1.035.22-2.04.383-3.005l.027-.146a24.5 24.5 0 0 1 6.104.57q-.007-.056-.017-.115c-.33-2.06-.819-3.945-1.448-5.556-1.029-2.635-2.371-4.271-3.502-4.271-1.132 0-2.474 1.636-3.503 4.271q-.375.958-.679 2.034a30 30 0 0 0-.718 3.213A40 40 0 0 0 6.662 21H3.5z"/> <defs> <linearGradient id="arcA" x1="12.088" x2="12.088" y1="3" y2="21" gradientUnits="userSpaceOnUse"> <stop stop-color="#182680"/> <stop offset="1" stop-color="#842D56"/> </linearGradient> </defs> </svg>';
-const BASE='<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none" viewBox="0 0 24 24" > <path fill="#00F" d="M3 4.706c0-.585 0-.877.11-1.101.106-.215.28-.39.496-.495C3.83 3 4.122 3 4.706 3h14.588c.585 0 .876 0 1.101.11.215.105.389.28.494.495.111.225.111.517.111 1.101v14.588c0 .585 0 .876-.11 1.101-.106.215-.28.389-.495.494-.225.111-.517.111-1.101.111H4.706c-.585 0-.876 0-1.101-.11a1.08 1.08 0 0 1-.494-.495C3 20.17 3 19.878 3 19.294z"/> </svg>';
 
-/* ---------------- screens ---------------- */
-function head(tab){return `<div class="a-top"><div class="logo">Ctrl<span>+</span>ArcZ</div><span class="pill">${ARC} Arc</span></div>
-<div class="acard" style="flex-direction:row;justify-content:space-between;align-items:center;padding:10px 14px"><span style="font-family:var(--mono);font-size:12px">0xf9e7…4fcE</span><b style="font-family:var(--mono)">${S.bal||'0.54'} USDC</b></div>
-<div class="seg"><span class="${tab==='pay'?'on':''}">Öde</span><span class="${tab==='bridge'?'on':''}">Köprü</span><span class="${tab==='sub'?'on':''}">Abonelikler</span></div>`}
-function sign(title,rows){return `<div class="popup" data-spot="popup"><div class="ph"><i></i>Cüzdan · imza isteği</div><div style="font-weight:600">${title}</div>${rows.map(r=>`<div class="kv"><span>${r[0]}</span><span>${r[1]}</span></div>`).join('')}<div class="cta" style="padding:8px">Onayla</div></div>`}
+/* The app's own Arc and Base marks */
+const ARC = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none" viewBox="0 0 24 24"><path fill="url(#arcA)" d="M3.5 20.999c.146-4.407.893-8.519 2.142-11.717C7.223 5.231 9.513 3 12.088 3s4.865 2.231 6.447 6.283c.822 2.107 1.427 4.61 1.786 7.334q.048.366.087.737.015.024.013.041s.21 1.317.256 3.604h-.024c-.313-.256-4-3.153-10.112-2.314.093-1.035.22-2.04.383-3.005l.027-.146a24.5 24.5 0 0 1 6.104.57q-.007-.056-.017-.115c-.33-2.06-.819-3.945-1.448-5.556-1.029-2.635-2.371-4.271-3.502-4.271-1.132 0-2.474 1.636-3.503 4.271q-.375.958-.679 2.034a30 30 0 0 0-.718 3.213A40 40 0 0 0 6.662 21H3.5z"/><defs><linearGradient id="arcA" x1="12.088" x2="12.088" y1="3" y2="21" gradientUnits="userSpaceOnUse"><stop stop-color="#182680"/><stop offset="1" stop-color="#842D56"/></linearGradient></defs></svg>';
+const BASE = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none" viewBox="0 0 24 24"><path fill="#00F" d="M3 4.706c0-.585 0-.877.11-1.101.106-.215.28-.39.496-.495C3.830 3 4.122 3 4.706 3h14.588c.585 0 .876 0 1.101.11.215.105.389.28.494.495.111.225.111.517.111 1.101v14.588c0 .585 0 .876-.11 1.101-.106.215-.28.389-.495.494-.225.111-.517.111-1.101.111H4.706c-.585 0-.876 0-1.101-.11a1.080 1.080 0 0 1-.494-.495C3 20.170 3 19.878 3 19.294z"/></svg>';
 
-const SCREENS={
-send(){
-  if(S.mode==='claim'||S.mode==='claimed'){
-    return `<div class="app">${head('pay').replace('Öde</span>','Öde</span>')}
-    <div class="acard" data-spot="claim"><h4>Gelen korumalı transfer</h4>
-      <div class="kv"><span>Gönderen</span><span>0xf9e7…4fcE</span></div><div class="kv"><span>Tutar</span><span>0.05 USDC</span></div><div class="kv"><span>Kalan süre</span><span>58 dk</span></div>
-      <div class="lbl">Kod</div><div class="inp" data-spot="codein">${S.mode==='claimed'||S.typed?'C481-AQ8M-RN8V-TYVW':'<span style="color:#9aa0b4">Gönderenin verdiği kod</span>'}</div>
-      ${S.mode==='claimed'?'<div class="note ok"><div><b>Para hesabında</b>0.05 USDC cüzdanına geçti.</div></div>':'<div class="cta">Al</div>'}
-    </div></div>`;
-  }
-  const addr=S.addr==='bad'?`<span>0x05a1<span class="mid">c3e97d2f40b8a1e6c05d7b39f2a4e8d1</span>9577</span>`:S.addr==='good'?`<span>0x05a1906B5260de007ccfeF2Be5e6d6da72849577</span>`:'<span style="color:#9aa0b4">0x…</span>';
-  const rules=S.risk==='bad'?`<div class="note bad" data-spot="risk"><div><b>Gönderim engellendi</b>· Bu adres, daha önce gönderim yaptığınız <span style="font-family:var(--mono)">0x05a1…9577</span> adresinin ilk ve son karakterleriyle birebir aynı görünüyor ama farklı bir adres.<br>· Bu adres size 1 kez 0 değerli transfer gönderdi.<br>· Bu adres 24 saatten daha yeni.</div></div>`:'';
-  const agent=S.agent&&S.risk==='bad'?`<div class="note info" data-spot="agent" style="border:1px solid #c9d2ee"><div><b>Adres müfettişi (yapay zekâ)</b>Örnek yorum: "Bu adres, daha önce para gönderdiğin 0x05a1…9577 adresinin taklidi. Sana 0 değerli bir transfer göndererek geçmişine girmiş. Gönderme."</div></div>`:'';
-  const risk=S.risk==='bad'?rules+agent
-    :S.risk==='ok'?`<div class="note ok" data-spot="risk"><div><b>Güvenli görünüyor</b>Bu adrese daha önce korumalı bir gönderim yapıldı ve alıcı kodla claim etti.</div></div>`:'';
-  const done=S.sent?`<div class="note info" data-spot="sent"><div><b>Gönderildi ve kilitlendi</b>#5 · 0.05 USDC kontratta. Alıcı kodu girene ya da 1 saat dolana kadar bekler.</div></div>`:'';
-  const refund=S.refund?`<div class="note ok" data-spot="refund"><div><b>Para geri döndü</b>Süre doldu, alıcı almadı. 0.05 USDC cüzdanına iade edildi.</div></div>`:'';
-  return `<div class="app">${head('pay')}
-  <div class="acard">
-    <div class="lbl">Alıcı adresi</div><div class="inp" data-spot="addr">${addr}</div>
-    ${risk}
-    <div class="amt" data-spot="amount"><div class="row"><span class="lbl">Tutar</span><span style="font-size:12px;color:var(--app-mute)">Bakiye 0.54 USDC</span></div><div class="row"><span class="big">${S.amount||'0'}</span><span class="tok">${ARC} USDC</span></div></div>
-    <div class="two"><div><div class="lbl">İptal / claim penceresi</div><div class="inp" style="font-family:var(--sans)">1 saat</div></div><div><div class="lbl">Alma kodu</div><div class="inp" data-spot="code" style="justify-content:center;font-weight:700;letter-spacing:.1em">${S.code?'C481-AQ8M-RN8V-TYVW':'<span style="color:#9aa0b4">gönderince üretilir</span>'}</div></div></div>
-    ${done}${refund}
-    <div class="cta ${S.addr==='good'&&S.amount?'':'off'}" data-spot="send">Korumalı gönder</div>
-  </div>
-  ${S.popup?sign('Korumalı gönder',[['Ağ','Arc'],['Tutar','0.05 USDC'],['Ağ ücreti (en fazla)','0.05 USDC']]):''}
-  </div>`;
-},
-bridge(){
-  const st=(i,t)=>`<div class="st ${S.stage>i?'done':S.stage===i?'act':''}"><i>${S.stage>i?'✓':''}</i>${t}</div>`;
-  return `<div class="app">${head('bridge')}
-  <div class="acard">
-    <div class="seg" style="grid-template-columns:1fr 1fr"><span class="on">CCTP</span><span>Gateway</span></div>
-    <div data-spot="route" style="display:flex;flex-direction:column;gap:8px">
-      <div class="amt"><div class="row"><span class="lbl" style="display:inline-flex;gap:6px;align-items:center">${ARC} Kaynak · Arc</span><span style="font-size:12px;color:var(--app-mute)">Bakiye 0.38 USDC</span></div><div class="row"><span class="big">0.02</span><span class="tok">${ARC} USDC</span></div></div>
-      <div style="text-align:center;color:var(--app-mute)">↓</div>
-      <div class="amt"><div class="row"><span class="lbl" style="display:inline-flex;gap:6px;align-items:center">${BASE} Hedef · Base</span><span style="font-size:12px;color:var(--app-mute)">Alacağın</span></div><div class="row"><span class="big">0.02</span><span class="tok">${BASE} USDC</span></div></div>
-    </div>
-    <div class="cta ${S.stage>=0?'off':''}" data-spot="go">Köprüle</div>
-    ${S.stage>=0?`<div class="acard" data-spot="progress" style="padding:12px"><div class="kv"><span>Arc → Base</span><span>0.02 USDC ${S.stage>=4?'· ulaştı':''}</span></div><div class="kv"><span>Ücret</span><span>0.05428 USDC</span></div><div class="steps">${st(0,'Onay')}${st(1,'Yakma')}${st(2,'Attestation')}${st(3,'Basım')}</div></div>`:''}
-  </div>
-  ${S.popup?sign('Arc ağında imza',[['Ağ','Arc'],['Tutar','0.02 USDC'],['Hedef','Base']]):''}
-  </div>`;
-},
-sub(){
-  const gwBal=S.fund==='ok'?'60.000':'0.000';
-  const fund=`<div class="acard" data-spot="fund" style="border-left:3px solid var(--orange)"><h4>Abonelik bakiyesi</h4>
-    <div class="kv"><span>Arc üzerinde</span><span style="font-weight:700">${gwBal} USDC</span></div>
-    <div class="two"><div class="inp">${S.fund==='empty'||S.fund==='sign'?'60.00':'<span style="color:#9aa0b4">0.00</span>'}</div><div class="cta ${S.fund==='empty'||S.fund==='sign'?'':'off'}" style="padding:9px">Yatır</div></div>
-    <span style="font-size:12px;color:var(--app-mute)">Buraya yatırılan tutar yaklaşık 1s içinde sayılır.</span></div>`;
-  const form=`<div class="acard" data-spot="form"><h4>Yeni abonelik</h4>
-    <div class="two"><div><div class="lbl">Satıcı</div><div class="inp" style="font-family:var(--sans)">Spotify</div></div><div><div class="lbl">Satıcı adresi</div><div class="inp" style="font-family:var(--sans)">Spotify'ın adresi</div></div></div>
-    <div class="note ok" data-spot="subrisk"><div><b>Güvenli görünüyor</b>· Kurallar: Bu adrese daha önce korumalı bir gönderim yapıldı ve alıcı kodla claim etti.<br>· Agent kontrolü: Daha önce ödeme yaptığınız doğrulanmış bir alıcı.</div></div>
-    <div class="lbl">Çekim başına</div><div class="inp">10.00 USDC</div>
-    <div class="two"><div><div class="lbl">Ne sıklıkla</div><div class="inp" style="font-family:var(--sans)">Aylık</div></div><div><div class="lbl">Kaç ay</div><div class="inp">6</div></div></div>
-    <div class="kv"><span>Toplam</span><span>60.00 USDC</span></div><div class="kv"><span>Circle ücreti</span><span>Gateway bakiyesinden</span></div>
-    ${S.stage>=1&&S.stage<4?`<div class="steps" data-spot="steps">
-      <div class="st ${S.stage>1?'done':'act'}"><i>${S.stage>1?'✓':''}</i>Satıcı kontrol ediliyor</div>
-      <div class="st ${S.stage>2?'done':S.stage===2?'act':''}"><i>${S.stage>2?'✓':''}</i>Kutu oluşturuluyor</div>
-      <div class="st ${S.stage>2?'done':''}"><i>${S.stage>2?'✓':''}</i>Listede göster</div>
-      <div class="st ${S.stage===3?'act':''}"><i></i>Circle bütçeyi mint ediyor</div></div>`:''}
-    <div class="cta ${S.stage>0?'off':''}">Abonelik oluştur</div></div>`;
-  const status=S.stage>=6?'İptal':S.stage>=4?'Aktif':'Oluşturuluyor';
-  const bal=S.stage>=6?'0.00':S.stage>=5?'50.00':S.stage>=4?'60.00':'0.00';
-  const box=S.stage>=2?`<div class="boxcard" data-spot="box"><div class="h"><span>Spotify</span><span class="chip ${S.stage>=6?'gray':S.stage>=4?'':'warn'}">${status}</span></div>
-    <div class="kv"><span>Kutu (akıllı kontrat)</span><span>kendi adresi olan kontrat</span></div>
-    <div class="kv"><span>Sahibi</span><span>tek kullanımlık adres</span></div>
-    <div class="kv"><span>Bakiye</span><span>${bal} USDC</span></div>
-    <div class="kv"><span>Kurallar</span><span>ayda en fazla 10 · toplam 60 · 6 ay</span></div>
-    ${S.stage>=4&&S.stage<6?'<div class="two"><div class="cta" data-spot="pullbtn" style="padding:8px">Şimdi çek</div><div class="cta ghost" data-spot="cancelbtn" style="padding:8px">İptal</div></div>':''}</div>`:'';
-  const hist=S.stage>=5?`<div class="rowi fresh" data-spot="pull"><span class="t">01 Eki</span><span class="m">Spotify ödemesi<small>kontrat kuralları kontrol etti</small></span><span class="r">-10.00<small>zincirde</small></span></div>`:'';
-  const cancel=S.stage>=6?`<div class="note ok" data-spot="cancel"><div><b>Abonelik iptal edildi, kalan para geri döndü.</b>50 USDC aboneliğin tek kullanımlık adresine geçti. Anahtarı Ayşe'nin cüzdanından türetilir.</div></div>`:'';
-  const pop=S.popup==='dep'?sign('Gateway\'e yatırma',[['Ağ','Arc'],['Tutar','60.00 USDC'],['Ücret','USDC ile ödenir']])
-    :S.popup==='gw'?sign('Gateway harcama imzası',[['İşlem','harcama talimatı'],['Tutar','60.00 USDC'],['Alıcı','abonelik kutusu'],['Ağ ücreti','yok']]):'';
-  return `<div class="app">${head('sub')}${fund}${form}${box}${hist}${cancel}${pop}</div>`;
-},
-nano(){
-  const bal=S.bal2??0; const spent=S.spent||0; const base=bal+spent; const pct=base>0?Math.round(bal/base*100):0;
-  const dash=base>0?(bal/base*100):0;
-  const feed=(S.feed||[]).map((r,i)=>`<div class="rowi ${i===0&&S.fresh?'fresh':''}" ${i===0?'data-spot="row"':''}><span class="t">${r[0]}</span><span class="m">Claude Haiku 4.5<small>${r[1]}</small></span><span class="r">-0.003 USDC<small>Circle: ${r[2]}</small></span></div>`).join('');
-  const panel=!S.active?`<div class="note info"><div>Her istek, ajan cüzdanından Circle Nanopayments ile ödenir. Gaz yok, aylık fatura yok.</div></div><div class="cta" data-spot="activate">Aktifleştir</div>`:
-  `<div class="meter" data-spot="meter"><div>
-     <div class="kv"><span>Kalan bakiye</span><span>${bal.toFixed(3)} USDC</span></div>
-     <div class="kv"><span>İstek başı</span><span>0.003 USDC</span></div>
-     <div class="kv"><span>Kalan istek</span><span>${Math.floor(bal/0.003)}</span></div>
-     <div class="kv"><span>Ajan cüzdanı</span><span>0x48D9…916F</span></div></div>
-     <div class="gauge"><svg viewBox="0 0 200 112"><path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="#e5e8f0" stroke-width="14" stroke-linecap="round" pathLength="100"/><path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="#1a8a55" stroke-width="14" stroke-linecap="round" pathLength="100" stroke-dasharray="${dash} 100" style="transition:stroke-dasharray .6s"/></svg><div class="c"><b>${base>0?pct+'%':'-'}</b><span>${base>0?'SAĞLIKLI':'BOŞ'}</span></div></div></div>
-   <div class="amt" data-spot="load"><div class="row"><span class="lbl">Bakiye yükle</span><span style="font-size:12px;color:var(--app-mute)">Cüzdan 0.54 USDC</span></div><div class="row"><span class="big">0.10</span><span class="tok">${ARC} USDC</span></div></div>
-   <div class="cta">Gateway'e yükle</div>
-   <div data-spot="api" style="display:flex;flex-direction:column;gap:6px"><div class="lbl">API'n</div>
-     <div class="kv"><span>API URL</span><span>https://ctrlarcz.xyz/api/nano</span></div>
-     <div class="kv"><span>API Key</span><span>ctz_f9e7…_0851a7…</span></div></div>
-   <div class="lbl">İstekler${feed?' · '+(S.feed||[]).length:''}</div>${feed||'<span style="color:var(--app-mute);font-size:12.5px">Henüz istek yok.</span>'}`;
-  const term=S.term?`<div class="term" data-spot="term"><span class="p">$</span> curl https://ctrlarcz.xyz/api/nano/v1/messages \\
-    -H "x-api-key: ctz_f9e7…" \\
-    -d '{"messages":[{"role":"user","content":"In one sentence: what is Circle Gateway?"}]}'
-${S.term>=2?'<span class="d">→ ctrlarcz sunucusu → BlockRun</span>\n<span class="r">← HTTP 402 Payment Required  (0.003 USDC, eip155:5042)</span>\n':''}${S.term>=3?'<span class="d">→ ödeme imzası ile tekrar gönderildi (PAYMENT-SIGNATURE)</span>\n<span class="y">← Circle Gateway: ödeme onaylandı</span>\n':''}${S.term>=4?'<span class="p">← 200 OK  x-nano-paid: 0.003000</span>\n"Circle Gateway is a blockchain payment platform that enables merchants and developers to accept and manage stablecoin payments globally."':''}</div>`:'';
-  return `<div class="app"><div class="a-top"><div class="logo">Ctrl<span>+</span>ArcZ</div><span class="pill">${ARC} Arc</span></div>
-  <div class="acard" data-spot="panel"><h4>Kullandıkça öde</h4><div class="inp" style="font-family:var(--sans)" data-spot="merchant"><span style="display:flex;gap:8px;align-items:center"><b style="color:#D97757">A\\</b>Claude API</span><span>▾</span></div>${panel}</div>${term}
-  ${S.popup==='sign'?sign('Mesaj imzası',[['Amaç','API anahtarı'],['Para hareketi','yok']]):S.popup==='dep'?sign('Gateway\'e yatırma',[['İşlem','Gateway\'e yatırma'],['Kimin adına','ajan cüzdanı'],['Tutar','0.10 USDC']]):''}</div>`;
-},
-keeper(){
-  const lines=(S.lines||[]).map(l=>`<span class="ln">${l}</span>`).join('');
-  return `<div class="app" style="max-width:640px"><div class="a-top"><div class="logo" style="font-size:14px">keeper@ctrlarcz · pm2</div><span class="pill">${ARC} Arc mainnet</span></div>
-  <div class="console" data-spot="console">${lines}<span class="ln d">▍</span></div>
-  ${S.box?`<div class="boxcard" data-spot="salary"><div class="h"><span>Keeper'ın işlem ücreti bütçesi</span><span class="chip">Aktif</span></div>
-  <div class="kv"><span>Adres</span><span>${short(A.salary)}</span></div><div class="kv"><span>Kime ödeyebilir</span><span>sadece keeper</span></div>
-  <div class="kv"><span>Kurallar</span><span>seferde ≤0.03 · 30 dk'da bir · toplam 0.10 · 30 gün</span></div>
-  <div class="kv"><span>Kalan</span><span>${S.box}</span></div></div>`:''}</div>`;
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const codeHtml = s => esc(s).replace(/(^|\s)(\/\/ [^\n]*)/g, '$1<span class="c">$2</span>');
+
+/* ------------------------------------------------------------------ */
+/* Drawn screens                                                      */
+/* ------------------------------------------------------------------ */
+let S = {};
+
+function wallet(addr, bal) {
+  return `<div class="a-top"><div class="logo">Ctrl<span>+</span>ArcZ</div><span class="pill">${ARC} Arc</span></div>
+  <div class="acard wallet"><span class="mono sm">${addr}</span>${bal ? `<b class="mono">${bal} USDC</b>` : ""}</div>`;
 }
+const modes = on => `<div class="modes"><span class="${on === "send" ? "on" : ""}">Gönder</span><span class="${on === "recv" ? "on" : ""}">Al</span></div>`;
+const tabs = on => `<div class="seg3"><span class="${on === "pay" ? "on" : ""}">Öde</span><span class="${on === "bridge" ? "on" : ""}">Köprü</span><span class="${on === "sub" ? "on" : ""}">Abonelikler</span></div>`;
+function sign(title, rows) {
+  return `<div class="popup" data-spot="popup"><div class="ph2"><i></i>Cüzdan · onay isteği</div><div class="pt">${title}</div>${rows.map(r => `<div class="kv"><span>${r[0]}</span><span>${r[1]}</span></div>`).join("")}<div class="cta sm">Onayla</div></div>`;
+}
+
+const SCREENS = {
+  /* Protected send: Ali pays, Ayşe claims (transfer #5 on mainnet) */
+  send() {
+    if (S.mode) {
+      const done = S.mode === "claimed";
+      return `<div class="app">${wallet("0x05a1…9577", "")}${modes("recv")}
+      <div class="acard" data-spot="claim"><h4>Transferi claim et</h4>
+        <div class="lbl">Claim kodu</div><div class="inp mono">C481-AQ8M-RN8V-TYVW</div>
+        <div class="hint">Eşleşti: transfer #5, 0.05 USDC, gönderen 0xf9e7…4fcE</div>
+        ${done
+          ? `<div class="note ok" data-spot="claimed"><b>Alındı</b>Cüzdanınıza geçti. Yeni bakiye: 0.33 USDC.</div>`
+          : `<div class="two"><div class="cta">Claim et (kendi gas’ım)</div><div class="cta ghost">Gazsız al</div></div>`}
+      </div></div>`;
+    }
+    if (S.sent) {
+      return `<div class="app">${wallet("0xf9e7…4fcE", "")}${modes("send")}${tabs("pay")}
+      <div class="acard" data-spot="sent"><h4>Gönderildi ve kilitlendi</h4>
+        <div class="sm">Alıcıya vereceğiniz kod:</div>
+        <div class="kv"><span>#5 şu adres için kilitlendi</span><span class="mono">0x05a1…9577</span></div>
+        <div class="codebig" data-spot="code">C481-AQ8M-RN8V-TYVW</div>
+        <div class="sm mute">Kodu alıcıya kendiniz iletin: söyleyin ya da yalnızca onun okuyabileceği bir kanaldan gönderin. Bir kez gösterilir, hiçbir yere kaydedilmez.</div>
+      </div></div>`;
+    }
+    const bad = S.addr === "bad", good = S.addr === "good";
+    const addr = bad ? `0x05a1<span class="mid">1734ecc443ffc7180db868aefe234166</span>9577`
+      : good ? "0x05a1906B5260de007ccfeF2Be5e6d6da72849577" : `<span class="ph">0x…</span>`;
+    let risk = "";
+    if (bad) {
+      risk = `<div class="rp rp--bad" data-spot="risk"><div class="rp-head">Gönderim engellendi</div>
+        <div data-spot="rules"><div class="rp-row"><i></i><span class="rp-name">Kurallar</span><span class="rp-res">2 bulgu</span></div>
+          <ul><li>Bu adres, daha önce gönderim yaptığınız 0x05a1…9577 adresinin ilk ve son karakterleriyle birebir aynı görünüyor ama farklı bir adres. Cüzdanlar adresin ortasını gizlediği için ikisi ayırt edilemez.</li>
+          <li>Bu adresin zincirde hiç işlem geçmişi yok. Yeni bir alıcıysa normal; beklemediğiniz bir adresse durun.</li></ul></div>
+        <div data-spot="agentchk"><div class="rp-row"><i></i><span class="rp-name">Agent kontrolü</span><span class="rp-res">${S.agent ? "Güvenilir adresin taklit edilmiş kopyası, hiç işlem geçmişi yok." : "Bakılıyor…"}</span></div>
+          ${S.agent ? `<ul><li>Adresin hiçbir işlem geçmişi veya yaşı yoktur, yani yeni oluşturulmuş olup kullanılmamıştır.</li></ul>` : ""}</div>
+        <div class="rp-link">Bu farklı bir adres ve ona ödemek istiyorum</div></div>`;
+    } else if (good) {
+      risk = `<div class="rp rp--ok" data-spot="risk"><div class="rp-head">Güvenli görünüyor</div>
+        <div class="rp-row"><i></i><span class="rp-name">Kurallar</span><span class="rp-res">1 bulgu</span></div>
+        <ul><li>Bu adrese daha önce korumalı bir gönderim yapıldı ve alıcı kodla claim etti.</li></ul>
+        <div class="rp-row"><i></i><span class="rp-name">Agent kontrolü</span><span class="rp-res">Bu adres daha önce ödediğiniz doğrulanmış bir alıcı.</span></div></div>`;
+    }
+    const has = !!S.amount;
+    return `<div class="app">${wallet("0xf9e7…4fcE", "0.44")}${modes("send")}${tabs("pay")}
+    <div class="acard">
+      <div class="seg2"><span class="on">Korumalı</span><span>Gizli</span></div>
+      <div class="col" data-spot="addrbox">
+        <div class="lbl">Alıcı adresi</div>
+        <div class="inp mono">${addr}</div>
+        <div><span class="btn-s">Zehirleme saldırısını dene</span></div>
+        ${bad ? `<div class="hint">0x05a1...9577 adresini taklit ediyor. Cüzdanda ikisi aynı görünür.</div>` : ""}
+      </div>
+      ${risk}
+      <div class="col" data-spot="details">
+        <div class="amt"><div class="row"><span class="lbl">Tutar</span><span class="sm mute">Bakiye 0.44 USDC</span></div><div class="row"><span class="big">${has ? "0.05" : "0"}</span><span class="tok">${ARC} USDC</span></div></div>
+        <div class="cost"><div class="kv"><span>Tutar</span><span>${has ? "0.05" : "0.00"} USDC</span></div><div class="kv"><span>Ağ ücreti (en fazla)</span><span>0.05 USDC</span></div><div class="kv tot"><span>Ödeyeceğin</span><span>${has ? "0.10" : "0.05"} USDC</span></div></div>
+        <div class="lbl">İptal / claim penceresi</div><div class="inp">1 saat</div>
+      </div>
+      <div class="cta ${good && has ? "" : "off"}">Korumalı gönder</div>
+    </div>
+    ${S.popup ? sign("Korumalı gönderim", [["Ağ", "Arc"], ["Tutar", "0.05 USDC"], ["Ağ ücreti (en fazla)", "0.05 USDC"]]) : ""}</div>`;
+  },
+
+  /* CCTP, the real Arc to Base run */
+  bridge() {
+    const st = (i, t, h) => `<div class="st ${S.stage > i ? "done" : S.stage === i ? "act" : ""}"><i>${S.stage > i ? "✓" : ""}</i><span class="grow">${t}</span>${S.stage > i && h ? `<span class="mono xs mute">${h}</span>` : ""}</div>`;
+    return `<div class="app">${wallet("0xf9e7…4fcE", "")}${modes("send")}${tabs("bridge")}
+    <div class="acard">
+      <div class="seg2"><span class="on">CCTP</span><span>Gateway</span></div>
+      <div class="col" data-spot="route">
+        <div class="lbl">Kaynak · ${ARC} Arc</div>
+        <div class="amt"><div class="row"><span class="lbl">Tutar</span></div><div class="row"><span class="big">0.02</span><span class="tok">${ARC} USDC</span></div></div>
+        <div class="lbl">Hedef · ${BASE} Base</div>
+        <div class="amt"><div class="row"><span class="lbl">Alacağın</span></div><div class="row"><span class="big">0.02</span><span class="tok">${BASE} USDC</span></div></div>
+        <div class="lbl">Alıcı (opsiyonel)</div><div class="inp"><span class="ph">Boş bırakılırsa kendi adresiniz</span></div>
+      </div>
+      <div class="cta ${S.stage >= 0 ? "off" : ""}">Köprüle</div>
+    </div>
+    ${S.stage >= 0 ? `<div class="acard" data-spot="progress"><h4>Son işlemler</h4>
+      <div class="kv"><span>${ARC} Arc → ${BASE} Base</span><span class="mono">0.02 USDC${S.stage >= 4 ? " · ulaştı" : ""}</span></div>
+      <div class="kv"><span>Ücret</span><span class="mono">0.05428 USDC</span></div>
+      <div class="steps">${st(0, "Onay", "0xeb84…57c1")}${st(1, "Yakma", "0xe5ca…f65a")}${st(2, "Circle'ın onayı", "")}${st(3, "Basım", "0xb1dc…89cf")}</div></div>` : ""}
+    ${S.popup ? sign("Köprüle", [["Ağ", "Arc"], ["Tutar", "0.02 USDC"], ["Hedef", "Base"]]) : ""}</div>`;
+  },
+
+  /* Subscription: example merchant and amounts, the app's real steps and labels */
+  sub() {
+    const deposited = S.fund === "ok" || S.fund === "spent";
+    const gwBal = S.fund === "ok" ? "61.000" : S.fund === "spent" ? "≈0.960" : "0.000";
+    const typing = S.fund === "none" || S.fund === "sign";
+    const fund = `<div class="acard" data-spot="fund" style="border-left:3px solid var(--orange)"><h4>Abonelik bakiyesi</h4>
+      <div class="kv"><span>Arc üzerinde</span><span class="mono b">${gwBal} USDC</span></div>
+      <div class="kv"><span>${ARC} Arc</span><span>Cüzdan bakiyesi ${deposited ? "39.00" : "100.00"} USDC</span></div>
+      <div class="two"><div class="inp mono">${typing ? "61.00" : `<span class="ph">0.00</span>`}</div><div class="cta ${typing ? "" : "off"}">Yatır</div></div></div>`;
+    const stp = (i, t) => `<div class="st ${S.stage > i ? "done" : S.stage === i ? "act" : ""}"><i>${S.stage > i ? "✓" : ""}</i>${t}</div>`;
+    const form = `<div class="acard" data-spot="form"><h4>Yeni abonelik</h4>
+      <div class="two"><div><div class="lbl">Satıcı</div><div class="inp">Spotify</div></div><div><div class="lbl">Satıcı adresi</div><div class="inp">Spotify'ın Arc adresi</div></div></div>
+      <div class="lbl">Çekim başına</div><div class="inp mono">10.00 USDC</div>
+      <div class="two"><div><div class="lbl">Ne sıklıkla</div><div class="inp">Aylık</div></div><div><div class="lbl">Kaç ay</div><div class="inp mono">6</div></div></div>
+      <div class="cost"><div class="kv"><span>Aylık ödeme toplamın</span><span>60.00 USDC</span></div><div class="kv"><span>Circle ücreti</span><span>≈0.04 USDC</span></div><div class="kv tot"><span>Ödeyeceğin</span><span>≈60.04 USDC</span></div></div>
+      ${S.stage >= 1 && S.stage <= 3 ? `<div class="steps" data-spot="steps">${stp(1, "Satıcı kontrol ediliyor")}${stp(2, "Kutu oluşturuluyor")}<div class="st ${S.stage > 2 ? "done" : ""}"><i>${S.stage > 2 ? "✓" : ""}</i>Listede göster</div>${stp(3, "Circle bütçeyi mint ediyor")}</div>` : ""}
+      <div class="cta ${S.stage > 0 ? "off" : ""}">Abonelik oluştur</div></div>`;
+    let list = "";
+    if (S.stage >= 3) {
+      const chip = S.stage >= 6 ? `<span class="chip gray">İptal</span>` : S.stage >= 4 ? `<span class="chip">Aktif</span>` : `<span class="chip warn">Bekliyor</span>`;
+      const left = S.stage >= 6 ? "0.00" : S.stage >= 5 ? "50.00" : S.stage >= 4 ? "60.00" : "0.00";
+      list = `<div class="acard"><h4>Aboneliklerin</h4>
+        <div class="boxcard" data-spot="box"><div class="h"><span>Spotify</span>${chip}</div>
+          <div class="kv"><span>Kontrattaki para</span><span class="mono">${left} USDC</span></div>
+          <div class="kv"><span>Kurallar</span><span>seferde en fazla 10 · aylık · toplam 60 · 6 ay</span></div>
+          ${S.stage >= 4 && S.stage < 6 ? `<div class="two"><div class="cta sm">Şimdi çek</div><div class="cta ghost sm">İptal</div></div>` : ""}</div>
+        ${S.stage >= 5 ? `<div class="rowi fresh" data-spot="pull"><span class="t">1. ay</span><span class="m">Spotify ödemesi<small>kontrattan satıcıya</small></span><span class="r">-10.00 USDC<small>zincirde</small></span></div>` : ""}
+        ${S.stage >= 6 ? `<div class="note ok" data-spot="cancel"><b>Abonelik iptal edildi, kalan para geri döndü.</b>Kontratta kalan 50 USDC geri döndü.</div>` : ""}</div>`;
+    }
+    const pop = S.popup === "dep" ? sign("Gateway'e yatırma", [["Ağ", "Arc"], ["Tutar", "61.00 USDC"], ["İşlemler", "USDC onayı ve yatırma"]])
+      : S.popup === "gw" ? sign("Gateway harcama talimatı", [["Tutar", "60.00 USDC"], ["Alıcı", "abonelik kontratı"], ["İşlem", "yok, sadece imza"]]) : "";
+    return `<div class="app">${wallet("0x05a1…9577", deposited ? "39.00" : "100.00")}${modes("send")}${tabs("sub")}${fund}${form}${list}${pop}</div>`;
+  },
+
+  /* Pay per request: Ayşe's real run on mainnet, the x402 exchange drawn as a sequence */
+  nano() {
+    if (S.list) {
+      return `<div class="app">${wallet("0x05a1…9577", "")}${modes("send")}${tabs("sub")}
+      <div class="acard"><h4>Yeni abonelik</h4><div class="lbl">Satıcı</div>
+        <div class="inp"><span class="ph">Satıcı seç</span><span>▾</span></div>
+        <div class="menu"><div class="opt on" data-spot="opt"><span class="claude">A\\</span> Claude API</div><div class="opt">Netflix</div><div class="opt">Spotify</div><div class="opt">YouTube</div><div class="opt">Prime Video</div><div class="opt">OpenAI</div></div></div></div>`;
+    }
+    const bal = S.bal || 0, spent = S.spent || 0, base = bal + spent;
+    const pct = base > 0 ? Math.round(bal / base * 100) : null;
+    const left = base > 0 ? Math.floor((bal + 1e-9) / 0.003) : "-";
+    const lead = `<div class="note info">Her isteği ajan, Gateway'deki bakiyesinden Circle Nanopayments ile öder. Gaz yok, aylık fatura yok.</div>`;
+    let panel;
+    if (!S.active) {
+      panel = `${lead}<div class="cta" data-spot="activate">Aktifleştir</div>`;
+    } else {
+      const loading = S.loading ? `<div class="steps"><div class="st done"><i>✓</i>USDC onayı</div><div class="st act"><i></i>Ajan için Gateway'e yatırma</div><div class="st"><i></i>Circle bakiyeyi onaylıyor</div></div>` : "";
+      panel = `${lead}
+      <div class="meter" data-spot="meter"><div>
+        <div class="kv"><span>Kalan bakiye</span><span class="mono">${bal.toFixed(3)} USDC</span></div>
+        <div class="kv"><span>İstek başı</span><span class="mono">0.003 USDC</span></div>
+        <div class="kv"><span>Kalan istek</span><span class="mono">${left}</span></div>
+        <div class="kv"><span>Harcanan</span><span class="mono">${spent.toFixed(3)} USDC</span></div>
+        <div class="kv"><span>Ajan cüzdanı</span><span class="mono">0xeb5F…b3c0</span></div></div>
+        <div class="gauge"><svg viewBox="0 0 200 112"><path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="#e5e8f0" stroke-width="14" stroke-linecap="round" pathLength="100"/><path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="#1a8a55" stroke-width="14" stroke-linecap="round" pathLength="100" stroke-dasharray="${pct || 0} 100"/></svg><div class="c"><b>${pct === null ? "-" : pct + "%"}</b><span>${pct === null ? "Boş" : "Sağlıklı"}</span></div></div></div>
+      <div class="amt"><div class="row"><span class="lbl">Bakiye yükle</span></div><div class="row"><span class="big">0.05</span><span class="tok">${ARC} USDC</span></div></div>
+      <div class="cta">Gateway'e yükle</div>${loading}
+      <div class="col" data-spot="api"><div class="lbl">API'n</div>
+        <div class="kv"><span>API URL</span><span class="mono">https://ctrlarcz.xyz/api/nano</span></div>
+        <div class="kv"><span>API Key</span><span class="mono">ctz_••••••••••••</span></div></div>
+      <div class="lbl">İstekler</div>
+      ${S.feed ? `<div class="col" data-spot="paid"><div class="toast">Ödeme alındı · 0.003 USDC</div><div class="rowi fresh"><span class="t">03:04:50</span><span class="m">Claude Haiku 4.5<small>104 giriş · 40 çıkış</small></span><span class="r">-0.003 USDC<small>Circle: alındı</small></span></div></div>` : `<span class="hint">Henüz istek yok.</span>`}
+      <div class="cta ghost" data-spot="withdraw">Kalanı geri çek</div>`;
+    }
+    const money = S.money ? `<div class="money" data-spot="money"><div class="money-h">Para nerede?</div>
+        <div class="mbox"><b>Ayşe'nin cüzdanı</b><span>kendi cüzdanı, anahtarı Ayşe'de</span></div>
+        <div class="marrow"><span>0.05 USDC yatırdı</span><i>→</i></div>
+        <div class="mbox gw"><b>Circle Gateway</b><span>ajan cüzdanının bakiyesi</span><em>${bal.toFixed(3)} USDC</em></div>
+        <div class="marrow"><i>←</i><span>imza atarak harcar</span></div>
+        <div class="mbox"><b>Ajan cüzdanı</b><span class="mono">0xeb5F…b3c0</span><span>sunucumuzda, içinde USDC yok</span></div></div>` : "";
+    const ROWS = [
+      [0, 1, "soru + API anahtarı"],
+      [1, 2, "aynı soru, ödemesiz"],
+      [2, 1, "402 · önce 0.003 USDC öde"],
+      [1, 2, "aynı soru + imzalı ödeme"],
+      [2, 3, "imzayı kontrol et"],
+      [3, 2, "onaylandı · 0.003 USDC ayrıldı"],
+      [2, 1, "Claude'un cevabı"],
+      [1, 0, "cevap · x-nano-paid: 0.003"]
+    ];
+    let flow = "";
+    if (S.seq) {
+      const hi = S.hi || [];
+      const rows = ROWS.slice(0, S.seq).map((r, i) => {
+        const a = r[0], b = r[1], lo = Math.min(a, b), up = Math.max(a, b);
+        const x = (2 * lo + 1) * 12.5, w = (up - lo) * 25;
+        return `<div class="seq-row ${hi.includes(i) ? "hi" : ""}"><div class="seq-arrow ${b > a ? "r" : "l"}" style="left:${x}%;width:${w}%"></div><div class="seq-label" style="left:${x + w / 2}%">${esc(r[2])}</div></div>`;
+      }).join("");
+      const cmd = `<span class="p">$</span> curl -i https://ctrlarcz.xyz/api/nano/v1/messages \\
+    -H "x-api-key: ctz_…" \\
+    -H "content-type: application/json" \\
+    -d '{"model":"claude-haiku-4-5","max_tokens":80,
+         "messages":[{"role":"user","content":"Tek cümleyle: Circle Gateway nedir?"}]}'`;
+      const answer = S.term >= 2 ? `
+
+<span class="y">HTTP/1.1 200 OK
+x-nano-paid: 0.003000</span>
+<span class="d"># cevaptaki metin:</span>
+Circle Gateway, blockchain ağlarında kripto varlıkları yönetmek ve transfer etmek için kullanılan bir fintech platformudur.` : "";
+      flow = `<div class="col" data-spot="flow" style="gap:12px">
+        <div class="term">${cmd}${answer}</div>
+        <div class="seq"><div class="seq-heads"><div>Ayşe'nin programı<small>terminal</small></div><div>Ctrl+ArcZ sunucusu<small>ajan cüzdanı burada</small></div><div>BlockRun<small>Claude'u satan servis</small></div><div>Circle Gateway<small>ödemeyi onaylar</small></div></div>
+        <div class="seq-body">${rows}</div>
+        ${S.batch ? `<div class="seq-note">Circle bu ödemeleri toplar ve birkaç dakikada bir tek işlemle Arc'a yazar.</div>` : ""}</div></div>`;
+    }
+    const pop = S.popup === "sign" ? sign("Mesaj imzası", [["Amaç", "cüzdanın sahibi olduğunu kanıtlamak"], ["Para hareketi", "yok"]])
+      : S.popup === "dep" ? sign("Gateway'e yatırma", [["Kimin adına", "ajan cüzdanı 0xeb5F…b3c0"], ["Tutar", "0.05 USDC"], ["İşlemler", "USDC onayı ve yatırma"]]) : "";
+    return `<div class="app">${wallet("0x05a1…9577", "")}${modes("send")}${tabs("sub")}
+      <div class="acard" data-spot="panel"><h4>Kullandıkça öde</h4>
+        <div class="lbl">Satıcı</div><div class="inp"><span><span class="claude">A\\</span> Claude API</span><span>▾</span></div>
+        ${panel}</div>${pop}</div>${money || flow ? `<div class="wide">${money}${flow}</div>` : ""}`;
+  }
 };
 
-/* ---------------- scenarios ---------------- */
-const SC=[
-{key:'send',slide:'Slayt 2',tab:'Korumalı gönderim',url:'ctrlarcz.xyz/?tab=pay',screen:'send',
- lead:'Para alıcıya değil kontrata gider. Alıcı kodla alır, kimse almazsa para geri döner. Göndermeden önce adres kontrol edilir.',
- steps:[
- {spot:'addr',st:{addr:'bad'},text:'Ali, Ayşe\'ye göndermek için geçmişinden bir adres kopyaladı. Başı ve sonu Ayşe\'ninkiyle aynı, ortası farklı. Bu sahte bir adres.',
-  log:['app','Sahte adres yapıştırıldı','Adres zehirlemesi: dolandırıcı, başı ve sonu aynı bir adres üretir, sana 0 USDC göndererek geçmişine girer. Cüzdanlar adresin ortasını gizlediği için fark edilmez.','',[]]},
- {spot:'risk',st:{risk:'bad'},text:'Adres girilir girilmez kurallar çalıştı ve gönderimi engelledi.',
-  log:['app','1. katman: kurallar','Tarayıcıda çalışır. Adresi daha önce para gönderdiğin adreslerle karşılaştırır, sana 0 USDC gönderip göndermediğine ve ne kadar yeni olduğuna bakar.','<span class="c">// npm i @ctrl-arcz/sdk</span>\nconst rapor = await check(benimAdresim, girilenAdres)\n<span class="c">// rapor.level: "block" | "warning" | "safe"</span>',[L.sdk]]},
- {spot:'agent',st:{agent:1},text:'Ardından adres müfettişi ajanı ne olduğunu insan diliyle açıkladı.',
-  log:['server','2. katman: yapay zekâ ajanı','Sunucu adres hakkında bilgi toplar, Claude bunu okuyup yorumu yazar. Ajan kararı sadece sıkılaştırabilir, gevşetemez.','POST /api/investigate\n<span class="c">// → { level, headline, points }</span>',[]]},
- {spot:'amount',st:{addr:'good',risk:'ok',agent:0,amount:'0.05'},text:'Ali doğru adresi seçti, 0.05 USDC ve 1 saatlik pencere girdi.',
-  log:['app','Tutar ve pencere','Pencere, alıcının parayı alabileceği süre: 60 saniye, 1 saat ya da 24 saat.','',[]]},
- {spot:'popup',st:{popup:1},text:'Cüzdan imza istiyor: gerekirse önce USDC onayı, sonra gönderim. Ağ ücreti USDC ile ödeniyor.',
-  log:['chain','sendProtected()','USDC kontrata kilitlenir. Kontrat tutarı, alıcıyı, son tarihi ve kodun özetini saklar. Kodun kendisi zincire yazılmaz, çünkü zincirdeki her şey herkese açık.','usdc.approve(CtrlArcZ, tutar)\nsendProtected(configId, alici, tutar, claimHash)',[L.ctrl,L.tx(TX.create3,'Mainnet örneği')]]},
- {spot:'code',st:{popup:0,sent:1,code:1},text:'Transfer #5 kilitlendi, kod ekranda. Ali bunu Ayşe\'ye mesajla iletir. Sahte adresin sahibi kodu bilmez.',
-  log:['app','Kod tarayıcıda üretilir','Kontrat kod üretemez, orada üretilen her şey herkese görünür. Kod gönderenin tarayıcısında rastgele üretilir: 16 karakter, dörderli gruplar. Zincire sadece özeti gider.','const { secret, claimHash } = generateClaimCode()\n<span class="c">// secret → alıcıya, claimHash → kontrata</span>',[L.sdk]]},
- {spot:'codein',st:{mode:'claim',typed:1},text:'Ayşe "Al" ekranında kodu giriyor. Uygulama kodla eşleşen transferi zincirde buluyor: transfer #5. İşlem ücretini kendisi ödeyebilir ya da gazsız alabilir.',
-  log:['chain','claim()','Kontrat girilen kodun özetini hesaplar, sakladığıyla aynıysa USDC alıcıya geçer. 5 yanlış denemede transfer kilitlenir.','claim(transferId, kod, salt)',[L.ctrl]]},
- {spot:'claim',st:{mode:'claimed'},text:'Para Ayşe\'de. Kimse almasaydı süre dolunca Ali\'ye dönecekti. Bunu yapan programı 5. senaryoda göreceğiz.',
-  log:['chain','Süre dolarsa: reclaimExpired()','Bu fonksiyonu herkes çağırabilir ama para her zaman gönderene gider.','reclaimExpired(transferId)',[L.tx(TX.reclaim3,'Mainnet örneği')]]},
- {spot:'summary',st:{},summary:{title:'Özet: adres müfettişi ajanı',sub:'Göndermeden önce adresi inceleyen yapay zekâ ajanı.',items:[
-    ['Ajan ne yaptı?','Sahte adresin neden sahte olduğunu insan diliyle açıkladı: hangi adresi taklit ettiğini ve geçmişinin olmadığını. Kuralların engelini gevşetemez, sadece sıkılaştırabilir.'],
-    ['Nasıl kuruldu?','Sunucumuzda çalışan bir servis. Onu uygulama tetikler: adres girilince sunucumuzun /api/investigate adresine istek gider. Servis adres hakkında bilgi toplar, Claude bu bilgiyi okuyup sabit bir biçimde cevap verir.'],
-    ['Circle ne sağladı?','İncelenen para USDC. Bu ajanın kendisi bir Circle ürünü kullanmıyor.'],
-    ['Arc ne sağladı?','Arc\'taki USDC transfer geçmişi açık ve okunabilir. Ajan kararını bu geçmişe bakarak veriyor.']
-  ]},text:'Özet: bu senaryoda ajan ne yaptı, nasıl kuruldu, Circle ve Arc ne sağladı.',
-  log:['app','Özet','Özet: adres müfettişi ajanı','',[]]}
- ]},
-{key:'bridge',slide:'Slayt 3',tab:'Ağlar arası transfer',url:'ctrlarcz.xyz/?tab=bridge',screen:'bridge',
- lead:'Arc\'taki USDC\'yi Base\'e taşımak. Circle CCTP ile USDC bir ağda yakılır, diğerinde yeniden basılır. Bu akış mainnet\'te gerçekten yapıldı.',
- steps:[
- {spot:'route',st:{stage:-1,bal:'0.38'},text:'Ali Arc\'taki 0.02 USDC\'yi Base\'e göndermek istiyor.',
-  log:['app','Rota seçildi','Ağ listesi ve kontrat adresleri Circle\'ın Bridge Kit paketinden gelir. Her ağın bir CCTP numarası var: Arc 26, Base 6.','',[L.cctp]]},
- {spot:'popup',st:{stage:0,popup:1},text:'Cüzdan Arc\'ta imza istiyor: önce USDC onayı, sonra yakma.',
-  log:['chain','Arc: depositForBurn()','USDC Arc\'ta yakılır. Mesaja hedef ağ, alıcı ve "basımı Circle yapsın" talimatı yazılır.','TokenMessenger.depositForBurn(\n  tutar, 6, alici, USDC,\n  …, maxFee, 1000, "cctp-forward")',[L.tx(TX.brApprove,'Onay işlemi'),L.tx(TX.brBurn,'Yakma işlemi')]]},
- {spot:'progress',st:{stage:2,popup:0},text:'Yakma tamam. Circle yakımı gördü ve imzalı bir onay belgesi üretiyor.',
-  log:['circle','Attestation','Uygulama durumu Circle\'ın API\'sinden takip eder.','GET https://iris-api.circle.com/v2/messages/26?transactionHash=…',[L.cctp]]},
- {spot:'progress',st:{stage:3},text:'Basım Base\'de. Bu işlemi Circle kendisi gönderiyor, Ali\'nin Base\'de işlem ücreti ödemesi gerekmiyor.',
-  log:['base','Base: basım','Yakarken verilen "cctp-forward" talimatı sayesinde Circle basım işlemini Base\'de kendisi gönderir. Karşılığı ücrete eklenir.','',[['Basım işlemi (Base)','https://basescan.org/tx/'+TX.brMint]]]},
- {spot:'progress',st:{stage:4,bal:'0.38'},text:'0.02 USDC Base\'e ulaştı. Borsaya gitmeden, uygulamanın içinden.',
-  log:['circle','Ücret','Bu transferin ücreti 0.05428 USDC oldu: Circle\'ın Base\'deki basım işlemini göndermesinin bedeli. Ücret hedef ağa göre değişir.','',[L.cctp]]}
- ]},
-{key:'sub',slide:'Slayt 4',tab:'Abonelik',url:'ctrlarcz.xyz/?tab=subscriptions',screen:'sub',
- lead:'Abonelik parası Circle Gateway bakiyesinden gelir. Her abonelik için kuralları içine yazılmış ayrı bir kutu (akıllı kontrat) açılır.',
- steps:[
- {spot:'fund',st:{fund:'empty',stage:0},text:'Önce abonelik bakiyesi. Ayşe cüzdanından Circle Gateway\'e 60 USDC yatırıyor. Abonelik parası buradan çıkacak.',
-  log:['app','Abonelik bakiyesi','Abonelik kutuları (akıllı kontrat) Ayşe\'nin cüzdanından değil, Gateway bakiyesinden doldurulur. Bu yüzden önce Gateway\'e para yatırılır.','',[L.gw]]},
- {spot:'popup',st:{fund:'sign',popup:'dep'},text:'Cüzdan Arc\'ta işlem imzası istiyor: USDC onayı ve Gateway\'e yatırma.',
-  log:['chain','GatewayWallet.deposit()','USDC Circle\'ın Gateway kontratına yatırılır ve Ayşe\'nin Gateway bakiyesine yazılır.','usdc.approve(GatewayWallet, tutar)\nGatewayWallet.deposit(USDC, tutar)',[L.gwc]]},
- {spot:'fund',st:{fund:'ok',popup:0},text:'Circle yatırılanı yaklaşık 1 saniyede saydı. Gateway bakiyesi 60 USDC.',
-  log:['circle','Bakiye sayıldı','Bakiye Circle Gateway API\'den okunur. Arc hızlı kesinleştiği için yatırılan para hemen kullanılabilir.','POST https://gateway-api.circle.com/v1/balances',[L.gw]]},
- {spot:'form',st:{stage:0},text:'Ayşe Spotify\'a aylık 10 USDC, 6 aylık abonelik formunu doldurdu. Formdaki her alan kutuya (akıllı kontrat) yazılacak bir kural olacak.',
-  log:['app','Kurallar belirlendi','Kime ödenecek, seferde en fazla ne kadar, ne sıklıkla, toplam ne kadar, ne zamana kadar. Bunlar kutunun (akıllı kontrat) harcama kuralları olacak.','',[]]},
- {spot:'subrisk',st:{stage:0},text:'Satıcı adresi girilince kurallar ve adres müfettişi ajanı birlikte kontrol etti. Sahte bir adres olsaydı abonelik açılmazdı.',
-  log:['server','Ajan satıcıyı kontrol ediyor','Gönderimdeki aynı iki katman: tarayıcıda kurallar, sunucuda yapay zekâ ajanı. Ajan kararı sadece sıkılaştırabilir.','POST /api/investigate',[]]},
- {spot:'steps',st:{stage:1},text:'"Abonelik oluştur"a basıldı. İlk adım: sunucumuz satıcı adresini kontrol ediyor.',
-  log:['server','Satıcı kontrol ediliyor','Sunucumuz satıcı adresini aynı güvenlik kontrolünden geçirir. Riskli bir adresse abonelik hiç açılmaz.','POST /api/cosign  { phase: "precheck", owner, target, amount }',[]]},
- {spot:'box',st:{stage:2},text:'Kutu (akıllı kontrat) oluşturuluyor. Factory kontrat bu abonelik için yeni bir kontrat deploy etti, kurallar içine yazıldı.',
-  log:['chain','Factory: createAccount()','Deploy işlemini bizim sunucu gönderir. Kutunun (akıllı kontrat) sahibi Ayşe\'nin cüzdanı değil, bu abonelik için üretilen tek kullanımlık bir adres. Böylece abonelik zincirde Ayşe\'yle eşleştirilemez.','factory.createAccount(sahip, salt, {\n  target, perPullMax, interval,\n  maxAmount, expiry\n})',[L.factory,L.eip5564]]},
- {spot:'popup',st:{stage:3,popup:'gw'},text:'Circle bütçeyi mint ediyor. Ayşe, Gateway bakiyesinden kutuya (akıllı kontrat) 60 USDC gönderilmesi için imza atıyor. Bu bir işlem değil, talimat.',
-  log:['circle','Gateway harcama talimatı','İmzalı talimat Circle Gateway API\'ye gider. Circle onaylar ve parayı kutuya (akıllı kontrat) basar.','POST https://gateway-api.circle.com/v1/transfer?enableForwarder=true',[L.gw]]},
- {spot:'box',st:{stage:4,popup:0,fund:'spent'},text:'Kutuda (akıllı kontrat) 60 USDC var, abonelik aktif. Zincirde bu para Circle\'dan gelmiş görünüyor, Ayşe\'den değil.',
-  log:['chain','Circle kutuya (akıllı kontrat) bastı','Circle\'ın minter kontratı USDC\'yi doğrudan kutuya (akıllı kontrat) basar. Ayşe\'nin cüzdanıyla kutu arasında bir bağ görünmez.','GatewayMinter.gatewayMint(belge, imza)',[L.addr(A.minter,'GatewayMinter')]]},
- {spot:'pull',st:{stage:5},text:'Ödeme günü geldi. "Şimdi çek" ile Spotify\'ın 10 USDC\'si kutudan (akıllı kontrat) ödendi.',
-  log:['chain','pull(): aylık ödeme','Kutu (akıllı kontrat) her kuralı kendisi kontrol eder, para sadece Spotify\'a gider. Sunucumuz da ödemeden önce kuralları kontrol edip onay imzası verir. İmza olmadan ödeme geçmez.','function pull(tutar, onayImzasi) {\n  require(tutar <= perPullMax);\n  require(now >= lastPull + interval);\n  require(spent + tutar <= maxAmount);\n  require(now <= expiry);\n  usdc.transfer(target, tutar);\n}',[L.factory]]},
- {spot:'cancel',st:{stage:6},text:'Ayşe "İptal" dedi. Kalan 50 USDC kutudan (akıllı kontrat) çıktı ve aboneliğin tek kullanımlık adresine döndü.',
-  log:['chain','İptal: sweepToVault()','Kalan para bu aboneliğin tek kullanımlık adresine döner. Bu çağrıyı sadece o adres yapabilir, anahtarı Ayşe\'nin cüzdanından türetilir. İşlem ücretini bizim sunucu o adrese gönderir.','sweepToVault(kasaAdresi)',[]]},
- {spot:'summary',st:{},summary:{title:'Özet: abonelik ve ajan',sub:'Abonelikte ajan satıcı adresini kontrol ediyor.',items:[
-    ['Ajan ne yaptı?','Adres müfettişi ajanı satıcı adresini kontrol etti. Sahte bir adres olsaydı abonelik açılmazdı.'],
-    ['Nasıl kuruldu?','Factory kontrat her abonelik için bir kutu (akıllı kontrat) deploy eder. Kurallar kutu açılırken içine yazılır: kime, seferde en fazla ne kadar, ne sıklıkla, toplam ne kadar, ne zamana kadar. Her ödemede sunucumuzun onay imzası da gerekir.'],
-    ['Circle ne sağladı?','Gateway: abonelik bütçesi Ayşe\'nin tek bir USDC bakiyesinde durur ve kutuya (akıllı kontrat) tek seferde basılır. Para Circle\'dan geldiği için kutu zincirde Ayşe\'nin cüzdanıyla eşleştirilemez.'],
-    ['Arc ne sağladı?','Gateway\'e yatırılan para yaklaşık 1 saniyede kullanılabilir oldu. İşlem ücreti USDC ile ödenir. Ajanın ayrıca ETH gibi bir gaz tokenı tutması gerekmez: harcadığı para ile ücretini ödediği para aynı bakiye.']
-  ]},text:'Özet: bu senaryoda ajan ne yaptı, nasıl kuruldu, Circle ve Arc ne sağladı.',
-  log:['app','Özet','Özet: abonelik ve ajanlar','',[]]}
- ]},
-{key:'nano',slide:'Slayt 5–7',tab:'Kullandıkça öde',url:'ctrlarcz.xyz/?tab=subscriptions',screen:'nano',
- lead:'Claude API\'yi soru başına ödemek. Her istekte ajan cüzdanı (sana özel, isteklerin ödemesini otomatik yapan ayrı bir cüzdan) 0.003 USDC\'lik ödemeyi kendisi imzalar, Circle Gateway onaylar.',
- steps:[
- {spot:'merchant',st:{},text:'Abonelikler listesinden Claude API seçilince ekran kullandıkça öde paneline dönüşüyor.',
-  log:['app','Kullandıkça ödenen servis','Claude API\'yi Circle Agent Marketplace\'teki BlockRun servisi satıyor: Arc üzerinde soru başına 0.003 USDC.','',[L.market]]},
- {spot:'popup',st:{popup:'sign'},text:'"Aktifleştir"e basınca cüzdan bir mesaj imzalıyor. Para hareketi yok.',
-  log:['server','API anahtarı ve ajan cüzdanı (sana özel, isteklerin ödemesini otomatik yapan ayrı bir cüzdan)','Sunucu imzayla cüzdanın sana ait olduğunu doğrular. Sana özel bir ajan cüzdanı (sana özel, isteklerin ödemesini otomatik yapan ayrı bir cüzdan) ve bir API anahtarı üretir.','POST /api/nano/session\n<span class="c">// → { agent, apiKey }</span>',[]]},
- {spot:'popup',st:{popup:'dep',active:1,bal2:0},text:'Ali ajan cüzdanına (sana özel, isteklerin ödemesini otomatik yapan ayrı bir cüzdan) 0.10 USDC yüklüyor. Para Circle Gateway\'de, ajan cüzdanının adına duruyor.',
-  log:['chain','GatewayWallet.depositFor()','Ali öder, bakiye ajan cüzdanının (sana özel, isteklerin ödemesini otomatik yapan ayrı bir cüzdan) adına yazılır. Zincire yazılan işlemler sadece bunlar: USDC onayı ve yatırma.','usdc.approve(GatewayWallet, tutar)\nGatewayWallet.depositFor(USDC, ajanCuzdani, tutar)',[L.gwc,L.tx(TX.depositFor,'Mainnet örneği')]]},
- {spot:'meter',st:{popup:0,bal2:0.1},text:'Bakiye hazır: 33 soru. Claude kullanan her program artık bu adresi ve anahtarı kullanabilir.',
-  log:['circle','Bakiye Gateway\'de','Kalan bakiye Circle Gateway API\'den okunur. Gösterge harcadıkça düşer.','POST https://gateway-api.circle.com/v1/balances',[L.gw]]},
- {spot:'term',st:{term:1},text:'Ali terminalden Claude\'a soru soruyor. Anthropic anahtarı yerine bizim adresimizi ve anahtarımızı kullanıyor.',
-  log:['server','İstek sunucuya geldi','Sunucu anahtardan kullanıcıyı, kullanıcıdan ajan cüzdanını (sana özel, isteklerin ödemesini otomatik yapan ayrı bir cüzdan) bulur ve isteği BlockRun\'a iletir.','',[]]},
- {spot:'term',st:{term:2},text:'BlockRun cevap yerine "önce öde" diyor: HTTP 402.',
-  log:['server','x402: HTTP 402','Servis fiyatı, ağı ve ödeme adresini cevapta bildirir.','{ "amount": "3000",\n  "network": "eip155:5042",\n  "payTo": "0xe903…1aBf" }',[L.x402]]},
- {spot:'term',st:{term:3},text:'Ajan cüzdanı (sana özel, isteklerin ödemesini otomatik yapan ayrı bir cüzdan) ödemeyi kimseye sormadan imzaladı ve soruyu tekrar gönderdi. Circle onayladı.',
-  log:['circle','Nanopayment','Ödeme bir işlem değil, imzalı bir yetki. Gaz yok. Circle imzayı doğrular, binlerce ödemeyi toplayıp tek seferde zincire yazar.','const client = new GatewayClient({ chain: "arc", privateKey })\nawait client.pay(url, { method: "POST", body })',[L.nano,L.eip3009]]},
- {spot:'row',st:{term:4,bal2:0.097,spent:0.003,feed:[['19:07:20','100 giriş · 29 çıkış','alındı']],fresh:1},text:'Cevap terminale geldi. Aynı anda sitede yeni bir ödeme satırı belirdi ve gösterge düştü.',
-  log:['circle','Ödeme kaydı','Her ödeme Circle\'ın kayıtlarında görünür: önce "alındı", zincire yazılınca "zincirde".','GET https://gateway-api.circle.com/v1/x402/transfers?from=ajanCuzdani',[L.nano]]},
- {spot:'panel',st:{},text:'Kendi API\'sini satmak isteyen de aynı yolu kullanır. Rotasına tek satır eklemesi yeterli.',
-  log:['server','Satıcı tarafı','Circle\'ın paketi, ödemesiz isteğe 402 döner, ödemeli isteği Circle\'a onaylatır.','app.post("/soru", gateway.require("$0.003"), cevapVer)',[L.nano,L.market]]},
- {spot:'summary',st:{},summary:{title:'Özet: kullandıkça öde ajanı',sub:'Her Claude isteğini kendi başına ödeyen ajan cüzdanı (sana özel, isteklerin ödemesini otomatik yapan ayrı bir cüzdan).',items:[
-    ['Ajan ne yaptı?','Her Claude isteğinde 0.003 USDC\'lik ödemeyi kimseye sormadan imzaladı. Bütçe bitince ödeme yapamaz, yüklenen bakiyeden fazlasını harcayamaz.'],
-    ['Nasıl kuruldu?','"Aktifleştir"e basınca sunucumuz kullanıcıya özel bir ajan cüzdanı (sana özel, isteklerin ödemesini otomatik yapan ayrı bir cüzdan) ve bir API anahtarı üretti. Bütçe Gateway\'e ajan adına yüklendi. İstekler geldikçe sunucu ödemeyi Circle\'ın x402-batching paketiyle ajan adına yapıyor.'],
-    ['Circle ne sağladı?','Gateway Nanopayments: gazsız, çok küçük tutarlarda ödeme ve binlerce ödemenin toplu olarak zincire yazılması. x402 ile ödemenin onayı. Claude servisini satan BlockRun, Circle Agent Marketplace\'te listeli.'],
-    ['Arc ne sağladı?','Ödemeler Arc üzerinde USDC ile yapılıyor, Circle toplu ödemeleri Arc\'a yazıyor. Bütçeyi yüklemek dışında ajanın zincire işlem göndermesi gerekmiyor.']
-  ]},text:'Özet: bu senaryoda ajan ne yaptı, nasıl kuruldu, Circle ve Arc ne sağladı.',
-  log:['app','Özet','Özet: kullandıkça öde ajanı','',[]]}
- ]},
-{key:'keeper',slide:'Slayt 8',tab:'Keeper',url:'sunucu · pm2 logs ctrlarcz-keeper',screen:'keeper',
- lead:'Sunucumuzda sürekli çalışan bir program. Süresi dolan transferleri bulup parayı gönderene iade eder, kendi işlem ücretlerini, kuralları zincirde yazılı bir işlem ücreti bütçesinden öder. Konsoldaki satırlar sunucudaki gerçek kayıtlardır.',
- steps:[
- {spot:'summary',st:{lines:[]},summary:{title:'Keeper nedir?',sub:'Kendi cüzdanı olan ve kendi kendine çalışan bir program.',items:[
-    ['Ne?','Node.js ile yazılmış bir program: apps/keeper. Bir kontrat değil, bir servis. Sunucumuzda pm2 ile sürekli çalışıyor.'],
-    ['Cüzdanı ve anahtarı','Kendi normal bir Arc cüzdanı var. Anahtarı sunucudaki ayarlarda duruyor: KEEPER_PK. İşlemleri bu anahtarla kendisi imzalayıp gönderiyor.'],
-    ['Onu ne tetikliyor?','Kendi zamanlayıcısı: 30 saniyede bir çalışıyor. Onu bir kullanıcı, bir API çağrısı ya da Circle tetiklemiyor.'],
-    ['Nereye kurulur?','Node.js çalışan herhangi bir sunucuya. Ayarlar: ağ, anahtar, işlem ücreti bütçesi kontratının adresi, onay sunucusunun adresi. Çalıştırma komutu: pnpm --filter @ctrl-arcz/keeper start'],
-    ['Kullanıcının parasını taşıyor mu?','Hayır. Para kontratta durur. Keeper sadece iade çağrısını yapar, parayı gönderene kontrat kendisi gönderir. Keeper\'ın cüzdanından sadece işlem ücreti çıkar.'],
-    ['Güvenlik','Keeper sadece kurallara uyan işi yapabilir. İade adresini kontrat belirler. İşlem ücreti bütçesinden seferde en fazla 0.03, 30 dakikada bir, toplam 0.10 USDC çekebilir: önce onay sunucusu, sonra kontrat kuralları kontrol eder. Anahtarı çalınırsa kayıp en fazla bu işlem ücreti bütçesi kadardır ve operatör kalanı tek işlemle geri alır.']
-  ]},text:'Önce keeper\'ın ne olduğu: nerede çalışıyor, cüzdanı nerede, onu ne tetikliyor.',
-  log:['app','Keeper nedir?','Sunucuda çalışan, kendi cüzdanı olan bir program.','',[]]},
- {spot:'console',st:{lines:['<span class="d">keeper 0x2520…102A watching 0x9988…33aE on chain 5042</span>','tick @22770170: open=1 reclaimed=0 balance=0.045399 USDC','tick @22770232: open=1 reclaimed=0 balance=0.045399 USDC']},text:'Ali, Ayşe\'ye 60 saniyelik pencereyle 0.02 USDC korumalı gönderim yaptı: transfer #6. Ayşe kodu girmedi. Konsoldaki "open=1": bekleyen, henüz alınmamış bir korumalı gönderim var.',
-  log:['chain','Keeper neyi izliyor?','Korumalı gönderimleri: 1. senaryodaki gibi, parası kontratta kilitli duran ve alıcının kodla almasını bekleyen transferler. Keeper bunların listesini CtrlArcZ kontratının olay kayıtlarından çıkarır.','getLogs({ address: CtrlArcZ, event: "TransferCreated" })',[L.ctrl]]},
- {spot:'console',st:{lines:['<span class="d">keeper 0x2520…102A watching 0x9988…33aE on chain 5042</span>','tick @22770170: open=1 reclaimed=0 balance=0.045399 USDC','tick @22770232: open=1 reclaimed=0 balance=0.045399 USDC']},text:'60 saniye doldu, Ayşe almadı. Keeper, iadenin işlem ücretine değip değmediğine bakıyor.',
-  log:['app','Karar kuralları','Sadece süresi dolmuş ve hâlâ açık transferler. İade masraftan küçükse yapmaz. Önce büyük tutarlar.','',[]]},
- {spot:'console',st:{lines:['<span class="d">keeper 0x2520…102A watching 0x9988…33aE on chain 5042</span>','tick @22770232: open=1 reclaimed=0 balance=0.045399 USDC','<span class="g">reclaimed #6: 0.02 USDC returned to 0xf9e7…4fcE (0x9aa9…c52d)</span>','tick @22770291: open=0 reclaimed=1 balance=0.044077 USDC']},text:'Keeper iadeyi yaptı, 0.02 USDC gönderene döndü. Parayı kime göndereceğini keeper değil kontrat belirler.',
-  log:['chain','reclaimExpired(6)','Herkes çağırabilir ama para her zaman gönderene gider. Bu yüzden bu işi bir bota güvenle bırakabilirsiniz.','function reclaimExpired(id) {\n  require(now > deadline);\n  usdc.transfer(sender, amount);\n}',[L.tx(TX.reclaim6,'Bu işlem mainnet\'te')]]},
- {spot:'salary',st:{box:'0.07 USDC',lines:['<span class="d">keeper 0x2520…102A watching 0x9988…33aE on chain 5042</span>','tick @22692498: open=0 reclaimed=0 balance=0.02 USDC | drew 0.03 USDC salary (0x4ec1…13c4)']},text:'Bakiyesi alt sınırın altına inince keeper işlem ücreti bütçesinden (akıllı kontrat) kendi masrafı için para çekti.',
-  log:['chain','İşlem ücreti bütçesi: abonelikteki kontratın aynısı','Keeper\'ın bütçesi abonelik senaryosundaki kutuyla (akıllı kontrat) aynı tür kontrat. Satıcının yerinde keeper yazıyor. Anahtarı çalınsa bile kurallardan fazlası çekilemez.','pull(0.03, onayImzasi)\n<span class="c">// seferde en fazla 0.03 · 30 dakikada bir · toplam 0.10</span>',[L.addr(A.salary,'İşlem ücreti bütçesi kontratı'),L.tx(TX.salary,'Bu çekim mainnet\'te')]]},
- {spot:'summary',st:{},summary:{title:'Özet: keeper',sub:'Kimse komut vermeden çalışan ve kendi masrafını ödeyen program.',items:[
-    ['Ajan ne yaptı?','Süresi dolan transfer #6\'yı kendisi buldu ve 0.02 USDC\'yi gönderene iade etti. Bakiyesi azalınca işlem ücreti bütçesinden (akıllı kontrat) kendi masrafı için para çekti.'],
-    ['Nasıl kuruldu?','Sunucumuzda pm2 ile sürekli çalışan bir Node.js programı, kendi Arc cüzdanı var ve 30 saniyede bir kendi kendine çalışıyor. İşlem ücreti bütçesi abonelikteki kontratla aynı türden: seferde en fazla 0.03 USDC, 30 dakikada bir, toplam 0.10 USDC, 30 gün. Maaş çekerken onay sunucumuzun imzasını alıyor.'],
-    ['Circle ne sağladı?','USDC: keeper\'ın iade ettiği para da, işlem ücreti bütçesi de USDC.'],
-    ['Arc ne sağladı?','İşlem ücreti USDC ile ödenir. Ajanın ayrıca ETH gibi bir gaz tokenı tutması gerekmez: harcadığı para ile ücretini ödediği para aynı bakiye. Keeper\'ın iadesi gibi her işlem bir saniyenin altında kesinleşiyor.']
-  ]},text:'Özet: bu senaryoda ajan ne yaptı, nasıl kuruldu, Circle ve Arc ne sağladı.',
-  log:['app','Özet','Özet: keeper','',[]]}
- ]}
+/* ------------------------------------------------------------------ */
+/* Scenarios                                                          */
+/* ------------------------------------------------------------------ */
+const SC = [
+{
+  key: "send", slide: "Slayt 2", tab: "Korumalı gönderim", title: "Korumalı gönderim", url: "ctrlarcz.xyz/?tab=pay", screen: "send",
+  lead: "Para doğrudan alıcıya gitmez, önce bir kontratta bekler. Alıcı kodu girerse parayı alır, girmezse para gönderene döner. Göndermeden önce adres de kontrol edilir.",
+  steps: [
+    { spot: "addrbox", st: { addr: "bad" },
+      text: "Ali, Ayşe'ye para gönderecek ve adresi geçmişinden kopyalıyor. Ama bu adres Ayşe'nin değil. Başı ve sonu Ayşe'nin adresiyle aynı, ortası farklı.",
+      log: { tag: "app", title: "Adres zehirleme",
+        body: "Dolandırıcı, Ali'nin daha önce para gönderdiği bir adresin başını ve sonunu taklit eden yeni bir adres üretir. Sonra bu adresten Ali'ye küçük bir işlem gönderir ve sahte adres Ali'nin geçmişine girer. Cüzdanlar adresin ortasını gizlediği için Ali farkı görmez. Uygulamadaki “Zehirleme saldırısını dene” düğmesi, denemek için böyle bir adres üretir." } },
+    { spot: "rules", st: {},
+      text: "Adres girilir girilmez kurallar çalışıyor ve gönderimi engelliyor. Para hâlâ Ali'nin cüzdanında.",
+      log: { tag: "app", title: "1. kontrol: kurallar",
+        body: "Kurallar Ali'nin tarayıcısında çalışır. Girilen adresi Ali'nin daha önce para gönderdiği adreslerle karşılaştırır ve adresin geçmişine bakar. Bu kurallar npm'deki SDK'mızda.",
+        code: `import { check } from "@ctrl-arcz/sdk"
+const rapor = await check(aliAdresi, girilenAdres)
+// rapor.level: "block", "warning" ya da "safe"`,
+        links: [L.sdk] } },
+    { spot: "agentchk", st: { agent: 1 },
+      text: "Aynı anda adres müfettişi ajanı da adrese bakıyor ve adresin neden tehlikeli olduğunu açıklıyor.",
+      log: { tag: "server", title: "2. kontrol: adres müfettişi ajanı",
+        body: "Uygulama adresi sunucumuza gönderir. Sunucu adresin bakiyesini, geçmişini ve kuralların bulgularını toplar. Claude bunları okuyup kısa bir değerlendirme yazar. Ajan kuralların engelini kaldıramaz, sadece kararı sıkılaştırabilir.",
+        code: `POST /api/investigate
+// cevap: { level, headline, points }` } },
+    { spot: "details", st: { addr: "good", agent: 0, amount: 1 },
+      text: "Ali, Ayşe'nin gerçek adresini giriyor. Bu sefer iki kontrol de “güvenli” diyor. Ali 0.05 USDC gönderecek ve Ayşe'ye parayı alması için 1 saat veriyor.",
+      log: { tag: "app", title: "Alma süresi",
+        body: "Ayşe parayı bu süre içinde almazsa para Ali'ye döner. Uygulamada üç seçenek var: 60 saniye, 1 saat ve 24 saat." } },
+    { spot: "popup", st: { popup: 1 },
+      text: "Ali “Korumalı gönder”e basıyor. Cüzdanı işlemi onaylamasını istiyor.",
+      log: { tag: "chain", title: "Para kontrata kilitlenir",
+        body: "USDC Ayşe'ye değil, CtrlArcZ kontratına gider. Kontrat tutarı, alıcıyı, son tarihi ve kodun özetini saklar. Daha önce izin verilmediyse cüzdan önce bir USDC onayı da ister.",
+        code: `usdc.approve(CtrlArcZ, tutar)
+CtrlArcZ.sendProtected(configId, alici, tutar, claimHash)`,
+        links: [L.ctrl, L.ctrlSrc, tx(TX.create3, "Mainnet'te bir örnek")] } },
+    { spot: "code", st: { popup: 0, sent: 1 },
+      text: "Para kontrata kilitlendi ve ekranda bir kod çıktı. Ali bu kodu Ayşe'ye mesajla gönderiyor. Para yanlış adrese gitmiş olsaydı bile kodu bilmeyen biri parayı alamazdı.",
+      log: { tag: "app", title: "Kod",
+        body: "Kod Ali'nin tarayıcısında rastgele üretilir ve hiçbir yere kaydedilmez. Kontrata kodun kendisi değil, özeti yazılır. Zincirdeki her şey herkese açık olduğu için kodun kendisi yazılsaydı herkes görebilirdi.",
+        code: `import { generateClaimCode } from "@ctrl-arcz/sdk"
+const { secret, claimHash } = generateClaimCode()
+// secret: 16 karakterlik kod, Ayşe'ye verilir
+// claimHash: kodun özeti, kontrata yazılır`,
+        links: [L.sdk] } },
+    { spot: "claim", st: { mode: "claim" },
+      text: "Ayşe uygulamasında “Al” sekmesini açıp kodu yazıyor. Uygulama bu kodla eşleşen transferi buluyor: #5, 0.05 USDC.",
+      log: { tag: "chain", title: "claim()",
+        body: "Kontrat girilen kodun özetini hesaplar ve sakladığıyla karşılaştırır. İkisi aynıysa USDC Ayşe'ye geçer. Kod 5 kez yanlış girilirse transfer kilitlenir. Ayşe “Gazsız al”ı seçerse işlem ücretini sunucumuz öder.",
+        code: `CtrlArcZ.claim(transferId, kod, salt)`,
+        links: [L.ctrl] } },
+    { spot: "claimed", st: { mode: "claimed" },
+      text: "Para Ayşe'nin cüzdanına geçti. Ayşe parayı 1 saat içinde almasaydı para Ali'ye geri dönecekti.",
+      log: { tag: "chain", title: "Süre dolarsa",
+        body: "Süre dolunca kontratın reclaimExpired() fonksiyonu çağrılır. Bu fonksiyonu herkes çağırabilir ama para her zaman gönderene döner. Sunucumuzdaki bir program süresi dolan transferleri bulup bu fonksiyonu kendiliğinden çağırır.",
+        code: `CtrlArcZ.reclaimExpired(transferId)`,
+        links: [tx(TX.reclaim6, "Mainnet'te bir iade")] } },
+    { summary: {
+        title: "Özet: adres müfettişi ajanı",
+        sub: "Parayı göndermeden önce adresi inceleyen yapay zekâ ajanı.",
+        items: [
+          ["Ajan ne yaptı?", "Sahte adresin hangi adresi taklit ettiğini ve neden tehlikeli olduğunu açıkladı. Kuralların engelini kaldıramaz, sadece kararı sıkılaştırabilir."],
+          ["Nasıl oluşturuldu?", "Sunucumuzda çalışan bir servis. Ali adres girince uygulama sunucuya sorar. Sunucu adresin bilgilerini toplar, Claude bu bilgileri okuyup değerlendirmeyi yazar."],
+          ["Circle ne sağladı?", "Gönderilen para Circle'ın USDC'si. Bu ajan ayrıca bir Circle ürünü kullanmıyor."],
+          ["Arc ne sağladı?", "Arc'taki işlem geçmişi herkese açık. Kurallar da ajan da kararını bu geçmişe bakarak veriyor."]
+        ] },
+      text: "Özet: ajan ne yaptı, nasıl oluşturuldu, Circle ve Arc ne sağladı.",
+      log: { tag: "app", title: "Özet", body: "Adres müfettişi ajanı." } }
+  ]
+},
+{
+  key: "bridge", slide: "Slayt 3", tab: "Ağlar arası transfer", title: "Ağlar arası transfer", url: "ctrlarcz.xyz/?tab=bridge", screen: "bridge",
+  lead: "Ali, Arc'taki USDC'sinin bir kısmını Base ağına taşıyor. Bu transfer mainnet'te yapıldı ve linkler gerçek işlemlere gidiyor.",
+  steps: [
+    { spot: "route", st: { stage: -1 },
+      text: "Ali 0.02 USDC'yi Arc'tan Base'e gönderecek. Alıcı kısmını boş bırakırsa para Ali'nin Base'deki adresine gider.",
+      log: { tag: "circle", title: "Circle CCTP",
+        body: "CCTP, Circle'ın USDC'yi ağlar arasında taşıma protokolü. USDC bir ağda yakılır, diğer ağda aynı miktar yeniden basılır. Böylece iki tarafta da Circle'ın kendi USDC'si olur.",
+        links: [L.cctp] } },
+    { spot: "popup", st: { stage: 0, popup: 1 },
+      text: "Ali “Köprüle”ye basıyor. Cüzdanı Arc'ta iki işlemi onaylamasını istiyor: USDC onayı ve yakma.",
+      log: { tag: "chain", title: "Arc'ta yakma",
+        body: "USDC Arc'ta yakılır. Aynı işleme hedef ağ, alıcı adresi ve “Base'deki basımı Circle yapsın” talimatı eklenir.",
+        code: `TokenMessenger.depositForBurnWithHook(
+  tutar, 6, alici, USDC,
+  …, maxFee, 1000, "cctp-forward"
+)
+// 6: Base'in CCTP numarası
+// "cctp-forward": basımı Circle yapsın`,
+        links: [tx(TX.brApprove, "Onay işlemi"), tx(TX.brBurn, "Yakma işlemi")] } },
+    { spot: "progress", st: { stage: 2, popup: 0 },
+      text: "Yakma tamamlandı. Circle yakmayı görüyor ve imzalı bir onay üretiyor.",
+      log: { tag: "circle", title: "Circle'ın onayı",
+        body: "Circle, Arc'taki yakmayı doğrular ve imzalı bir onay üretir. Base'deki kontrat basımı bu onayı görünce yapar. Uygulama durumu Circle'ın API'sinden izler.",
+        code: `// Circle'ın CCTP API'si
+GET /v2/messages/26?transactionHash=…
+// 26: Arc'ın CCTP numarası` } },
+    { spot: "progress", st: { stage: 3 },
+      text: "Base'de basım yapılıyor. Bu işlemi Circle gönderiyor, bu yüzden Ali'nin Base'de gaz için ETH tutması gerekmiyor.",
+      log: { tag: "base", title: "Base'de basım",
+        body: "Yakarken verilen talimat sayesinde basım işlemini Circle gönderir. Bu hizmetin bedeli transfer ücretine dahildir.",
+        links: [L.basescan] } },
+    { spot: "progress", st: { stage: 4 },
+      text: "0.02 USDC Base'e ulaştı. Ali parayı bir borsaya gitmeden, uygulamanın içinden taşıdı.",
+      log: { tag: "circle", title: "Ücret",
+        body: "Bu transferin ücreti 0.05428 USDC oldu. Ücret hedef ağa göre değişir.",
+        links: [L.cctp] } }
+  ]
+},
+{
+  key: "sub", slide: "Slayt 4", tab: "Abonelik", title: "Abonelik", url: "ctrlarcz.xyz/?tab=subscriptions", screen: "sub",
+  lead: "Ayşe Spotify'a 6 aylık abonelik açıyor. Abonelik parası Circle Gateway'den gelir ve bu abonelik için Arc'ta açılan ayrı bir akıllı kontratta durur. Satıcı ve tutarlar örnek. Adımlar ve ekran yazıları uygulamanın kendisinden.",
+  steps: [
+    { spot: "fund", st: { fund: "none", stage: 0 },
+      text: "Abonelik parası Ayşe'nin cüzdanından değil, Circle Gateway bakiyesinden gelir. Ayşe önce bu bakiyeye 61 USDC yatırıyor: 60 USDC abonelik için, kalanı Circle'ın ücreti için.",
+      log: { tag: "circle", title: "Circle Gateway",
+        body: "Gateway, Circle'ın USDC bakiye sistemi. USDC, Circle'ın Arc'taki Gateway kontratına yatırılır ve Circle bunu Ayşe'nin bakiyesi olarak tutar. Ayşe bu bakiyeden, imza atarak istediği adrese para gönderebilir.",
+        links: [L.gw] } },
+    { spot: "popup", st: { fund: "sign", popup: "dep" },
+      text: "Ayşe “Yatır”a basıyor. Cüzdanı iki işlemi onaylamasını istiyor: USDC onayı ve yatırma.",
+      log: { tag: "chain", title: "Gateway'e yatırma",
+        body: "USDC, Ayşe'nin cüzdanından Circle'ın GatewayWallet kontratına geçer. Circle yatırmayı yaklaşık bir dakika içinde Ayşe'nin bakiyesine ekler.",
+        code: `usdc.approve(GatewayWallet, tutar)
+GatewayWallet.deposit(USDC, tutar)`,
+        links: [L.gwc] } },
+    { spot: "form", st: { fund: "ok", popup: 0 },
+      text: "Gateway bakiyesi 61 USDC. Ayşe formu dolduruyor: satıcı Spotify, çekim başına 10 USDC, aylık, 6 ay. Toplam 60 USDC.",
+      log: { tag: "app", title: "Formdaki değerler",
+        body: "Bu değerler birazdan açılacak abonelik kontratının kuralları olacak: kime ödenecek, seferde en fazla ne kadar, ne sıklıkla, toplamda en fazla ne kadar ve ne zamana kadar." } },
+    { spot: "steps", st: { stage: 1 },
+      text: "Ayşe “Abonelik oluştur”a basıyor. İlk adım “Satıcı kontrol ediliyor”: sunucumuz satıcı adresini kontrol ediyor.",
+      log: { tag: "server", title: "Satıcı kontrol ediliyor",
+        body: "Sunucumuz satıcı adresini, korumalı gönderimdeki kurallarla kontrol eder. Adres riskliyse ya da kontrol yapılamıyorsa onay vermez ve abonelik açılmaz. Bu adımlarda Ayşe'nin cüzdanı işlem göndermez, sadece mesaj imzalar.",
+        code: `POST /api/cosign
+{ phase: "precheck", owner, target, amount }` } },
+    { spot: "steps", st: { stage: 2 },
+      text: "İkinci adım “Kutu oluşturuluyor”: Arc'ta bu abonelik için yeni bir akıllı kontrat açılıyor. Uygulama buna kutu diyor. Abonelik parası bu kontratta duracak.",
+      log: { tag: "chain", title: "Kutu: abonelik kontratı",
+        body: "Arc'ta bizim bir factory kontratımız var. Factory her abonelikte yeni bir SpendPolicyAccount kontratı açar ve formdaki kuralları içine yazar. Kurallar sonradan değiştirilemez. Kontratı açan işlemi sunucumuz gönderir, ücretini de o öder.",
+        code: `SpendPolicyFactory.createAccount(ownerHash, salt, {
+  token:      USDC,
+  target:     spotifyAdresi,  // kime ödenir
+  perPullMax: 10 USDC,        // seferde en fazla
+  interval:   30 gün,         // ne sıklıkla
+  maxAmount:  60 USDC,        // toplamda en fazla
+  expiry:     6 ay sonra,     // bitiş
+  cosigner:   sunucumuz,      // her ödemeyi onaylar
+  vaultHash:  iadeAdresi,     // iptalde para buraya döner
+  mode:       PULL            // satıcı çeker
+})`,
+        links: [L.factory, L.facSrc, L.accSrc] } },
+    { spot: "popup", st: { stage: 3, popup: "gw" },
+      text: "Son adım “Circle bütçeyi mint ediyor”. Ayşe bir imza atıyor: “Gateway bakiyemden 60 USDC'yi bu kontrata gönder.” Bu bir işlem değil, Circle'a verilen imzalı bir talimat.",
+      log: { tag: "circle", title: "Gateway talimatı",
+        body: "Talimat Circle'ın Gateway API'sine gider. Circle, Ayşe'nin Gateway bakiyesinden 60 USDC düşer ve aynı miktarı Arc'ta doğrudan kontrata basar. Ücretini de bakiyeden alır.",
+        code: `// Circle Gateway API
+POST /v1/transfer?enableForwarder=true`,
+        links: [L.gw] } },
+    { spot: "box", st: { stage: 4, popup: 0, fund: "spent" },
+      text: "Kontratta 60 USDC var ve abonelik aktif. Zincirde bu para Ayşe'nin cüzdanından değil, Circle'dan gelmiş görünüyor.",
+      log: { tag: "chain", title: "Circle kontrata bastı",
+        body: "USDC'yi Circle'ın GatewayMinter kontratı basar. Zincirde Ayşe'nin cüzdanından bu kontrata giden bir transfer yoktur. Bu yüzden abonelik Ayşe'yle eşleştirilemez.",
+        code: `GatewayMinter.gatewayMint(onay, imza)`,
+        links: [L.minter] } },
+    { spot: "pull", st: { stage: 5 },
+      text: "Ödeme zamanı geldi. Çekimi normalde satıcı yapar, uygulamada bunu denemek için “Şimdi çek” düğmesi var. Spotify'ın 10 USDC'si kontrattan ödeniyor.",
+      log: { tag: "chain", title: "pull(): aylık ödeme",
+        body: "Çekimi herkes gönderebilir ama para sadece satıcıya gider. Kontrat her çekimde kuralları kendisi kontrol eder. Sunucumuzun onay imzası da gerekir.",
+        code: `// SpendPolicyAccount.pull, sadeleştirilmiş
+function pull(amount, sig) {
+  require(now <= expiry);               // bitiş
+  require(spent + amount <= maxAmount); // toplamda en fazla
+  require(amount <= perPullMax);        // seferde en fazla
+  require(now >= lastPull + interval);  // ne sıklıkla
+  require(imzalayan(sig) == cosigner);  // sunucumuzun onayı
+  token.transfer(target, amount);       // sadece satıcıya
+}`,
+        links: [L.accSrc] } },
+    { spot: "cancel", st: { stage: 6 },
+      text: "Ayşe aboneliği iptal ediyor. Kontratta kalan 50 USDC geri dönüyor.",
+      log: { tag: "chain", title: "İptal",
+        body: "Kalan para, bu abonelik için üretilen tek kullanımlık bir adrese döner. Bu adresin anahtarı Ayşe'nin cüzdanından türetilir, yani para Ayşe'nin kontrolündedir. İşlem ücreti için sunucumuz bu adrese biraz USDC gönderir.",
+        code: `SpendPolicyAccount.sweepToVault(iadeAdresi)
+// sadece iade adresinin kendisi çağırabilir` } },
+    { summary: {
+        title: "Özet: abonelik kontratı",
+        sub: "Uygulamanın “kutu” dediği şey.",
+        items: [
+          ["Kutu ne?", "Her abonelik için Arc'ta açılan ayrı bir akıllı kontrat. Kendi adresi ve bakiyesi var. Parayı sadece satıcıya ve sadece içindeki kurallara uyarak öder."],
+          ["Nerede oluşturuluyor?", "Arc'taki factory kontratımızda. “Abonelik oluştur”a basınca sunucumuz factory'yi çağırır, factory yeni bir kontrat açar. Factory'yi herkes çağırabilir, kodu açık."],
+          ["İçine ne yazılıyor?", "Kime ödeyeceği, seferde en fazla ne kadar, ne sıklıkla, toplamda en fazla ne kadar ve ne zamana kadar. Bir de her ödemeyi onaylayacak sunucu ve iptalde paranın döneceği adres. Ayşe'nin adresi yazılmaz. Kurallar sonradan değiştirilemez."],
+          ["Circle ve Arc ne sağladı?", "Circle Gateway: abonelik parası Ayşe'nin Gateway bakiyesinden kontrata tek seferde basıldı, zincirde Ayşe'den gelmiş görünmüyor. Arc: işlem ücretleri USDC ile ödeniyor."]
+        ] },
+      text: "Özet: kutu ne, nerede oluşturuluyor, içine ne yazılıyor.",
+      log: { tag: "app", title: "Özet", body: "Abonelik kontratı." } }
+  ]
+},
+{
+  key: "nano", slide: "Slayt 5-7", tab: "Kullandıkça öde", title: "Kullandıkça öde: Circle ile ajan ödemesi", url: "ctrlarcz.xyz/?tab=subscriptions", screen: "nano",
+  lead: "Ayşe Claude'u aylık abonelikle değil, soru başına ödüyor: her soru 0.003 USDC. Ödemeyi her seferinde sunucumuzdaki ajan yapıyor. Ödeme Circle'ın x402 ve Nanopayments sistemiyle geçiyor. Tutarlar ve ekrandaki istek mainnet'teki gerçek bir kullanımdan.",
+  steps: [
+    { spot: "opt", st: { list: 1 },
+      text: "Ayşe Abonelikler ekranında satıcı listesini açıyor ve “Claude API”yi seçiyor.",
+      log: { tag: "app", title: "Claude'u kim satıyor?",
+        body: "Claude'u BlockRun adlı bir servis satıyor: Arc üzerinde soru başına 0.003 USDC. BlockRun, Circle'ın Agent Marketplace'inde listeli. Agent Marketplace, ajanların kullandıkça ödeyerek kullanabildiği servislerin kataloğu.",
+        links: [L.market] } },
+    { spot: "popup", st: { list: 0, popup: "sign" },
+      text: "Aylık form yerine “Kullandıkça öde” paneli açılıyor. Ayşe “Aktifleştir”e basıyor. Cüzdanı sadece bir mesaj imzalıyor, para hareketi yok.",
+      log: { tag: "server", title: "Ajan cüzdanı oluşturulur",
+        body: "Ajan, sunucumuzda çalışan ve Ayşe'nin sorularının ödemesini yapan program. Ödemeleri imzalamak için kendi cüzdanı var, çünkü Ayşe'nin cüzdanı her soruda onay isterdi. Ayşe “Aktifleştir”e basınca sunucumuz imzayı kontrol eder ve Ayşe için yeni bir Arc cüzdanı oluşturur. Anahtarı sunucumuzda durur, Ayşe'ye verilmez.",
+        code: `POST /api/nano/session   // Ayşe'nin imzasıyla
+// cevap: { agent: "0xeb5F…b3c0", apiKey: "ctz_…" }
+// agent: Ayşe'nin ajan cüzdanı
+// apiKey: Ayşe'nin programlarının kullanacağı anahtar` } },
+    { spot: "popup", st: { popup: "dep", active: 1, loading: 1 },
+      text: "Ayşe ajan için Circle Gateway'e 0.05 USDC yatırıyor. Cüzdanı iki işlemi onaylamasını istiyor: USDC onayı ve yatırma.",
+      log: { tag: "chain", title: "Ajan için Gateway'e yatırma",
+        body: "Para Ayşe'nin cüzdanından çıkar ve Circle'ın GatewayWallet kontratına girer. depositFor, parayı başka bir adres adına yatırır. Burada o adres ajan cüzdanı, yani Circle bu parayı ajanın bakiyesi olarak kaydeder.",
+        code: `usdc.approve(GatewayWallet, 0.05 USDC)
+GatewayWallet.depositFor(USDC, ajanCuzdani, 0.05 USDC)
+// ajanCuzdani: bu parayı harcayabilecek tek adres`,
+        links: [L.gwc, tx(TX.depositFor, "Mainnet'te bir örnek")] } },
+    { spot: "money", st: { popup: 0, loading: 0, bal: 0.05, money: 1 },
+      text: "Para ajan cüzdanına gitmedi, Circle Gateway'de ajan adına duruyor. Ajan bu parayı sadece imza atarak harcıyor. 0.05 USDC, 16 soruya yetiyor.",
+      log: { tag: "circle", title: "Neden Gateway?",
+        body: "Circle Nanopayments ödemeleri Gateway bakiyesinden alır. Bu yüzden ajanın parası Gateway'de durur, ajan cüzdanının kendisinde USDC yoktur. Circle yatırmayı yaklaşık bir dakika içinde bakiyeye ekler. Panel bakiyeyi Circle'ın API'sinden okur.",
+        code: `// Circle Gateway API
+POST /v1/balances`,
+        links: [L.gw, L.nano] } },
+    { spot: "api", st: {},
+      text: "Panelde bir API adresi ve bir API anahtarı var. Claude kullanan bir programa Anthropic'in adresi ve anahtarı yerine bunlar yazılıyor.",
+      log: { tag: "app", title: "Mevcut programlarla çalışır",
+        body: "Bu API, Anthropic'in Claude API'siyle aynı biçimde çalışır. Programda sadece adres ve anahtar değişir.",
+        code: `import Anthropic from "@anthropic-ai/sdk"
+const claude = new Anthropic({
+  apiKey:  "ctz_…",
+  baseURL: "https://ctrlarcz.xyz/api/nano"
+})` } },
+    { spot: "flow", st: { seq: 2, hi: [0, 1], term: 1 },
+      text: "Ayşe terminalden Claude'a bir soru soruyor. Soru, API anahtarıyla birlikte sunucumuza geliyor. Sunucu soruyu BlockRun'a iletiyor.",
+      log: { tag: "server", title: "Soru sunucumuza geldi",
+        body: "Sunucu API anahtarından ödemeyi hangi ajan cüzdanının yapacağını bulur. Soruyu BlockRun'a önce ödemesiz gönderir." } },
+    { spot: "flow", st: { seq: 3, hi: [2] },
+      text: "BlockRun cevap vermiyor, önce ödeme istiyor. HTTP 402 kodu geliyor: fiyat 0.003 USDC, ağ Arc.",
+      log: { tag: "seller", title: "x402: ödeme isteği",
+        body: "HTTP'de 402 kodu “ödeme gerekli” demek. x402 bu kodu kullanan bir ödeme standardı. Servis 402 ile birlikte ne kadar, hangi ağda ve hangi adrese ödeneceğini gönderir.",
+        code: `// PAYMENT-REQUIRED başlığındaki bilgi
+{ "network": "eip155:5042",     // Arc
+  "amount":  "3000",            // 0.003 USDC
+  "payTo":   "0xe903…1aBf",     // BlockRun'ın adresi
+  "extra":   { "name": "GatewayWalletBatched" } }
+// GatewayWalletBatched: Circle Gateway ile öde`,
+        links: [L.x402] } },
+    { spot: "flow", st: { seq: 4, hi: [3] },
+      text: "Ajan fiyatı kontrol ediyor ve ödemeyi imzalıyor. Sonra aynı soruyu imzayla birlikte tekrar gönderiyor. Ayşe'ye bir şey sorulmuyor.",
+      log: { tag: "server", title: "Ajan ödemeyi imzalar",
+        body: "Ajan 0.02 USDC'den pahalı bir soruyu ödemez. Fiyat uygunsa “BlockRun'a 0.003 USDC ödüyorum” diyen bir imza atar. Bu bir işlem değil, sadece bir imza. Gaz ödenmez. İmza, isteğin PAYMENT-SIGNATURE başlığında gider.",
+        code: `// Circle'ın paketi: 402'yi görür, imzalar, tekrar gönderir
+import { GatewayClient } from "@circle-fin/x402-batching/client"
+const ajan = new GatewayClient({ chain: "arc", privateKey })
+await ajan.pay(url, { method: "POST", body })` } },
+    { spot: "flow", st: { seq: 6, hi: [4, 5], batch: 1 },
+      text: "BlockRun imzayı Circle Gateway'e gönderiyor. Circle imzayı ve ajanın bakiyesini kontrol ediyor, 0.003 USDC'yi ayırıyor.",
+      log: { tag: "circle", title: "Circle Gateway Nanopayments",
+        body: "Circle her ödemeyi Arc'a ayrı ayrı yazmaz. İmzaları toplar ve birkaç dakikada bir tek işlemle yazar. Bu yüzden ödeme başına işlem ücreti yoktur ve 0.003 USDC gibi küçük ödemeler yapılabilir.",
+        links: [L.nano, L.stack] } },
+    { spot: "flow", st: { seq: 8, hi: [6, 7], term: 2 },
+      text: "Ödeme onaylandı. BlockRun Claude'un cevabını gönderiyor ve cevap Ayşe'nin terminaline geliyor.",
+      log: { tag: "server", title: "Cevap",
+        body: "Sunucu cevabı olduğu gibi iletir. x-nano-paid başlığı bu soru için ödenen tutarı gösterir.",
+        code: `HTTP/1.1 200 OK
+x-nano-paid: 0.003000` } },
+    { spot: "paid", st: { bal: 0.047, spent: 0.003, feed: 1 },
+      text: "Panelde “Ödeme alındı · 0.003 USDC” bildirimi çıkıyor ve listeye yeni bir satır ekleniyor. Kalan bakiye 0.047 USDC, gösterge yüzde 94.",
+      log: { tag: "circle", title: "Ödeme kaydı",
+        body: "Panel bu listeyi Circle'ın ödeme kayıtlarından okur. Durum önce “alındı” olur. Circle ödemeyi topladığında “toplandı”, Arc'a yazdığında “zincirde” olur.",
+        code: `// Circle Gateway API
+GET /v1/x402/transfers?from=ajanCuzdani` } },
+    { spot: "withdraw", st: {},
+      text: "Ayşe istediği zaman “Kalanı geri çek”e basabilir. Ajanın Gateway'deki bakiyesi Ayşe'nin cüzdanına döner.",
+      log: { tag: "circle", title: "Geri çekme",
+        body: "Ayşe bir mesaj imzalar. Sunucu, ajan cüzdanıyla Circle'a bir Gateway talimatı imzalar. Circle parayı Arc'ta Ayşe'nin cüzdanına basar. Circle'ın ücreti için küçük bir pay bakiyede kalır." } },
+    { summary: {
+        title: "Özet: Circle ile ajan ödemesi",
+        sub: "Ayşe bütçeyi bir kez yükledi, her sorunun ödemesini ajan yaptı.",
+        items: [
+          ["Ajan ne yaptı?", "Her Claude sorusunda BlockRun'ın istediği fiyatı kontrol etti ve 0.003 USDC'lik ödemeyi Ayşe'ye sormadan imzaladı. 0.02 USDC'den pahalı bir soruyu ödemez, Gateway'deki bakiyeden fazlasını harcayamaz."],
+          ["Nasıl oluşturuldu?", "Ayşe “Aktifleştir”e basınca sunucumuz onun için bir Arc cüzdanı oluşturdu, anahtarı sunucuda. Ayşe bu cüzdan adına Gateway'e para yatırdı. Circle'ın Agent Wallets ürününün şu an API'si yok, sadece komut satırından kullanılıyor. Bu yüzden cüzdanı kendimiz oluşturduk."],
+          ["Circle ne sağladı?", "x402 ile servis ödeme istedi, ajan imzayla ödedi. Nanopayments ile ödemeler gazsız oldu ve toplu olarak zincire yazıldı. Gateway ajanın bakiyesini tuttu. Claude'u satan BlockRun, Agent Marketplace'te listeli."],
+          ["Arc ne sağladı?", "Ödemeler Arc üzerinde USDC ile yapılıyor ve Circle toplu ödemeleri Arc'a yazıyor. Ayşe yatırma işleminin ücretini de USDC ile ödedi, başka bir token gerekmedi."]
+        ] },
+      text: "Özet: ajan ne yaptı, nasıl oluşturuldu, Circle ve Arc ne sağladı.",
+      log: { tag: "app", title: "Özet", body: "Circle ile ajan ödemesi.", links: [L.stack, L.nano] } }
+  ]
+}
 ];
 
-/* ---------------- engine ---------------- */
-let sc=0, step=0, S={};
-const $=id=>document.getElementById(id);
-const stage=$('stage');
-function stateAt(i){const o={};for(let k=0;k<=i;k++)Object.assign(o,SC[sc].steps[k].st);return o}
-function renderTabs(){
-  $('tabs').innerHTML=SC.map((s,i)=>`<button class="tab" role="tab" type="button" aria-selected="${i===sc}" data-i="${i}"><b>${i+1}</b>${esc(s.tab)}</button>`).join('');
-  $('tabs').querySelectorAll('.tab').forEach(b=>b.onclick=()=>go(+b.dataset.i,0));
+/* ------------------------------------------------------------------ */
+/* Engine                                                             */
+/* ------------------------------------------------------------------ */
+const TAGS = { app: "Uygulama", chain: "Zincir · Arc", base: "Zincir · Base", circle: "Circle", server: "Sunucumuz", seller: "Satıcı · BlockRun" };
+let sc = 0, step = 0;
+const $ = id => document.getElementById(id);
+const stage = $("stage");
+
+function stateAt(i) { const o = {}; for (let k = 0; k <= i; k++) Object.assign(o, SC[sc].steps[k].st || {}); return o; }
+
+function summaryHtml(m) {
+  return `<div class="sum" data-spot="summary"><h2>${esc(m.title)}</h2>${m.sub ? `<p class="sub">${esc(m.sub)}</p>` : ""}
+  <ol>${m.items.map((it, i) => `<li><b class="n">${i + 1}</b><div><h3>${esc(it[0])}</h3><p>${esc(it[1])}</p></div></li>`).join("")}</ol></div>`;
 }
-function renderLog(){
-  const c=SC[sc];
-  $('log').innerHTML=c.steps.map((s,i)=>{const [tag,title,body,code,links]=s.log;
-    const tagName={app:'Uygulama',chain:'Zincir · Arc',base:'Zincir · Base',circle:'Circle',server:'Sunucu'}[tag];
-    return `<button type="button" class="logrow ${i===step?'cur':''} ${i>step?'future':''}" data-i="${i}">
-      <div class="lr-top"><span class="tag t-${tag}">${tagName}</span><span class="lr-step">Adım ${i+1}</span></div>
-      <h3>${esc(title)}</h3><p>${esc(body)}</p>${code?`<div class="code">${code}</div>`:''}
-      ${links&&links.length?`<div class="links">${links.map(l=>`<a href="${l[1]}" target="_blank" rel="noopener">${esc(l[0])} ↗</a>`).join('')}</div>`:''}</button>`}).reverse().join('');
-  $('log').querySelectorAll('.logrow').forEach(b=>b.onclick=e=>{if(e.target.closest('a'))return;go(sc,+b.dataset.i)});
+
+function renderTabs() {
+  $("tabs").innerHTML = SC.map((s, i) => `<button class="tab" role="tab" type="button" aria-selected="${i === sc}" data-i="${i}"><b>${i + 1}</b>${esc(s.tab)}</button>`).join("");
+  $("tabs").querySelectorAll(".tab").forEach(b => b.onclick = () => go(+b.dataset.i, 0));
 }
-function place(){
-  const c=SC[sc], s=c.steps[step];
-  stage.querySelectorAll('.spot,.pop').forEach(n=>n.remove());
-  const t=s.summary?null:stage.querySelector(`[data-spot="${s.spot}"]`);
-  const view=stage.clientHeight;
-  // Bring the highlighted part into the middle of the app window. The app is
-  // taller than the window on long screens, and a spotlight below the fold
-  // looked like nothing happened.
-  if(t){
-    const tr0=t.getBoundingClientRect(), sr0=stage.getBoundingClientRect();
-    const inContent=tr0.top-sr0.top+stage.scrollTop;
-    stage.scrollTop=Math.max(0, tr0.height>view-60 ? inContent-30 : inContent-(view-tr0.height)/2);
-  }else stage.scrollTop=0;
-  const sr=stage.getBoundingClientRect();
-  const sy=stage.scrollTop;
-  const spot=document.createElement('div');spot.className='spot';if(s.summary)spot.style.display='none';
-  let r={left:12,top:sy+12,width:sr.width-24,height:60};
-  if(t){const tr=t.getBoundingClientRect();r={left:tr.left-sr.left-6,top:tr.top-sr.top+sy-6,width:tr.width+12,height:tr.height+12}}
-  Object.assign(spot.style,{left:r.left+'px',top:r.top+'px',width:r.width+'px',height:r.height+'px'});
-  stage.appendChild(spot);
-  const pop=document.createElement('div');pop.className='pop';
-  const n=c.steps.length;
-  pop.innerHTML=`<div class="meta">Adım ${step+1} / ${n}<span class="bar"><i style="width:${(step+1)/n*100}%"></i></span></div><p>${esc(s.text)}</p>
-  <div class="acts"><button class="btn" type="button" id="pPrev" ${step===0&&sc===0?'disabled':''}>← Geri</button><button class="btn dark" type="button" id="pNext">${step===n-1?(sc<SC.length-1?'Sonraki senaryo →':'Bitti'):'Devam →'}</button></div>`;
-  stage.appendChild(pop);
-  const pw=pop.offsetWidth, ph=pop.offsetHeight;
-  // Beside the highlight when there is room, otherwise below or above it;
-  // always inside the visible part of the app window.
-  let left=r.left+r.width+14, top=r.top;
-  if(left+pw>sr.width-8) left=r.left-pw-14;
-  if(left<8){
-    left=Math.min(Math.max(8,r.left),sr.width-pw-8);
-    top=r.top+r.height+14;
-    if(top+ph>sy+view-8) top=r.top-ph-14;
+
+function renderLog() {
+  const c = SC[sc];
+  $("log").innerHTML = c.steps.map((s, i) => {
+    if (i > step) return "";
+    const g = s.log;
+    return `<div class="logrow ${i === step ? "cur" : ""}" data-i="${i}" tabindex="0">
+      <div class="lr-top"><span class="tag t-${g.tag}">${TAGS[g.tag]}</span><span class="lr-step">Adım ${i + 1}</span></div>
+      <h3>${esc(g.title)}</h3>${g.body ? `<p>${esc(g.body)}</p>` : ""}
+      ${g.code ? `<div class="code">${codeHtml(g.code)}</div>` : ""}
+      ${g.links && g.links.length ? `<div class="links">${g.links.map(l => `<a href="${l[1]}" target="_blank" rel="noopener">${esc(l[0])} ↗</a>`).join("")}</div>` : ""}</div>`;
+  }).reverse().join("");
+  $("log").querySelectorAll(".logrow").forEach(b => b.onclick = e => { if (e.target.closest("a")) return; go(sc, +b.dataset.i); });
+}
+
+function place() {
+  const c = SC[sc], s = c.steps[step];
+  stage.querySelectorAll(".spot,.pop").forEach(n => n.remove());
+  const t = s.summary ? null : stage.querySelector(`[data-spot="${s.spot}"]`);
+  const view = stage.clientHeight;
+  if (t) {
+    const tr0 = t.getBoundingClientRect(), sr0 = stage.getBoundingClientRect();
+    const inContent = tr0.top - sr0.top + stage.scrollTop;
+    stage.scrollTop = Math.max(0, tr0.height > view - 60 ? inContent - 30 : inContent - (view - tr0.height) / 2);
+  } else stage.scrollTop = 0;
+  const sr = stage.getBoundingClientRect();
+  const sy = stage.scrollTop;
+  let r = null;
+  if (t) {
+    const tr = t.getBoundingClientRect();
+    r = { left: tr.left - sr.left - 6, top: tr.top - sr.top + sy - 6, width: tr.width + 12, height: tr.height + 12 };
+    const spot = document.createElement("div"); spot.className = "spot";
+    Object.assign(spot.style, { left: r.left + "px", top: r.top + "px", width: r.width + "px", height: r.height + "px" });
+    stage.appendChild(spot);
   }
-  top=Math.max(sy+8,Math.min(top,sy+view-ph-8));
-  if(s.summary){left=sr.width-pw-16;top=sy+view-ph-16;}
-  pop.style.left=left+'px';pop.style.top=top+'px';
-  $('pPrev').onclick=prev;$('pNext').onclick=next;
+  const pop = document.createElement("div"); pop.className = "pop";
+  const n = c.steps.length;
+  const last = step === n - 1;
+  pop.innerHTML = `<div class="meta">Adım ${step + 1} / ${n}<span class="bar"><i style="width:${(step + 1) / n * 100}%"></i></span></div><p>${esc(s.text)}</p>
+  <div class="acts"><button class="btn" type="button" id="pPrev" ${step === 0 && sc === 0 ? "disabled" : ""}>← Geri</button><button class="btn dark" type="button" id="pNext">${last ? (sc < SC.length - 1 ? "Sonraki senaryo →" : "Bitti") : "Devam →"}</button></div>`;
+  stage.appendChild(pop);
+  const pw = pop.offsetWidth, ph = pop.offsetHeight;
+  let left, top;
+  if (!r) { left = sr.width - pw - 16; top = sy + view - ph - 16; }
+  else {
+    left = r.left + r.width + 14; top = r.top;
+    if (left + pw > sr.width - 8) left = r.left - pw - 14;
+    if (left < 8) {
+      left = Math.min(Math.max(8, r.left), sr.width - pw - 8);
+      top = r.top + r.height + 14;
+      if (top + ph > sy + view - 8) top = r.top - ph - 14;
+    }
+    top = Math.max(sy + 8, Math.min(top, sy + view - ph - 8));
+  }
+  pop.style.left = left + "px"; pop.style.top = top + "px";
+  $("pPrev").onclick = prev; $("pNext").onclick = next;
 }
-function render(){
-  const c=SC[sc];
-  S=stateAt(step);
-  $('slideTag').textContent=c.slide;$('scTitle').textContent=c.tab;$('scLead').textContent=c.lead;$('url').textContent=c.url;
-  const cur=c.steps[step];
-  stage.innerHTML=cur.summary?`<div class="sum" data-spot="summary"><h2>${esc(cur.summary.title)}</h2><p class="sub">${esc(cur.summary.sub)}</p><ol>${cur.summary.items.map((it,i)=>`<li><b class="n">${i+1}</b><div><h3>${esc(it[0])}</h3><p>${esc(it[1])}</p></div></li>`).join('')}</ol></div>`:SCREENS[c.screen]();
-  renderTabs();renderLog();
+
+function render() {
+  const c = SC[sc], cur = c.steps[step];
+  S = stateAt(step);
+  $("slideTag").textContent = c.slide; $("scTitle").textContent = c.title; $("scLead").textContent = c.lead; $("url").textContent = c.url;
+  stage.innerHTML = cur.summary ? summaryHtml(cur.summary) : SCREENS[c.screen]();
+  renderTabs(); renderLog();
   requestAnimationFrame(place);
-  try{history.replaceState(null,'','#s'+(sc+1))}catch(e){}
+  try { history.replaceState(null, "", "#s" + (sc + 1)); } catch (e) { /* some frames refuse it */ }
 }
-function go(i,j){sc=i;step=j;render()}
-function next(){const n=SC[sc].steps.length;if(step<n-1)go(sc,step+1);else if(sc<SC.length-1)go(sc+1,0)}
-function prev(){if(step>0)go(sc,step-1);else if(sc>0)go(sc-1,SC[sc-1].steps.length-1)}
-$('restart').onclick=()=>go(sc,0);
-$('toEnd').onclick=()=>go(sc,SC[sc].steps.length-1);
-document.addEventListener('keydown',e=>{
-  if(['ArrowRight','PageDown',' '].includes(e.key)){e.preventDefault();next()}
-  else if(['ArrowLeft','PageUp'].includes(e.key)){e.preventDefault();prev()}
-  else if(/^[1-5]$/.test(e.key))go(+e.key-1,0);
+function go(i, j) { sc = i; step = j; render(); }
+function next() { const n = SC[sc].steps.length; if (step < n - 1) go(sc, step + 1); else if (sc < SC.length - 1) go(sc + 1, 0); }
+function prev() { if (step > 0) go(sc, step - 1); else if (sc > 0) go(sc - 1, SC[sc - 1].steps.length - 1); }
+$("restart").onclick = () => go(sc, 0);
+$("toEnd").onclick = () => go(sc, SC[sc].steps.length - 1);
+document.addEventListener("keydown", e => {
+  if (["ArrowRight", "PageDown", " "].includes(e.key)) { e.preventDefault(); next(); }
+  else if (["ArrowLeft", "PageUp"].includes(e.key)) { e.preventDefault(); prev(); }
+  else if (/^[1-4]$/.test(e.key)) go(+e.key - 1, 0);
 });
-window.addEventListener('resize',()=>requestAnimationFrame(place));
-const h=(location.hash||'').match(/^#s([1-5])$/);if(h)sc=+h[1]-1;
+window.addEventListener("resize", () => requestAnimationFrame(place));
+const h = (location.hash || "").match(/^#s([1-4])$/); if (h) sc = +h[1] - 1;
 render();
 </script>
-
 </body>
 </html>
