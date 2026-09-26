@@ -42,7 +42,7 @@ header.top{display:flex;align-items:center;justify-content:space-between;gap:16p
 .dots{display:flex;gap:6px}.dots i{width:10px;height:10px;border-radius:50%;display:block;background:#ff5f57}.dots i:nth-child(2){background:#febc2e}.dots i:nth-child(3){background:#28c840}
 .url{flex:1;text-align:center;font:12px var(--mono);color:#aab2d8;background:#0f1428;border-radius:6px;padding:4px 10px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 .net{font:600 11px var(--mono);color:#1c2550;background:#bfe0ff;border-radius:5px;padding:2px 7px}
-.stage{position:relative;background:var(--app-bg);min-height:calc(100vh - 210px);padding:22px;overflow:hidden}
+.stage{position:relative;background:var(--app-bg);height:calc(100vh - 235px);min-height:480px;padding:22px 22px 50vh;overflow-y:auto;overflow-x:hidden;scrollbar-width:thin}
 /* spotlight */
 .spot{position:absolute;border-radius:12px;box-shadow:0 0 0 9999px rgba(12,16,38,.55);outline:2px solid #ffd580;outline-offset:3px;pointer-events:none;transition:all .35s cubic-bezier(.2,.8,.2,1);z-index:5}
 .pop{position:absolute;z-index:6;width:min(400px,calc(100% - 24px));background:#fff;border-radius:12px;padding:14px 16px 14px;box-shadow:0 14px 40px rgba(0,0,0,.28);transition:top .35s,left .35s}
@@ -265,20 +265,36 @@ bridge(){
   </div>`;
 },
 sub(){
+  const gwBal=S.fund==='ok'?'60.000':'0.000';
+  const fund=`<div class="acard" data-spot="fund" style="border-left:3px solid var(--orange)"><h4>Abonelik bakiyesi</h4>
+    <div class="kv"><span>Arc üzerinde</span><span style="font-weight:700">${gwBal} USDC</span></div>
+    <div class="two"><div class="inp">${S.fund==='empty'||S.fund==='sign'?'60.00':'<span style="color:#9aa0b4">0.00</span>'}</div><div class="cta ${S.fund==='empty'||S.fund==='sign'?'':'off'}" style="padding:9px">Yatır</div></div>
+    <span style="font-size:12px;color:var(--app-mute)">Buraya yatırılan tutar yaklaşık 1s içinde sayılır.</span></div>`;
   const form=`<div class="acard" data-spot="form"><h4>Yeni abonelik</h4>
     <div class="two"><div><div class="lbl">Satıcı</div><div class="inp" style="font-family:var(--sans)">Spotify</div></div><div><div class="lbl">Satıcı adresi</div><div class="inp" style="font-family:var(--sans)">Spotify'ın adresi</div></div></div>
-    <div class="lbl">Çekim başına</div><div class="inp">10.00 USDC</div><div class="two"><div><div class="lbl">Ne sıklıkla</div><div class="inp" style="font-family:var(--sans)">Aylık</div></div><div><div class="lbl">Kaç ay</div><div class="inp">6</div></div></div><div class="kv"><span>Kutuya yüklenecek</span><span>60.00 USDC</span></div>
-    <div class="cta ${S.stage>0?'off':''}">Abone ol</div></div>`;
-  const box=S.stage>=2?`<div class="boxcard" data-spot="box"><div class="h"><span>Spotify aboneliği</span><span class="chip ${S.stage>=6?'gray':S.stage>=3?'':'warn'}">${S.stage>=6?'İptal edildi':S.stage>=3?'Aktif':'Açıldı'}</span></div>
-    <div class="kv"><span>Kontrat</span><span>yeni adres</span></div>
+    <div class="note ok"><div><b>Güvenli görünüyor</b>Bu adrese daha önce gönderim yaptınız.</div></div>
+    <div class="lbl">Çekim başına</div><div class="inp">10.00 USDC</div>
+    <div class="two"><div><div class="lbl">Ne sıklıkla</div><div class="inp" style="font-family:var(--sans)">Aylık</div></div><div><div class="lbl">Kaç ay</div><div class="inp">6</div></div></div>
+    <div class="kv"><span>Toplam</span><span>60.00 USDC</span></div><div class="kv"><span>Circle ücreti</span><span>Gateway bakiyesinden</span></div>
+    ${S.stage>=1&&S.stage<4?`<div class="steps" data-spot="steps">
+      <div class="st ${S.stage>1?'done':'act'}"><i>${S.stage>1?'✓':''}</i>Satıcı kontrol ediliyor</div>
+      <div class="st ${S.stage>2?'done':S.stage===2?'act':''}"><i>${S.stage>2?'✓':''}</i>Kutu oluşturuluyor</div>
+      <div class="st ${S.stage>2?'done':''}"><i>${S.stage>2?'✓':''}</i>Listede göster</div>
+      <div class="st ${S.stage===3?'act':''}"><i></i>Circle bütçeyi mint ediyor</div></div>`:''}
+    <div class="cta ${S.stage>0?'off':''}">Abonelik oluştur</div></div>`;
+  const status=S.stage>=6?'İptal':S.stage>=4?'Aktif':'Oluşturuluyor';
+  const bal=S.stage>=6?'0.00':S.stage>=5?'50.00':S.stage>=4?'60.00':'0.00';
+  const box=S.stage>=2?`<div class="boxcard" data-spot="box"><div class="h"><span>Spotify</span><span class="chip ${S.stage>=6?'gray':S.stage>=4?'':'warn'}">${status}</span></div>
+    <div class="kv"><span>Kutu</span><span>kendi adresi olan kontrat</span></div>
     <div class="kv"><span>Sahibi</span><span>tek kullanımlık adres</span></div>
-    <div class="kv"><span>Bakiye</span><span data-spot="boxbal">${S.stage>=6?'0.00':S.stage>=5?'50.00':S.stage>=3?'60.00':'0.00'} USDC</span></div>
-    <div class="kv"><span>Kurallar</span><span>ayda 10 · toplam 60 · 6 ay</span></div></div>`:'';
-  const flow=S.stage>=3?`<div class="flowline" data-spot="flow"><span>Senin Gateway bakiyen</span><em>→</em><span>Circle Minter</span><em>→</em><span>Abonelik kontratı</span>${S.stage>=5?'<em>→</em><span>Spotify · 10 USDC</span>':''}</div>`:'';
+    <div class="kv"><span>Bakiye</span><span>${bal} USDC</span></div>
+    <div class="kv"><span>Kurallar</span><span>ayda en fazla 10 · toplam 60 · 6 ay</span></div>
+    ${S.stage>=4&&S.stage<6?'<div class="two"><div class="cta" data-spot="pullbtn" style="padding:8px">Şimdi çek</div><div class="cta ghost" data-spot="cancelbtn" style="padding:8px">İptal</div></div>':''}</div>`:'';
   const hist=S.stage>=5?`<div class="rowi fresh" data-spot="pull"><span class="t">01 Eki</span><span class="m">Spotify ödemesi<small>kontrat kuralları kontrol etti</small></span><span class="r">-10.00<small>zincirde</small></span></div>`:'';
-  const cancel=S.stage>=6?`<div class="note ok" data-spot="cancel"><div><b>İptal edildi</b>Kalan 50 USDC cüzdanına döndü.</div></div>`:(S.stage>=5?'<div class="cta ghost" data-spot="cancelbtn">İptal et, kalanı geri al</div>':'');
-  return `<div class="app">${head('sub')}${form}${box}${flow}${hist}${cancel}
-  ${S.popup?sign('Gateway harcama imzası',[['İşlem','Gateway talimatı'],['Tutar','60.00 USDC'],['Alıcı','abonelik kontratı'],['Ağ ücreti','yok']]):''}</div>`;
+  const cancel=S.stage>=6?`<div class="note ok" data-spot="cancel"><div><b>Abonelik iptal edildi, kalan para geri döndü.</b>50 USDC, Ayşe'nin tek kullanımlık kasa adresine geçti. Anahtarı Ayşe'de.</div></div>`:'';
+  const pop=S.popup==='dep'?sign('Gateway\'e yatırma',[['Ağ','Arc'],['Tutar','60.00 USDC'],['Ücret','USDC ile ödenir']])
+    :S.popup==='gw'?sign('Gateway harcama imzası',[['İşlem','harcama talimatı'],['Tutar','60.00 USDC'],['Alıcı','abonelik kutusu'],['Ağ ücreti','yok']]):'';
+  return `<div class="app">${head('sub')}${fund}${form}${box}${hist}${cancel}${pop}</div>`;
 },
 nano(){
   const bal=S.bal2??0; const spent=S.spent||0; const base=bal+spent; const pct=base>0?Math.round(bal/base*100):0;
@@ -353,22 +369,28 @@ const SC=[
   log:['circle','Diğer yol: Circle Gateway','Gateway\'e bir kez yatırırsın, sonra her ağa saniyeler içinde sadece bir imzayla gönderirsin. Uygulamadaki "Gateway" sekmesi bunu yapar.','',[L.gw]]}
  ]},
 {key:'sub',slide:'Slayt 4',tab:'Abonelik',url:'ctrlarcz.xyz/?tab=subscriptions',screen:'sub',
- lead:'Her abonelik için ayrı bir kontrat deploy edilir. Kurallar kontratın içine yazılır, para Circle Gateway\'den gelir.',
+ lead:'Abonelik parası Circle Gateway bakiyesinden gelir. Her abonelik için kuralları içine yazılmış ayrı bir kutu kontratı açılır.',
  steps:[
- {spot:'form',st:{stage:0},text:'Ayşe Spotify\'a aylık 10 USDC, 6 aylık bir abonelik açıyor.',
-  log:['app','Kurallar belirlendi','Formdaki her alan kontrata yazılacak bir kural: kime ödenecek, seferde en fazla ne kadar, ne sıklıkla, toplam ne kadar, ne zamana kadar.','',[]]},
- {spot:'form',st:{stage:1},text:'Kontratın sahibi Ayşe\'nin ana cüzdanı olmayacak. Bu abonelik için yeni bir adres üretiliyor.',
-  log:['app','Tek kullanımlık adres','Zincire bakan biri aboneliği Ayşe\'nin cüzdanıyla eşleştiremez. Bu yöntemin standardı ERC-5564.','',[L.eip5564]]},
- {spot:'box',st:{stage:2},text:'Factory kontrat bu abonelik için yeni bir kontrat deploy etti. Kurallar içinde, değiştirilemez.',
-  log:['chain','Factory: createAccount()','Tek bir factory kontrat, her abonelik için küçük bir kopya kontrat deploy eder. Deploy işlemini bizim sunucu gönderir, Ayşe\'nin cüzdanı görünmesin diye.','factory.createAccount(sahip, salt, {\n  target, perPullMax, interval,\n  maxAmount, expiry\n})',[L.factory,L.eip1167]]},
- {spot:'popup',st:{stage:2,popup:1},text:'Kontratı doldurmak için Ayşe bir imza atıyor. Bu bir işlem değil, Gateway\'e verilen bir talimat.',
-  log:['circle','Gateway talimatı','Ayşe\'nin Gateway bakiyesinden 60 USDC abonelik kontratına gönderilir.','POST https://gateway-api.circle.com/v1/transfer',[L.gw]]},
- {spot:'flow',st:{stage:3,popup:0},text:'Kontrata 60 USDC geldi. Zincirde bu para Circle\'dan gelmiş görünüyor, Ayşe\'den değil.',
-  log:['chain','Circle kontrata bastı','Circle\'ın minter kontratı USDC\'yi doğrudan abonelik kontratına basar. Ayşe\'nin cüzdanıyla kontrat arasında bir bağ görünmez.','GatewayMinter.gatewayMint(belge, imza)',[L.addr(A.minter,'GatewayMinter'),L.gw]]},
- {spot:'pull',st:{stage:5},text:'Bir ay sonra Spotify\'ın 10 USDC\'si kontrattan ödeniyor.',
-  log:['chain','pull(): aylık ödeme','Kontrat her kuralı kendisi kontrol eder. Ayrıca bizim sunucu da ödemeden önce kuralları kontrol edip onay imzası verir. İmza olmadan ödeme geçmez.','function pull(tutar, onayImzasi) {\n  require(tutar <= perPullMax);\n  require(now >= lastPull + interval);\n  require(spent + tutar <= maxAmount);\n  require(now <= expiry);\n  usdc.transfer(target, tutar);\n}',[L.factory]]},
- {spot:'cancel',st:{stage:6},text:'Ayşe aboneliği iptal etti. Kalan 50 USDC cüzdanına döndü.',
-  log:['chain','İptal: sweepToVault()','Sadece Ayşe\'nin belirlediği iade adresi çağırabilir. Bizim sunucu kapalı olsa bile iptal çalışır.','sweepToVault(iadeAdresi)',[]]}
+ {spot:'fund',st:{fund:'empty',stage:0},text:'Önce abonelik bakiyesi. Ayşe cüzdanından Circle Gateway\'e 60 USDC yatırıyor. Abonelik parası buradan çıkacak.',
+  log:['app','Abonelik bakiyesi','Abonelik kutuları Ayşe\'nin cüzdanından değil, Gateway bakiyesinden doldurulur. Bu yüzden önce Gateway\'e para yatırılır.','',[L.gw]]},
+ {spot:'popup',st:{fund:'sign',popup:'dep'},text:'Cüzdan Arc\'ta işlem imzası istiyor: USDC onayı ve Gateway\'e yatırma.',
+  log:['chain','GatewayWallet.deposit()','USDC Circle\'ın Gateway kontratına yatırılır ve Ayşe\'nin Gateway bakiyesine yazılır.','usdc.approve(GatewayWallet, tutar)\nGatewayWallet.deposit(USDC, tutar)',[L.gwc]]},
+ {spot:'fund',st:{fund:'ok',popup:0},text:'Circle yatırılanı yaklaşık 1 saniyede saydı. Gateway bakiyesi 60 USDC.',
+  log:['circle','Bakiye sayıldı','Bakiye Circle Gateway API\'den okunur. Arc hızlı kesinleştiği için yatırılan para hemen kullanılabilir.','POST https://gateway-api.circle.com/v1/balances',[L.gw]]},
+ {spot:'form',st:{stage:0},text:'Ayşe Spotify\'a aylık 10 USDC, 6 aylık abonelik formunu doldurdu. Satıcı adresi de kontrol edildi.',
+  log:['app','Kurallar belirlendi','Formdaki her alan kutuya yazılacak bir kural: kime ödenecek, seferde en fazla ne kadar, ne sıklıkla, toplam ne kadar, ne zamana kadar.','',[]]},
+ {spot:'steps',st:{stage:1},text:'"Abonelik oluştur"a basıldı. İlk adım: sunucumuz satıcı adresini kontrol ediyor.',
+  log:['server','Satıcı kontrol ediliyor','Sunucumuz satıcı adresini aynı güvenlik kontrolünden geçirir. Riskli bir adresse abonelik hiç açılmaz.','POST /api/cosign  { mode: "precheck", target, amount }',[]]},
+ {spot:'box',st:{stage:2},text:'Kutu oluşturuluyor. Factory kontrat bu abonelik için yeni bir kontrat deploy etti, kurallar içine yazıldı.',
+  log:['chain','Factory: createAccount()','Deploy işlemini bizim sunucu gönderir. Kutunun sahibi Ayşe\'nin cüzdanı değil, bu abonelik için üretilen tek kullanımlık bir adres. Böylece abonelik zincirde Ayşe\'yle eşleştirilemez.','factory.createAccount(sahip, salt, {\n  target, perPullMax, interval,\n  maxAmount, expiry\n})',[L.factory,L.eip5564]]},
+ {spot:'popup',st:{stage:3,popup:'gw'},text:'Circle bütçeyi mint ediyor. Ayşe, Gateway bakiyesinden kutuya 60 USDC gönderilmesi için imza atıyor. Bu bir işlem değil, talimat.',
+  log:['circle','Gateway harcama talimatı','İmzalı talimat Circle Gateway API\'ye gider. Circle onaylar ve parayı kutuya basar.','POST https://gateway-api.circle.com/v1/transfer',[L.gw]]},
+ {spot:'box',st:{stage:4,popup:0,fund:'spent'},text:'Kutuda 60 USDC var, abonelik aktif. Zincirde bu para Circle\'dan gelmiş görünüyor, Ayşe\'den değil.',
+  log:['chain','Circle kutuya bastı','Circle\'ın minter kontratı USDC\'yi doğrudan kutuya basar. Ayşe\'nin cüzdanıyla kutu arasında bir bağ görünmez.','GatewayMinter.gatewayMint(belge, imza)',[L.addr(A.minter,'GatewayMinter')]]},
+ {spot:'pull',st:{stage:5},text:'Ödeme günü geldi. "Şimdi çek" ile Spotify\'ın 10 USDC\'si kutudan ödendi.',
+  log:['chain','pull(): aylık ödeme','Kutu her kuralı kendisi kontrol eder, para sadece Spotify\'a gider. Sunucumuz da ödemeden önce kuralları kontrol edip onay imzası verir. İmza olmadan ödeme geçmez.','function pull(tutar, onayImzasi) {\n  require(tutar <= perPullMax);\n  require(now >= lastPull + interval);\n  require(spent + tutar <= maxAmount);\n  require(now <= expiry);\n  usdc.transfer(target, tutar);\n}',[L.factory]]},
+ {spot:'cancel',st:{stage:6},text:'Ayşe "İptal" dedi. Kalan 50 USDC kutudan çıktı.',
+  log:['chain','İptal: sweepToVault()','Kalan para Ayşe\'nin tek kullanımlık kasa adresine döner. Bu çağrıyı sadece o kasa adresi yapabilir. Sunucumuz kapalı olsa bile iptal çalışır.','sweepToVault(kasaAdresi)',[]]}
  ]},
 {key:'nano',slide:'Slayt 5–7',tab:'Kullandıkça öde',url:'ctrlarcz.xyz/?tab=subscriptions',screen:'nano',
  lead:'Claude API\'yi soru başına ödemek. Her istekte ajan cüzdanı 0.003 USDC\'lik ödemeyi kendisi imzalar, Circle Gateway onaylar.',
@@ -429,10 +451,20 @@ function place(){
   const c=SC[sc], s=c.steps[step];
   stage.querySelectorAll('.spot,.pop').forEach(n=>n.remove());
   const t=stage.querySelector(`[data-spot="${s.spot}"]`);
+  const view=stage.clientHeight;
+  // Bring the highlighted part into the middle of the app window. The app is
+  // taller than the window on long screens, and a spotlight below the fold
+  // looked like nothing happened.
+  if(t){
+    const tr0=t.getBoundingClientRect(), sr0=stage.getBoundingClientRect();
+    const inContent=tr0.top-sr0.top+stage.scrollTop;
+    stage.scrollTop=Math.max(0, tr0.height>view-60 ? inContent-30 : inContent-(view-tr0.height)/2);
+  }else stage.scrollTop=0;
   const sr=stage.getBoundingClientRect();
+  const sy=stage.scrollTop;
   const spot=document.createElement('div');spot.className='spot';
-  let r={left:12,top:12,width:sr.width-24,height:60};
-  if(t){const tr=t.getBoundingClientRect();r={left:tr.left-sr.left-6,top:tr.top-sr.top-6,width:tr.width+12,height:tr.height+12}}
+  let r={left:12,top:sy+12,width:sr.width-24,height:60};
+  if(t){const tr=t.getBoundingClientRect();r={left:tr.left-sr.left-6,top:tr.top-sr.top+sy-6,width:tr.width+12,height:tr.height+12}}
   Object.assign(spot.style,{left:r.left+'px',top:r.top+'px',width:r.width+'px',height:r.height+'px'});
   stage.appendChild(spot);
   const pop=document.createElement('div');pop.className='pop';
@@ -441,14 +473,17 @@ function place(){
   <div class="acts"><button class="btn" type="button" id="pPrev" ${step===0&&sc===0?'disabled':''}>← Geri</button><button class="btn dark" type="button" id="pNext">${step===n-1?(sc<SC.length-1?'Sonraki senaryo →':'Bitti'):'Devam →'}</button></div>`;
   stage.appendChild(pop);
   const pw=pop.offsetWidth, ph=pop.offsetHeight;
+  // Beside the highlight when there is room, otherwise below or above it;
+  // always inside the visible part of the app window.
   let left=r.left+r.width+14, top=r.top;
-  if(left+pw>sr.width-8){left=r.left-pw-14}
-  if(left<8){left=Math.min(Math.max(8,r.left),sr.width-pw-8);top=r.top+r.height+14;if(top+ph>stage.scrollHeight-8)top=Math.max(8,r.top-ph-14)}
-  top=Math.max(8,Math.min(top,stage.scrollHeight-ph-8));
+  if(left+pw>sr.width-8) left=r.left-pw-14;
+  if(left<8){
+    left=Math.min(Math.max(8,r.left),sr.width-pw-8);
+    top=r.top+r.height+14;
+    if(top+ph>sy+view-8) top=r.top-ph-14;
+  }
+  top=Math.max(sy+8,Math.min(top,sy+view-ph-8));
   pop.style.left=left+'px';pop.style.top=top+'px';
-  const fr=spot.getBoundingClientRect(), pr=pop.getBoundingClientRect();
-  const lo=Math.min(fr.top,pr.top), hi=Math.max(fr.bottom,pr.bottom);
-  if(lo<0||hi>innerHeight){const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;window.scrollBy({top:(lo+hi)/2-innerHeight/2,behavior:reduce?'auto':'smooth'})}
   $('pPrev').onclick=prev;$('pNext').onclick=next;
 }
 function render(){
